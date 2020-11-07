@@ -1,0 +1,48 @@
+#
+#  All these atom types are used to define interactions with PN (normal lone pairs) of rings and other pi-groups
+#  TODO: do they need to interact with aromatic carbons (A), too?
+#  TODO: do planar atoms (Np, Op, etc) interact with each other? see 4BFQ.
+#  
+# 
+#   - atom types are defined according to the SMARTS sequence
+#   - atoms for which atom types are defined are specified in the second field
+#   - for SMARTS atoms for which no atom type is defined, '*' is used
+#
+#   TODO:   maybe the indices are not necessary if null ('*') are used
+#           re-consider oxygen types: there are a lot, not sure if all needed
+#
+#
+
+[CH2X4][CH2X4][CH2X4][NHX3][CH0X3](=[NH2X3+,NHX2+0,N])[NH2X3]       guanidine;                          3,4,5,6;    *,*,*,Np,Cp,Np,Np
+
+[*][CX3](=[OX1])[NX3H2]                                             amides;                             0,1,2,3;    *,Cp,Op,Np
+
+[*][CX3](=[OX1])[OH0-,OH]                                           carboxylic/carboxylate;             0,1,2,3;    *,Cp,Op,Op
+
+###  N-methylpyrrole, etc... (maybe superfluous? Np would be sufficient?)
+[n;X3]                                                              N aromatic non-HBacc;               0;          Nr
+
+### anyline
+[N;X3]~[a]                                                          N aromatic amine non-HBacc;         0;          Np
+
+### pyridine
+[n;X2]                                                              N aromatic HBacc;                   0;          Nl
+
+### aromatic hydroxyl/ether/cyclic carbonyl
+[#8;!R]~[a]                                                         O aromatic OH HBacc;                0;          Op
+
+[s]                                                                 S aromatic non-HBacc;               0;          Sr
+
+[o]                                                                 O aromatic non-HBacc;               0;          Or
+
+[NX4]                                                               N charged non-HBacc;                0;          N+
+
+### nitro (NOTE: maybe Or instead of On, since both non HBacc?)
+O~[N](~[O])-[a]                                                     aromatic nitro (all non-HBAcc);     0,1,2;      On,Np,On,*
+
+
+### This might be superfluous? it has pseudo-atoms already...
+[CH2X4][SX2][*]                                                     S cys/met;                          1;          *,Sp,*
+
+[C]=[C]                                                             C aliphatic unsaturated;            0,1;        Cp,Cp
+# TODO: sp1 (do they interact with aromatic? check literature)

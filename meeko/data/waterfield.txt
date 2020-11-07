@@ -1,0 +1,101 @@
+#
+# Water Forcefield 0.1.1
+#
+
+# Hydrogen
+## H
+#ATOM H_000    1   0.000 1 1 1.8 [#1] # all hydrogens
+
+## HC
+ATOM H_C_000  0   0.000 1 1 1.8 [#1][#6] # all CH
+ATOM H_C_001  1   0.500 1 1 1.8 [#1][#6;X2] # acetylene
+ATOM H_C_002  1   0.250 1 1 1.8 [#1][#6;X3] # ethylene / benzene
+ATOM H_C_003  1   0.120 1 1 1.8 [#1][#6;X4] # methane
+
+## OH
+ATOM H_O_000  1   0.000 1 1 1.8 [#1][#8] # general hydroxyl (OH)
+ATOM H_O_001  1   1.100 1 1 1.8 [#1;X1][#8;X2;v2] # other hydroxyl
+ATOM H_O_002  1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1][a] # Ar-OH (phenol-like)
+ATOM H_O_003  1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1]-[#6;X3;v4]=[#8;X1;v2] # carboxylate H
+# ATOM H_O_004  1   1.000 1 1 1.8 [] # hydrogen of TIP5P water molecule
+
+## HN
+ATOM H_N_000  1   0.000 1 1 1.8 [#1][#7] # general NH
+ATOM H_N_001  1   0.500 1 1 1.8 [#1;X1][#7;X3;v3] # amine
+ATOM H_N_002  1   0.800 1 1 1.8 [#1;X1][#7;X2;v3] # nitrogen sp2 (guanidine, immine)
+ATOM H_N_003  1   0.800 1 1 1.8 [#1;X1][#7;X3;v3][a] # aniline (matches pyrrole, which follows)
+ATOM H_N_004  1   1.300 1 1 1.8 [#1;X1][#7;a;X3;v3;H1] # aromatic nitrogen (pyrrole)
+ATOM H_N_005  1   1.100 1 1 1.8 [#1;X1][#7;X3;v3][#6;X3;v4]=[#8;X1;v2] # amide nitrogen donor (overrides pyrrole)
+
+## HS
+ATOM H_S_000  1   0.000 1 1 1.8 [#1][#16] # default SH
+ATOM H_S_001  1   0.500 1 1 1.8 [#1;X1][#16;X2;v2] # -SH (general thiol)
+ATOM H_S_002  1   0.700 1 1 1.8 [#1;X1][#16;X2;v2;H1][a] # Ar-SH (benzenethiol-like)
+
+# Oxygen
+## O
+ATOM O_000     2   0.000 2 2 2.8 [#8] # all oxygens
+ATOM O_001     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4][*] # in acetone / ester(sp2) / aldehyde
+ATOM O_002     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4]([#6])[#6,#1] # in acetone / aldehyde
+ATOM O_003     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4]([a]) # acetophenone
+ATOM O_004     2   1.200 2 2 2.8 [#8;X1;v2]=[#6;X3;v4]([#7;X3;v3]) # in amide
+ATOM O_006     2   0.600 3 2 2.8 [#8;X2;v2]([!a])[a] # in phenol / anisole 
+ATOM O_007     2   0.800 3 2 2.8 [#8;X2;v2]([!a])[!a] # in ether (matches hydroxyl/ester(sp3), which follows)
+ATOM O_008     2   0.900 3 2 2.8 [#8;X2;v2;H1][!a;!N] # in aliphatic hydroxyl (errnsly match nitro/carboxy)
+ATOM O_005     0   0.500 0 0 0.0 [#8;X2;v2](-[*])[#6;X3;v4]=[#8;X1;v2] # in ester(sp3) / acetic acid (sp3)
+ATOM O_009     0   0.600 0 0 0.0 [#8;X2;v2]([a])[a] # aromatic oxygen / aromatic ether
+
+## ON
+ATOM O_011_1   2   0.800 2 2 2.8 [#8;X1]~[#7;X3](~[#8;X1]) # nitro group (any)
+ATOM O_011_2   2   0.800 2 2 2.8 [#8;X1]~[#7;X3](~[#8;X2;H1])
+ATOM O_012_1   2   0.800 2 2 2.8 [#8;X2;H1]~[#7;X3](~[#8;X1])~[C] # nitro group (aliphatic)
+ATOM O_012_2   2   0.800 2 2 2.8 [#8;X1]~[#7;X3](~[#8;X2;H1])~[C]
+ATOM O_013_1   2   0.800 2 2 2.8 [#8;X1]~[#7](~[#8;X1])~[c] # nitro group (aromatic)
+ATOM O_013_2   2   0.800 2 2 2.8 [#8;X1]~[#7](~[#8;X2;H1])~[c]
+ATOM O_019     2   0.600 3 2 2.8 [#8;X2]([#7])[!#1] # ether oxygen in nitrate (NO3)
+
+## OS
+ATOM O_S_000   0   0.000 0 0 0.0 [#8]~[#16] # All O-S
+ATOM O_S_001   2   1.400 2 3 2.8 [#8;X1]~[#16;X3] # DMSO (the bond is not always double in openbabel/mol2 files)
+ATOM O_S_002   2   1.000 2 3 2.8 [#8;X1]~[#16]~[#8;X1] # Sulfone S(=O)(=O)(C)C / sulfonate S(=O)(=O)(OC)C
+ATOM O_S_003   2   0.600 2 3 2.8 [#8;X1]~[#16]([#8;X2])([#8;X2])~[#8;X1] # Sulfate (S(=O)(=O)(OC)OC)
+ATOM O_S_004   0   0.750 0 0 0.0 [#8;X2]~[#16] # sulfate/sulfone ether-like oxygen
+
+## OP
+ATOM O_P_000   0   0.000 0 0 0.0 [#8]~[#15]
+ATOM O_P_001   2   0.000 2 3 2.8 [#8;X1]~[#15]
+ATOM O_P_002   2   1.200 2 3 2.8 [#8]=[#15]
+ATOM O_P_003   0   0.750 0 0 0.0 [#8]-[#15]
+
+## O Lone pairs
+# ATOM O_L_000   2   1.000 1 1 2.1 [] # Lone pair of TIP5P water molecule
+
+# Nitrogen
+ATOM N_000     0   0.000 0 0 0.0 [#7] # any nitrogen
+ATOM N_001     2   0.900 1 1 2.8 [#7;X1;v3]#[#6;X2;v4] # nitrile
+ATOM N_002     2   1.200 2 1 2.8 [#7;X2;v3]=[*] # in immine
+ATOM N_003     2   1.200 2 1 2.8 [#7;X2;v3]([a])([a]) # in pyridine
+ATOM N_004     2   1.200 3 1 2.8 [#7;X3;v3][!a] # aliphatic amine, ammonia, hydrazine
+ATOM N_005     0   0.000 0 0 0.0 [#7;X3;v3][a] # revert anilines erroneously matched in previous smarts
+ATOM N_006     0   0.000 0 0 0.0 [#7;X3;v3][#6;X3;v4]=[#8;X1;v2] # revert amides from N_004
+
+# Sulfur
+ATOM S_000     0   0.000 0 0 0.0 [#16] # any sulfur (in sulfones, sulfates, dmso, therefore weight=0)
+ATOM S_001     2   0.500 3 2 2.8 [#16;X2;v2] # generic sp3 sulfur (thioether)
+ATOM S_002     0   0.000 0 0 0.0 [#16;X2;v2]([a])[a] # thiophene
+ATOM S_003_1   2   0.700 3 2 2.8 [#16;X2;v2]([C;X4;v4])[C;X4;v4] # thioether bound to two sp3 carbons or methanethiol
+ATOM S_003_2   2   0.700 3 2 2.8 [#16;X2;v2]([C;X4;v4])[#1]
+ATOM S_004     2   0.700 2 3 2.8 [#16;X2;v2;h] # thioketone (in FreeSolv-0.5 occurs as P=S)
+
+# Carbon
+ATOM C_000     0   0.000 0 0 0.0 [#6] # any carbon
+ATOM C_001     0   0.300 0 0 0.0 [#6;X2;v4] # sp carbon
+ATOM C_002     0   0.300 0 0 0.0 [#6;X3;v4] # sp2 carbon
+ATOM C_003     0   0.400 0 0 0.0 [#6;X3;v4;a] # aromatic carbon
+
+# Halogen
+ATOM CL_000    0   0.400 3 1 2.8 [#17] # any chlorine
+ATOM F_000     0   0.400 3 1 2.8 [#9] # any fluorine
+ATOM BR_000    0   0.400 3 1 2.8 [#35] # any bromine
+ATOM I_000     0   0.400 3 1 2.8 [#53] # any iodine
+ATOM P_000     0   0.000 0 0 0.0 [#15] # any phosphorus

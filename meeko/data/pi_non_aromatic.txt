@@ -1,0 +1,50 @@
+#
+# PI_PSEUDO_PATTERNS.txt
+#
+# patterns used for building pi pseudo-atoms (centroid, normals) for groups that are *not* aromatic
+# 
+#
+#   SMARTS_PATTERN (space) LABEL  PLANE_IDX     CENTROID_IDX
+#    string         [  ]  string;  int, int,... ; int
+#
+# Indices:
+#   - are 0-based (this could be changed if necessary)
+#   - indices are used to define which atoms in the pattern are used to calculate
+#     centroids and normals; for this reason, they have to be in the order that
+#     defines the vectors Atom1-Atom2, and Atom3-Atom2, so that they do not define
+#     a degenerate plane (see code in geomutils.py)
+#   - centroid idx defines which atom is used used to place the centroid
+#
+#  For example, for guanidine:
+#
+#   [CH2X4][CH2X4][CH2X4][NHX3][CH0X3](=[NH2X3+,NHX2+0,N])[NH2X3] guanidine; 3,4,5,6; 4
+#
+#   atoms used to calculate the plane are:
+#
+#     3:  '[NHX3'
+#     4:  '[CH0X3]'
+#     5:  '(=[NH2X3+,NHX2+0,N])'
+#     6:  '[NH2X3]'
+#
+#   and the centroid is place on atom 4 in the pattern ('[CH0X3]')
+
+
+# TODO this pattern can be improved to recognize better actual guanidine group (i.e., smaller pattern)
+[CH2X4][CH2X4][CH2X4][NHX3][CH0X3](=[NH2X3+,NHX2+0,N])[NH2X3]       guanidine;                      3,6,5,4;    4
+[*]~[CX3](=[OX1])[NX3H2]                                            amide;                          0,3,1,2;    1
+[*]~[CX3](=[OX1])[OH0-,OH]                                          carboxylic/carboxylate;         0,3,1,2;    1
+# this might be approximated because it places the centroid atoms at 90 degrees sharp, but QM might disagree
+[CH2X4][SX2][*]                                                     cys/met;                        1,0,2;      1
+
+
+
+# TODO
+# add delocalized,isolated, double-bonds? (only if they need centroid/normals)
+# add nitro-benzene
+# add benzoic and benzamide (changing first atom in asn/gln pattern
+# the parameter line format might be extended to have a distance value used to set the lenght of the normal vector for different groups
+# IMPORTANT: do we really need centroids for these atoms? by looking at structures, it seem we can get away by 
+#            defining interactions between planar atoms (Np, Op, etc.) and aromatic rings. If so, we could limit the centroid-normals
+#            model to rings to create maps, then define weaker pairwise interactions between planar atoms
+#            As a consequence, this file might become obsolete
+#    
