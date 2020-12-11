@@ -13,7 +13,6 @@ from openbabel import openbabel as ob
 from .setup import MoleculeSetup
 from .atomtyper import AtomTyperLegacy
 from .bondtyper import BondTyperLegacy
-from .water_builder import WaterBuilder
 from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
 from .flexibility import FlexibilityBuilder

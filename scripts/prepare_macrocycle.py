@@ -29,7 +29,7 @@ def main():
 	verbose = args.verbose
 
 	mol = obutils.load_molecule_from_file(input_molecule_file)
-	preparator = MoleculePreparation(merge_hydrogens=True, macrocycle=True, amide_rigid=True)
+	preparator = MoleculePreparation(merge_hydrogens=True, macrocycle=True, hydrate=True, amide_rigid=True)
 	preparator.prepare(mol)
 
 	# maybe verbose could be an option and it will show the various bond scores and breakdowns?
