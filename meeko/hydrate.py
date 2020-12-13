@@ -5,10 +5,10 @@
 #
 
 
+
 import numpy as np
 
 from .utils import geomutils
-
 
 class HydrateMoleculeLegacy:
     def __init__(self, distance=3.0, charge=0, atom_type="W"):
@@ -22,6 +22,10 @@ class HydrateMoleculeLegacy:
         self._rotatable = False
         self._hb_config = {'HD': {1: (1, 1)},    # neigh: 1, wat: 1, sp1
                            'OA': {
+                                      1: (2, 2), # neigh: 1, wat: 2, sp2
+                                      2: (2, 3)  # neigh: 2, wat: 2, sp3
+                                  },
+                           'SA': {
                                       1: (2, 2), # neigh: 1, wat: 2, sp2
                                       2: (2, 3)  # neigh: 2, wat: 2, sp3
                                   },
@@ -77,7 +81,7 @@ class HydrateMoleculeLegacy:
 
         position = geomutils.atom_to_move(anchor_xyz, [v1, v2, v3])
         position = geomutils.resize_vector(position, hb_length, anchor_xyz)
-        positions = np.array([positions])
+        positions = np.array([position])
 
         return positions
 
@@ -113,19 +117,16 @@ class HydrateMoleculeLegacy:
         water_positions = []
         # It will be the same distance for all of the water molecules
         hb_length = self._distance
-
-        for a, neighbors in list(mol.setup.graph.items()):
+        for a, neighbors in mol.setup.graph.items():
             atom_type = mol.setup.get_atom_type(a)
             anchor_xyz = mol.setup.get_coord(a)
             neighbor1_xyz = mol.setup.get_coord(neighbors[0])
             positions = np.array([])
-
-            try:
+            n_wat = None
+            hyb = None
+            if atom_type in self._hb_config:
                 n_wat, hyb = self._hb_config[atom_type][len(neighbors)]
                 water_anchors.append(a)
-            except:
-                n_wat = None
-                hyb = None
 
             if hyb == 1:
                 if n_wat == 1:
@@ -142,8 +143,7 @@ class HydrateMoleculeLegacy:
                                                           hb_length)
                 elif n_wat == 2:
                     # Example: C=0 (backbone oxygen)
-                    tmp_neighbors = mol.setup.get_neigh(neighbors[0])
-                    tmp_neighbors.pop(tmp_neighbors.index(a))
+                    tmp_neighbors = [ x for x in  mol.setup.get_neigh(neighbors[0]) if not x == a ]
                     neighbor2_xyz =  mol.setup.get_coord(tmp_neighbors[0])
                     positions = self._place_sp2_two_waters(anchor_xyz,
                                                            neighbor1_xyz, neighbor2_xyz,
@@ -170,10 +170,9 @@ class HydrateMoleculeLegacy:
                     positions = np.array([])
 
             if positions.size:
-                print(a, anchor_xyz, atom_type, neighbors, n_wat, hyb, positions)
                 water_positions.append(positions)
 
         for water_anchor, waters_on_anchor in zip(water_anchors, water_positions):
             for water_on_anchor in waters_on_anchor:
                 pseudo_idx = mol.setup.add_pseudo(water_on_anchor, self._charge, [water_anchor], self._atom_type,
-                                                  self._bond_type, self._rotatable, water_on_anchor)
+                                                 self._bond_type, self._rotatable)

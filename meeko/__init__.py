@@ -5,7 +5,9 @@
 #
 
 from .preparation import MoleculePreparation
+from .setup import MoleculeSetup
 from .utils import obutils
 from .utils import geomutils
+from .atomtyper import AtomTyperLegacy
 
-__all__ = ['MoleculePreparation', 'obutils', 'geomutils']
+__all__ = ['MoleculePreparation', 'obutils', 'geomutils', 'MoleculeSetup', 'AtomTyperLegacy']

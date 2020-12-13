@@ -71,7 +71,7 @@ class MolWriterLegacyPDBQT():
             print("Error [%s]" % sys.exc_info()[1])
             return False
 
-    def fix_atom_types(self):
+    def fix_atom_types(self, print_full_types=False):
         """ set legacy atom types and update closure atoms"""
         # print "SKIPPA FIXING ATOM TYPES"
         # return
@@ -134,8 +134,9 @@ class MolWriterLegacyPDBQT():
                         self.setup.set_atom_type(idx, at_type)
                         # print "XXX", self.setup.get_atom_type(idx)
                         all_types.append(at_type)
-        print("ALL TYPES", all_types)
-        return
+
+        if not print_full_types:
+            return
         all_types = set(all_types)
         unique_pairs = []
         for a1 in all_types:
@@ -182,11 +183,14 @@ class MolWriterLegacyPDBQT():
 
     def _walk_graph_recursive(self, node, edge_start=0, first=False): #, rigid_body_id=None):
         """ recursive walk of rigid bodies"""
+        """
+
         print("\n============================WALK")
         print("CALLED WITH", node, edge_start)
         print("RB MEMNBERS", self.model['rigid_body_members'])
         print("RB CONNECTIVIYY", self.model['rigid_body_connectivity'])
         print("------------------------")
+        """
         if first:
             self._buff.append('ROOT')
         # add atoms in this rigid body
@@ -197,12 +201,12 @@ class MolWriterLegacyPDBQT():
             member_pool = sorted(self.model['rigid_body_members'][node])
         else:
             member_pool = self.model['rigid_body_members'][node][:]
-            print("MEMBERPOOL NOW", member_pool)
-            print("REMOVING", edge_start)
+            # print("MEMBERPOOL NOW", member_pool)
+            # print("REMOVING", edge_start)
             member_pool.remove(edge_start)
             member_pool = [edge_start] + member_pool
         
-        print(member_pool)
+        # print(member_pool)
         
         for member in member_pool:
             if self.setup.atom_ignore[member] == 1:
@@ -223,7 +227,7 @@ class MolWriterLegacyPDBQT():
             begin, next_index = self.model['rigid_body_connectivity'][node, neigh]
             begin = self._numbering[begin]
             end = self._count
-            print("END IS NOW", end)
+            # print("END IS NOW", end)
             line = "BRANCH % 4d % 4d" % (begin, end)
             self._buff.append(line)
             self._walk_graph_recursive(neigh, edge_start=next_index)
@@ -249,7 +253,7 @@ class MolWriterLegacyPDBQT():
         atom_name = "%s%d" % (atom_symbol, atom_count)
         coord = self.setup.coord[atom_idx]
         element = self.setup.get_atom_type(atom_idx)
-        print("ELEMENT", element)
+        #print("ELEMENT", element)
         charge = self.setup.charge[atom_idx]
         atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
         return atom.format(_type, self._count, atom_name, alt_id, res_name, chain,

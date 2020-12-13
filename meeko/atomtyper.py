@@ -23,6 +23,7 @@ class AtomTyperLegacy:
                 return "HD"
             return "H"
 
+
     def set_param_legacy(self, mol):
         """ define atom parameters for AD 4.2.x
             strict: if True (default) adhere to the strict
@@ -43,12 +44,21 @@ class AtomTyperLegacy:
 
             for smarts, idx in patterns:
                 found = mol.setup.smarts.find_pattern(smarts)
-
                 if found:
                     for group in found:
                         oxygen_cache.append(group[idx])
 
             oxygen_cache = set(oxygen_cache)
+        # nitrogen acceptor:
+        # - aromatic with 2 connections
+        # - any aliphatic without 4 connections
+        nitro_acceptor_pattern = '[$([n;X2]),$([N;!X4])]' 
+        nitro_acceptors = []
+        found = mol.setup.smarts.find_pattern(nitro_acceptor_pattern)
+        if found:
+            for group in found:
+                nitro_acceptors.append(group[0])
+        
 
         for atom in ob.OBMolAtomIter(mol):
             atom_idx = atom.GetIdx()
@@ -67,6 +77,10 @@ class AtomTyperLegacy:
                 atom_type = 'OA'
                 if not self._strict and atom_idx in oxygen_cache:
                     atom_type = 'O'
+            # nitrogen
+            elif element == 'N':
+                if atom_idx in nitro_acceptors:
+                    atom_type = 'NA'
             # sulfur
             elif element == 'S':
                 atom_type = 'SA'
