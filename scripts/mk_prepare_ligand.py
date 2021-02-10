@@ -12,7 +12,7 @@ from meeko import obutils
 
 
 def cmd_lineparser():
-    parser = argparse.ArgumentParser(description="waterkit")
+    parser = argparse.ArgumentParser(description="Meeko")
     parser.add_argument("-i", "--mol", dest="input_molecule_file", required=True,
                         action="store", help="molecule file")
     parser.add_argument("-m", "--macrocycle", dest="build_macrocycle", default=False,
@@ -24,7 +24,7 @@ def cmd_lineparser():
     parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
                         action="store", help="output pdbqt file")
     parser.add_argument("-v", "--verbose", dest="verbose", default=False,
-                        action="store_true", help="output pdbqt file")
+                        action="store_true", help="print information about molecule setup")
     return parser.parse_args()
 
 
