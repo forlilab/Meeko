@@ -31,7 +31,7 @@ class PDBQTWriterLegacy():
                         'N' :'Ng',
                         'SA':'SG',
                         'S' :'Sg',
-                        'C' :'CG',
+                        'C' :'CG0',
                         #'P' :'PG', #
                         }
         neighbor13_14_tab = {'OA':'O1',
@@ -53,19 +53,6 @@ class PDBQTWriterLegacy():
                     at_type = "%sG" % curr_at_type
 
                 self.setup.set_atom_type(target_idx, at_type)
-
-                # updating 1,3 and 1,4
-                for kind, atom_idx_list in list(self.model['neigh_13_14'][i][target_idx].items()):
-                    for idx in atom_idx_list:
-                        if self.setup.get_ignore(idx):
-                            continue
-
-                        curr_at_type = self.setup.get_atom_type(idx)
-                        at_type = neighbor13_14_tab.get(curr_at_type, None)
-                        if at_type is None:
-                            at_type = "%s1" % curr_at_type
-
-                        self.setup.set_atom_type(idx, at_type)
 
     def _make_pdbqt_line(self, atom_idx):
         """ """
