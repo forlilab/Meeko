@@ -4,16 +4,20 @@
 # Meeko hydrate molecule
 #
 
-
-
 import numpy as np
 
 from .utils import geomutils
 
+
 class HydrateMoleculeLegacy:
     def __init__(self, distance=3.0, charge=0, atom_type="W"):
-        """
-            the final version will have to use SMARTS and multiple water types
+        """Initialize the legacy hydrate typer for AutoDock 4.2.x
+
+        Args:
+            distance (float): distance between water molecules and ligand heavy atoms. (default: 3.0)
+            charge (float): partial charge of the water molecule. Not use for the hydrated docking. (default: 0)
+            atom_type (str): atom type of the water molecule. (default: W)
+
         """
         self._distance = distance
         self._charge = charge
@@ -112,20 +116,32 @@ class HydrateMoleculeLegacy:
         return positions
 
     def hydrate(self, mol):
-        """ """
+        """Add water molecules to the ligand
+        
+        Args:
+            mol (OBMol): input OBMol molecule object
+
+        """
+        setup = mol.setup
         water_anchors = []
         water_positions = []
         # It will be the same distance for all of the water molecules
         hb_length = self._distance
-        for a, neighbors in mol.setup.graph.items():
-            atom_type = mol.setup.get_atom_type(a)
-            anchor_xyz = mol.setup.get_coord(a)
-            neighbor1_xyz = mol.setup.get_coord(neighbors[0])
+
+        for a, neighbors in setup.graph.items():
+            atom_type = setup.get_atom_type(a)
+            anchor_xyz = setup.get_coord(a)
+            neighbor1_xyz = setup.get_coord(neighbors[0])
             positions = np.array([])
             n_wat = None
             hyb = None
+
             if atom_type in self._hb_config:
-                n_wat, hyb = self._hb_config[atom_type][len(neighbors)]
+                try:
+                    n_wat, hyb = self._hb_config[atom_type][len(neighbors)]
+                except KeyError:
+                    raise RuntimeError('Cannot place water molecules on atom %d of type %s with %d neighbors.' % (a, atom_type, len(neighbors)))
+
                 water_anchors.append(a)
 
             if hyb == 1:
@@ -137,31 +153,31 @@ class HydrateMoleculeLegacy:
             elif hyb == 2:
                 if n_wat == 1:
                     # Example: X-Nitrogen-X
-                    neighbor2_xyz = mol.setup.get_coord(neighbors[1])
+                    neighbor2_xyz = setup.get_coord(neighbors[1])
                     positions = self._place_sp2_one_water(anchor_xyz,
                                                           neighbor1_xyz, neighbor2_xyz,
                                                           hb_length)
                 elif n_wat == 2:
                     # Example: C=0 (backbone oxygen)
-                    tmp_neighbors = [ x for x in  mol.setup.get_neigh(neighbors[0]) if not x == a ]
-                    neighbor2_xyz =  mol.setup.get_coord(tmp_neighbors[0])
+                    tmp_neighbors = [x for x in setup.get_neigh(neighbors[0]) if not x == a]
+                    neighbor2_xyz =  setup.get_coord(tmp_neighbors[0])
                     positions = self._place_sp2_two_waters(anchor_xyz,
                                                            neighbor1_xyz, neighbor2_xyz,
                                                            [hb_length, hb_length],
                                                            [-np.radians(120), np.radians(120)])
-                elif n_water == 3:
+                elif n_wat == 3:
                     hyb = 3
             elif hyb == 3:
                 if n_wat == 1:
                     # Example: Ammonia
-                    neighbor2_xyz = mol.setup.get_coord(neighbors[1])
-                    neighbor3_xyz = mol.setup.get_coord(neighbors[2])
+                    neighbor2_xyz = setup.get_coord(neighbors[1])
+                    neighbor3_xyz = setup.get_coord(neighbors[2])
                     positions = self._place_sp3_one_water(anchor_xyz, 
                                                           neighbor1_xyz, neighbor2_xyz, neighbor3_xyz,
                                                           hb_length)
                 elif n_wat == 2:
                     # Example: O-HD (Oxygen in hydroxyl group)
-                    neighbor2_xyz = mol.setup.get_coord(neighbors[1])
+                    neighbor2_xyz = setup.get_coord(neighbors[1])
                     positions = self._place_sp3_two_waters(anchor_xyz,
                                                            neighbor1_xyz, neighbor2_xyz,
                                                            [hb_length, hb_length],
@@ -174,5 +190,5 @@ class HydrateMoleculeLegacy:
 
         for water_anchor, waters_on_anchor in zip(water_anchors, water_positions):
             for water_on_anchor in waters_on_anchor:
-                pseudo_idx = mol.setup.add_pseudo(water_on_anchor, self._charge, [water_anchor], self._atom_type,
-                                                 self._bond_type, self._rotatable)
+                setup.add_pseudo(water_on_anchor, self._charge, [water_anchor], self._atom_type,
+                                     self._bond_type, self._rotatable)

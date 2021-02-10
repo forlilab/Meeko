@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Raccoon
+# Meeko preparation
 #
 
 import os
@@ -16,7 +16,7 @@ from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
 from .flexibility import FlexibilityBuilder
-from .writer import MolWriterLegacyPDBQT
+from .writer import PDBQTWriterLegacy
 from .utils import obutils
 
 
@@ -27,16 +27,13 @@ class MoleculePreparation:
         self._break_macrocycle = macrocycle
         self._keep_amide_rigid = amide_rigid
         self._mol = None
-        # atom typer
+
         self._atom_typer = AtomTyperLegacy()
-        # bond typer
-        self._bond_typer = BondTyperLegacy()
-        # macrocycle
-        self._macrocycle_typer = FlexMacrocycle() #max_ring_size=26, min_ring_size=8)
+        self._bond_typer = BondTyperLegacy(self._keep_amide_rigid)
+        self._macrocycle_typer = FlexMacrocycle(min_ring_size=7, max_ring_size=33, min_score=50) #max_ring_size=26, min_ring_size=8)
         self._flex_builder = FlexibilityBuilder()
-        #self._water_builder = WaterBuilder()
         self._water_builder = HydrateMoleculeLegacy()
-        self._writer = MolWriterLegacyPDBQT()
+        self._writer = PDBQTWriterLegacy()
 
     def prepare(self, mol):
         """ """
@@ -68,7 +65,7 @@ class MoleculePreparation:
         # 5.  scan macrocycles
         if self._break_macrocycle:
             # calculate possible breakable bonds
-            self._macrocycle_typer.analyze_mol(mol, min_ring_size=7, max_ring_size=33, min_score=50)
+            self._macrocycle_typer.search_macrocycle(mol)
 
         # 6.  build flexibility...
         # 6.1 if macrocycles typed:
@@ -86,29 +83,47 @@ class MoleculePreparation:
         # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
     
     def show_setup(self):
-        tot_charge = 0
-
-        print("Molecule setup\n")
-        print("==============[ ATOMS ]===================================================")
-        print("idx  |          coords            | charge |ign| atype    | connections")
-        print("-----+----------------------------+--------+---+----------+--------------- . . . ")
-        for k, v in list(self._mol.setup.coord.items()):
-            print("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
-                  self._mol.setup.charge[k], self._mol.setup.atom_ignore[k]),
-                  "| % -8s |" % self._mol.setup.atom_type[k],
-                  self._mol.setup.graph[k])
-            tot_charge += self._mol.setup.charge[k]
-        print("-----+----------------------------+--------+---+----------+--------------- . . . ")
-        print("  TOT CHARGE: %3.3f" % tot_charge)
-        #
-        print("\n======[ DIRECTIONAL VECTORS ]==========")
-        for k, v in list(self._mol.setup.coord.items()):
-            if k in self._mol.setup.interaction_vector:
-                print("% 4d " % k, self._mol.setup.atom_type[k], end=' ')
-        print("\n==============[ BONDS ]================")
-        for k, v in list(self._mol.setup.bond.items()):
-            print("% 8s : " % str(k), v)
-    
-    def write(self, pdbqt_filename):
         if self._mol is not None:
-            self._writer.write(self._mol, pdbqt_filename)
+            tot_charge = 0
+
+            print("Molecule setup\n")
+            print("==============[ ATOMS ]===================================================")
+            print("idx  |          coords            | charge |ign| atype    | connections")
+            print("-----+----------------------------+--------+---+----------+--------------- . . . ")
+            for k, v in list(self._mol.setup.coord.items()):
+                print("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
+                      self._mol.setup.charge[k], self._mol.setup.atom_ignore[k]),
+                      "| % -8s |" % self._mol.setup.atom_type[k],
+                      self._mol.setup.graph[k])
+                tot_charge += self._mol.setup.charge[k]
+            print("-----+----------------------------+--------+---+----------+--------------- . . . ")
+            print("  TOT CHARGE: %3.3f" % tot_charge)
+
+            print("\n======[ DIRECTIONAL VECTORS ]==========")
+            for k, v in list(self._mol.setup.coord.items()):
+                if k in self._mol.setup.interaction_vector:
+                    print("% 4d " % k, self._mol.setup.atom_type[k], end=' ')
+
+            print("\n==============[ BONDS ]================")
+            # For sanity users, we won't show those keys for now
+            keys_to_not_show = ['bond_order', 'type']
+            for k, v in list(self._mol.setup.bond.items()):
+                t = ', '.join('%s: %s' % (i, j) for i, j in v.items() if not i in keys_to_not_show)
+                print("% 8s - " % str(k), t)
+
+            self._macrocycle_typer.show_macrocycle_scores()
+
+            print('')
+    
+    def write_pdbqt_string(self):
+        if self._mol is not None:
+            return self._writer.write_string(self._mol)
+        else:
+            raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
+
+    def write_pdbqt_file(self, pdbqt_filename):
+        try:
+            with open(pdbqt_filename,'w') as w:
+                w.write(self.write_pdbqt_string())
+        except:
+            raise RuntimeError('Cannot write PDBQT file %s.' % pdbqt_filename)

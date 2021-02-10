@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Raccoon
+# Meeko flexibility typer
 #
 
 from copy import deepcopy
 from collections import defaultdict
-from itertools import product as iterproduct
-
-# DEBUG
+from itertools import product
 from operator import itemgetter
 
 
@@ -80,9 +78,6 @@ class FlexibilityBuilder:
             # the 0-model is the rigid model used as reference
             best_model_id, best_model_score = score_sorted[1]
             best_model = self.flexibility_models[best_model_id]
-
-        if best_model['broken_bonds']:
-            print("Most efficient ring opening bond:", best_model['broken_bonds'][0])
         
         setup = best_model['setup']
         del best_model['setup']
@@ -182,7 +177,7 @@ class FlexibilityBuilder:
                 bond_item = setup.get_bond(*bond_id)
                 if len(bond_item['in_rings']) > 1:
                     continue
-                if bond_item['type'] > 0 and bond_item['order'] == 1:
+                if bond_item['type'] > 0 and bond_item['bond_order'] == 1:
                     setup.bond[bond_id]['rotatable'] = True
 
         return setup
@@ -247,7 +242,7 @@ class FlexibilityBuilder:
             score = data['score']
             ring_bonds[ring_id].append((bond_id,ring_id, score))
         # enumerate all possible combinations of breakable rings for each ring
-        breakable_bond_raw = list(iterproduct(*list(ring_bonds.values())))
+        breakable_bond_raw = list(product(*list(ring_bonds.values())))
         for vect in breakable_bond_raw:
             bond_list = []
             ring_list = []
@@ -262,7 +257,6 @@ class FlexibilityBuilder:
             total_score = float(total_score) / len(bond_list)
             ring_list = list(set(ring_list))
             self.breakable_bond_matrix.append((bond_list, ring_list,total_score))
-        print("Enumerating %d breakable bonds combinations" % len(self.breakable_bond_matrix))
 
     def score_flex_model(self, model):
         """ score a flexibility model basing on the graph properties"""

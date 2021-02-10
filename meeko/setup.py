@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Raccoon
+# Meeko
 #
 
 from copy import deepcopy
@@ -11,6 +11,7 @@ import numpy as np
 from openbabel import openbabel as ob
 
 from .utils import obutils
+
 
 # based on the assumption we are using OpenBabel
 
@@ -238,7 +239,7 @@ class MoleculeSetup(object):
             in_rings = []
         # if bond_type==None:
         #     bond_type=None
-        self.bond[bond_id] = {'order': order,
+        self.bond[bond_id] = {'bond_order': order,
                               'type': bond_type,
                               'rotatable': rotatable,
                               'in_rings': in_rings}
@@ -274,6 +275,11 @@ class MoleculeSetup(object):
         idx_min = min(idx1, idx2)
         idx_max = max(idx1, idx2)
         return (idx_min, idx_max)
+
+    def is_methyl(self, atom_idx):
+        atom = self.mol.GetAtom(atom_idx)
+        h_count = len([x for x in ob.OBAtomAtomIter(atom) if x.GetAtomicNum() == 1])
+        return h_count == 3
 
     def init_atom(self):
         """initialize atom data table"""
@@ -380,18 +386,21 @@ class MoleculeSetup(object):
     def merge_hydrogen(self):
         """ standard method to merge hydrogens bound to carbons"""
         merged = 0
+
         for a, neigh_list in list(self.graph.items()):
             # look for hydrogens
             if not self.get_element(a) == 1:
                 continue
+
             hydrogen_charge = self.get_charge(a)
+
             for n in neigh_list:
                 # look for carbons
                 if self.get_element(n) == 6:
                     merged += 1
                     carbon_charge = self.get_charge(n)
                     # carbon adsorbs the final charge
-                    self.set_charge(n, carbon_charge+hydrogen_charge)
+                    self.set_charge(n, carbon_charge + hydrogen_charge)
                     # flag hydrogen to be ignored and set its charge to 0
                     self.set_charge(a, 0)
                     self.set_ignore(a, True)
