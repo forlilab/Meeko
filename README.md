@@ -31,5 +31,5 @@ preparator.prepare(mol)
 preparator.show_setup()
 
 output_pdbqt_file = "test_macrocycle_hydrate.pdbqt"
-preparator.write(output_pdbqt_file)
+preparator.write_pdbqt_file(output_pdbqt_file)
 ```
