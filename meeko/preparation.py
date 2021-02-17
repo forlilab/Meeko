@@ -35,8 +35,12 @@ class MoleculePreparation:
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
 
-    def prepare(self, mol):
-        """ """
+
+    def prepare(self, mol, is_protein_sidechain=False):
+        """ if protein_sidechain, C H N O will be removed,
+            root will be CA, and BEGIN/END_RES will be added.
+        """
+
         if mol.NumAtoms() == 0:
             raise ValueError('Error: no atoms present in the molecule')
 
@@ -78,9 +82,33 @@ class MoleculePreparation:
         #     in flexible macrocycles
         # TODO restore legacy AD types for PDBQT
         #self._atom_typer.set_param_legacy(mol)
-        self._flex_builder.process_mol(mol)
+        if is_protein_sidechain:
+            calpha_atom_index = self.get_calpha_atom_index(mol) # 1-index
+            self._flex_builder(mol, root_atom_index=calpha_atom_index)
+        else:
+            self._flex_builder(mol, root_atom_index=None)
         # TODO re-run typing after breaking bonds
         # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
+
+
+    def get_calpha_atom_index(self, mol):
+        """ used for preparing flexible sidechains
+            requires exactly 1 atom named "CA"
+            returns 1-index of CA atom
+        """
+
+        ca_atoms = [] # we want exactly 1
+        for atom in obutils.getAtoms(mol):
+            pdbinfo = obutils.getPdbInfo(atom)
+            if pdbinfo.name.strip() == 'CA':
+                ca_atoms.append(atom)
+        if len(ca_atoms) != 1:
+            sys.stderr.write("ERROR: flexible residue: need exactly one 'CA' atom.\n")
+            sys.stderr.write("       found %d 'CA' atoms\n" % len(ca_atoms))
+            sys.stderr.write("       obmol.GetTitle(): %s\n" % mol.GetTitle())
+            sys.exit(42)
+        return ca_atoms[0].GetIdx()
+
     
     def show_setup(self):
         if self._mol is not None:

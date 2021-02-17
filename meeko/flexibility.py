@@ -11,11 +11,8 @@ from operator import itemgetter
 
 
 class FlexibilityBuilder:
-    def __init__(self):
-        """ """
-        pass
 
-    def process_mol(self, mol, freeze_bonds=None):
+    def __call__(self, mol, freeze_bonds=None, root_atom_index=None):
         """ """
         # self.flexibility_models = []
         self.mol = mol
@@ -24,48 +21,34 @@ class FlexibilityBuilder:
         if not freeze_bonds is None:
             self._frozen_bonds = freeze_bonds[:]
         # build rigid body graph
-        self.build_flexible_models()
+        #self.build_flexible_model_standard() # always needed for relative score in score_model
+        # build graph for standard molecule (no open macrocycle rings)
+        model = self.build_rigid_body_connectivity()
+        model = self.set_graph_root(model, root_atom_index) # finds root if root_atom_index==None
+        self.add_flex_model(model, score=False)
+
+        # evaluate possible graphs for various ring openings
+        #self.build_flexible_model_open_rings()
+        self.build_breakable_bond_matrix()
+        for breakable_bond_vector in self.breakable_bond_matrix:
+            bond_tuple, rings, score = breakable_bond_vector #[2]
+            model = self.build_rigid_body_connectivity(bonds_to_break=breakable_bond_vector)
+            self.set_graph_root(model, root_atom_index) # finds root if root_atom_index==None
+            self.add_flex_model(model, score=True, initial_score=score)
+
+        self.select_best_model()
+
         # clean up
         del self.mol
         del self._frozen_bonds
         del self.flexibility_models
 
-    def build_flexible_models(self):
-        """
-        build flexibility models for all configurations of the ligand (standard,
-        and all macrocycle opening configurations)
-        """
-        self.build_flexible_model_standard()
-        self.build_flexible_model_open_rings()
-        self.select_best_model()
-
-    def build_flexible_model_standard(self):
-        """
-        build flexibility model for unmodified (no macrocycle) standard molecular model
-        """
-        model = self.build_rigid_body_connectivity()
-        model = self.find_graph_root(model)
-        self.add_flex_model(model, score=False)
-
-    def build_flexible_model_open_rings(self):
-        """
-        generate the matrix of all breakable bonds combinations, then
-        build the flexibility models of the open ring molecules
-        and score them
-        """
-        # build breakable bonds matrix
-        self.build_breakable_bond_matrix()
-        for breakable_bond_vector in self.breakable_bond_matrix:
-            bond_tuple, rings, score = breakable_bond_vector #[2]
-            model = self.build_rigid_body_connectivity(bonds_to_break=breakable_bond_vector)
-            model = self.find_graph_root(model)
-            self.add_flex_model(model, score=True, initial_score=score)
 
     def select_best_model(self):
         """
         select flexibility model with best complexity score
         """
-        if len(self.flexibility_models) == 1:
+        if len(self.flexibility_models) == 1: # no macrocyle open rings
             best_model = list(self.flexibility_models.values())[0]
         else:
             score_sorted_models = []
@@ -90,6 +73,7 @@ class FlexibilityBuilder:
         """ add a flexible model to the list of configurations,
             and optionally score it, basing on the connectivity properties
         """
+
         model_id = len(self.flexibility_models)
         if score == False:
             model['score'] = float('inf')
@@ -182,41 +166,60 @@ class FlexibilityBuilder:
 
         return setup
 
-    def find_graph_root(self, model):
+
+    def calc_max_depth(self, graph, seed_node, visited=[], depth=0):
+        maxdepth = depth 
+        newdepth = 0
+        visited.append(seed_node)
+        for node in graph[seed_node]:
+            if node not in visited:
+                visited.append(node)
+                newdepth = self.calc_max_depth(graph, node, visited, depth + 1)
+            maxdepth = max(maxdepth, newdepth)
+        return maxdepth
+
+
+    def set_graph_root(self, model, root_atom_index=None):
         """ TODO this has to be made aware of the weight of the groups left
          (see 1jff:TA1)
         """
-        graph = deepcopy(model['rigid_body_graph'])
-        max_depth = 0
-        torsions = 0
-        while len(graph) > 2:
-            max_depth += 1
-            leaves = []
-            for vertex, edges in list(graph.items()):
-                if len(edges) == 1:
-                    leaves.append(vertex)
-                    torsions += 1
-            for l in leaves:
-                for vertex, edges in list(graph.items()):
-                    if l in edges:
-                        edges.remove(l)
-                        graph[vertex] = edges
-                del graph[l]
 
-        if len(graph) == 1:
-            model['root'] = list(graph.keys())[0]
-        else:
-            r1, r2 = list(graph.keys())
-            r1_size = len(model['rigid_body_members'][r1])
-            r2_size = len(model['rigid_body_members'][r2])
-            if r1_size >= r2_size:
-                model['root'] = r1
+        if root_atom_index is None: # find rigid group that minimizes max_depth
+            graph = deepcopy(model['rigid_body_graph'])
+            #max_depth = 0
+            while len(graph) > 2: # remove leafs until 1 or 2 rigid groups remain
+                #max_depth += 1
+                leaves = []
+                for vertex, edges in list(graph.items()):
+                    if len(edges) == 1:
+                        leaves.append(vertex)
+                for l in leaves:
+                    for vertex, edges in list(graph.items()):
+                        if l in edges:
+                            edges.remove(l)
+                            graph[vertex] = edges
+                    del graph[l]
+
+            if len(graph) == 1:
+                root_body_index = list(graph.keys())[0]
             else:
-                model['root'] = r2
-            torsions += 1
-            max_depth += 1
-        model['graph_depth'] = max_depth
-        model['torsions'] = torsions
+                r1, r2 = list(graph.keys())
+                r1_size = len(model['rigid_body_members'][r1])
+                r2_size = len(model['rigid_body_members'][r2])
+                if r1_size >= r2_size:
+                    root_body_index = r1
+                else:
+                    root_body_index = r2
+                #max_depth += 1
+
+        else: # find index of rigid group
+            for body_index in model['rigid_body_members']:
+                if root_atom_index in model['rigid_body_members'][body_index]: # 1-index atoms
+                    root_body_index = body_index
+
+        model['root'] = root_body_index
+        model['torsions'] = len(model['rigid_body_members']) - 1
+        model['graph_depth'] = self.calc_max_depth(model['rigid_body_graph'], root_body_index, visited=[], depth=0)
 
         return model
 

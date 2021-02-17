@@ -37,6 +37,8 @@ def getCoordsFromAtomIndices(obmol, atomIdxList):
         coord.append(getAtomCoords(a))
     return np.array(coord)
 
+def getAtoms(obmol):
+    return ob.OBMolAtomIter(obmol)
 
 def getAtomRes(atom):
     """ retrieve residue info about the atom """

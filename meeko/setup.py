@@ -354,10 +354,7 @@ class MoleculeSetup(object):
     def init_from_obmol(self, obmol, amide_rigid=True):
         """generate a new molecule setup
 
-            data can be accessed by index in the arrays/dicts or using the appropriate
-            methods.
-            NOTE: OpenBabel uses a clumsy 1-based index, while we shuold probably
-                  respect more civilized conventions and use 0-based
+            NOTE: OpenBabel uses 1-based index
         """
         # storing info
         self.mol = obmol
