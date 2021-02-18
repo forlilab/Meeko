@@ -280,9 +280,12 @@ class MoleculeSetup(object):
         return (idx_min, idx_max)
 
     def is_methyl(self, atom_idx):
+        """ identify methyl groups (to be done with SMARTS)"""
         atom = self.mol.GetAtom(atom_idx)
+        if not (atom.GetAtomicNum() == 6):
+            return False
         h_count = len([x for x in ob.OBAtomAtomIter(atom) if x.GetAtomicNum() == 1])
-        return h_count == 3 and atom.GetAtomicNum() == 6
+        return h_count == 3
 
     def init_atom(self):
         """initialize atom data table"""
