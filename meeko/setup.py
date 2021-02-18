@@ -282,7 +282,7 @@ class MoleculeSetup(object):
     def is_methyl(self, atom_idx):
         atom = self.mol.GetAtom(atom_idx)
         h_count = len([x for x in ob.OBAtomAtomIter(atom) if x.GetAtomicNum() == 1])
-        return h_count == 3
+        return h_count == 3 and atom.GetAtomicNum() == 6
 
     def init_atom(self):
         """initialize atom data table"""
