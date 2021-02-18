@@ -62,6 +62,14 @@ class PDBQTWriterLegacy():
         pdbinfo = self.mol.setup.pdbinfo[atom_idx]
         if pdbinfo is None:
             pdbinfo = obutils.PDBAtomInfo('', '', 0, '')
+        atom_name = pdbinfo.name
+        res_name = pdbinfo.resName
+        res_num = pdbinfo.resNum
+        chain = pdbinfo.chain
+        if len(atom_name) > 4: atom_name = atom_name[0:4]
+        if len(res_name) > 3: res_name = res_name[0:3]
+        if res_num > 9999: res_num = res_num % 10000
+        if len(chain) > 1: chain = chain[0:1]
         in_code = ""
         occupancy = 1.0
         temp_factor = 0.0
@@ -71,14 +79,13 @@ class PDBQTWriterLegacy():
             self._atom_counter[atom_symbol] = 0
         self._atom_counter[atom_symbol] += 1
         atom_count = self._atom_counter[atom_symbol]
-        atom_name = "%s%d" % (atom_symbol, atom_count)
         coord = self.setup.coord[atom_idx]
         atom_type = self.setup.get_atom_type(atom_idx)
         charge = self.setup.charge[atom_idx]
         atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
 
-        return atom.format(record_type, self._count, pdbinfo.name, alt_id, pdbinfo.resName, pdbinfo.chain,
-                           pdbinfo.resNum, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
+        return atom.format(record_type, self._count, pdbinfo.name, alt_id, res_name, chain,
+                           res_num, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
                            occupancy, temp_factor, charge, atom_type)
 
     def _walk_graph_recursive(self, node, edge_start=0, first=False): #, rigid_body_id=None):
