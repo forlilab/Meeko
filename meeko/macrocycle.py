@@ -131,15 +131,20 @@ class FlexMacrocycle:
             target = bond_id[1 - idx]
             anchor = bond_id[0 - idx]
             coord = self._mol.setup.get_coord(target)
+            tmp = obutils.getPdbInfo(self._mol.GetAtom(anchor))
+            pdbinfo = obutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
+
             closure_pseudo.append({
                 'coord': coord,
                 'anchor_list': [anchor],
                 'charge': 0.0,
+                'pdbinfo': pdbinfo,
                 'atom_type': 'G',
                 'bond_type': 0,
                 'rotatable': False})
 
         return closure_pseudo
+
 
     def _find_13_14_neighs(self, bond_id):
         """

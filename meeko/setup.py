@@ -46,6 +46,7 @@ class MoleculeSetup(object):
         "element",
         "coord",
         "charge",
+        "pdbinfo",
         "graph",
         "bond",
         "interaction_vector",
@@ -68,6 +69,7 @@ class MoleculeSetup(object):
         self.atom_pseudo = []
         self.coord = OrderedDict()  # FIXME all OrderedDict shuold be converted to lists?
         self.charge = OrderedDict()
+        self.pdbinfo = OrderedDict()
         self.atom_type = OrderedDict()
         self.atom_ignore = OrderedDict()
         self.atom_true_count = 0
@@ -183,7 +185,7 @@ class MoleculeSetup(object):
         del self.interaction_vector[idx]
 
     # Pseudo-atoms
-    def add_pseudo(self, coord, charge, anchor_list, atom_type, bond_type, rotatable, directional_vectors=None, ignore=False):
+    def add_pseudo(self, coord, charge, anchor_list, atom_type, bond_type, rotatable, pdbinfo=None, directional_vectors=None, ignore=False):
         """ add data about pseudoatom
             multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
 
@@ -193,6 +195,7 @@ class MoleculeSetup(object):
         self.atom_pseudo.append(idx)
         self.coord[idx] = coord
         self.charge[idx] = charge
+        self.pdbinfo[idx] = pdbinfo
         self.atom_type[idx] = atom_type
         self.graph[idx] = []
         self.element[idx] = 0
@@ -287,6 +290,7 @@ class MoleculeSetup(object):
             idx = a.GetIdx()
             self.coord[idx] = np.asarray(obutils.getAtomCoords(a), dtype='float')
             self.charge[idx] = a.GetPartialCharge()
+            self.pdbinfo[idx] = obutils.getPdbInfo(a)
             self.atom_type[idx] = None
             self.graph[idx] = [x.GetIdx() for x in ob.OBAtomAtomIter(a)]
             self.element[idx] = a.GetAtomicNum()

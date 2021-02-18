@@ -7,6 +7,7 @@
 import sys
 
 from openbabel import openbabel as ob
+from .utils import obutils
 
 from .atomtyper import AtomTyperLegacy
 
@@ -58,9 +59,9 @@ class PDBQTWriterLegacy():
         """ """
         record_type = "ATOM"
         alt_id = " "
-        res_name = 'LIG'
-        chain = "L"
-        res_seq = 1
+        pdbinfo = self.mol.setup.pdbinfo[atom_idx]
+        if pdbinfo is None:
+            pdbinfo = obutils.PDBAtomInfo('', '', 0, '')
         in_code = ""
         occupancy = 1.0
         temp_factor = 0.0
@@ -76,8 +77,8 @@ class PDBQTWriterLegacy():
         charge = self.setup.charge[atom_idx]
         atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
 
-        return atom.format(record_type, self._count, atom_name, alt_id, res_name, chain,
-                           res_seq, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
+        return atom.format(record_type, self._count, pdbinfo.name, alt_id, pdbinfo.resName, pdbinfo.chain,
+                           pdbinfo.resNum, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
                            occupancy, temp_factor, charge, atom_type)
 
     def _walk_graph_recursive(self, node, edge_start=0, first=False): #, rigid_body_id=None):

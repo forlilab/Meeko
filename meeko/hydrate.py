@@ -7,6 +7,7 @@
 import numpy as np
 
 from .utils import geomutils
+from .utils import obutils
 
 
 class HydrateMoleculeLegacy:
@@ -190,5 +191,7 @@ class HydrateMoleculeLegacy:
 
         for water_anchor, waters_on_anchor in zip(water_anchors, water_positions):
             for water_on_anchor in waters_on_anchor:
+                tmp = setup.pdbinfo[water_anchor]
+                pdbinfo = obutils.PDBAtomInfo('WAT', tmp.resName, tmp.resNum, tmp.chain)
                 setup.add_pseudo(water_on_anchor, self._charge, [water_anchor], self._atom_type,
-                                     self._bond_type, self._rotatable)
+                                     self._bond_type, self._rotatable, pdbinfo)
