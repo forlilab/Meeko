@@ -79,6 +79,8 @@ class FlexMacrocycle:
         if bond.IsAromatic():
             #print("-> [ X ] aromatic bond violation")
             return -1
+        if atom1.GetAtomicNum() != 6 or atom1.IsAromatic() or atom2.GetAtomicNum() != 6 or atom2.IsAromatic():
+            return -1
         if (not bond_order == 1):
             # triple bond tolerated but not preferred (TODO true?)
             if bond_order == 3:
@@ -111,11 +113,6 @@ class FlexMacrocycle:
             #print("-> [ X ] multi-ring bond violation, (atom1 %d->%s rings | atom2 %d->%s rings)" % (atom_idx1, v1, atom_idx2, v2))
             #print("=> SCORE[%d]" % -1, "#")
             return -1
-        # privilege carbon-carbon bonds (check this, with the new glue atoms we have no issues)
-        if (not atom1.GetAtomicNum()==6) or (not atom2.GetAtomicNum()==6):
-            score -= 20
-            v1, v2 = atom1.GetAtomicNum(), atom2.GetAtomicNum()
-            #print("-> [ - ] non-carbon penalty (%d, %d)" % (v1,v2))
         # discourage chiral atoms
         if atom1.IsChiral() or atom2.IsChiral():
             score -= 20
