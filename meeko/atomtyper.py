@@ -29,7 +29,6 @@ class AtomTyperLegacy:
         self._oxygen_nonpolar_patterns = {#"[#8]": ('OA', 0),
                                           '[#7](~O)(~O)(~a)': ('O', 1), # aromatic-nitro
                                           '[a]~[#8]~[a]': ('O', 1), # aromatic ether
-                                          '[#6](-[#8])(=[#8])': ('O', 1), # carboxy hydroxyl
                                           '[o]': ('O', 0), # aromatic oxygen
                                           }
     
