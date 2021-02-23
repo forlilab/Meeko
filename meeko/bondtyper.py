@@ -13,84 +13,83 @@ from openbabel import openbabel as ob
 
 
 class BondTyperLegacy:
-    def __init__(self, amide_rigid=True):
-        """Initialize the legacy atom typer for AutoDock 4.2.x
-        
-        Args:
-            amide_rigid (bool): consider amide bond as rigid (default: True)
 
-        """
-        self._keep_amide_rigid = amide_rigid
-        self._amide_bonds = None
-
-    def _identify_amide_bonds(self, mol):
-        """Store info about amide bonds to be made non-rotatable.
-        
-        Args:
-            mol (OBMol): input OBMol object
-        
-        """
-        self._amide_bonds = []
-        pattern = "[NX3][CX3](=[OX1])[#6]"
-
-        found = mol.setup.smarts.find_pattern(pattern)
-
-        for p in found:
-            couple = mol.setup.get_bond_id(p[0], p[1])
-            couple = mol.setup.get_bond_id(*couple)
-            self._amide_bonds.append(couple)
-
-        self._amide_bonds = set(self._amide_bonds)
-
-    def set_types_legacy(self, mol):
+    def __call__(self, mol, keep_amide_rigid):
         """Typing atom bonds in the legacy way
         
         Args:
             mol (OBMol): input OBMol molecule object
 
         """
-        setup = mol.setup
 
-        if self._keep_amide_rigid:
-            self._identify_amide_bonds(mol)
-
-        for b in ob.OBMolBondIter(mol):
+        for ob_bond in ob.OBMolBondIter(mol):
             rotatable = True
-            is_amide_bond = False
             # @Stefano, might want to define something else for the default type (-1 ?)
             default_type = 42
 
-            begin = b.GetBeginAtomIdx()
-            end = b.GetEndAtomIdx()
-            bond_id = setup.get_bond_id(begin, end)
-            bond = setup.get_bond(begin,end)
-            bond_obj = mol.GetBond(begin,end)
-            bond_order = bond_obj.GetBondOrder()
-            in_ring = bond_obj.IsInRing()
-            terminal = (len(setup.graph[begin]) == 1 or len(setup.graph[end]) == 1)
+            begin = ob_bond.GetBeginAtomIdx()
+            end = ob_bond.GetEndAtomIdx()
 
-            if bond_obj.IsAromatic():
-                bond_order = 5
+            bond_order = ob_bond.GetBondOrder()
 
-            # Check for methyl group
-            if setup.is_methyl(begin) or setup.is_methyl(end):
-                terminal = True
-
-            # Is this bond an amide bond?
-            if (begin, end) in self._amide_bonds:
-                is_amide_bond = True
-                bond_order = 99
-
-            # @Stefano, Is it also for the amide bonds?
-            if bond_obj.IsAmide() and not bond_obj.IsTertiaryAmide() and False:
-                is_amide_bond = True
-                bond_order = 99
-
-            # If in_ring or terminal or bond_obj.GetBondOrder() > 1 or bond_obj.IsAromatic():
-            if in_ring or terminal or bond_order > 1 or is_amide_bond:
+            if bond_order > 1:
                 rotatable = False
 
-            # TODO SMART THE HECK OUT OF THE MOLECULE HERE
-            setup.bond[bond_id]['rotatable'] = rotatable
-            setup.bond[bond_id]['type'] = default_type
-            setup.bond[bond_id]['bond_order'] = bond_order
+            if ob_bond.IsInRing():
+                rotatable = False
+
+            if ob_bond.GetBeginAtom().GetExplicitDegree() == 1 or ob_bond.GetEndAtom().GetExplicitDegree(): # terminal
+                rotatable = False
+
+            if ob_bond.IsAromatic():
+                bond_order = 5
+                rotatable = False
+
+            # Check for methyl group
+            if mol.setup.is_methyl(begin) or mol.setup.is_methyl(end):
+                terminal = True
+
+            # @Stefano, Is it also for the amide bonds?
+            if ob_bond.IsAmide() and keep_amide_rigid:
+                bond_order = 99
+                rotatable = False
+
+            if self._is_imide(ob_bond):
+                rotatable = False
+
+            bond_id = mol.setup.get_bond_id(begin, end)
+            mol.setup.bond[bond_id]['rotatable'] = rotatable
+            mol.setup.bond[bond_id]['type'] = default_type
+            mol.setup.bond[bond_id]['bond_order'] = bond_order
+
+    def _is_imide(self, ob_bond):
+        """ python version of openbabel pdbqtformat.cpp/IsImide(OBBond* querybond)"""
+        if ob_bond.GetBondOrder() != 2:
+            return False
+        bgn = ob_bond.GetBeginAtom().GetAtomicNum()
+        end = ob_bond.GetEndAtom().GetAtomicNum()
+        if (bgn == 6 and end == 7) or (bgn == 7 and end == 6):
+            return True
+        return False
+    
+    def _is_amidine(self, ob_bond):
+        """ python version of openbabel pdbqtformat.cpp/IsImide(OBBond* querybond)"""
+        if ob_bond.GetBondOrder() != 1:
+            return False
+        bgn = ob_bond.GetBeginAtom().GetAtomicNum()
+        end = ob_bond.GetEndAtom().GetAtomicNum()
+        if bgn == 6 and end == 7:
+            c = ob_bond.GetBeginAtom()
+            n = ob_bond.GetEndAtom()
+        elif bgn == 7 and end == 6:
+            n = ob_bond.GetBeginAtom()
+            c = ob_bond.GetEndAtom()
+        else:
+            return False
+        if n.GetImplicitValence() != 3:
+            return False
+        # make sure C is attached to =N
+        for b in ob.OBAtomBondIter(c):
+            if isImide(b):
+                return True
+        return False
