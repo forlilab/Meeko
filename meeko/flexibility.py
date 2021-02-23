@@ -161,7 +161,7 @@ class FlexibilityBuilder:
                 bond_item = setup.get_bond(*bond_id)
                 if len(bond_item['in_rings']) > 1:
                     continue
-                if bond_item['type'] > 0 and bond_item['bond_order'] == 1:
+                if bond_item['bond_order'] == 1: # not amide, amidine, aromatic
                     setup.bond[bond_id]['rotatable'] = True
 
         return setup

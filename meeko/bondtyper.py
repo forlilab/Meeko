@@ -24,12 +24,8 @@ class BondTyperLegacy:
 
         for ob_bond in ob.OBMolBondIter(mol):
             rotatable = True
-            # @Stefano, might want to define something else for the default type (-1 ?)
-            default_type = 42
-
             begin = ob_bond.GetBeginAtomIdx()
             end = ob_bond.GetEndAtomIdx()
-
             bond_order = ob_bond.GetBondOrder()
 
             if bond_order > 1:
@@ -45,21 +41,19 @@ class BondTyperLegacy:
                 bond_order = 5
                 rotatable = False
 
-            # Check for methyl group
             if mol.setup.is_methyl(begin) or mol.setup.is_methyl(end):
-                terminal = True
+                rotatable = False
 
-            # @Stefano, Is it also for the amide bonds?
             if ob_bond.IsAmide() and keep_amide_rigid:
                 bond_order = 99
                 rotatable = False
 
             if self._is_imide(ob_bond):
+                bond_order = 99
                 rotatable = False
 
             bond_id = mol.setup.get_bond_id(begin, end)
             mol.setup.bond[bond_id]['rotatable'] = rotatable
-            mol.setup.bond[bond_id]['type'] = default_type
             mol.setup.bond[bond_id]['bond_order'] = bond_order
 
     def _is_imide(self, ob_bond):
