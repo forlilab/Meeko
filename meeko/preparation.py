@@ -29,7 +29,7 @@ class MoleculePreparation:
         self._mol = None
 
         self._atom_typer = AtomTyperLegacy()
-        self._bond_typer = BondTyperLegacy(self._keep_amide_rigid)
+        self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(min_ring_size=7, max_ring_size=33, min_score=50) #max_ring_size=26, min_ring_size=8)
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
@@ -60,7 +60,7 @@ class MoleculePreparation:
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer.set_types_legacy(mol)
+        self._bond_typer(mol, self._keep_amide_rigid)
 
         # 4 . hydrate molecule
         if self._add_water:
