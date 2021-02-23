@@ -48,7 +48,7 @@ class BondTyperLegacy:
                 bond_order = 99
                 rotatable = False
 
-            if self._is_imide(ob_bond):
+            if self._is_amidine(ob_bond):
                 bond_order = 99
                 rotatable = False
 
@@ -80,10 +80,10 @@ class BondTyperLegacy:
             c = ob_bond.GetEndAtom()
         else:
             return False
-        if n.GetImplicitValence() != 3:
+        if n.GetExplicitDegree() != 3:
             return False
         # make sure C is attached to =N
         for b in ob.OBAtomBondIter(c):
-            if isImide(b):
+            if self._is_imide(b):
                 return True
         return False
