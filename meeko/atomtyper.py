@@ -27,10 +27,10 @@ class AtomTyperLegacy:
                                             }
 
         self._oxygen_nonpolar_patterns = {#"[#8]": ('OA', 0),
-                                          '[#7](~O)(~O)(~a)': ('O', 1), # aromatic-nitro
-                                          '[#6](-[#8X2H1])(=[#8])': ('O', 1), # carboxy hydroxyl
-                                          '[a]~[#8]~[a]': ('O', 1), # aromatic ether (diphenyl ether)
-                                          '[o]': ('O', 0), # aromatic oxygen
+                                          #'[#7](~O)(~O)(~a)': ('O', 1), # aromatic-nitro
+                                          #'[#6](-[#8X2H1])(=[#8])': ('O', 1), # carboxy hydroxyl
+                                          #'[a]~[#8]~[a]': ('O', 1), # aromatic ether (diphenyl ether)
+                                          #'[o]': ('O', 0), # aromatic oxygen
                                           }
     
     def _hydrogen_atom_type(self, hydrogen):
