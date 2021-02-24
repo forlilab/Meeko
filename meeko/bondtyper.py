@@ -34,7 +34,7 @@ class BondTyperLegacy:
             if ob_bond.IsInRing():
                 rotatable = False
 
-            if ob_bond.GetBeginAtom().GetExplicitDegree() == 1 or ob_bond.GetEndAtom().GetExplicitDegree(): # terminal
+            if ob_bond.GetBeginAtom().GetExplicitDegree() == 1 or ob_bond.GetEndAtom().GetExplicitDegree() == 1: # terminal
                 rotatable = False
 
             if ob_bond.IsAromatic():
