@@ -16,6 +16,7 @@ from . import utils
 
 # named tuple to contain information about an atom
 PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
+PDBResInfo  = namedtuple('PDBResInfo',       "resName resNum chain")
 
 
 def getAtomIdxCoords(obmol, atom_idx):

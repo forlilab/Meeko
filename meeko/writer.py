@@ -21,6 +21,7 @@ class PDBQTWriterLegacy():
         self._numbering = {}
         self._pdbqt_buffer = []
         self._atom_counter = {}
+        self._resinfo_set = set() # for flexres keywords BEGIN_RES / END_RES
 
     def _fix_atom_types(self):
         """ set legacy atom types and update closure atoms"""
@@ -55,13 +56,10 @@ class PDBQTWriterLegacy():
 
                 self.setup.set_atom_type(target_idx, at_type)
 
-    def _make_pdbqt_line(self, atom_idx):
-        """ """
-        record_type = "ATOM"
-        alt_id = " "
-        pdbinfo = self.mol.setup.pdbinfo[atom_idx]
-        if pdbinfo is None:
-            pdbinfo = obutils.PDBAtomInfo('', '', 0, '')
+    def _get_pdbinfo_fitting_pdb_chars(self, pdbinfo):
+        """ return strings and integers that are guaranteed
+            to fit within the designated chars of the PDB format """
+
         atom_name = pdbinfo.name
         res_name = pdbinfo.resName
         res_num = pdbinfo.resNum
@@ -70,6 +68,18 @@ class PDBQTWriterLegacy():
         if len(res_name) > 3: res_name = res_name[0:3]
         if res_num > 9999: res_num = res_num % 10000
         if len(chain) > 1: chain = chain[0:1]
+        return atom_name, res_name, res_num, chain
+
+    def _make_pdbqt_line(self, atom_idx):
+        """ """
+        record_type = "ATOM"
+        alt_id = " "
+        pdbinfo = self.mol.setup.pdbinfo[atom_idx]
+        if pdbinfo is None:
+            pdbinfo = obutils.PDBAtomInfo('', '', 0, '')
+        resinfo = obutils.PDBResInfo(pdbinfo.resName, pdbinfo.resNum, pdbinfo.chain)
+        self._resinfo_set.add(resinfo)
+        atom_name, res_name, res_num, chain = self._get_pdbinfo_fitting_pdb_chars(pdbinfo)
         in_code = ""
         occupancy = 1.0
         temp_factor = 0.0
@@ -117,6 +127,12 @@ class PDBQTWriterLegacy():
 
             # Write the branch
             begin, next_index = self.model['rigid_body_connectivity'][node, neigh]
+
+            # do not write branch (or anything downstream) if any of the two atoms
+            # defining the rotatable bond are ignored
+            if self.setup.atom_ignore[begin] or self.setup.atom_ignore[next_index]:
+                continue
+
             begin = self._numbering[begin]
             end = self._count
 
@@ -124,7 +140,7 @@ class PDBQTWriterLegacy():
             self._walk_graph_recursive(neigh, edge_start=next_index)
             self._pdbqt_buffer.append("ENDBRANCH %4d %4d" % (begin, end))
 
-    def write_string(self, mol):
+    def write_string(self, mol, is_protein_sidechain):
         """Output a PDBQT file as a string.
         
         Args:
@@ -139,6 +155,7 @@ class PDBQTWriterLegacy():
         self._numbering = {}
         self._pdbqt_buffer = []
         self._atom_counter = {}
+        self._resinfo_set = set()
 
         self.mol = mol
         self.model = mol.setup.flexibility_model
@@ -164,7 +181,18 @@ class PDBQTWriterLegacy():
 
         self._walk_graph_recursive(root, first=True)
 
-        # torsdof is always going to be the one of the rigid, non-macrocyclic one
-        self._pdbqt_buffer.append('TORSDOF %d\n' % active_tors)
+        if is_protein_sidechain:
+            if len(self._resinfo_set) > 1:
+                print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
+                print(self._resinfo_set, file=sys.stderr)
+            resinfo = list(self._resinfo_set)[0]
+            pdbinfo = obutils.PDBAtomInfo('', resinfo.resName, resinfo.resNum, resinfo.chain)
+            _, res_name, res_num, chain = self._get_pdbinfo_fitting_pdb_chars(pdbinfo)
+            resinfo_string = "{:3s} {:1s}{:4d}".format(res_name, chain, res_num)
+            self._pdbqt_buffer.insert(0, 'BEGIN_RES %s' % resinfo_string)
+            self._pdbqt_buffer.append('END_RES %s' % resinfo_string)
+        else: # no TORSDOF in flexres
+            # torsdof is always going to be the one of the rigid, non-macrocyclic one
+            self._pdbqt_buffer.append('TORSDOF %d\n' % active_tors)
 
         return '\n'.join(self._pdbqt_buffer)
