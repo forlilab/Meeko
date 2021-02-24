@@ -27,6 +27,8 @@ def cmd_lineparser():
                         action="store_true", help="add hydrogen atoms")
     parser.add_argument("--pH", dest="pH_value", default=None,
                         action="store", help="correct protonation for pH (default: No correction)")
+    parser.add_argument("-f", "--flex", dest="is_protein_sidechain", default=False,
+                        action="store_true", help="prepare as flexible protein residue")
     parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
                         action="store", help="output pdbqt file")
     parser.add_argument("-v", "--verbose", dest="verbose", default=False,
@@ -44,6 +46,7 @@ def main():
     no_merge_hydrogen = args.no_merge_hydrogen
     add_hydrogen = args.add_hydrogen
     pH_value = args.pH_value
+    is_protein_sidechain = args.is_protein_sidechain
 
     mol = obutils.load_molecule_from_file(input_molecule_file)
 
@@ -57,18 +60,17 @@ def main():
 
     preparator = MoleculePreparation(merge_hydrogens=no_merge_hydrogen, macrocycle=build_macrocycle, 
                                      hydrate=add_water, amide_rigid=True)
-    preparator.prepare(mol)
+    preparator.prepare(mol, is_protein_sidechain)
 
     # maybe verbose could be an option and it will show the various bond scores and breakdowns?
     if verbose:
         preparator.show_setup()
 
     if output_pdbqt_file is None:
-        # if output format not defined, use infile to infer outname
-        name, ext = os.path.splitext(input_molecule_file)
-        output_pdbqt_file = "%s.pdbqt" % (name)
-
-    preparator.write_pdbqt_file(output_pdbqt_file)
+        text = preparator.write_pdbqt_string()
+        print(text)
+    else:
+        preparator.write_pdbqt_file(output_pdbqt_file)
 
 
 if __name__ == '__main__':

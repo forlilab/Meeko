@@ -45,7 +45,8 @@ class MoleculePreparation:
             raise ValueError('Error: no atoms present in the molecule')
 
         self._mol = mol
-        MoleculeSetup(mol)
+        self.is_protein_sidechain = is_protein_sidechain # used in self.write_pdbqt_string
+        MoleculeSetup(mol, is_protein_sidechain=is_protein_sidechain)
 
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)
@@ -145,7 +146,7 @@ class MoleculePreparation:
     
     def write_pdbqt_string(self):
         if self._mol is not None:
-            return self._writer.write_string(self._mol)
+            return self._writer.write_string(self._mol, is_protein_sidechain=self.is_protein_sidechain)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 

@@ -58,7 +58,7 @@ class MoleculeSetup(object):
         'history',
         ]
 
-    def __init__(self, obmol, template=None, amide_rigid=True):
+    def __init__(self, obmol, template=None, amide_rigid=True, is_protein_sidechain=False):
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
@@ -88,7 +88,7 @@ class MoleculeSetup(object):
         self.history = []
 
         if template is None:
-            self.init_from_obmol(obmol, amide_rigid)
+            self.init_from_obmol(obmol, amide_rigid, is_protein_sidechain)
         elif isinstance(template, MoleculeSetup):
             self.init_from_template(template)
         else:
@@ -358,7 +358,7 @@ class MoleculeSetup(object):
                 in_rings = []
             self.add_bond(idx1, idx2, order=bond_order, in_rings=in_rings)
 
-    def init_from_obmol(self, obmol, amide_rigid=True):
+    def init_from_obmol(self, obmol, amide_rigid=True, is_protein_sidechain=False):
         """generate a new molecule setup
 
             NOTE: OpenBabel uses 1-based index
@@ -371,6 +371,8 @@ class MoleculeSetup(object):
         self.perceive_rings()
         self.init_bond(amide_rigid)
         self.mol.setup = self
+        if is_protein_sidechain:
+            self.ignore_backbone()
     
     def init_from_template(self, template):
         """ copy attributes to duplicate the template setup
@@ -408,3 +410,20 @@ class MoleculeSetup(object):
                     # flag hydrogen to be ignored and set its charge to 0
                     self.set_charge(a, 0)
                     self.set_ignore(a, True)
+
+
+    def ignore_backbone(self):
+        """ set ignore for PDB atom names 'C', 'N', 'H', and 'O'
+            these atoms are kept in the rigid PDBQT by ReactiveReceptor"""
+
+        exclude_pdbname = {'C': 0, 'N': 0, 'H': 0, 'O': 0} # store counts of found atoms
+        for atom in ob.OBMolAtomIter(self.mol):
+            pdbinfo = obutils.getPdbInfo(atom)
+            if pdbinfo.name.strip() in exclude_pdbname:
+                idx = atom.GetIdx()
+                self.set_ignore(idx, True)
+                exclude_pdbname[pdbinfo.name.strip()] += 1
+        for name in exclude_pdbname:
+            n_found = exclude_pdbname[name]
+            if n_found != 1:
+                print("Warning: expected 1 atom with PDB name '%s' but found %d" % (name, n_found))
