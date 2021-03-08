@@ -136,9 +136,9 @@ class PDBQTWriterLegacy():
             begin = self._numbering[begin]
             end = self._count
 
-            self._pdbqt_buffer.append("BRANCH %4d %4d" % (begin, end))
+            self._pdbqt_buffer.append("BRANCH %3d %3d" % (begin, end))
             self._walk_graph_recursive(neigh, edge_start=next_index)
-            self._pdbqt_buffer.append("ENDBRANCH %4d %4d" % (begin, end))
+            self._pdbqt_buffer.append("ENDBRANCH %3d %3d" % (begin, end))
 
     def write_string(self, mol, is_protein_sidechain):
         """Output a PDBQT file as a string.
@@ -195,4 +195,4 @@ class PDBQTWriterLegacy():
             # torsdof is always going to be the one of the rigid, non-macrocyclic one
             self._pdbqt_buffer.append('TORSDOF %d\n' % active_tors)
 
-        return '\n'.join(self._pdbqt_buffer)
+        return '\n'.join(self._pdbqt_buffer) + '\n'
