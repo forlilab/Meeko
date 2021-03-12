@@ -9,5 +9,10 @@ from .setup import MoleculeSetup
 from .utils import obutils
 from .utils import geomutils
 from .atomtyper import AtomTyperLegacy
+from .receptor_pdbqt import PDBQTReceptor
+from .molecule_pdbqt import PDBQTMolecule
+from . import analysis
 
-__all__ = ['MoleculePreparation', 'obutils', 'geomutils', 'MoleculeSetup', 'AtomTyperLegacy']
+__all__ = ['MoleculePreparation', 'obutils', 'geomutils', 
+           'MoleculeSetup', 'AtomTyperLegacy', 'PDBQTMolecule',
+           'PDBQTReceptor', 'analysis']
