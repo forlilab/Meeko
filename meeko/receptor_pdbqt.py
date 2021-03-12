@@ -10,7 +10,6 @@ from collections import defaultdict
 import numpy as np
 from scipy import spatial
 
-from .utils.van_der_waals_radius_table import van_der_waals_radius
 from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 
@@ -27,7 +26,7 @@ atom_property_definitions = {'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS
 def _read_receptor_pdbqt_file(pdbqt_filename):
     i = 0
     atoms = []
-    atoms_dtype = [('id', 'i4'), ('name', 'U4'), ('resid', 'i4'),
+    atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ("xyz", "f4", (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U2')]
     atom_properties = {'all': [], 'vdw': [], 'hb_acc': [], 'hb_don': [], 'non-metal': [], 'metal': []}
@@ -37,11 +36,12 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
 
         for line in lines:
             if line.startswith('ATOM'):
-                atom_id = int(line[6:11].strip())
-                atom_name = line[12:15].strip()
+                idx = i
+                serial = int(line[6:11].strip())
+                name = line[12:16].strip()
                 resname = line[17:20].strip()
-                resid = int(line[22:26].strip())
                 chainid = line[21].strip()
+                resid = int(line[22:26].strip())
                 xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=np.float32)
                 partial_charges = float(line[71:77].strip())
                 atom_type = line[77:79].strip()
@@ -51,7 +51,7 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
                     atom_properties[atom_property_definitions[atom_type]].append(i)
                 except:
                     atom_properties['vdw'].append(i)
-                atoms.append((atom_id, atom_name, resid, resname, chainid, xyz, partial_charges, atom_type))
+                atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
 
                 i += 1
 
@@ -60,22 +60,21 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
     return atoms, atom_properties
 
 
-def _identify_bonds(atom_ids, positions, atom_types):
+def _identify_bonds(atom_idx, positions, atom_types):
     bonds = defaultdict(list)
     KDTree = spatial.cKDTree(positions)
     bond_allowance_factor = 1.1
     # If we ask more than the number of coordinates/element
     # in the BHTree, we will end up with some inf values
-    k = 5 if len(atom_ids) > 5 else len(atom_ids)
+    k = 5 if len(atom_idx) > 5 else len(atom_idx)
+    atom_idx = np.array(atom_idx)
 
-    atom_ids = np.array(atom_ids)
-
-    for atom_id, position, atom_type in zip(atom_ids, positions, atom_types):
+    for atom_i, position, atom_type in zip(atom_idx, positions, atom_types):
         distances, indices = KDTree.query(position, k=k)
         r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
 
         optimal_distances = [bond_allowance_factor * (r_cov + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
-        bonds[atom_id] = atom_ids[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
+        bonds[atom_i] = atom_idx[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
 
     return bonds
 
@@ -96,54 +95,55 @@ class PDBQTReceptor:
     def __repr__(self):
         return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))
 
-    def positions(self, atom_ids=None):
+    def positions(self, atom_idx=None):
         """
         Return coordinates (xyz) of all atoms or a certain atom
 
         Args:
-            atom_ids (int, list): index of one or multiple atoms
+            atom_idx (int, list): index of one or multiple atoms
 
         Returns:
             ndarray: 2d ndarray of coordinates (xyz)
 
         """
-        if atom_ids is not None and self._atoms.size > 1:
-            if not isinstance(atom_ids, (list, tuple, np.ndarray)):
-                atom_ids = np.array(atom_ids, dtype=np.int)
+        if atom_idx is not None and self._atoms.size > 1:
+            if not isinstance(atom_idx, (list, tuple, np.ndarray)):
+                atom_idx = np.array(atom_idx, dtype=np.int)
             # -1 because numpy array is 0-based
-            positions = self._atoms['xyz'][atom_ids]
+            positions = self._atoms['xyz'][atom_idx]
         else:
             positions = self._atoms['xyz']
 
         return np.atleast_2d(positions).copy()
 
-    def atoms(self, atom_ids=None):
+    def atoms(self, atom_idx=None):
         """Return the atom i
 
         Args:
-            atom_ids (int, list): index of one or multiple atoms
+            atom_idx (int, list): index of one or multiple atoms
 
         Returns:
             ndarray: 2d ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
 
         """
-        if atom_ids is not None and self._atoms.size > 1:
-            if not isinstance(atom_ids, (list, tuple, np.ndarray)):
-                atom_ids = np.array(atom_ids, dtype=np.int)
-            atoms = self._atoms[atom_ids]
+        if atom_idx is not None and self._atoms.size > 1:
+            if not isinstance(atom_idx, (list, tuple, np.ndarray)):
+                atom_idx = np.array(atom_idx, dtype=np.int)
+            atoms = self._atoms[atom_idx]
         else:
             atoms = self._atoms
 
         return atoms.copy()
 
-    def closest_atoms(self, xyz, radius, atom_properties=None, ignore=None):
-        """Retrieve indices of the closest atoms around x 
+    def closest_atoms_from_positions(self, xyz, radius, atom_properties=None, ignore=None):
+        """Retrieve indices of the closest atoms around a positions/coordinates 
         at a certain radius.
 
         Args:
-            xyz (array_like): array of 3D coordinates
+            xyz (np.ndarray): array of 3D coordinates
             raidus (float): radius
-            atom_property (str): property of the atoms to retrieve (properties: vdw, hb_don, hb_acc, metal)
+            atom_properties (str): property of the atoms to retrieve 
+                (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
             ignore (int or list): ignore atom for the search using atom id (0-based)
 
         Returns:
@@ -163,14 +163,15 @@ class PDBQTReceptor:
             index = set(index)
 
         if atom_properties is not None:
-            if not isinstance(atom_properties, (list, tuple, np.ndarray)):
+            if not isinstance(atom_properties, (list, tuple)):
                 atom_properties = [atom_properties]
 
             try:
                 for atom_property in atom_properties:
                     index.intersection_update(self._atom_properties[atom_property])
             except:
-                raise KeyError('Atom property %s is not valid. Valid atom properties are: %s' % (atom_property, self._atom_properties.keys()))
+                error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
+                raise KeyError(error_msg % (atom_property, self._atom_properties.keys()))
 
         if ignore is not None:
             if not isinstance(ignore, (list, tuple, np.ndarray)):
@@ -181,17 +182,33 @@ class PDBQTReceptor:
 
         return self._atoms[index]
 
-    def neighbor_atoms(self, atom_ids):
+    def closest_atoms(self, atom_idx, radius, atom_properties=None):
+        """Retrieve indices of the closest atoms around a positions/coordinates 
+        at a certain radius.
+
+        Args:
+            atom_idx (int, list): index of one or multiple atoms (0-based)
+            raidus (float): radius
+            atom_properties (str or list): property of the atoms to retrieve 
+                (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
+
+        Returns:
+            ndarray: 2d ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
+
+        """
+        return self.closest_atoms_from_positions(self._atoms[atom_idx]['xyz'], radius, atom_properties, atom_idx)
+
+    def neighbor_atoms(self, atom_idx):
         """Return neighbor (bonded) atoms
 
         Args:
-            atom_ids (int, list): index of one or multiple atoms (0-based)
+            atom_idx (int, list): index of one or multiple atoms (0-based)
 
         Returns:
             list_of_list: list of lists containing the neighbor (bonded) atoms (0-based)
 
         """
-        if not isinstance(atom_ids, (list, tuple, np.ndarray)):
-            atom_ids = [atom_ids]
+        if not isinstance(atom_idx, (list, tuple, np.ndarray)):
+            atom_idx = [atom_idx]
 
-        return [self._bonds[i] for i in atom_ids]
+        return [self._bonds[i] for i in atom_idx]

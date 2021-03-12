@@ -18,33 +18,53 @@ def _compute_angle(v1, v2):
     return angle
 
 
-def _is_valid_hydrogen_bond(atom_a, atom_b, atom_c, atom_d, criteria):
+def _is_valid_hydrogen_bond(atom_acc_1, atom_acc_2, atom_don_1, atom_don_2, angle_criteria):
     """Check if the hydrogen bond is valid based on the angles
 
-    Donor-H -- acceptor angle        : atom_c-atom_b -- atom_a
-    Pre_acceptor-acceptor -- H angle : atom_d-atom_a -- atom_b
+    Donor-H -- acceptor angle        : atom_don_2-atom_don_1 -- atom_acc_1
+    Pre_acceptor-acceptor -- H angle : atom_acc_2-atom_acc_1 -- atom_don_1
 
     Source: https://psa-lab.github.io/Hbind/user_guide/
 
+    Args:
+        atom_acc_1 (np.ndarray): coordinates of atom acceptor 1
+        atom_acc_2 (np.ndarray): coordinates of atom acceptor 2
+        atom_don_1 (np.ndarray): coordinates of atom donor 1
+        atom_don_2 (np.ndarray): coordinates of atom donor 2
+        angle_criteria (list): list of two angle (in degrees) criteria to satisfied
+
+    Returns:
+        bool: True if hydrogen bond is valid, otherwise False
+
     """
-    angle_1 = np.degrees(_compute_angle(atom_b - atom_c, atom_b - atom_a))
-    angle_2 = np.degrees(_compute_angle(atom_a - atom_d, atom_a - atom_b))
-    return (angle_1 >= criteria[0]) & (angle_2 >= criteria[1])
+    angle_1 = np.degrees(_compute_angle(atom_don_1 - atom_don_2, atom_don_1 - atom_acc_1))
+    angle_2 = np.degrees(_compute_angle(atom_acc_1 - atom_acc_2, atom_acc_1 - atom_don_1))
+    return (angle_1 >= angle_criteria[0]) & (angle_2 >= angle_criteria[1])
 
 
 class FingerprintInteractions:
 
     def __init__(self):
+        """FingerprintInteractions object
+        """
         self._data = None
         self._unique_interactions = None
         self._criteria = {'hb_acc': [3.2, 120, 90], 'hb_don': [3.2, 120, 90],
                           'all': [4.2], 'vdw': [4.2],
                           'reactive': [2.0]}
         self._valid_interactions = {'hb_acc': 'hb_don', 'hb_don': 'hb_acc',
+                                    'water': 'hb_acc', 'water': 'hb_don',
                                     'all': 'all', 'vdw': 'vdw',
                                     'reactive': 'reactive'}
 
     def run(self, receptor, molecules):
+        """Run the fingerprint interactions.
+        
+        Args:
+            receptor (PDBQTReceptor): receptor 
+            molecules (PDBQTMolecule, list of PDBQTMolecule): molecule or list of molecules
+
+        """
         data = []
         self._unique_interactions = {'hb': {*()}, 'vdw': {*()}, 'reactive': {*()}}
 
@@ -52,55 +72,74 @@ class FingerprintInteractions:
             molecules = [molecules]
 
         for molecule in molecules:
+            has_flexible_residues = molecule.has_flexible_residues()
+            interaction_types = molecule.available_atom_properties()
+            # We consider 'all' == 'vdw'
+            interaction_types.pop(interaction_types.index('vdw'))
+
             for pose in molecule:
                 tmp_hb = []
                 tmp_vdw = []
 
-                for interaction_type in ['hb_acc', 'hb_don', 'all']:
+                for interaction_type in interaction_types:
                     max_distance = self._criteria[interaction_type][0]
 
                     lig_atoms = pose.atoms_by_properties(['ligand', interaction_type])
 
                     for lig_atom in lig_atoms:
-                        rec_atoms = receptor.closest_atoms(lig_atom['xyz'], max_distance, self._valid_interactions[interaction_type])
+                        atom_properties = self._valid_interactions[interaction_type]
+                        rec_rigid_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], max_distance, atom_properties)
 
-                        if rec_atoms.size > 0:
-                            if interaction_type in ['all']:
-                                interactions = ['%s:%d' % (x[0], x[1]) for x in np.unique(rec_atoms[['chain', 'resid']], axis=0)]
-                                # We trick 'all' interaction type as 'vdw' at the end
-                                tmp_vdw.extend(interactions)
-                            elif interaction_type in ['hb_acc', 'hb_don']:
-                                interactions = []
+                        rec_rigid_flex = [receptor]
+                        rec_rigid_flex_atoms = [rec_rigid_atoms]
 
-                                # Get the atoms attached
-                                # We will use their positions to calculate the HB vector
-                                lig_bound_atoms_index = pose.neighbor_atoms(lig_atom['id'] - 1)
-                                lig_bound_atoms = pose.atoms(lig_bound_atoms_index[0])
-                                lig_hb_vector = np.mean(lig_bound_atoms['xyz'], axis=0)
+                        if has_flexible_residues:
+                            # Get only the flexible residue part of the ligand
+                            atom_properties = ['flexible_residue', self._valid_interactions[interaction_type]]
+                            rec_flex_atoms = pose.closest_atoms_from_positions(lig_atom['xyz'], max_distance, atom_properties)
 
-                                # Get unique receptor residues around the lig_atom
-                                resids, index = np.unique(rec_atoms[['chain', 'resid', 'name']], axis=0, return_index=True)
+                            rec_rigid_flex.append(pose)
+                            rec_rigid_flex_atoms.append(rec_flex_atoms)
 
-                                for i in index:
-                                    # And we do the same thing with the receptor
-                                    rec_bound_atoms_index = receptor.neighbor_atoms(rec_atoms[i]['id'] - 1)
-                                    rec_bound_atoms = receptor.atoms(rec_bound_atoms_index[0])
-                                    rec_hb_vector = np.mean(rec_bound_atoms['xyz'], axis=0)
+                        for rec, rec_atoms in zip(rec_rigid_flex, rec_rigid_flex_atoms):
+                            if rec_atoms.size > 0:
+                                if interaction_type in ['all']:
+                                    interactions = ['%s:%d' % (x[0], x[1]) for x in np.unique(rec_atoms[['chain', 'resid']], axis=0)]
+                                    # We trick 'all' interaction type as 'vdw' at the end
+                                    tmp_vdw.extend(interactions)
+                                elif interaction_type in ['hb_acc', 'hb_don']:
+                                    interactions = []
 
-                                    if interaction_type == 'hb_acc':
-                                        good_hb = _is_valid_hydrogen_bond(lig_atom['xyz'], rec_atoms[i]['xyz'],
-                                                                          rec_hb_vector, lig_hb_vector,
-                                                                          self._criteria[interaction_type][1:])
-                                    else:
-                                        good_hb = _is_valid_hydrogen_bond(rec_atoms[i]['xyz'], lig_atom['xyz'],
-                                                                          lig_hb_vector, rec_hb_vector,
-                                                                          self._criteria[interaction_type][1:])
+                                    # Get the atoms attached
+                                    # We will use their positions to calculate the HB vector
+                                    lig_bound_atoms_index = pose.neighbor_atoms(lig_atom['idx'])
+                                    lig_bound_atoms = pose.atoms(lig_bound_atoms_index[0])
+                                    lig_hb_vector = np.mean(lig_bound_atoms['xyz'], axis=0)
 
-                                    if good_hb:
-                                        chain, resid, name = rec_atoms[i][['chain', 'resid', 'name']]
-                                        interactions.append('%s:%d:%s' % (chain, resid, name))
+                                    # Get unique receptor residues around the lig_atom
+                                    resids, index = np.unique(rec_atoms[['chain', 'resid', 'name']], axis=0, return_index=True)
 
-                                tmp_hb.extend(interactions)
+                                    for i in index:
+                                        # And we do the same thing with the receptor (rigid and flex)
+                                        # This right now will fail if we have a water molecule
+                                        rec_bound_atoms_index = rec.neighbor_atoms(rec_atoms[i]['idx'])
+                                        rec_bound_atoms = rec.atoms(rec_bound_atoms_index[0])
+                                        rec_hb_vector = np.mean(rec_bound_atoms['xyz'], axis=0)
+
+                                        if interaction_type == 'hb_acc':
+                                            good_hb = _is_valid_hydrogen_bond(lig_atom['xyz'], lig_hb_vector,
+                                                                              rec_atoms[i]['xyz'], rec_hb_vector,
+                                                                              self._criteria[interaction_type][1:])
+                                        else:
+                                            good_hb = _is_valid_hydrogen_bond(rec_atoms[i]['xyz'], rec_hb_vector,
+                                                                              lig_atom['xyz'], lig_hb_vector,
+                                                                              self._criteria[interaction_type][1:])
+
+                                        if good_hb:
+                                            chain, resid, name = rec_atoms[i][['chain', 'resid', 'name']]
+                                            interactions.append('%s:%d:%s' % (chain, resid, name))
+
+                                    tmp_hb.extend(interactions)
 
                 tmp_hb = set(tmp_hb)
                 tmp_vdw = set(tmp_vdw)
@@ -113,6 +152,13 @@ class FingerprintInteractions:
         self._data = data
 
     def to_dataframe(self):
+        """Generate a panda DataFrame with all the interactions
+
+        Returns:
+            pd.DataFrame: pandas DataFrame containing all the interaction 
+                found between the molecules and the receptor
+
+        """
         count = 0
         resid_to_idx_encoder = {}
         columns = [[], []]
