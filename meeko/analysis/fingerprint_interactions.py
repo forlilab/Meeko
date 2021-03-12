@@ -37,13 +37,16 @@ class FingerprintInteractions:
     def __init__(self):
         self._data = None
         self._unique_interactions = None
-        self._criteria = {'all': [4.2], 'vdw': [4.2], 
-                          'hb_acc': [3.2, 120, 90], 'hb_don': [3.2, 120, 90]}
-        self._valid_interactions = {'hb_acc': 'hb_don', 'hb_don': 'hb_acc', 'all': 'all', 'vdw': 'vdw'}
+        self._criteria = {'hb_acc': [3.2, 120, 90], 'hb_don': [3.2, 120, 90],
+                          'all': [4.2], 'vdw': [4.2],
+                          'reactive': [2.0]}
+        self._valid_interactions = {'hb_acc': 'hb_don', 'hb_don': 'hb_acc',
+                                    'all': 'all', 'vdw': 'vdw',
+                                    'reactive': 'reactive'}
 
     def run(self, receptor, molecules):
         data = []
-        self._unique_interactions = {'hb': {*()}, 'vdw': {*()}}
+        self._unique_interactions = {'hb': {*()}, 'vdw': {*()}, 'reactive': {*()}}
 
         if not isinstance(molecules, (list, tuple)):
             molecules = [molecules]

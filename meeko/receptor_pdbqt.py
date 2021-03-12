@@ -18,7 +18,10 @@ from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 atom_property_definitions = {'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
                              'HD': 'hb_don', 'HS': 'hb_don',
                              'Cl': 'non-metal', 
-                             'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal'}
+                             'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
+                             'W': 'water',
+                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue', 
+                             'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
 def _read_receptor_pdbqt_file(pdbqt_filename):
@@ -57,20 +60,22 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
     return atoms, atom_properties
 
 
-def _identify_bonds(positions, atom_types):
-    count = 0
+def _identify_bonds(atom_ids, positions, atom_types):
     bonds = defaultdict(list)
     KDTree = spatial.cKDTree(positions)
-    bond_length_allowance_factor = 1.1
+    bond_allowance_factor = 1.1
+    # If we ask more than the number of coordinates/element
+    # in the BHTree, we will end up with some inf values
+    k = 5 if len(atom_ids) > 5 else len(atom_ids)
 
-    for atom_type, position in zip(atom_types, positions):
-        distances, indices = KDTree.query(position, k=5)
-        r_cov1 = covalent_radius[autodock4_atom_types_elements[atom_type]]
+    atom_ids = np.array(atom_ids)
 
-        optimal_distances = [bond_length_allowance_factor * (r_cov1 + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
-        bonds[count] = indices[1:][np.where(distances[1:] < optimal_distances)].tolist()
+    for atom_id, position, atom_type in zip(atom_ids, positions, atom_types):
+        distances, indices = KDTree.query(position, k=k)
+        r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
 
-        count += 1
+        optimal_distances = [bond_allowance_factor * (r_cov + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
+        bonds[atom_id] = atom_ids[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
 
     return bonds
 
@@ -86,7 +91,7 @@ class PDBQTReceptor:
         self._atoms, self._atom_properties = _read_receptor_pdbqt_file(self._pdbqt_filename)
         # We add to the KDTree only the rigid part of the receptor
         self._KDTree = spatial.cKDTree(self._atoms['xyz'])
-        self._bonds = _identify_bonds(self._atoms['xyz'], self._atoms['atom_type'])
+        self._bonds = _identify_bonds(self._atom_properties['all'], self._atoms['xyz'], self._atoms['atom_type'])
 
     def __repr__(self):
         return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))

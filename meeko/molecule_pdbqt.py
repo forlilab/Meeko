@@ -18,7 +18,10 @@ from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 atom_property_definitions = {'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
                              'HD': 'hb_don', 'HS': 'hb_don',
                              'Cl': 'non-metal', 
-                             'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal'}
+                             'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
+                             'W': 'water',
+                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue', 
+                             'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
 def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
@@ -32,7 +35,8 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
                    ('resname', 'U3'), ('chain', 'U1'), ('xyz', 'f4', (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U2')]
     atom_properties = {'ligand': [], 'flexible_residue': [],
-                       'all': [], 'vdw': [], 'hb_acc': [], 'hb_don': [], 'reactive': []}
+                       'all': [], 'vdw': [], 'hb_acc': [], 'hb_don': [], 
+                       'water': [], 'glue': [], 'reactive': []}
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
@@ -73,7 +77,10 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
                 tmp_positions.append(xyz)
                 i += 1
             elif line.startswith('BEGIN_RES'):
-                location = 'residue'
+                location = 'flexible_residue'
+            elif line.startswith('END_RES'):
+                # We never know if there is a molecule just after the flexible residue...
+                location = 'ligand'
             elif line.startswith('ENDMDL'):
                 # After reading the first pose no need to store atom properties 
                 # anymore, it is the same for every pose
@@ -98,20 +105,22 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
     return atoms, atom_properties, positions
 
 
-def _identify_bonds(positions, atom_types):
-    count = 0
+def _identify_bonds(atom_ids, positions, atom_types):
     bonds = defaultdict(list)
     KDTree = spatial.cKDTree(positions)
-    bond_length_allowance_factor = 1.1
+    bond_allowance_factor = 1.1
+    # If we ask more than the number of coordinates/element
+    # in the BHTree, we will end up with some inf values
+    k = 5 if len(atom_ids) > 5 else len(atom_ids)
 
-    for atom_type, position in zip(atom_types, positions):
-        distances, indices = KDTree.query(position, k=5)
-        r_cov1 = covalent_radius[autodock4_atom_types_elements[atom_type]]
+    atom_ids = np.array(atom_ids)
 
-        optimal_distances = [bond_length_allowance_factor * (r_cov1 + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
-        bonds[count] = indices[1:][np.where(distances[1:] < optimal_distances)].tolist()
+    for atom_id, position, atom_type in zip(atom_ids, positions, atom_types):
+        distances, indices = KDTree.query(position, k=k)
+        r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
 
-        count += 1
+        optimal_distances = [bond_allowance_factor * (r_cov + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
+        bonds[atom_id] = atom_ids[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
 
     return bonds
 
@@ -136,8 +145,20 @@ class PDBQTMolecule:
         self._positions = None
         self._name = os.path.splitext(os.path.basename(self._pdbqt_filename))[0]
 
+        # Juice all the information from that PDBQT file
         self._atoms, self._atom_properties, self._positions = _read_ligand_pdbqt_file(self._pdbqt_filename, self._poses_to_read)
-        self._bonds = _identify_bonds(self._atoms['xyz'], self._atoms['atom_type'])
+
+        # Identify bonds in the ligands
+        mol_atoms = self._atoms[self._atom_properties['ligand']]
+        self._bonds = _identify_bonds(self._atom_properties['ligand'], mol_atoms['xyz'], mol_atoms['atom_type'])
+
+        """... then in the flexible residues 
+        Since we are extracting bonds from docked poses, we might be in the situation
+        where the ligand reacted with one the flexible residues and we don't want to 
+        consider them as normally bonded..."""
+        if self._atom_properties['flexible_residue']:
+            flex_atoms = self._atoms[self._atom_properties['flexible_residue']]
+            self._bonds.update(_identify_bonds(self._atom_properties['flexible_residue'], flex_atoms['xyz'], flex_atoms['atom_type']))
 
     def __getitem__(self, value):
         if isinstance(value, int):
@@ -216,7 +237,7 @@ class PDBQTMolecule:
             atoms['xyz'] = self._positions[self._current_pose, atom_ids,:]
         else:
             atoms = self._atoms.copy()
-            atoms['xyz'] = self._positions
+            atoms['xyz'] = self._positions[self._current_pose,:,:]
 
         return atoms
 
