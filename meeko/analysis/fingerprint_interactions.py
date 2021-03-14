@@ -44,11 +44,15 @@ def _is_valid_hydrogen_bond(atom_acc_1, atom_acc_2, atom_don_1, atom_don_2, angl
 
 class FingerprintInteractions:
 
-    def __init__(self):
+    def __init__(self, receptor):
         """FingerprintInteractions object
+
+        Args:
+            receptor (PDBQTReceptor): receptor 
+
         """
-        self._data = None
-        self._unique_interactions = None
+        self._data = []
+        self._unique_interactions = {'hb': {*()}, 'vdw': {*()}, 'reactive': {*()}}
         self._criteria = {'hb_acc': [3.2, 120, 90], 'hb_don': [3.2, 120, 90],
                           'all': [4.2], 'vdw': [4.2],
                           'reactive': [2.0]}
@@ -57,16 +61,16 @@ class FingerprintInteractions:
                                     'all': 'all', 'vdw': 'vdw',
                                     'reactive': 'reactive'}
 
-    def run(self, receptor, molecules):
+        self._receptor = receptor
+
+    def run(self, molecules):
         """Run the fingerprint interactions.
         
         Args:
-            receptor (PDBQTReceptor): receptor 
             molecules (PDBQTMolecule, list of PDBQTMolecule): molecule or list of molecules
 
         """
         data = []
-        self._unique_interactions = {'hb': {*()}, 'vdw': {*()}, 'reactive': {*()}}
 
         if not isinstance(molecules, (list, tuple)):
             molecules = [molecules]
@@ -88,9 +92,9 @@ class FingerprintInteractions:
 
                     for lig_atom in lig_atoms:
                         atom_properties = self._valid_interactions[interaction_type]
-                        rec_rigid_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], max_distance, atom_properties)
+                        rec_rigid_atoms = self._receptor.closest_atoms_from_positions(lig_atom['xyz'], max_distance, atom_properties)
 
-                        rec_rigid_flex = [receptor]
+                        rec_rigid_flex = [self._receptor]
                         rec_rigid_flex_atoms = [rec_rigid_atoms]
 
                         if has_flexible_residues:
@@ -149,7 +153,7 @@ class FingerprintInteractions:
 
                 data.append((pose.name, pose.pose_id, list(tmp_hb), list(tmp_vdw)))
 
-        self._data = data
+        self._data.extend(data)
 
     def to_dataframe(self):
         """Generate a panda DataFrame with all the interactions
