@@ -23,12 +23,14 @@ atom_property_definitions = {'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
-def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
+def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
     i = 0
     atoms = None
     positions = []
+    free_energies = []
     n_poses = 0
     location = 'ligand'
+    energy_best_pose = None
     store_atom_properties = True
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ('xyz', 'f4', (3)),
@@ -43,7 +45,6 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
         for line in lines:
             if line.startswith('MODEL'):
                 i = 0
-                n_poses += 1
 
                 # Check if the molecule topology is the same for each pose
                 if atoms is not None:
@@ -54,6 +55,32 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
 
                 tmp_positions = []
                 tmp_atoms = []
+            elif line.startswith('REMARK VINA RESULT'):
+                # Read free energy from output Vina PDBQT files
+                energy = float(line.split()[3])
+
+                if energy_best_pose is None:
+                    energy_best_pose = energy
+                energy_current_pose = energy
+
+                diff_energy = energy_current_pose - energy_best_pose
+                if (energy_range <= diff_energy and energy_range != 1):
+                    break
+
+                free_energies.append(energy)
+            elif line.startswith('USER    Estimated Free Energy of Binding'):
+                # Read free energy from output AD4 PDBQT files
+                energy = float(line.split()[7])
+
+                if energy_best_pose is None:
+                    energy_best_pose = energy
+                energy_current_pose = energy
+
+                diff_energy = energy_current_pose - energy_best_pose
+                if (energy_range <= diff_energy and energy_range != 1):
+                    break
+
+                free_energies.append(energy)
             elif line.startswith('ATOM') or line.startswith("HETATM"):
                 idx = i
                 serial = int(line[6:11].strip())
@@ -82,6 +109,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
                 # We never know if there is a molecule just after the flexible residue...
                 location = 'ligand'
             elif line.startswith('ENDMDL'):
+                n_poses += 1
                 # After reading the first pose no need to store atom properties 
                 # anymore, it is the same for every pose
                 store_atom_properties = False
@@ -97,12 +125,12 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=None):
 
                 positions.append(tmp_positions)
 
-                if n_poses >= poses_to_read and poses_to_read != -1:
+                if (n_poses >= poses_to_read and poses_to_read != -1):
                     break
 
     positions = np.array(positions).reshape((n_poses, atoms.shape[0], 3))
 
-    return atoms, atom_properties, positions
+    return atoms, atom_properties, positions, free_energies
 
 
 def _identify_bonds(atom_idx, positions, atom_types):
@@ -126,26 +154,35 @@ def _identify_bonds(atom_idx, positions, atom_types):
 
 class PDBQTMolecule:
 
-    def __init__(self, pdbqt_filename, poses_to_read=None):
+    def __init__(self, pdbqt_filename, name=None, poses_to_read=None, energy_range=None):
         """PDBQTMolecule object
 
-        Contains both __getitem__ and __iter__ methods, someone might lose his hair because of this.
+        Contains both __getitem__ and __iter__ methods, someone might lose his mind because of this.
 
         Args:
             pdbqt_filename (str): pdbqt filename
+            name (str): name of the molecule (default: None, use filename without pdbqt suffix)
             poses_to_read (int): total number of poses to read (default: None, read all)
+            energy_range (float): read docked poses until the maximum energy difference 
+                from best pose is reach, for example 2.5 kcal/mol (default: Non, read all)
 
         """
         self._current_pose = 0
         self._poses_to_read = poses_to_read if poses_to_read is not None else -1
+        self._energy_range = energy_range if energy_range is not None else -1
         self._pdbqt_filename = pdbqt_filename
         self._atoms = None
         self._atom_properties = None
         self._positions = None
-        self._name = os.path.splitext(os.path.basename(self._pdbqt_filename))[0]
+        self._free_energies = None
+        if name is None:
+            self._name = os.path.splitext(os.path.basename(self._pdbqt_filename))[0]
+        else:
+            self._name = name
 
         # Juice all the information from that PDBQT file
-        self._atoms, self._atom_properties, self._positions = _read_ligand_pdbqt_file(self._pdbqt_filename, self._poses_to_read)
+        results = _read_ligand_pdbqt_file(self._pdbqt_filename, self._poses_to_read, self._energy_range)
+        self._atoms, self._atom_properties, self._positions, self._free_energies = results
 
         # Build KDTrees for each pose
         self._KDTrees = [spatial.cKDTree(positions) for positions in self._positions]
@@ -192,16 +229,29 @@ class PDBQTMolecule:
 
     @property    
     def name(self):
+        """Return the name of the molecule."""
         return self._name
 
     @property
     def pose_id(self):
+        """Return the index of the current pose."""
         return self._current_pose
 
+    @property
+    def score(self):
+        """Return the score (kcal/mol) of the current pose."""
+        return self._free_energies[self._current_pose]
+
     def available_atom_properties(self):
+        """Return all the available atom properties for that molecule.
+        
+        The following properties are ignored: ligand and flexible_residue
+
+        """
         return [k for k, v in self._atom_properties.items() if not k in ['ligand', 'flexible_residue'] and len(v) > 0]
 
     def has_flexible_residues(self):
+        """Tell me if the molecule contains a flexible residue or not."""
         if self._atom_properties['flexible_residue']:
             return True
         return False
