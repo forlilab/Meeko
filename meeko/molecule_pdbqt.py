@@ -55,29 +55,21 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
 
                 tmp_positions = []
                 tmp_atoms = []
-            elif line.startswith('REMARK VINA RESULT'):
-                # Read free energy from output Vina PDBQT files
-                energy = float(line.split()[3])
+            elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
+                # Read free energy from output PDBQT files
+                try:
+                    # Vina
+                    energy = float(line.split()[3])
+                except:
+                    # AD4
+                    energy = float(line.split()[7])
 
                 if energy_best_pose is None:
                     energy_best_pose = energy
                 energy_current_pose = energy
 
                 diff_energy = energy_current_pose - energy_best_pose
-                if (energy_range <= diff_energy and energy_range != 1):
-                    break
-
-                free_energies.append(energy)
-            elif line.startswith('USER    Estimated Free Energy of Binding'):
-                # Read free energy from output AD4 PDBQT files
-                energy = float(line.split()[7])
-
-                if energy_best_pose is None:
-                    energy_best_pose = energy
-                energy_current_pose = energy
-
-                diff_energy = energy_current_pose - energy_best_pose
-                if (energy_range <= diff_energy and energy_range != 1):
+                if (energy_range <= diff_energy and energy_range != -1):
                     break
 
                 free_energies.append(energy)
