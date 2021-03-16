@@ -39,8 +39,8 @@ def _is_valid_hydrogen_bond(atom_acc_1, atom_acc_2, atom_don_1, atom_don_2, hb_c
 
     Args:
         atom_acc_1 (np.ndarray): coordinates of atom acceptor 1
-        atom_acc_2 (np.ndarray): coordinates of atom acceptor 2
-        atom_don_1 (np.ndarray): coordinates of atom donor 1
+        atom_acc_2 (np.ndarray): coordinates of atom acceptor 2 (can be None for non directional acceptor HB)
+        atom_don_1 (np.ndarray): coordinates of atom donor 1 (can be None for non directional donor HB)
         atom_don_2 (np.ndarray): coordinates of atom donor 2
         hb_criteria (list): list a distance and two angles (in degrees) criteria to be satisfied
 
@@ -66,6 +66,9 @@ def _is_valid_hydrogen_bond(atom_acc_1, atom_acc_2, atom_don_1, atom_don_2, hb_c
             # atom_don_2-atom_don_1 -- atom_acc_1
             angle_1 = np.degrees(_compute_angle(atom_don_2 - atom_don_1, atom_acc_1 - atom_don_1))
             angle_2 = 180
+        else:
+            if atom_acc_1 is None or atom_don_2 is None:
+                raise RuntimeError('Atom acceptor 1 and atom donor 2 need to be defined (!= None).')
 
         return (angle_1 >= hb_criteria[1]) & (angle_2 >= hb_criteria[2])
     else:
@@ -151,7 +154,7 @@ class FingerprintInteractions:
                                     rec_bound_atoms = rec.atoms(rec_bound_atoms_index[0])
                                     rec_hb_vector = np.mean(rec_bound_atoms['xyz'], axis=0)
 
-                                if lig_atom_property == 'vdw' and rec_atom_property == 'vdw':
+                                if lig_atom_property == 'vdw':
                                     # vdW - vdW interaction
                                     tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 elif lig_atom_property == 'hb_don' and rec_atom_property == 'hb_acc':
@@ -189,7 +192,13 @@ class FingerprintInteractions:
                                     if good_hb:
                                         tmp_water.append('w_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 else:
-                                    pass
+                                    # Default interaction is vdW
+                                    # hb_don    -- vdW
+                                    # hb_acc    -- vdW
+                                    # non-metal -- vdW
+                                    # metal     -- vdW
+                                    # glue      -- vdW
+                                    tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
 
                 tmp_hb = set(tmp_hb)
                 tmp_vdw = set(tmp_vdw)
@@ -243,7 +252,7 @@ class FingerprintInteractions:
         # Create final dataframe
         df = pd.DataFrame(fpi, index=np.arange(0, len(self._data)), columns=multi_columns)
         # Remove columns where there are zero interactions. This is because we mix hb + water interactions.
-        df = df.loc[:, (df.sum(axis=0) != 0)]
+        #df = df.loc[:, (df.sum(axis=0) != 0)]
         df['name'] = names
         df['pose'] = poses
         df.set_index(['name', 'pose'], inplace=True)
