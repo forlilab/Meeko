@@ -98,27 +98,6 @@ class PDBQTReceptor:
     def __repr__(self):
         return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))
 
-    def positions(self, atom_idx=None):
-        """
-        Return coordinates (xyz) of all atoms or a certain atom
-
-        Args:
-            atom_idx (int, list): index of one or multiple atoms
-
-        Returns:
-            ndarray: 2d ndarray of coordinates (xyz)
-
-        """
-        if atom_idx is not None and self._atoms.size > 1:
-            if not isinstance(atom_idx, (list, tuple, np.ndarray)):
-                atom_idx = np.array(atom_idx, dtype=np.int)
-            # -1 because numpy array is 0-based
-            positions = self._atoms['xyz'][atom_idx]
-        else:
-            positions = self._atoms['xyz']
-
-        return np.atleast_2d(positions).copy()
-
     def atoms(self, atom_idx=None):
         """Return the atom i
 
@@ -137,6 +116,18 @@ class PDBQTReceptor:
             atoms = self._atoms
 
         return atoms.copy()
+
+    def positions(self, atom_idx=None):
+        """Return coordinates (xyz) of all atoms or a certain atom
+
+        Args:
+            atom_idx (int, list): index of one or multiple atoms (0-based)
+
+        Returns:
+            ndarray: 2d ndarray of coordinates (xyz)
+
+        """
+        return np.atleast_2d(self.atoms(atom_idx)['xyz'])
 
     def closest_atoms_from_positions(self, xyz, radius, atom_properties=None, ignore=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 

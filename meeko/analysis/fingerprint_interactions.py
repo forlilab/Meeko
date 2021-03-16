@@ -28,7 +28,7 @@ def _compute_angle(v1, v2):
     return angle
 
 
-def _is_valid_hydrogen_bond(atom_acc_1, atom_acc_2, atom_don_1, atom_don_2, hb_criteria, log=False):
+def _is_valid_hydrogen_bond(atom_acc_1, atom_acc_2, atom_don_1, atom_don_2, hb_criteria):
     """Check if the hydrogen bond is valid based on the angles
 
     Donor-H -- acceptor angle        : atom_don_2-atom_don_1 -- atom_acc_1 (angle_1)
@@ -112,7 +112,7 @@ class FingerprintInteractions:
             has_flexible_residues = molecule.has_flexible_residues()
 
             for pose in molecule:
-                tmp = {'hb': [], 'vdw': [],
+                tmp = {'vdw': [], 'hb': [],
                        'water': [],
                        'metal': []}
 
