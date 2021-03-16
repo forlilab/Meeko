@@ -11,13 +11,12 @@ import pandas as pd
 
 
 atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
-                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw',
-                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
+                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw', 'Cl': 'vdw',
+                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc',
                              'HD': 'hb_don', 'HS': 'hb_don',
-                             'Cl': 'non-metal', 
                              'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
                              'W': 'water',
-                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue', 
+                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue',
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
@@ -86,13 +85,13 @@ class FingerprintInteractions:
         """
         self._data = []
         self._max_distance = 4.2
-        self._unique_interactions = {'hb': {*()},
-                                     'vdw': {*()},
+        self._unique_interactions = {'vdw': {*()}, 'hb': {*()},
                                      'water': {*()},
+                                     'metal': {*()},
                                      'reactive': {*()}}
-        self._criteria = {'hb_acc': [3.2, 120, 90], 'hb_don': [3.2, 120, 90],
-                          'all': [4.2], 'vdw': [4.2],
+        self._criteria = {'vdw': [4.2], 'hb_acc': [3.2, 120, 90], 'hb_don': [3.2, 120, 90],
                           'water': [3.2, 120, 90],
+                          'metal': [3.0],
                           'reactive': [2.0]}
 
         self._receptor = receptor
@@ -113,9 +112,9 @@ class FingerprintInteractions:
             has_flexible_residues = molecule.has_flexible_residues()
 
             for pose in molecule:
-                tmp_hb = []
-                tmp_vdw = []
-                tmp_water = []
+                tmp = {'hb': [], 'vdw': [],
+                       'water': [],
+                       'metal': []}
 
                 lig_atoms = pose.atoms_by_properties(['ligand'])
                 if pose.has_water_molecules():
@@ -141,6 +140,7 @@ class FingerprintInteractions:
                     if lig_atom_property in ['hb_acc', 'hb_don']:
                         lig_bound_atoms_index = pose.neighbor_atoms(lig_atom['idx'])
                         lig_bound_atoms = pose.atoms(lig_bound_atoms_index[0])
+                        # This is not accurate when bonds don't have the same length
                         lig_hb_vector = np.mean(lig_bound_atoms['xyz'], axis=0)
 
                     for rec, rec_atoms in zip(rec_rigid_flex, rec_rigid_flex_atoms):
@@ -152,11 +152,12 @@ class FingerprintInteractions:
                                 if rec_atom_property in ['hb_acc', 'hb_don']:
                                     rec_bound_atoms_index = rec.neighbor_atoms(rec_atom['idx'])
                                     rec_bound_atoms = rec.atoms(rec_bound_atoms_index[0])
+                                    # This is not accurate when bonds don't have the same length
                                     rec_hb_vector = np.mean(rec_bound_atoms['xyz'], axis=0)
 
                                 if lig_atom_property == 'vdw':
                                     # vdW - vdW interaction
-                                    tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
+                                    tmp['vdw'].append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 elif lig_atom_property == 'hb_don' and rec_atom_property == 'hb_acc':
                                     # (LIG) HB donor - HB acceptor (REC) interaction
                                     good_hb = _is_valid_hydrogen_bond(rec_atom['xyz'], rec_hb_vector,
@@ -165,10 +166,10 @@ class FingerprintInteractions:
 
                                     if good_hb:
                                         chain, resid, name = rec_atom['chain'], rec_atom['resid'], rec_atom['name']
-                                        tmp_hb.append('h_%s:%d:%s' % (chain, resid, name))
+                                        tmp['hb'].append('h_%s:%d:%s' % (chain, resid, name))
                                     else:
                                         # If it is a bad hb then it magically becomes a good vdw interaction
-                                        tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
+                                        tmp['vdw'].append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 elif lig_atom_property == 'hb_acc' and rec_atom_property == 'hb_don':
                                     # (LIG) HB acceptor - HB donor (REC) interaction
                                     good_hb = _is_valid_hydrogen_bond(lig_atom['xyz'], lig_hb_vector,
@@ -177,10 +178,10 @@ class FingerprintInteractions:
 
                                     if good_hb:
                                         chain, resid, name = rec_atom['chain'], rec_atom['resid'], rec_atom['name']
-                                        tmp_hb.append('h_%s:%d:%s' % (chain, resid, name))
+                                        tmp['hb'].append('h_%s:%d:%s' % (chain, resid, name))
                                     else:
                                         # If it is a bad hb then it magically becomes a good vdw interaction
-                                        tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
+                                        tmp['vdw'].append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 elif lig_atom_property == 'water':
                                     good_hb = False
 
@@ -196,25 +197,27 @@ class FingerprintInteractions:
                                                                           self._criteria[lig_atom_property])
 
                                     if good_hb:
-                                        tmp_water.append('w_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
+                                        # For now we keep only the chain and resid information
+                                        # because I don't know yet how to handle water -- OH group interactions...
+                                        tmp['water'].append('w_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
+                                elif lig_atom_property == 'hb_acc' and rec_atom_property == 'metal':
+                                    # (LIG) HB acceptor - metal (REC) interaction
+                                    distance = np.linalg.norm(lig_atom['xyz'] - rec_atom['xyz'])
+                                    if distance <= self._criteria[rec_atom_property][0]:
+                                        tmp['metal'].append('m_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 else:
                                     # Default interaction is vdW
                                     # hb_don    -- vdW
                                     # hb_acc    -- vdW
-                                    # non-metal -- vdW
-                                    # metal     -- vdW
                                     # glue      -- vdW
-                                    tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
+                                    tmp['vdw'].append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
 
-                tmp_hb = set(tmp_hb)
-                tmp_vdw = set(tmp_vdw)
-                tmp_water = set(tmp_water)
-                # Store all the unique interactions we seen
-                self._unique_interactions['hb'].update(tmp_hb)
-                self._unique_interactions['vdw'].update(tmp_vdw)
-                self._unique_interactions['water'].update(tmp_water)
-
-                data.append((pose.name, pose.pose_id, list(tmp_hb), list(tmp_vdw), list(tmp_water)))
+                tmp_data = [pose.name, pose.pose_id]
+                for inte_type, resids in tmp.items():
+                    unique_resids = set(resids)
+                    self._unique_interactions[inte_type].update(unique_resids)
+                    tmp_data.append(list(unique_resids))
+                data.append(tmp_data)
 
         self._data.extend(data)
 
@@ -250,7 +253,8 @@ class FingerprintInteractions:
         fpi = np.zeros(shape=(len(self._data), count), dtype=int)
 
         for i, pose_molecule in enumerate(self._data):
-            idx = [resid_to_idx_encoder[x] for x in pose_molecule[2] + pose_molecule[3] + pose_molecule[4]]
+            resids = pose_molecule[2] + pose_molecule[3] + pose_molecule[4] + pose_molecule[5]
+            idx = [resid_to_idx_encoder[resid] for resid in resids]
             fpi[i][idx] = 1
             names.append(pose_molecule[0])
             poses.append(pose_molecule[1] + 1)

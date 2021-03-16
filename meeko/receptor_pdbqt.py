@@ -15,13 +15,12 @@ from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 
 
 atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
-                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw',
-                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
+                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw', 'Cl': 'vdw',
+                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc',
                              'HD': 'hb_don', 'HS': 'hb_don',
-                             'Cl': 'non-metal', 
                              'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
                              'W': 'water',
-                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue', 
+                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue',
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
@@ -39,7 +38,7 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
         lines = f.readlines()
 
         for line in lines:
-            if line.startswith('ATOM'):
+            if line.startswith('ATOM') or line.startswith("HETATM"):
                 idx = i
                 serial = int(line[6:11].strip())
                 name = line[12:16].strip()
@@ -51,10 +50,7 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
                 atom_type = line[77:79].strip()
                 
                 atom_properties['all'].append(i)
-                try:
-                    atom_properties[atom_property_definitions[atom_type]].append(i)
-                except:
-                    atom_properties['vdw'].append(i)
+                atom_properties[atom_property_definitions[atom_type]].append(i)
                 atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
 
                 i += 1

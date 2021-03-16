@@ -15,13 +15,12 @@ from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 
 
 atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
-                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw',
-                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
+                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw', 'Cl': 'vdw',
+                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc',
                              'HD': 'hb_don', 'HS': 'hb_don',
-                             'Cl': 'non-metal', 
                              'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
                              'W': 'water',
-                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue', 
+                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue',
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
@@ -90,7 +89,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                 """ We are looking for gap in the serial atom numbers. Usually if they
                 are not following it means that atoms are missing. This will happen with
                 water molecules after using dry.py, only non-overlapping water molecules
-                are kept. Also if the current serial becomes suddenly inferior than the 
+                are kept. Also if the current serial becomes suddenly inferior than the
                 previous and equal to 1, it means that we are now in another molecule/flexible 
                 residue. So here we are adding dummy atoms
                 """
@@ -107,13 +106,14 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                 tmp_positions.append(xyz)
                 tmp_actives.append(i)
 
-                if atom_type == 'W':
-                    water_indices.update([i])
-
-                if store_atom_properties:
+                # We store water idx separately from the rest since their number can be variable
+                if store_atom_properties and atom_type != 'W':
                     atom_properties[location].append(i)
                     atom_properties['all'].append(i)
                     atom_properties[atom_property_definitions[atom_type]].append(i)
+
+                if atom_type == 'W':
+                    water_indices.update([i])
 
                 previous_serial = serial
                 i += 1
@@ -124,22 +124,22 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                 location = 'ligand'
             elif line.startswith('ENDMDL'):
                 n_poses += 1
-                # After reading the first pose no need to store atom properties 
+                # After reading the first pose no need to store atom properties
                 # anymore, it is the same for every pose
                 store_atom_properties = False
 
                 tmp_atoms = np.array(tmp_atoms, dtype=atoms_dtype)
 
                 if atoms is None:
-                    """We store the atoms (topology) only once, since 
-                    it is supposed to be the same for all the molecules in the PDBQT file.
-                    But we will continue to compare the topology of the current pose with the 
-                    first one seen in the PDBQT file, to be sure only the atom positions are
-                    changing."""
+                    """We store the atoms (topology) only once, since it is supposed to be
+                    the same for all the molecules in the PDBQT file (except when water molecules
+                    are involved... classic). But we will continue to compare the topology of
+                    the current pose with the first one seen in the PDBQT file, to be sure only
+                    the atom positions are changing."""
                     atoms = tmp_atoms.copy()
                 else:
                     # Check if the molecule topology is the same for each pose
-                    # We ignore water molecules and atom type XX
+                    # We ignore water molecules (W) and atom type XX
                     columns = ['idx', 'serial', 'name', 'resid', 'resname', 'chain', 'partial_charges', 'atom_type']
                     top1 = atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
                     top2 = tmp_atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
@@ -148,7 +148,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                         error_msg = 'PDBQT file %s does contain molecules with different topologies'
                         raise RuntimeError(error_msg % pdbqt_filename)
 
-                    # Update information about water molecules as soon as we find new ones
+                    # Update information about water molecules (W) as soon as we find new ones
                     tmp_water_molecules_idx = tmp_atoms[tmp_atoms['atom_type'] == 'W']['idx']
                     water_molecules_idx = atoms[atoms['atom_type'] == 'XX']['idx']
                     new_water_molecules_idx = list(set(tmp_water_molecules_idx).intersection(water_molecules_idx))
@@ -291,7 +291,7 @@ class PDBQTMolecule:
         if not isinstance(ignore_properties, (list, tuple)):
             ignore_properties = [ignore_properties]
 
-        ignore_properties += ['ligand', 'flexible_residue']
+        ignore_properties += ['ligand', 'flexible_residue', 'water']
 
         return [k for k, v in self._atom_properties.items() 
                 if not k in ignore_properties and len(v) > 0]
