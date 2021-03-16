@@ -14,7 +14,9 @@ from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 
 
-atom_property_definitions = {'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
+atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
+                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw',
+                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
                              'HD': 'hb_don', 'HS': 'hb_don',
                              'Cl': 'non-metal', 
                              'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
@@ -29,7 +31,9 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ("xyz", "f4", (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U2')]
-    atom_properties = {'all': [], 'vdw': [], 'hb_acc': [], 'hb_don': [], 'non-metal': [], 'metal': []}
+    atom_properties = {'hb': [], 'hb_acc': [], 'hb_don': [],
+                       'all': [], 'vdw': [],
+                       'non-metal': [], 'metal': []}
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
@@ -56,6 +60,9 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
                 i += 1
 
     atoms = np.array(atoms, dtype=atoms_dtype)
+
+    # Concatenate both hb_acc + hb_don. This is useful for atoms that can be both acc/don (ex: water molecules)
+    atom_properties['hb'] = atom_properties['hb_acc'] +  atom_properties['hb_don']
 
     return atoms, atom_properties
 
@@ -179,8 +186,9 @@ class PDBQTReceptor:
             index = index.difference([i for i in ignore])
 
         index = list(index)
+        atoms = self._atoms[index].copy()
 
-        return self._atoms[index]
+        return atoms
 
     def closest_atoms(self, atom_idx, radius, atom_properties=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 

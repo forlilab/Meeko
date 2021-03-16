@@ -14,7 +14,9 @@ from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 
 
-atom_property_definitions = {'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
+atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
+                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw',
+                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc', 
                              'HD': 'hb_don', 'HS': 'hb_don',
                              'Cl': 'non-metal', 
                              'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
@@ -25,19 +27,23 @@ atom_property_definitions = {'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS
 
 def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
     i = 0
+    n_poses = 0
     atoms = None
+    actives = []
     positions = []
     free_energies = []
-    n_poses = 0
+    water_indices = {*()}
     location = 'ligand'
     energy_best_pose = None
     store_atom_properties = True
+    atom_types_to_ignore = ['W', 'XX'] # For checking the topology
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ('xyz', 'f4', (3)),
-                   ('partial_charges', 'f4'), ('atom_type', 'U2')]
-    atom_properties = {'ligand': [], 'flexible_residue': [],
-                       'all': [], 'vdw': [], 'hb_acc': [], 'hb_don': [], 
-                       'water': [], 'glue': [], 'reactive': []}
+                   ('partial_charges', 'f4'), ('atom_type', 'U3')]
+    atom_properties = {'ligand': [], 'flexible_residue': [], 'water': [],
+                       'hb_acc': [], 'hb_don': [],
+                       'all': [], 'vdw': [],
+                       'glue': [], 'reactive': []}
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
@@ -45,16 +51,10 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
         for line in lines:
             if line.startswith('MODEL'):
                 i = 0
-
-                # Check if the molecule topology is the same for each pose
-                if atoms is not None:
-                    columns = ['idx', 'serial', 'name', 'resid', 'resname', 'chain', 'partial_charges', 'atom_type']
-                    if not np.array_equal(atoms[columns], tmp_atoms[columns]):
-                        error_msg = 'PDBQT file %s does contain molecules with different topologies'
-                        raise RuntimeError(error_msg % pdbqt_filename)
-
+                previous_serial = 0
                 tmp_positions = []
                 tmp_atoms = []
+                tmp_actives = []
             elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
                 # Read free energy from output PDBQT files
                 try:
@@ -74,26 +74,48 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
 
                 free_energies.append(energy)
             elif line.startswith('ATOM') or line.startswith("HETATM"):
-                idx = i
                 serial = int(line[6:11].strip())
                 name = line[12:16].strip()
                 resname = line[17:20].strip()
                 chainid = line[21].strip()
                 resid = int(line[22:26].strip())
                 xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=float)
-                partial_charges = float(line[71:77].strip())
-                atom_type = line[77:79].strip()
+                try:
+                    # PDBQT files from dry.py script are stripped from their partial charges. sigh...
+                    partial_charges = float(line[71:77].strip())
+                except:
+                    partial_charges = 0.0
+                atom_type = line[77:-1].strip()
+
+                """ We are looking for gap in the serial atom numbers. Usually if they
+                are not following it means that atoms are missing. This will happen with
+                water molecules after using dry.py, only non-overlapping water molecules
+                are kept. Also if the current serial becomes suddenly inferior than the 
+                previous and equal to 1, it means that we are now in another molecule/flexible 
+                residue. So here we are adding dummy atoms
+                """
+                if (previous_serial + 1 != serial) and not (serial < previous_serial and serial == 1):
+                    diff = serial - previous_serial - 1
+                    for _ in range(diff):
+                        xyz_nan = [999.999, 999.999, 999.999]
+                        tmp_atoms.append((i, 9999, 'XXXX', 9999, 'XXX', 'X', xyz_nan, 999.999, 'XX'))
+                        tmp_positions.append(xyz_nan)
+                        i += 1
+
+                # Once it is done, we can return to a normal life... and add existing atoms
+                tmp_atoms.append((i, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
+                tmp_positions.append(xyz)
+                tmp_actives.append(i)
+
+                if atom_type == 'W':
+                    water_indices.update([i])
 
                 if store_atom_properties:
                     atom_properties[location].append(i)
                     atom_properties['all'].append(i)
-                    try:
-                        atom_properties[atom_property_definitions[atom_type]].append(i)
-                    except:
-                        atom_properties['vdw'].append(i)
+                    atom_properties[atom_property_definitions[atom_type]].append(i)
 
-                tmp_atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
-                tmp_positions.append(xyz)
+                previous_serial = serial
                 i += 1
             elif line.startswith('BEGIN_RES'):
                 location = 'flexible_residue'
@@ -106,23 +128,45 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                 # anymore, it is the same for every pose
                 store_atom_properties = False
 
-                """We store the atoms (topology) only once, since 
-                it is supposed to be the same for all the molecules in the PDBQT file.
-                But we will continue to compare the topology of the current pose with the 
-                first one seen in the PDBQT file, to be sure only the atom positions are
-                changing."""
                 tmp_atoms = np.array(tmp_atoms, dtype=atoms_dtype)
+
                 if atoms is None:
+                    """We store the atoms (topology) only once, since 
+                    it is supposed to be the same for all the molecules in the PDBQT file.
+                    But we will continue to compare the topology of the current pose with the 
+                    first one seen in the PDBQT file, to be sure only the atom positions are
+                    changing."""
                     atoms = tmp_atoms.copy()
+                else:
+                    # Check if the molecule topology is the same for each pose
+                    # We ignore water molecules and atom type XX
+                    columns = ['idx', 'serial', 'name', 'resid', 'resname', 'chain', 'partial_charges', 'atom_type']
+                    top1 = atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
+                    top2 = tmp_atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
+
+                    if not np.array_equal(top1, top2):
+                        error_msg = 'PDBQT file %s does contain molecules with different topologies'
+                        raise RuntimeError(error_msg % pdbqt_filename)
+
+                    # Update information about water molecules as soon as we find new ones
+                    tmp_water_molecules_idx = tmp_atoms[tmp_atoms['atom_type'] == 'W']['idx']
+                    water_molecules_idx = atoms[atoms['atom_type'] == 'XX']['idx']
+                    new_water_molecules_idx = list(set(tmp_water_molecules_idx).intersection(water_molecules_idx))
+                    atoms[new_water_molecules_idx] = tmp_atoms[new_water_molecules_idx]
 
                 positions.append(tmp_positions)
+                actives.append(tmp_actives)
 
                 if (n_poses >= poses_to_read and poses_to_read != -1):
                     break
 
     positions = np.array(positions).reshape((n_poses, atoms.shape[0], 3))
 
-    return atoms, atom_properties, positions, free_energies
+    # We add indices of all the water molecules we saw
+    if water_indices:
+        atom_properties['water'] = list(water_indices)
+
+    return atoms, actives, atom_properties, positions, free_energies
 
 
 def _identify_bonds(atom_idx, positions, atom_types):
@@ -164,6 +208,7 @@ class PDBQTMolecule:
         self._energy_range = energy_range if energy_range is not None else -1
         self._pdbqt_filename = pdbqt_filename
         self._atoms = None
+        self._actives = None
         self._atom_properties = None
         self._positions = None
         self._free_energies = None
@@ -174,7 +219,7 @@ class PDBQTMolecule:
 
         # Juice all the information from that PDBQT file
         results = _read_ligand_pdbqt_file(self._pdbqt_filename, self._poses_to_read, self._energy_range)
-        self._atoms, self._atom_properties, self._positions, self._free_energies = results
+        self._atoms, self._actives, self._atom_properties, self._positions, self._free_energies = results
 
         # Build KDTrees for each pose
         self._KDTrees = [spatial.cKDTree(positions) for positions in self._positions]
@@ -234,66 +279,91 @@ class PDBQTMolecule:
         """Return the score (kcal/mol) of the current pose."""
         return self._free_energies[self._current_pose]
 
-    def available_atom_properties(self):
+    def available_atom_properties(self, ignore_properties=None):
         """Return all the available atom properties for that molecule.
         
         The following properties are ignored: ligand and flexible_residue
 
         """
-        return [k for k, v in self._atom_properties.items() if not k in ['ligand', 'flexible_residue'] and len(v) > 0]
+        if ignore_properties is None:
+            ignore_properties = []
+
+        if not isinstance(ignore_properties, (list, tuple)):
+            ignore_properties = [ignore_properties]
+
+        ignore_properties += ['ligand', 'flexible_residue']
+
+        return [k for k, v in self._atom_properties.items() 
+                if not k in ignore_properties and len(v) > 0]
 
     def has_flexible_residues(self):
-        """Tell me if the molecule contains a flexible residue or not."""
+        """Tell if the molecule contains a flexible residue or not.
+
+        Returns:
+            bool: True if contains flexible residues, otherwise False
+
+        """
         if self._atom_properties['flexible_residue']:
             return True
         return False
 
-    def positions(self, atom_idx=None):
-        """Return coordinates (xyz) of all atoms or a certain atom
-
-        Args:
-            atom_idx (int, list): index of one or multiple atoms (0-based)
+    def has_water_molecules(self):
+        """Tell if the molecules contains water molecules or not in the current pose.
 
         Returns:
-            ndarray: 2d ndarray of coordinates (xyz)
+            bool: True if contains water molecules in the current pose, otherwise False
 
         """
-        if atom_idx is not None and self._positions.size > 1:
-            if not isinstance(atom_idx, (list, tuple, np.ndarray)):
-                atom_idx = np.array(atom_idx, dtype=np.int)
-            positions = self._positions[self._current_pose, atom_idx,:]
-        else:
-            positions = self._positions[self._current_pose,:,:]
+        if set(self._atom_properties['water']).intersection(self._actives[self._current_pose]):
+            return True
+        return False
 
-        return np.atleast_2d(positions).copy()
-
-    def atoms(self, atom_idx=None):
+    def atoms(self, atom_idx=None, only_active=True):
         """Return the atom i
 
         Args:
             atom_idx (int, list): index of one or multiple atoms (0-based)
+            only_active (bool): return only active atoms (default: True, return only active atoms)
 
         Returns:
             ndarray: 2d ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
 
         """
-        if atom_idx is not None and self._positions.size > 1:
+        if atom_idx is not None:
             if not isinstance(atom_idx, (list, tuple, np.ndarray)):
                 atom_idx = np.array(atom_idx, dtype=np.int)
-            atoms = self._atoms[atom_idx].copy()
-            atoms['xyz'] = self._positions[self._current_pose, atom_idx,:]
         else:
-            atoms = self._atoms.copy()
-            atoms['xyz'] = self._positions[self._current_pose,:,:]
+            atom_idx = np.arange(0, self._atoms.shape[0])
+
+        # Get index of only the active atoms
+        if only_active:
+            atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
+
+        atoms = self._atoms[atom_idx].copy()
+        atoms['xyz'] = self._positions[self._current_pose, atom_idx,:]
 
         return atoms
 
-    def atoms_by_properties(self, atom_properties):
+    def positions(self, atom_idx=None, only_active=True):
+        """Return coordinates (xyz) of all atoms or a certain atom
+
+        Args:
+            atom_idx (int, list): index of one or multiple atoms (0-based)
+            only_active (bool): return only active atoms (default: True, return only active atoms)
+
+        Returns:
+            ndarray: 2d ndarray of coordinates (xyz)
+
+        """
+        return np.atleast_2d(self.atoms(atom_idx, only_active)['xyz'])
+
+    def atoms_by_properties(self, atom_properties, only_active=True):
         """Return atom based on their properties
 
         Args:
             atom_properties (str or list): property of the atoms to retrieve 
                 (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
+            only_active (bool): return only active atoms (default: True, return only active atoms)
 
         """
         if not isinstance(atom_properties, (list, tuple)):
@@ -301,27 +371,26 @@ class PDBQTMolecule:
 
         if len(atom_properties) > 1:
             try:
-                index = set(self._atom_properties[atom_properties[0]])
+                atom_idx = set(self._atom_properties[atom_properties[0]])
 
                 for atom_property in atom_properties[1:]:
-                    index.intersection_update(self._atom_properties[atom_property])
+                    atom_idx.intersection_update(self._atom_properties[atom_property])
             except:
                 error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
                 raise KeyError(error_msg % (atom_property, self._atom_properties.keys()))
 
-            index = list(index)
+            atom_idx = list(atom_idx)
         else:
             try:
-                index = self._atom_properties[atom_properties[0]]
+                atom_idx = self._atom_properties[atom_properties[0]]
             except:
                 error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
-                raise KeyError(error_msg % (atom_property, self._atom_properties.keys()))
+                raise KeyError(error_msg % (atom_properties[0], self._atom_properties.keys()))
 
-        selected_atoms = self._atoms[index].copy()
-        if self._current_pose != 0:
-            selected_atoms['xyz'] = self._positions[self._current_pose, index,:]
+        if atom_idx:
+            return self.atoms(atom_idx, only_active)
 
-        return selected_atoms
+        return np.array([])
 
     def closest_atoms_from_positions(self, xyz, radius, atom_properties=None, ignore=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 
@@ -338,17 +407,17 @@ class PDBQTMolecule:
             ndarray: 2d ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
 
         """
-        index = self._KDTrees[self._current_pose].query_ball_point(xyz, radius, p=2, return_sorted=True)
+        atom_idx = self._KDTrees[self._current_pose].query_ball_point(xyz, radius, p=2, return_sorted=True)
 
         # When nothing was found around...
-        if not index:
+        if not atom_idx:
             return np.array([])
 
         # Handle the case when positions for of only one atom was passed in the input
         try:
-            index = {i for j in index for i in j}
+            atom_idx = {i for j in atom_idx for i in j}
         except:
-            index = set(index)
+            atom_idx = set(atom_idx)
 
         if atom_properties is not None:
             if not isinstance(atom_properties, (list, tuple)):
@@ -356,7 +425,7 @@ class PDBQTMolecule:
 
             try:
                 for atom_property in atom_properties:
-                    index.intersection_update(self._atom_properties[atom_property])
+                    atom_idx.intersection_update(self._atom_properties[atom_property])
             except:
                 error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
                 raise KeyError(error_msg % (atom_property, self._atom_properties.keys()))
@@ -364,13 +433,17 @@ class PDBQTMolecule:
         if ignore is not None:
             if not isinstance(ignore, (list, tuple, np.ndarray)):
                 ignore = [ignore]
-            index = index.difference([i for i in ignore])
+            atom_idx = atom_idx.difference([i for i in ignore])
 
-        index = list(index)
-        atoms = self._atoms[index].copy()
-        atoms['xyz'] = self._positions[self._current_pose, index,:]
+        # Get index of only the active atoms
+        atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
 
-        return atoms
+        if atom_idx:
+            atoms = self._atoms[atom_idx].copy()
+            atoms['xyz'] = self._positions[self._current_pose, atom_idx,:]
+            return atoms
+
+        return np.array([])
 
     def closest_atoms(self, atom_idx, radius, atom_properties=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 
@@ -383,10 +456,20 @@ class PDBQTMolecule:
                 (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
 
         Returns:
-            ndarray: 2d ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
+            ndarray: ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
 
         """
-        return self.closest_atoms_from_positions(self._atoms[atom_idx]['xyz'], radius, atom_properties, atom_idx)
+        if not isinstance(atom_idx, (list, tuple)):
+                atom_idx = [atom_idx]
+
+        # Get index of only the active atoms
+        atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
+
+        if atom_idx:
+            positions = self._positions[self._current_pose, atom_idx,:]
+            return self.closest_atoms_from_positions(positions, radius, atom_properties, atom_idx)
+
+        return np.array([])
 
     def neighbor_atoms(self, atom_idx):
         """Return neighbor (bonded) atoms
@@ -400,5 +483,8 @@ class PDBQTMolecule:
         """
         if not isinstance(atom_idx, (list, tuple, np.ndarray)):
             atom_idx = [atom_idx]
+
+        # Get index of only the active atoms
+        atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
 
         return [self._bonds[i] for i in atom_idx]
