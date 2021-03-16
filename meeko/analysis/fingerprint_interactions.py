@@ -166,6 +166,9 @@ class FingerprintInteractions:
                                     if good_hb:
                                         chain, resid, name = rec_atom['chain'], rec_atom['resid'], rec_atom['name']
                                         tmp_hb.append('h_%s:%d:%s' % (chain, resid, name))
+                                    else:
+                                        # If it is a bad hb then it magically becomes a good vdw interaction
+                                        tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 elif lig_atom_property == 'hb_acc' and rec_atom_property == 'hb_don':
                                     # (LIG) HB acceptor - HB donor (REC) interaction
                                     good_hb = _is_valid_hydrogen_bond(lig_atom['xyz'], lig_hb_vector,
@@ -175,6 +178,9 @@ class FingerprintInteractions:
                                     if good_hb:
                                         chain, resid, name = rec_atom['chain'], rec_atom['resid'], rec_atom['name']
                                         tmp_hb.append('h_%s:%d:%s' % (chain, resid, name))
+                                    else:
+                                        # If it is a bad hb then it magically becomes a good vdw interaction
+                                        tmp_vdw.append('v_%s:%d' % (rec_atom['chain'], rec_atom['resid']))
                                 elif lig_atom_property == 'water':
                                     good_hb = False
 
