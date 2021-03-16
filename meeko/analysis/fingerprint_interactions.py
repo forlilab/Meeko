@@ -221,11 +221,15 @@ class FingerprintInteractions:
 
         self._data.extend(data)
 
-    def to_dataframe(self):
+    def to_dataframe(self, remove_common=False):
         """Generate a panda DataFrame with all the interactions
+        
+        Args:
+            remove_common (bool): remove all the interactions (columns) that
+                are common to all the molecules (default: False)
 
         Returns:
-            pd.DataFrame: pandas DataFrame containing all the interaction 
+            pd.DataFrame: pandas DataFrame containing all the interactions
                 found between the molecules and the receptor
 
         """
@@ -261,10 +265,13 @@ class FingerprintInteractions:
 
         # Create final dataframe
         df = pd.DataFrame(fpi, index=np.arange(0, len(self._data)), columns=multi_columns)
-        # Remove columns where there are zero interactions. This is because we mix hb + water interactions.
-        #df = df.loc[:, (df.sum(axis=0) != 0)]
+        
         df['name'] = names
         df['pose'] = poses
         df.set_index(['name', 'pose'], inplace=True)
+
+        if remove_common:
+            # Remove interactions (columns) that are common to all molecules
+            df = df.loc[:, (df.sum(axis=0) != df.shape[0])]
 
         return df
