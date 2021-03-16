@@ -140,7 +140,7 @@ class PDBQTWriterLegacy():
             self._walk_graph_recursive(neigh, edge_start=next_index)
             self._pdbqt_buffer.append("ENDBRANCH %3d %3d" % (begin, end))
 
-    def write_string(self, mol, is_protein_sidechain):
+    def write_string(self, mol, is_protein_sidechain, save_index_map=False):
         """Output a PDBQT file as a string.
         
         Args:
@@ -181,6 +181,14 @@ class PDBQTWriterLegacy():
 
         self._walk_graph_recursive(root, first=True)
 
+        if save_index_map:
+            i = 0
+            for remark_line in self.remark_index_map():
+                # need to use 'insert' because self._numbering is calculated
+                # only after self._walk_graph_recursive
+                self._pdbqt_buffer.insert(i, remark_line)
+                i += 1
+
         if is_protein_sidechain:
             if len(self._resinfo_set) > 1:
                 print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
@@ -195,4 +203,23 @@ class PDBQTWriterLegacy():
             # torsdof is always going to be the one of the rigid, non-macrocyclic one
             self._pdbqt_buffer.append('TORSDOF %d\n' % active_tors)
 
+
         return '\n'.join(self._pdbqt_buffer) + '\n'
+
+
+    def remark_index_map(self):
+        """ write mapping of atom indices from input molecule to output PDBQT """
+
+        max_line_length = 79
+        remark_lines = []
+        line = 'REMARK INDEX MAP'
+        for key in self._numbering:
+            if key not in self.setup.atom_pseudo:
+                candidate_text = " %d %d" % (key, self._numbering[key])
+                if (len(line) + len(candidate_text)) < max_line_length:
+                    line += candidate_text
+                else:
+                    remark_lines.append(line)
+                    line = 'REMARK INDEX MAP' + candidate_text
+        remark_lines.append(line)
+        return remark_lines

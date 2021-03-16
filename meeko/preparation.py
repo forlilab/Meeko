@@ -144,15 +144,18 @@ class MoleculePreparation:
 
             print('')
     
-    def write_pdbqt_string(self):
+    def write_pdbqt_string(self, save_index_map=False):
         if self._mol is not None:
-            return self._writer.write_string(self._mol, is_protein_sidechain=self.is_protein_sidechain)
+            return self._writer.write_string(
+                    self._mol,
+                    is_protein_sidechain=self.is_protein_sidechain,
+                    save_index_map=save_index_map)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 
-    def write_pdbqt_file(self, pdbqt_filename):
+    def write_pdbqt_file(self, pdbqt_filename, save_index_map):
         try:
             with open(pdbqt_filename,'w') as w:
-                w.write(self.write_pdbqt_string())
+                w.write(self.write_pdbqt_string(save_index_map))
         except:
             raise RuntimeError('Cannot write PDBQT file %s.' % pdbqt_filename)
