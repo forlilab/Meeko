@@ -29,6 +29,8 @@ def cmd_lineparser():
                         action="store", help="correct protonation for pH (default: No correction)")
     parser.add_argument("-f", "--flex", dest="is_protein_sidechain", default=False,
                         action="store_true", help="prepare as flexible protein residue")
+    parser.add_argument("--index_map", dest="save_index_map", default=False,
+                        action="store_true", help="write map of indices from input to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
                         action="store", help="output pdbqt file")
     parser.add_argument("-v", "--verbose", dest="verbose", default=False,
@@ -47,6 +49,7 @@ def main():
     add_hydrogen = args.add_hydrogen
     pH_value = args.pH_value
     is_protein_sidechain = args.is_protein_sidechain
+    save_index_map = args.save_index_map
 
     mol = obutils.load_molecule_from_file(input_molecule_file)
 
@@ -67,7 +70,7 @@ def main():
         preparator.show_setup()
 
     if output_pdbqt_file is None:
-        text = preparator.write_pdbqt_string()
+        text = preparator.write_pdbqt_string(save_index_map)
         print(text)
     else:
         preparator.write_pdbqt_file(output_pdbqt_file)
