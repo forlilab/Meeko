@@ -24,7 +24,7 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
-def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
+def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, is_dlg=False):
     i = 0
     n_poses = 0
     atoms = None
@@ -34,8 +34,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
     water_indices = {*()}
     location = 'ligand'
     energy_best_pose = None
-    store_atom_properties = True
-    atom_types_to_ignore = ['W', 'XX'] # For checking the topology
+    is_first_pose = True
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ('xyz', 'f4', (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U3')]
@@ -43,9 +42,17 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                        'hb_acc': [], 'hb_don': [],
                        'all': [], 'vdw': [],
                        'glue': [], 'reactive': []}
+    index_map = {}
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
+
+        if is_dlg:
+            newlines = []
+            for line in lines:
+                if line.startswith('DOCKED: '):
+                    newlines.append(line[8:])
+            lines = newlines
 
         for line in lines:
             if line.startswith('MODEL'):
@@ -54,6 +61,13 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                 tmp_positions = []
                 tmp_atoms = []
                 tmp_actives = []
+            elif line.startswith('REMARK INDEX MAP') and is_first_pose:
+                integers = [int(integer) for integer in line.split()[3:]]
+                if len(integers) % 2 == 1:
+                    raise RuntimeError("number of indices in INDEX MAP is odd")
+                for j in range(int(len(integers) / 2)): 
+                    index_map[integers[j*2]] = integers[j*2+1]
+
             elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
                 # Read free energy from output PDBQT files
                 try:
@@ -107,7 +121,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                 tmp_actives.append(i)
 
                 # We store water idx separately from the rest since their number can be variable
-                if store_atom_properties and atom_type != 'W':
+                if is_first_pose and atom_type != 'W':
                     atom_properties[location].append(i)
                     atom_properties['all'].append(i)
                     atom_properties[atom_property_definitions[atom_type]].append(i)
@@ -126,7 +140,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
                 n_poses += 1
                 # After reading the first pose no need to store atom properties
                 # anymore, it is the same for every pose
-                store_atom_properties = False
+                is_first_pose = False
 
                 tmp_atoms = np.array(tmp_atoms, dtype=atoms_dtype)
 
@@ -166,7 +180,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1):
     if water_indices:
         atom_properties['water'] = list(water_indices)
 
-    return atoms, actives, atom_properties, positions, free_energies
+    return atoms, actives, atom_properties, positions, free_energies, index_map
 
 
 def _identify_bonds(atom_idx, positions, atom_types):
@@ -190,7 +204,7 @@ def _identify_bonds(atom_idx, positions, atom_types):
 
 class PDBQTMolecule:
 
-    def __init__(self, pdbqt_filename, name=None, poses_to_read=None, energy_range=None):
+    def __init__(self, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False):
         """PDBQTMolecule object
 
         Contains both __getitem__ and __iter__ methods, someone might lose his mind because of this.
@@ -201,6 +215,9 @@ class PDBQTMolecule:
             poses_to_read (int): total number of poses to read (default: None, read all)
             energy_range (float): read docked poses until the maximum energy difference 
                 from best pose is reach, for example 2.5 kcal/mol (default: Non, read all)
+            is_dlg will read lines starting with "DOCKED: " in autodock-gpu output.
+                This is the equivalent to OpenBabel's command line option '-ad'
+                or OBConversion.SetOptions('d', 0) from the Python API.
 
         """
         self._current_pose = 0
@@ -212,14 +229,15 @@ class PDBQTMolecule:
         self._atom_properties = None
         self._positions = None
         self._free_energies = None
+        self._index_map = None
         if name is None:
             self._name = os.path.splitext(os.path.basename(self._pdbqt_filename))[0]
         else:
             self._name = name
 
         # Juice all the information from that PDBQT file
-        results = _read_ligand_pdbqt_file(self._pdbqt_filename, self._poses_to_read, self._energy_range)
-        self._atoms, self._actives, self._atom_properties, self._positions, self._free_energies = results
+        results = _read_ligand_pdbqt_file(self._pdbqt_filename, self._poses_to_read, self._energy_range, is_dlg)
+        self._atoms, self._actives, self._atom_properties, self._positions, self._free_energies, self._index_map = results
 
         # Build KDTrees for each pose
         self._KDTrees = [spatial.cKDTree(positions) for positions in self._positions]
