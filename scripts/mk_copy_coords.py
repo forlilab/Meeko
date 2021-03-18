@@ -23,59 +23,6 @@ def cmd_lineparser():
                         action="store", help="output molecule file in SDF format")
     return parser.parse_args()
 
-def copy_coords(obmol, coords, index_map):
-    """ Args:
-        obmol (OBMol): coordinates will be changed in this object
-        coords (2D array): coordinates to copy
-        index_map (dict): map of atom indices from obmol (keys) to coords (values)
-    """
-    n_atoms = obmol.NumAtoms()
-    n_matched_atoms = 0
-    hydrogens_to_delete = []
-    heavy_parents = []
-    for atom in ob.OBMolAtomIter(obmol):
-        ob_index = atom.GetIdx() # 1-index
-        if ob_index in pdbqt_mol._index_map:
-            pdbqt_index = pdbqt_mol._index_map[ob_index]-1
-            x, y, z = pose_xyz[pdbqt_index, :] 
-            atom.SetVector(x, y, z)
-            n_matched_atoms += 1
-        elif atom.GetAtomicNum() != 1:
-            raise RuntimeError('obmol heavy atom missing in pdbqt_mol, only hydrogens can be missing')
-        else:
-            hydrogens_to_delete.append(atom)
-            bond_counter = 0
-            for bond in ob.OBAtomBondIter(atom):
-                bond_counter += 1
-            if bond_counter != 1:
-                raise RuntimeError("hydrogen atom has %d bonds, must have 1" % bond_counter)
-            begin_atom = bond.GetBeginAtom()
-            end_atom = bond.GetEndAtom()
-            if atom == begin_atom:
-                heavy_parents.append(end_atom)
-            elif atom == end_atom:
-                heavy_parents.append(begin_atom)
-            else:
-                raise RuntimeError("hydrogen isn't either Begin or End atom of its own bond")
-
-    if n_matched_atoms != len(index_map):
-        raise RuntimeError("Not all pdbqt_mol atoms were considered")
-
-    # delete explicit hydrogens
-    for hydrogen in hydrogens_to_delete:
-        obmol.DeleteHydrogen(hydrogen)
-
-    # increment implicit H count of heavy atom parents
-    for heavy_parent in heavy_parents:
-        n_implicit = heavy_parent.GetImplicitHCount()
-        heavy_parent.SetImplicitHCount(n_implicit + 1)
-
-    # add back explicit hydrogens
-    obmol.AddHydrogens()
-    if obmol.NumAtoms() != n_atoms:
-        raise RuntimeError("number of atoms changed after deleting and adding hydrogens")
-
-    return
 
 
 
@@ -100,8 +47,8 @@ if __name__ == '__main__':
     if not success:
         raise RuntimeError("file format %s not recognized by openbabel" % output_format)
 
-    for pose_xyz in pdbqt_mol._positions: # iterate over poses
-        copy_coords(obmol, pose_xyz, pdbqt_mol._index_map)
+    for pose in pdbqt_mol:
+        pose.copy_coordinates_to_obmol(obmol)
         output_string += conv.WriteString(obmol)
 
     if output_filename is None:

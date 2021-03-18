@@ -9,6 +9,7 @@ from collections import defaultdict
 
 import numpy as np
 from scipy import spatial
+from openbabel import openbabel as ob
 
 from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
@@ -506,3 +507,61 @@ class PDBQTMolecule:
         atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
 
         return [self._bonds[i] for i in atom_idx]
+
+    def copy_coordinates_to_obmol(self, obmol, index_map=None):
+        """ Args:
+            obmol (OBMol): coordinates will be changed in this object
+            index_map (dict): map of atom indices from obmol (keys) to coords (values)
+        """
+
+        if index_map is None:
+            index_map = self._index_map
+
+        n_atoms = obmol.NumAtoms()
+        n_matched_atoms = 0
+        hydrogens_to_delete = []
+        heavy_parents = []
+        for atom in ob.OBMolAtomIter(obmol):
+            ob_index = atom.GetIdx() # 1-index
+            if ob_index in index_map:
+                pdbqt_index = index_map[ob_index]-1
+                x, y, z = self._positions[self._current_pose][pdbqt_index, :] 
+                atom.SetVector(x, y, z)
+                n_matched_atoms += 1
+            elif atom.GetAtomicNum() != 1:
+                raise RuntimeError('obmol heavy atom missing in pdbqt_mol, only hydrogens can be missing')
+            else:
+                hydrogens_to_delete.append(atom)
+                bond_counter = 0
+                for bond in ob.OBAtomBondIter(atom):
+                    bond_counter += 1
+                if bond_counter != 1:
+                    raise RuntimeError("hydrogen atom has %d bonds, must have 1" % bond_counter)
+                begin_atom = bond.GetBeginAtom()
+                end_atom = bond.GetEndAtom()
+                if atom == begin_atom:
+                    heavy_parents.append(end_atom)
+                elif atom == end_atom:
+                    heavy_parents.append(begin_atom)
+                else:
+                    raise RuntimeError("hydrogen isn't either Begin or End atom of its own bond")
+    
+        if n_matched_atoms != len(index_map):
+            raise RuntimeError("Not all pdbqt_mol atoms were considered")
+    
+        # delete explicit hydrogens
+        for hydrogen in hydrogens_to_delete:
+            obmol.DeleteHydrogen(hydrogen)
+    
+        # increment implicit H count of heavy atom parents
+        for heavy_parent in heavy_parents:
+            n_implicit = heavy_parent.GetImplicitHCount()
+            heavy_parent.SetImplicitHCount(n_implicit + 1)
+    
+        # add back explicit hydrogens
+        obmol.AddHydrogens()
+        if obmol.NumAtoms() != n_atoms:
+            raise RuntimeError("number of atoms changed after deleting and adding hydrogens")
+    
+        return
+
