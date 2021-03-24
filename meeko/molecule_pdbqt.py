@@ -28,14 +28,21 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
 def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, is_dlg=False):
     i = 0
     n_poses = 0
+    previous_serial = 0
+    tmp_positions = []
+    tmp_atoms = []
+    tmp_actives = []
     atoms = None
     actives = []
     positions = []
     free_energies = []
-    water_indices = {*()}
+    index_map = {}
+    water_indices = {*()}  
     location = 'ligand'
     energy_best_pose = None
     is_first_pose = True
+    is_model = False
+
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ('xyz', 'f4', (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U3')]
@@ -43,32 +50,33 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
                        'hb_acc': [], 'hb_don': [],
                        'all': [], 'vdw': [],
                        'glue': [], 'reactive': []}
-    index_map = {}
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
 
-        if is_dlg:
-            newlines = []
-            for line in lines:
-                if line.startswith('DOCKED: '):
-                    newlines.append(line[8:])
-            lines = newlines
-
         for line in lines:
+            if is_dlg:
+                if line.startswith('DOCKED'):
+                    line = line[8:]
+                else:
+                    continue
+
             if line.startswith('MODEL'):
+                # Reinitialize variables
                 i = 0
                 previous_serial = 0
                 tmp_positions = []
                 tmp_atoms = []
                 tmp_actives = []
+                is_model = True
             elif line.startswith('REMARK INDEX MAP') and is_first_pose:
                 integers = [int(integer) for integer in line.split()[3:]]
-                if len(integers) % 2 == 1:
-                    raise RuntimeError("number of indices in INDEX MAP is odd")
-                for j in range(int(len(integers) / 2)): 
-                    index_map[integers[j*2]] = integers[j*2+1]
 
+                if len(integers) % 2 == 1:
+                    raise RuntimeError("Number of indices in INDEX MAP is odd")
+
+                for j in range(int(len(integers) / 2)): 
+                    index_map[integers[j*2]] = integers[j*2 + 1]
             elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
                 # Read free energy from output PDBQT files
                 try:
@@ -175,6 +183,15 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
                 if (n_poses >= poses_to_read and poses_to_read != -1):
                     break
 
+        """ if there is no model, it means that there is only one molecule
+        so when we reach the end of the file, we store the atoms, 
+        positions and actives stuff. """
+        if not is_model:
+            n_poses += 1
+            atoms = np.array(tmp_atoms, dtype=atoms_dtype)
+            positions.append(tmp_positions)
+            actives.append(tmp_actives)
+
     positions = np.array(positions).reshape((n_poses, atoms.shape[0], 3))
 
     # We add indices of all the water molecules we saw
@@ -216,9 +233,7 @@ class PDBQTMolecule:
             poses_to_read (int): total number of poses to read (default: None, read all)
             energy_range (float): read docked poses until the maximum energy difference 
                 from best pose is reach, for example 2.5 kcal/mol (default: Non, read all)
-            is_dlg will read lines starting with "DOCKED: " in autodock-gpu output.
-                This is the equivalent to OpenBabel's command line option '-ad'
-                or OBConversion.SetOptions('d', 0) from the Python API.
+            is_dlg (bool): input file is in dlg (AutoDock docking log) format (default: False)
 
         """
         self._current_pose = 0
