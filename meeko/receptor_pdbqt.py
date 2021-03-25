@@ -19,6 +19,7 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
                              'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc',
                              'HD': 'hb_don', 'HS': 'hb_don',
                              'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
+                             'MG': 'metal', 'CA': 'metal', 'FE': 'metal', 'ZN': 'metal', 'MN': 'metal',
                              'W': 'water',
                              'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue',
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
@@ -30,9 +31,11 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ("xyz", "f4", (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U2')]
-    atom_properties = {'hb': [], 'hb_acc': [], 'hb_don': [],
+    atom_annotations = {'hb_acc': [], 'hb_don': [],
                        'all': [], 'vdw': [],
-                       'non-metal': [], 'metal': []}
+                       'metal': []}
+    # TZ is a pseudo atom for AutoDock4Zn FF
+    pseudo_atom_types = ['TZ']
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
@@ -48,19 +51,17 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
                 xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=np.float32)
                 partial_charges = float(line[71:77].strip())
                 atom_type = line[77:79].strip()
-                
-                atom_properties['all'].append(i)
-                atom_properties[atom_property_definitions[atom_type]].append(i)
-                atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
+
+                if not atom_type in pseudo_atom_types:
+                    atom_annotations['all'].append(i)
+                    atom_annotations[atom_property_definitions[atom_type]].append(i)
+                    atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
 
                 i += 1
 
     atoms = np.array(atoms, dtype=atoms_dtype)
 
-    # Concatenate both hb_acc + hb_don. This is useful for atoms that can be both acc/don (ex: water molecules)
-    atom_properties['hb'] = atom_properties['hb_acc'] +  atom_properties['hb_don']
-
-    return atoms, atom_properties
+    return atoms, atom_annotations
 
 
 def _identify_bonds(atom_idx, positions, atom_types):
@@ -87,13 +88,13 @@ class PDBQTReceptor:
     def __init__(self, pdbqt_filename):
         self._pdbqt_filename = pdbqt_filename
         self._atoms = None
-        self._atom_properties = None
+        self._atom_annotations = None
         self._KDTree = None
 
-        self._atoms, self._atom_properties = _read_receptor_pdbqt_file(self._pdbqt_filename)
+        self._atoms, self._atom_annotations = _read_receptor_pdbqt_file(self._pdbqt_filename)
         # We add to the KDTree only the rigid part of the receptor
         self._KDTree = spatial.cKDTree(self._atoms['xyz'])
-        self._bonds = _identify_bonds(self._atom_properties['all'], self._atoms['xyz'], self._atoms['atom_type'])
+        self._bonds = _identify_bonds(self._atom_annotations['all'], self._atoms['xyz'], self._atoms['atom_type'])
 
     def __repr__(self):
         return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))
@@ -162,10 +163,10 @@ class PDBQTReceptor:
 
             try:
                 for atom_property in atom_properties:
-                    index.intersection_update(self._atom_properties[atom_property])
+                    index.intersection_update(self._atom_annotations[atom_property])
             except:
                 error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
-                raise KeyError(error_msg % (atom_property, self._atom_properties.keys()))
+                raise KeyError(error_msg % (atom_property, self._atom_annotations.keys()))
 
         if ignore is not None:
             if not isinstance(ignore, (list, tuple, np.ndarray)):

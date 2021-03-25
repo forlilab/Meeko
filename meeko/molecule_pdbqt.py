@@ -20,6 +20,7 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
                              'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc',
                              'HD': 'hb_don', 'HS': 'hb_don',
                              'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
+                             'MG': 'metal', 'CA': 'metal', 'FE': 'metal', 'ZN': 'metal', 'MN': 'metal',
                              'W': 'water',
                              'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue',
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
