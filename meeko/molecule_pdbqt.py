@@ -32,24 +32,24 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
     tmp_positions = []
     tmp_atoms = []
     tmp_actives = []
-    atoms = None
-    actives = []
-    positions = []
-    free_energies = []
-    index_map = {}
+    tmp_pdbqt_string = ''
     water_indices = {*()}  
     location = 'ligand'
     energy_best_pose = None
     is_first_pose = True
     is_model = False
-
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ('xyz', 'f4', (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U3')]
-    atom_properties = {'ligand': [], 'flexible_residue': [], 'water': [],
-                       'hb_acc': [], 'hb_don': [],
-                       'all': [], 'vdw': [],
-                       'glue': [], 'reactive': []}
+
+    atoms = None
+    positions = []
+    atom_annotations = {'ligand': [], 'flexible_residue': [], 'water': [],
+                        'hb_acc': [], 'hb_don': [],
+                        'all': [], 'vdw': [],
+                        'glue': [], 'reactive': []}
+    pose_data = {'n_poses': None, 'active_atoms': [], 'free_energies': [], 
+                 'index_map': {}, 'pdbqt_string': []}
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
@@ -61,6 +61,13 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
                 else:
                     continue
 
+            if not line.startswith(('MODEL', 'ENDMDL')):
+                """This is very lazy I know...
+                But would you rather spend time on rebuilding the whole torsion tree and stuff
+                for writing PDBQT files or drinking margarita? Energy was already spend to build
+                that, so let's re-use it!"""
+                tmp_pdbqt_string += line
+
             if line.startswith('MODEL'):
                 # Reinitialize variables
                 i = 0
@@ -68,33 +75,8 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
                 tmp_positions = []
                 tmp_atoms = []
                 tmp_actives = []
+                tmp_pdbqt_string = ''
                 is_model = True
-            elif line.startswith('REMARK INDEX MAP') and is_first_pose:
-                integers = [int(integer) for integer in line.split()[3:]]
-
-                if len(integers) % 2 == 1:
-                    raise RuntimeError("Number of indices in INDEX MAP is odd")
-
-                for j in range(int(len(integers) / 2)): 
-                    index_map[integers[j*2]] = integers[j*2 + 1]
-            elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
-                # Read free energy from output PDBQT files
-                try:
-                    # Vina
-                    energy = float(line.split()[3])
-                except:
-                    # AD4
-                    energy = float(line.split()[7])
-
-                if energy_best_pose is None:
-                    energy_best_pose = energy
-                energy_current_pose = energy
-
-                diff_energy = energy_current_pose - energy_best_pose
-                if (energy_range <= diff_energy and energy_range != -1):
-                    break
-
-                free_energies.append(energy)
             elif line.startswith('ATOM') or line.startswith("HETATM"):
                 serial = int(line[6:11].strip())
                 name = line[12:16].strip()
@@ -131,15 +113,42 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
 
                 # We store water idx separately from the rest since their number can be variable
                 if is_first_pose and atom_type != 'W':
-                    atom_properties[location].append(i)
-                    atom_properties['all'].append(i)
-                    atom_properties[atom_property_definitions[atom_type]].append(i)
+                    atom_annotations[location].append(i)
+                    atom_annotations['all'].append(i)
+                    atom_annotations[atom_property_definitions[atom_type]].append(i)
 
                 if atom_type == 'W':
                     water_indices.update([i])
 
                 previous_serial = serial
                 i += 1
+            elif line.startswith('REMARK'):
+                if line.startswith('REMARK INDEX MAP') and is_first_pose:
+                    integers = [int(integer) for integer in line.split()[3:]]
+
+                    if len(integers) % 2 == 1:
+                        raise RuntimeError("Number of indices in INDEX MAP is odd")
+
+                    for j in range(int(len(integers) / 2)): 
+                        pose_data['index_map'][integers[j*2]] = integers[j*2 + 1]
+                elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
+                    # Read free energy from output PDBQT files
+                    try:
+                        # Vina
+                        energy = float(line.split()[3])
+                    except:
+                        # AD4
+                        energy = float(line.split()[7])
+
+                    if energy_best_pose is None:
+                        energy_best_pose = energy
+                    energy_current_pose = energy
+
+                    diff_energy = energy_current_pose - energy_best_pose
+                    if (energy_range <= diff_energy and energy_range != -1):
+                        break
+
+                    pose_data['free_energies'].append(energy)
             elif line.startswith('BEGIN_RES'):
                 location = 'flexible_residue'
             elif line.startswith('END_RES'):
@@ -178,7 +187,8 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
                     atoms[new_water_molecules_idx] = tmp_atoms[new_water_molecules_idx]
 
                 positions.append(tmp_positions)
-                actives.append(tmp_actives)
+                pose_data['active_atoms'].append(tmp_actives)
+                pose_data['pdbqt_string'].append(tmp_pdbqt_string)
 
                 if (n_poses >= poses_to_read and poses_to_read != -1):
                     break
@@ -190,15 +200,18 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
             n_poses += 1
             atoms = np.array(tmp_atoms, dtype=atoms_dtype)
             positions.append(tmp_positions)
-            actives.append(tmp_actives)
+            pose_data['active_atoms'].append(tmp_actives)
+            pose_data['pdbqt_string'].append(tmp_pdbqt_string)
 
     positions = np.array(positions).reshape((n_poses, atoms.shape[0], 3))
 
+    pose_data['n_poses'] = n_poses
+
     # We add indices of all the water molecules we saw
     if water_indices:
-        atom_properties['water'] = list(water_indices)
+        atom_annotations['water'] = list(water_indices)
 
-    return atoms, actives, atom_properties, positions, free_energies, index_map
+    return atoms, positions, atom_annotations, pose_data
 
 
 def _identify_bonds(atom_idx, positions, atom_types):
@@ -223,7 +236,7 @@ def _identify_bonds(atom_idx, positions, atom_types):
 class PDBQTMolecule:
 
     def __init__(self, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False):
-        """PDBQTMolecule object
+        """PDBQTMolecule class for reading PDBQT (or dlg) files from AutoDock4, AutoDock-GPU or AutoDock-Vina
 
         Contains both __getitem__ and __iter__ methods, someone might lose his mind because of this.
 
@@ -237,38 +250,37 @@ class PDBQTMolecule:
 
         """
         self._current_pose = 0
-        self._poses_to_read = poses_to_read if poses_to_read is not None else -1
-        self._energy_range = energy_range if energy_range is not None else -1
         self._pdbqt_filename = pdbqt_filename
         self._atoms = None
-        self._actives = None
-        self._atom_properties = None
         self._positions = None
-        self._free_energies = None
-        self._index_map = None
+        self._bonds = None
+        self._atom_annotations = None
+        self._pose_data = None
         if name is None:
             self._name = os.path.splitext(os.path.basename(self._pdbqt_filename))[0]
         else:
             self._name = name
 
         # Juice all the information from that PDBQT file
-        results = _read_ligand_pdbqt_file(self._pdbqt_filename, self._poses_to_read, self._energy_range, is_dlg)
-        self._atoms, self._actives, self._atom_properties, self._positions, self._free_energies, self._index_map = results
+        poses_to_read = poses_to_read if poses_to_read is not None else -1
+        energy_range = energy_range if energy_range is not None else -1
+        results = _read_ligand_pdbqt_file(self._pdbqt_filename, poses_to_read, energy_range, is_dlg)
+        self._atoms, self._positions, self._atom_annotations, self._pose_data = results
 
-        # Build KDTrees for each pose
+        # Build KDTrees for each pose (search closest atoms by distance)
         self._KDTrees = [spatial.cKDTree(positions) for positions in self._positions]
 
         # Identify bonds in the ligands
-        mol_atoms = self._atoms[self._atom_properties['ligand']]
-        self._bonds = _identify_bonds(self._atom_properties['ligand'], mol_atoms['xyz'], mol_atoms['atom_type'])
+        mol_atoms = self._atoms[self._atom_annotations['ligand']]
+        self._bonds = _identify_bonds(self._atom_annotations['ligand'], mol_atoms['xyz'], mol_atoms['atom_type'])
 
         """... then in the flexible residues 
         Since we are extracting bonds from docked poses, we might be in the situation
         where the ligand reacted with one the flexible residues and we don't want to 
         consider them as normally bonded..."""
         if self.has_flexible_residues():
-            flex_atoms = self._atoms[self._atom_properties['flexible_residue']]
-            self._bonds.update(_identify_bonds(self._atom_properties['flexible_residue'], flex_atoms['xyz'], flex_atoms['atom_type']))
+            flex_atoms = self._atoms[self._atom_annotations['flexible_residue']]
+            self._bonds.update(_identify_bonds(self._atom_annotations['flexible_residue'], flex_atoms['xyz'], flex_atoms['atom_type']))
 
     def __getitem__(self, value):
         if isinstance(value, int):
@@ -296,7 +308,7 @@ class PDBQTMolecule:
 
     def __repr__(self):
         repr_str = '<Molecule from PDBQT file %s containing %d poses of %d atoms>'
-        return (repr_str % (self._pdbqt_filename, self._positions.shape[0], self._atoms.shape[0]))
+        return (repr_str % (self._pdbqt_filename, self._pose_data['n_poses'], self._atoms.shape[0]))
 
     @property    
     def name(self):
@@ -311,7 +323,7 @@ class PDBQTMolecule:
     @property
     def score(self):
         """Return the score (kcal/mol) of the current pose."""
-        return self._free_energies[self._current_pose]
+        return self._pose_data['free_energies'][self._current_pose]
 
     def available_atom_properties(self, ignore_properties=None):
         """Return all the available atom properties for that molecule.
@@ -327,7 +339,7 @@ class PDBQTMolecule:
 
         ignore_properties += ['ligand', 'flexible_residue', 'water']
 
-        return [k for k, v in self._atom_properties.items() 
+        return [k for k, v in self._atom_annotations.items() 
                 if not k in ignore_properties and len(v) > 0]
 
     def has_flexible_residues(self):
@@ -337,9 +349,10 @@ class PDBQTMolecule:
             bool: True if contains flexible residues, otherwise False
 
         """
-        if self._atom_properties['flexible_residue']:
+        if self._atom_annotations['flexible_residue']:
             return True
-        return False
+        else:
+            return False
 
     def has_water_molecules(self):
         """Tell if the molecules contains water molecules or not in the current pose.
@@ -348,9 +361,11 @@ class PDBQTMolecule:
             bool: True if contains water molecules in the current pose, otherwise False
 
         """
-        if set(self._atom_properties['water']).intersection(self._actives[self._current_pose]):
+        active_atoms_idx = self._pose_data['active_atoms'][self._current_pose]
+        if set(self._atom_annotations['water']).intersection(active_atoms_idx):
             return True
-        return False
+        else:
+            return False
 
     def atoms(self, atom_idx=None, only_active=True):
         """Return the atom i
@@ -371,7 +386,8 @@ class PDBQTMolecule:
 
         # Get index of only the active atoms
         if only_active:
-            atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
+            active_atoms_idx = self._pose_data['active_atoms'][self._current_pose]
+            atom_idx = list(set(atom_idx).intersection(active_atoms_idx))
 
         atoms = self._atoms[atom_idx].copy()
         atoms['xyz'] = self._positions[self._current_pose, atom_idx,:]
@@ -405,26 +421,26 @@ class PDBQTMolecule:
 
         if len(atom_properties) > 1:
             try:
-                atom_idx = set(self._atom_properties[atom_properties[0]])
+                atom_idx = set(self._atom_annotations[atom_properties[0]])
 
                 for atom_property in atom_properties[1:]:
-                    atom_idx.intersection_update(self._atom_properties[atom_property])
+                    atom_idx.intersection_update(self._atom_annotations[atom_property])
             except:
                 error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
-                raise KeyError(error_msg % (atom_property, self._atom_properties.keys()))
+                raise KeyError(error_msg % (atom_property, self._atom_annotations.keys()))
 
             atom_idx = list(atom_idx)
         else:
             try:
-                atom_idx = self._atom_properties[atom_properties[0]]
+                atom_idx = self._atom_annotations[atom_properties[0]]
             except:
                 error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
-                raise KeyError(error_msg % (atom_properties[0], self._atom_properties.keys()))
+                raise KeyError(error_msg % (atom_properties[0], self._atom_annotations.keys()))
 
         if atom_idx:
             return self.atoms(atom_idx, only_active)
-
-        return np.array([])
+        else:
+            return np.array([])
 
     def closest_atoms_from_positions(self, xyz, radius, atom_properties=None, ignore=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 
@@ -459,10 +475,10 @@ class PDBQTMolecule:
 
             try:
                 for atom_property in atom_properties:
-                    atom_idx.intersection_update(self._atom_properties[atom_property])
+                    atom_idx.intersection_update(self._atom_annotations[atom_property])
             except:
                 error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
-                raise KeyError(error_msg % (atom_property, self._atom_properties.keys()))
+                raise KeyError(error_msg % (atom_property, self._atom_annotations.keys()))
 
         if ignore is not None:
             if not isinstance(ignore, (list, tuple, np.ndarray)):
@@ -470,14 +486,15 @@ class PDBQTMolecule:
             atom_idx = atom_idx.difference([i for i in ignore])
 
         # Get index of only the active atoms
-        atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
+        active_atoms_idx = self._pose_data['active_atoms'][self._current_pose]
+        atom_idx = list(set(atom_idx).intersection(active_atoms_idx))
 
         if atom_idx:
             atoms = self._atoms[atom_idx].copy()
             atoms['xyz'] = self._positions[self._current_pose, atom_idx,:]
             return atoms
-
-        return np.array([])
+        else:
+            return np.array([])
 
     def closest_atoms(self, atom_idx, radius, atom_properties=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 
@@ -497,13 +514,14 @@ class PDBQTMolecule:
                 atom_idx = [atom_idx]
 
         # Get index of only the active atoms
-        atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
+        active_atoms_idx = self._pose_data['active_atoms'][self._current_pose]
+        atom_idx = list(set(atom_idx).intersection(active_atoms_idx))
 
         if atom_idx:
             positions = self._positions[self._current_pose, atom_idx,:]
             return self.closest_atoms_from_positions(positions, radius, atom_properties, atom_idx)
-
-        return np.array([])
+        else:
+            return np.array([])
 
     def neighbor_atoms(self, atom_idx):
         """Return neighbor (bonded) atoms
@@ -519,64 +537,108 @@ class PDBQTMolecule:
             atom_idx = [atom_idx]
 
         # Get index of only the active atoms
-        atom_idx = list(set(atom_idx).intersection(self._actives[self._current_pose]))
+        active_atoms_idx = self._pose_data['active_atoms'][self._current_pose]
+        atom_idx = list(set(atom_idx).intersection(active_atoms_idx))
 
         return [self._bonds[i] for i in atom_idx]
 
-    def copy_coordinates_to_obmol(self, obmol, index_map=None):
-        """ Args:
-            obmol (OBMol): coordinates will be changed in this object
-            index_map (dict): map of atom indices from obmol (keys) to coords (values)
-        """
+    def write_pdbqt_string(self, as_model=True):
+        """Write PDBQT output string of the current pose
+        
+        Args:
+            as_model (bool): Qdd MODEL/ENDMDL keywords to the output PDBQT string (default: True)
 
+        """
+        if as_model:
+            pdbqt_string = 'MODEL    %5d\n' % (self._current_pose + 1)
+            pdbqt_string += self._pose_data['pdbqt_string'][self._current_pose] 
+            pdbqt_string += 'ENDMDL\n'
+            return pdbqt_string
+        else: 
+            return self._pose_data['pdbqt_string'][self._current_pose]
+
+    def write_pdbqt_file(self, output_pdbqtfilename, overwrite=False, as_model=False):
+        """Write PDBQT file of the current pose
+
+        Args:
+            output_pdbqtfilename (str): filename of the output PDBQT file
+            overwrite (bool): overwrite on existing pdbqt file (default: False)
+            as_model (bool): Qdd MODEL/ENDMDL keywords to the output PDBQT string (default: False)
+
+        """
+        print(overwrite and os.path.isfile(output_pdbqtfilename))
+        if not overwrite and os.path.isfile(output_pdbqtfilename):
+            raise RuntimeError('Output PDBQT file %s already exists' % output_pdbqtfilename)
+
+        if as_model:
+            pdbqt_string = 'MODEL    %5d\n' % (self._current_pose + 1)
+            pdbqt_string += self._pose_data['pdbqt_string'][self._current_pose] 
+            pdbqt_string += 'ENDMDL\n'
+        else:
+            pdbqt_string = self._pose_data['pdbqt_string'][self._current_pose]
+
+        with open(output_pdbqtfilename, 'w') as w:
+            w.write(pdbqt_string)
+
+    def copy_coordinates_to_obmol(self, obmol, index_map=None):
+        """Copy coordinates of the current pose to an obmol object 
+
+        Args:
+            obmol (OBMol): coordinates will be changed in this object
+            index_map (dict): map of atom indices from obmol (keys) to coords (values) (Default: None)
+
+        """
         if index_map is None:
-            index_map = self._index_map
+            index_map = self._pose_data['index_map']
 
         n_atoms = obmol.NumAtoms()
         n_matched_atoms = 0
         hydrogens_to_delete = []
         heavy_parents = []
+
         for atom in ob.OBMolAtomIter(obmol):
             ob_index = atom.GetIdx() # 1-index
+
             if ob_index in index_map:
-                pdbqt_index = index_map[ob_index]-1
-                x, y, z = self._positions[self._current_pose][pdbqt_index, :] 
+                pdbqt_index = index_map[ob_index] - 1
+                x, y, z = self._positions[self._current_pose][pdbqt_index, :]
                 atom.SetVector(x, y, z)
                 n_matched_atoms += 1
             elif atom.GetAtomicNum() != 1:
-                raise RuntimeError('obmol heavy atom missing in pdbqt_mol, only hydrogens can be missing')
+                raise RuntimeError('Heavy atom in OBMol is missing, only hydrogens can be missing')
             else:
                 hydrogens_to_delete.append(atom)
                 bond_counter = 0
+
                 for bond in ob.OBAtomBondIter(atom):
                     bond_counter += 1
                 if bond_counter != 1:
-                    raise RuntimeError("hydrogen atom has %d bonds, must have 1" % bond_counter)
+                    raise RuntimeError('Hydrogen atom has more than one bonds (%d bonds)' % bond_counter)
+
                 begin_atom = bond.GetBeginAtom()
                 end_atom = bond.GetEndAtom()
+
                 if atom == begin_atom:
                     heavy_parents.append(end_atom)
                 elif atom == end_atom:
                     heavy_parents.append(begin_atom)
                 else:
-                    raise RuntimeError("hydrogen isn't either Begin or End atom of its own bond")
-    
+                    raise RuntimeError('Hydrogen isn\'t either Begin or End atom of its own bond')
+
         if n_matched_atoms != len(index_map):
-            raise RuntimeError("Not all pdbqt_mol atoms were considered")
-    
+            raise RuntimeError('Not all the atoms were considered')
+
         # delete explicit hydrogens
         for hydrogen in hydrogens_to_delete:
             obmol.DeleteHydrogen(hydrogen)
-    
+
         # increment implicit H count of heavy atom parents
         for heavy_parent in heavy_parents:
             n_implicit = heavy_parent.GetImplicitHCount()
             heavy_parent.SetImplicitHCount(n_implicit + 1)
-    
+
         # add back explicit hydrogens
         obmol.AddHydrogens()
         if obmol.NumAtoms() != n_atoms:
-            raise RuntimeError("number of atoms changed after deleting and adding hydrogens")
-    
-        return
+            raise RuntimeError('Number of atoms changed after deleting and adding hydrogens')
 
