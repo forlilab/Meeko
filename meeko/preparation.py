@@ -144,7 +144,7 @@ class MoleculePreparation:
 
             print('')
     
-    def write_pdbqt_string(self, save_index_map=False):
+    def write_pdbqt_string(self, save_index_map=True):
         if self._mol is not None:
             return self._writer.write_string(
                     self._mol,
@@ -153,7 +153,7 @@ class MoleculePreparation:
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 
-    def write_pdbqt_file(self, pdbqt_filename, save_index_map):
+    def write_pdbqt_file(self, pdbqt_filename, save_index_map=True):
         try:
             with open(pdbqt_filename,'w') as w:
                 w.write(self.write_pdbqt_string(save_index_map))
