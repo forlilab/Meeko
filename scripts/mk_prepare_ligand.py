@@ -30,9 +30,11 @@ def cmd_lineparser():
     parser.add_argument("-f", "--flex", dest="is_protein_sidechain", default=False,
                         action="store_true", help="prepare as flexible protein residue")
     parser.add_argument("-r", "--rigidify_bonds_smarts", dest="rigidify_bonds_smarts", default=[],
-                        action="append", help="SMARTS patterns to rigidify bonds")
+                        action="append", help="SMARTS patterns to rigidify bonds",
+                        metavar='SMARTS')
     parser.add_argument("-b", "--rigidify_bonds_indices", dest="rigidify_bonds_indices", default=[],
-                        action="append", help="indices of two atoms that define a bond (start at 1)", nargs='+', type=int)
+                        action="append", help="indices of two atoms (in the SMARTS) that define a bond (start at 1)",
+                        nargs='+', type=int, metavar='i j')
     parser.add_argument("--no_index_map", dest="save_index_map", default=True,
                         action="store_false", help="do not write map of atom indices from input to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
