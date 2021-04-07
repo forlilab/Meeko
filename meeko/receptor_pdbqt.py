@@ -32,8 +32,8 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
                    ('resname', 'U3'), ('chain', 'U1'), ("xyz", "f4", (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U2')]
     atom_annotations = {'hb_acc': [], 'hb_don': [],
-                       'all': [], 'vdw': [],
-                       'metal': []}
+                        'all': [], 'vdw': [],
+                        'metal': []}
     # TZ is a pseudo atom for AutoDock4Zn FF
     pseudo_atom_types = ['TZ']
 

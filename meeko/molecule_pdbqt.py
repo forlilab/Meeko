@@ -48,7 +48,7 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
     atom_annotations = {'ligand': [], 'flexible_residue': [], 'water': [],
                         'hb_acc': [], 'hb_don': [],
                         'all': [], 'vdw': [],
-                        'glue': [], 'reactive': []}
+                        'glue': [], 'reactive': [], 'metal': []}
     pose_data = {'n_poses': None, 'active_atoms': [], 'free_energies': [], 
                  'index_map': {}, 'pdbqt_string': []}
 
