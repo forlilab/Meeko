@@ -20,6 +20,7 @@ autodock4_atom_types_elements = {
     'MG':  'Mg',
     'P':   'P',
     'SA':  'S',
+    'S':   'S',
     'Cl':  'Cl',
     'CL':  'Cl',
     'Ca':  'Ca',

@@ -14,19 +14,37 @@ from openbabel import openbabel as ob
 
 class BondTyperLegacy:
 
-    def __call__(self, mol, keep_amide_rigid):
+    def __call__(self, mol, keep_amide_rigid, rigidify_bonds_smarts, rigidify_bonds_indices):
         """Typing atom bonds in the legacy way
         
         Args:
             mol (OBMol): input OBMol molecule object
 
+            rigidify_bond_smarts (list): patterns to freeze bonds, e.g. conjugated carbons
         """
+
+        to_rigidify = set()
+        n_smarts = len(rigidify_bonds_smarts)
+        assert(n_smarts == len(rigidify_bonds_indices))
+        for i in range(n_smarts):
+            a, b = rigidify_bonds_indices[i]
+            smarts = rigidify_bonds_smarts[i]
+            indices_list = mol.setup.smarts.find_pattern(smarts)
+            for indices in indices_list:
+                atom_a = indices[a]
+                atom_b = indices[b]
+                to_rigidify.add((atom_a, atom_b))
+                to_rigidify.add((atom_b, atom_a))
 
         for ob_bond in ob.OBMolBondIter(mol):
             rotatable = True
             begin = ob_bond.GetBeginAtomIdx()
             end = ob_bond.GetEndAtomIdx()
             bond_order = ob_bond.GetBondOrder()
+
+            if (begin, end) in to_rigidify:
+                bond_order = 1.1 # macrocycle class breaks bonds if bond_order == 1
+                rotatable = False
 
             if bond_order > 1:
                 rotatable = False

@@ -29,6 +29,12 @@ def cmd_lineparser():
                         action="store", help="correct protonation for pH (default: No correction)")
     parser.add_argument("-f", "--flex", dest="is_protein_sidechain", default=False,
                         action="store_true", help="prepare as flexible protein residue")
+    parser.add_argument("-r", "--rigidify_bonds_smarts", dest="rigidify_bonds_smarts", default=[],
+                        action="append", help="SMARTS patterns to rigidify bonds",
+                        metavar='SMARTS')
+    parser.add_argument("-b", "--rigidify_bonds_indices", dest="rigidify_bonds_indices", default=[],
+                        action="append", help="indices of two atoms (in the SMARTS) that define a bond (start at 1)",
+                        nargs='+', type=int, metavar='i j')
     parser.add_argument("--no_index_map", dest="save_index_map", default=True,
                         action="store_false", help="do not write map of atom indices from input to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
@@ -51,6 +57,17 @@ def main():
     is_protein_sidechain = args.is_protein_sidechain
     save_index_map = args.save_index_map
 
+    # SMARTS patterns to make bonds rigid
+    rigidify_bonds_smarts = args.rigidify_bonds_smarts
+    rigidify_bonds_indices = args.rigidify_bonds_indices
+    if len(rigidify_bonds_indices) != len(rigidify_bonds_smarts):
+        raise RuntimeError('length of --rigidify_bonds_indices differs from length of --rigidify_bonds_smarts')
+    for indices in rigidify_bonds_indices:
+        if len(indices) != 2:
+            raise RuntimeError('--rigidify_bonds_indices must specify pairs, e.g. -b 1 2 -b 3 4')
+        indices[0] = indices[0] - 1 # convert from 1- to 0-index
+        indices[1] = indices[1] - 1
+
     mol = obutils.load_molecule_from_file(input_molecule_file)
 
     if pH_value is not None:
@@ -62,7 +79,9 @@ def main():
         charge_model.ComputeCharges(mol)
 
     preparator = MoleculePreparation(merge_hydrogens=no_merge_hydrogen, macrocycle=build_macrocycle, 
-                                     hydrate=add_water, amide_rigid=True)
+                                     hydrate=add_water, amide_rigid=True,
+                                     rigidify_bonds_smarts=rigidify_bonds_smarts,
+                                     rigidify_bonds_indices=rigidify_bonds_indices)
     preparator.prepare(mol, is_protein_sidechain)
 
     # maybe verbose could be an option and it will show the various bond scores and breakdowns?

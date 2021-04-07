@@ -21,11 +21,14 @@ from .utils import obutils
 
 
 class MoleculePreparation:
-    def __init__(self, merge_hydrogens=True, hydrate=False, macrocycle=False, amide_rigid=True):
+    def __init__(self, merge_hydrogens=True, hydrate=False, macrocycle=False, amide_rigid=True,
+            rigidify_bonds_smarts=[], rigidify_bonds_indices=[]):
         self._merge_hydrogens = merge_hydrogens
         self._add_water = hydrate
         self._break_macrocycle = macrocycle
         self._keep_amide_rigid = amide_rigid
+        self._rigidify_bonds_smarts = rigidify_bonds_smarts
+        self._rigidify_bonds_indices = rigidify_bonds_indices
         self._mol = None
 
         self._atom_typer = AtomTyperLegacy()
@@ -61,7 +64,7 @@ class MoleculePreparation:
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(mol, self._keep_amide_rigid)
+        self._bond_typer(mol, self._keep_amide_rigid, self._rigidify_bonds_smarts, self._rigidify_bonds_indices)
 
         # 4 . hydrate molecule
         if self._add_water:
