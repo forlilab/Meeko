@@ -35,6 +35,7 @@ def cmd_lineparser():
     parser.add_argument("-b", "--rigidify_bonds_indices", dest="rigidify_bonds_indices", default=[],
                         action="append", help="indices of two atoms (in the SMARTS) that define a bond (start at 1)",
                         nargs='+', type=int, metavar='i j')
+    parser.add_argument("--double_bond_penalty", default=50, help="penalty > 100 prevents breaking double bonds")
     parser.add_argument("--no_index_map", dest="save_index_map", default=True,
                         action="store_false", help="do not write map of atom indices from input to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
@@ -50,6 +51,7 @@ def main():
     output_pdbqt_file = args.output_pdbqt_file
     verbose = args.verbose
     build_macrocycle = args.build_macrocycle
+    double_bond_penalty = args.double_bond_penalty
     add_water = args.add_water
     no_merge_hydrogen = args.no_merge_hydrogen
     add_hydrogen = args.add_hydrogen
@@ -81,7 +83,8 @@ def main():
     preparator = MoleculePreparation(merge_hydrogens=no_merge_hydrogen, macrocycle=build_macrocycle, 
                                      hydrate=add_water, amide_rigid=True,
                                      rigidify_bonds_smarts=rigidify_bonds_smarts,
-                                     rigidify_bonds_indices=rigidify_bonds_indices)
+                                     rigidify_bonds_indices=rigidify_bonds_indices,
+                                     double_bond_penalty=double_bond_penalty)
     preparator.prepare(mol, is_protein_sidechain)
 
     # maybe verbose could be an option and it will show the various bond scores and breakdowns?

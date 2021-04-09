@@ -15,21 +15,21 @@ from .utils import obutils
 
 
 class FlexMacrocycle:
-    def __init__(self, min_ring_size=8, max_ring_size=10, force_double_bond=False, min_score=50):
+    def __init__(self, min_ring_size=8, max_ring_size=10, force_double_bond=False, double_bond_penalty=50):
         """Initialize macrocycle typer.
         
         Args:
             min_ring_size (int): minimum size of the ring (default: 8)
             max_ring_size (int): maximum size of the ring (default: 10)
             force_double_bond (bool): (default: False)
-            min_score (int): minimum score (default: 50)
+            double_bond_penalty (float)
 
         """
         self._min_ring_size = min_ring_size
         self._max_ring_size = max_ring_size
         # accept also double bonds (if nothing better is found)
         self._force_double_bond = force_double_bond
-        self._min_score = min_score
+        self._double_bond_penalty = double_bond_penalty
 
         self._mol = None
         self._accepted_rings = None
@@ -90,7 +90,7 @@ class FlexMacrocycle:
             elif (bond_order == 2):
                 if self._force_double_bond:
                     #print("-> [ - ] sp2 bond penalty")
-                    score -= 50
+                    score -= self._double_bond_penalty
                 else:
                     #print("-> [ X ] sp2 violation")
                     # print("    => SCORE[%d]" % -1)
