@@ -44,7 +44,7 @@ class FingerprintInteractions:
             molecules = [molecules]
 
         for molecule in molecules:
-            for pose in molecule:
+            for i in range(molecule.number_of_poses):
                 tmp = {}
 
                 for interaction in self._interactions:
@@ -53,10 +53,10 @@ class FingerprintInteractions:
                     if interaction.name in ['HBDonor', 'HBAcceptor', 'WaterDonor', 'WaterAcceptor']:
                         columns += ['name']
 
-                    rigid_interactions, flex_interactions = interaction.find(pose, self._receptor)
+                    rigid_interactions, flex_interactions = interaction.find(molecule[i], self._receptor)
 
                     rec_rigid_atoms = self._receptor.atoms(rigid_interactions['receptor_idx'])
-                    rec_flex_atoms = pose.atoms(flex_interactions['receptor_idx'])
+                    rec_flex_atoms = molecule[i].atoms(flex_interactions['receptor_idx'])
 
                     if rec_rigid_atoms.size > 0:
                         unique_resids = np.unique(rec_rigid_atoms[columns])
@@ -68,7 +68,7 @@ class FingerprintInteractions:
 
                     tmp[interaction.name] = resids
 
-                tmp_data = [pose.name, pose.pose_id]
+                tmp_data = [molecule[i].name, molecule[i].pose_id]
                 for inte_type, resids in tmp.items():
                     unique_resids = set(resids)
                     self._unique_interactions[inte_type].update(unique_resids)

@@ -31,22 +31,24 @@ class _Interaction(ABC):
 
 class _DistanceBased(_Interaction):
     """Generic class for interactions (hydrohpbic, metal, reactive, etc...) based on distance only"""
-    def __init__(self, distance, atom_properties):
+    def __init__(self, distance, lig_atom_types, rec_atom_types):
         assert distance > 0, 'Distance must be superior than 0 Angstrom'
-        assert len(atom_properties) == 2, 'An array-like of two atom properties must be defined'
+        assert len(lig_atom_types) > 0, 'ligand atom types must be defined'
+        assert len(rec_atom_types) > 0, 'receptor atom types must be defined'
 
         self._distance = distance
-        self._atom_properties = atom_properties
+        self._lig_atom_types = lig_atom_types
+        self._rec_atom_types = rec_atom_types
 
     @property
     def name(self):
         return type(self).__name__
 
-    def find(self, ligand, receptor):
+    def find(self, molecule, receptor):
         """Find distance-based interactions between ligand and receptor.
 
         Args:
-            ligand (PDBQTMolecularr): ligand
+            molecule (PDBQTMolecule): molecule
             receptor (PDBQTReceptor): receptor
 
         Returns:
@@ -56,79 +58,105 @@ class _DistanceBased(_Interaction):
                 for each interaction between ligand and flexible sidechain
 
         """
-        dtype = [('ligand_idx', int), ('receptor_idx', int), 
-                 ('distance', float)]
+        dtype = [('ligand_idx', int), ('receptor_idx', int), ('distance', float)]
         rigid_interactions = [] 
         flex_interactions = []
-        has_flexible_residues = ligand.has_flexible_residues()
-        lig_atoms = ligand.atoms_by_properties(['ligand', self._atom_properties[0]])
+        has_flexible_residues = molecule.has_flexible_residues()
+        lig_atoms = molecule.ligands(self._lig_atom_types)
+
+        # When searching for ligand -- flexible/water interactions
+        # we are going to ignore those atoms (ligand)
+        to_ignore = list(lig_atoms['idx'])
+        if molecule.has_water_molecules():
+            to_ignore += list(molecule.water_molecules()['idx'])
 
         for lig_atom in lig_atoms:
             # Get interactions with the rigid part of the receptor
-            rec_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], self._distance, self._atom_properties[1])
+            rec_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], self._distance, self._rec_atom_types)
             rigid_interactions.extend((lig_atom['idx'], rec_atom['idx'], np.linalg.norm(lig_atom['xyz'] - rec_atom['xyz'])) for rec_atom in rec_atoms)
 
-            # Get interactions with the flexible part of the receptor (if present)
+            # If present, get interactions with the flexible sidechain atoms (part of the receptor)
+            # But we ignore the ligand itself
             if has_flexible_residues:
-                rec_atoms = ligand.closest_atoms_from_positions(lig_atom['xyz'], self._distance, ['flexible_residue', self._atom_properties[1]])
+                rec_atoms = molecule.closest_atoms_from_positions(lig_atom['xyz'], self._distance, self._rec_atom_types, to_ignore)
                 flex_interactions.extend((lig_atom['idx'], rec_atom['idx'], np.linalg.norm(lig_atom['xyz'] - rec_atom['xyz'])) for rec_atom in rec_atoms)
 
         return np.array(rigid_interactions, dtype=dtype), np.array(flex_interactions, dtype=dtype)
 
 
 class Hydrophobic(_DistanceBased):
-    def __init__(self, distance=4.5):
+    def __init__(self, distance=4.5,
+                 lig_atom_types=['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'],
+                 rec_atom_types=['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl']):
         """Hydrophobic interactions
 
         Args:
             distance (float): distance cutoff between ligand and receptor/flexible sidechain atoms (default: 4.5)
+            lig_atom_types (list of str): list of ligand hydrophobic AutoDock atom types
+                (default: ['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'])
+            rec_atom_types (list of str): list of receptor hydrophobic AutoDock atom types
+                (default: ['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'])
 
         """
-        super().__init__(distance, ['vdw', 'all'])
+        super().__init__(distance, lig_atom_types, rec_atom_types)
 
 
 class Reactive(_DistanceBased):
-    def __init__(self, distance=2.0):
+    def __init__(self, distance=2.0,
+                 lig_atom_types=['C1'],
+                 rec_atom_types=['S4']):
         """Reactive interaction between ligand and receptor (flexible sidechain).
 
         Args:
             distance (float): distance cutoff between ligand and reactive (flexible) sidechain atoms (default: 2.0)
+            lig_atom_types (list of str): list of ligand reactive AutoDock atom types
+                (default: ['C1'])
+            rec_atom_types (list of str): list of receptor reactive AutoDock atom types
+                (default: ['S4'])
 
         """
-        super().__init__(distance, ['reactive', 'reactive'])
+        super().__init__(distance, lig_atom_types, rec_atom_types)
 
 
 class Metal(_DistanceBased):
-    def __init__(self, distance=3.0):
+    def __init__(self, distance=3.0,
+                 lig_atom_types=['NA', 'OA', 'SA', 'OS', 'NS'],
+                 rec_atom_types=['Mg', 'Ca', 'Fe', 'Zn', 'Mn', 'MG', 'CA', 'FE', 'ZN', 'MN']):
         """Metal interaction between the ligand and metals in the receptor.
         
         Args:
             distance (float): distance cutoff between ligand and metal receptor atoms (default: 3.0)
+            lig_atom_types (list of str): list of ligand AutoDock atom types
+                (default: ['NA', 'OA', 'SA', 'OS', 'NS'])
+            rec_atom_types (list of str): list of receptor metal AutoDock atom types
+                (default: ['Mg', 'Ca', 'Fe', 'Zn', 'Mn'])
 
         """
-        super().__init__(distance, ['hb_acc', 'metal'])
+        super().__init__(distance, lig_atom_types, rec_atom_types)
 
 
 class _HBBased(_Interaction):
     """Generic class for hydrogen bond-like interactions"""
-    def __init__(self, distance, angles, atom_properties):
+    def __init__(self, distance, angles, lig_atom_types, rec_atom_types):
         assert distance > 0, 'Distance must be superior than 0 Angstrom'
         assert len(angles) == 2, 'An array-like of two angles must be defined'
-        assert len(atom_properties) == 2, 'An array-like of two atom properties must be defined'
+        assert len(lig_atom_types) > 0, 'ligand atom types must be defined'
+        assert len(rec_atom_types) > 0, 'receptor atom types must be defined'
 
         self._distance = distance
         self._angles = [np.radians(angle) for angle in angles]
-        self._atom_properties = atom_properties
+        self._lig_atom_types = lig_atom_types
+        self._rec_atom_types = rec_atom_types
 
     @property
     def name(self):
         return type(self).__name__
 
-    def find(self, ligand, receptor):
+    def find(self, molecule, receptor):
         """Find Hydrogen bond-like interactions between ligand and receptor.
 
         Args:
-            ligand (PDBQTMolecularr): ligand
+            molecule (PDBQTMolecule): molecule
             receptor (PDBQTReceptor): receptor
 
         Returns:
@@ -144,36 +172,38 @@ class _HBBased(_Interaction):
         flex_interactions = []
         lig_hb_pre_position = None
         rec_hb_pre_position = None
-        lig_atom_property, rec_atom_property = self._atom_properties
+        has_flexible_residues = molecule.has_flexible_residues()
 
-        has_flexible_residues = ligand.has_flexible_residues()
+        lig_atoms = molecule.ligands(self._lig_atom_types)
+        if molecule.has_water_molecules():
+            lig_atoms = np.concatenate((lig_atoms, molecule.water_molecules()))
 
-        if lig_atom_property == 'water':
-            lig_atoms = ligand.atoms_by_properties([lig_atom_property])
-        else:
-            lig_atoms = ligand.atoms_by_properties(['ligand', lig_atom_property])
+        # When searching for ligand -- flexible/water interactions
+        # we are going to ignore those atoms (ligand)
+        to_ignore = list(lig_atoms['idx'])
 
         for lig_atom in lig_atoms:
             # Get pre-acceptor position (if acceptor) or pre-hydrogen position (if donor) for that atom in the ligand
-            lig_bound_atoms_index = ligand.neighbor_atoms(lig_atom['idx'])
+            lig_bound_atoms_index = molecule.neighbor_atoms(lig_atom['idx'])
             if any(lig_bound_atoms_index):
-                lig_bound_atoms = ligand.atoms(lig_bound_atoms_index[0])
+                lig_bound_atoms = molecule.atoms(lig_bound_atoms_index[0])
                 # This is not accurate when bonds don't have the same length
                 lig_hb_pre_position = np.mean(lig_bound_atoms['xyz'], axis=0)
             else:
                 # If no atom bound, likely a water molecule attached to the ligand
                 lig_hb_pre_position = None
 
-            # Get rigid part of the receptor
-            rec_rigid_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], self._distance, rec_atom_property)
+            # Get interactions with the rigid part of the receptor
+            rec_rigid_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], self._distance, self._rec_atom_types)
             rec_rigid_flex = [receptor]
             rec_rigid_flex_atoms = [rec_rigid_atoms]
             rec_rigid_flex_types = ['rigid']
 
-            # Get the flexible part of the receptor (if present)
+            # If present, get interactions with the flexible sidechain atoms (part of the receptor)
+            # But we ignore the ligand itself
             if has_flexible_residues:
-                rec_flex_atoms = ligand.closest_atoms_from_positions(lig_atom['xyz'], self._distance, ['flexible_residue', rec_atom_property])
-                rec_rigid_flex.append(ligand)
+                rec_flex_atoms = molecule.closest_atoms_from_positions(lig_atom['xyz'], self._distance, self._rec_atom_types, to_ignore)
+                rec_rigid_flex.append(molecule)
                 rec_rigid_flex_atoms.append(rec_flex_atoms)
                 rec_rigid_flex_types.append('flex')
 
@@ -205,7 +235,8 @@ class _HBBased(_Interaction):
 
                         if (angle_1 >= self._angles[0]) & (angle_2 >= self._angles[1]):
                             tmp = [lig_atom['idx'], rec_atom['idx'], distance]
-                            if lig_atom_property == 'hb_don':
+                            # This is a very dirty trick...
+                            if 'HD' in self._lig_atom_types:
                                 tmp += [np.degrees(angle_1), np.degrees(angle_2)]
                             else:
                                 tmp += [np.degrees(angle_2), np.degrees(angle_1)]
@@ -219,7 +250,9 @@ class _HBBased(_Interaction):
 
 
 class HBDonor(_HBBased):
-    def __init__(self, distance=3.5, angles=(120, 90)):
+    def __init__(self, distance=3.5, angles=(120, 90), 
+                 lig_atom_types=['HD', 'HS'],
+                 rec_atom_types=['NA', 'OA', 'SA', 'OS', 'NS']):
         """Hydrogen bond interaction between the ligand (donor) and the receptor (acceptor)
         
         Args:
@@ -227,14 +260,20 @@ class HBDonor(_HBBased):
             angles (array-like): angles between donor and acceptor atoms (default: (120, 90))
                 Donor-H -- acceptor angle              (angle_1)
                 Pre_acceptor-acceptor -- H angle       (angle_2)
+            lig_atom_types (list of str): list of ligand HB donor AutoDock atom types
+                (default: ['HD', 'HS'])
+            rec_atom_types (list of str): list of receptor HB acceptor AutoDock atom types
+                (default: ['NA', 'OA', 'SA', 'OS', 'NS'])
 
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
-        super().__init__(distance - 1., angles, ['hb_don', 'hb_acc'])
+        super().__init__(distance - 1., angles, lig_atom_types, rec_atom_types)
 
 
 class HBAcceptor(_HBBased):
-    def __init__(self, distance=3.5, angles=(120, 90)):
+    def __init__(self, distance=3.5, angles=(120, 90),
+                 lig_atom_types=['NA', 'OA', 'SA', 'OS', 'NS'],
+                 rec_atom_types=['HD', 'HS']):
         """Hydrogen bond interaction between the ligand (acceptor) and the receptor (donor)
         
         Args:
@@ -242,34 +281,50 @@ class HBAcceptor(_HBBased):
             angles (array-like): angles between donor and acceptor atoms (default: (120, 90))
                 Donor-H -- acceptor angle              (angle_1)
                 Pre_acceptor-acceptor -- H angle       (angle_2)
+            lig_atom_types (list of str): list of ligand HB donor AutoDock atom types
+                (default: ['NA', 'OA', 'SA', 'OS', 'NS'] )
+            rec_atom_types (list of str): list of receptor HB acceptor AutoDock atom types
+                (default: ['HD', 'HS'])
 
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
-        super().__init__(distance - 1., angles[::-1], ['hb_acc', 'hb_don'])
+        super().__init__(distance - 1., angles[::-1], lig_atom_types, rec_atom_types)
 
 
 class WaterDonor(_HBBased):
-    def __init__(self, distance=3.2, angle=90):
+    def __init__(self, distance=3.2, angle=90,
+                 lig_atom_types=['W'],
+                 rec_atom_types=['NA', 'OA', 'SA', 'OS', 'NS']):
         """Interaction between donor water molecules (attached to the ligand) and receptor (acceptor)
         
         Args:
             distance (float): distance cutoff between donor water molecule and acceptor atoms (default: 3.2)
             angle (float): angle between donor water molecule and acceptor atoms (default: 90)
                 W_donor -- Pre_acceptor-acceptor angle
+            lig_atom_types (list of str): list of water AutoDock atom types
+                (default: ['W'])
+            rec_atom_types (list of str): list of receptor HB acceptor AutoDock atom types
+                (default: ['NA', 'OA', 'SA', 'OS', 'NS'])
 
         """
-        super().__init__(distance, (0, angle), ['water', 'hb_acc'])
+        super().__init__(distance, (0, angle), lig_atom_types, rec_atom_types)
 
 
 class WaterAcceptor(_HBBased):
-    def __init__(self, distance=3.2, angle=120):
+    def __init__(self, distance=3.2, angle=120,
+                 lig_atom_types=['W'],
+                 rec_atom_types=['HD', 'HS']):
         """Interaction between acceptor water molecules (attached to the ligand) and receptor (donor)
         
         Args:
             distance (float): distance cutoff between donor water molecule and acceptor atoms (default: 3.2)
             angle (float): angle between donor water molecule and acceptor atoms (default: 120)
                 W_acceptor -- Donor-H angle
+            lig_atom_types (list of str): list of water AutoDock atom types
+                (default: ['W'])
+            rec_atom_types (list of str): list of receptor HB donor AutoDock atom types
+                (default: ['HD', 'HS'])
 
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
-        super().__init__(distance - 1., (0, angle), ['water', 'hb_don'])
+        super().__init__(distance - 1., (0, angle), lig_atom_types, rec_atom_types)

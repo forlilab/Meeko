@@ -14,28 +14,12 @@ from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 
 
-atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
-                             'Br': 'vdw', 'I': 'vdw', 'F': 'vdw', 'Cl': 'vdw',
-                             'NA': 'hb_acc', 'OA': 'hb_acc', 'SA': 'hb_acc', 'OS': 'hb_acc', 'NS': 'hb_acc',
-                             'HD': 'hb_don', 'HS': 'hb_don',
-                             'Mg': 'metal', 'Ca': 'metal', 'Fe': 'metal', 'Zn': 'metal', 'Mn': 'metal',
-                             'MG': 'metal', 'CA': 'metal', 'FE': 'metal', 'ZN': 'metal', 'MN': 'metal',
-                             'W': 'water',
-                             'G0': 'glue', 'G1': 'glue', 'G2': 'glue', 'G3': 'glue',
-                             'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
-
-
 def _read_receptor_pdbqt_file(pdbqt_filename):
     i = 0
     atoms = []
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ("xyz", "f4", (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U2')]
-    atom_annotations = {'hb_acc': [], 'hb_don': [],
-                        'all': [], 'vdw': [],
-                        'metal': []}
-    # TZ is a pseudo atom for AutoDock4Zn FF
-    pseudo_atom_types = ['TZ']
 
     with open(pdbqt_filename) as f:
         lines = f.readlines()
@@ -52,16 +36,13 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
                 partial_charges = float(line[71:77].strip())
                 atom_type = line[77:79].strip()
 
-                if not atom_type in pseudo_atom_types:
-                    atom_annotations['all'].append(i)
-                    atom_annotations[atom_property_definitions[atom_type]].append(i)
-                    atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
-
+                atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
+                
                 i += 1
 
     atoms = np.array(atoms, dtype=atoms_dtype)
 
-    return atoms, atom_annotations
+    return atoms
 
 
 def _identify_bonds(atom_idx, positions, atom_types):
@@ -91,54 +72,60 @@ class PDBQTReceptor:
         self._atom_annotations = None
         self._KDTree = None
 
-        self._atoms, self._atom_annotations = _read_receptor_pdbqt_file(self._pdbqt_filename)
+        self._atoms = _read_receptor_pdbqt_file(self._pdbqt_filename)
         # We add to the KDTree only the rigid part of the receptor
         self._KDTree = spatial.cKDTree(self._atoms['xyz'])
-        self._bonds = _identify_bonds(self._atom_annotations['all'], self._atoms['xyz'], self._atoms['atom_type'])
+        self._bonds = _identify_bonds(self._atoms['idx'], self._atoms['xyz'], self._atoms['atom_type'])
 
     def __repr__(self):
         return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))
 
-    def atoms(self, atom_idx=None):
+    def atoms(self, atom_idx=None, atom_types=None):
         """Return the atom i
 
         Args:
             atom_idx (int, list): index of one or multiple atoms
+            atom_types (str, list of str): AutoDock atom type or list or atom types (default: None)
 
         Returns:
             ndarray: 2d ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
 
         """
-        if atom_idx is not None and self._atoms.size > 1:
+        if atom_idx is not None:
             if not isinstance(atom_idx, (list, tuple, np.ndarray)):
                 atom_idx = np.array(atom_idx, dtype=np.int)
             atoms = self._atoms[atom_idx]
         else:
             atoms = self._atoms
 
+        # Select atoms only with these atom types
+        if atom_types is not None:
+            mask = np.isin(atoms['atom_type'], atom_types)
+            atoms = atoms[mask]
+
         return atoms.copy()
 
-    def positions(self, atom_idx=None):
+    def positions(self, atom_idx=None, atom_types=None):
         """Return coordinates (xyz) of all atoms or a certain atom
 
         Args:
             atom_idx (int, list): index of one or multiple atoms (0-based)
+            atom_types (str, list of str): AutoDock atom type or list or atom types (default: None)
 
         Returns:
             ndarray: 2d ndarray of coordinates (xyz)
 
         """
-        return np.atleast_2d(self.atoms(atom_idx)['xyz'])
+        return np.atleast_2d(self.atoms(atom_idx, atom_types)['xyz'])
 
-    def closest_atoms_from_positions(self, xyz, radius, atom_properties=None, ignore=None):
+    def closest_atoms_from_positions(self, xyz, radius, atom_types=None, ignore=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 
         at a certain radius.
 
         Args:
             xyz (np.ndarray): array of 3D coordinates
-            raidus (float): radius
-            atom_properties (str): property of the atoms to retrieve 
-                (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
+            radius (float): radius in Angstrom
+            atom_types (str, list of str): AutoDock atom type or list or atom types (default: None)
             ignore (int or list): ignore atom for the search using atom id (0-based)
 
         Returns:
@@ -157,42 +144,35 @@ class PDBQTReceptor:
         except:
             index = set(index)
 
-        if atom_properties is not None:
-            if not isinstance(atom_properties, (list, tuple)):
-                atom_properties = [atom_properties]
-
-            try:
-                for atom_property in atom_properties:
-                    index.intersection_update(self._atom_annotations[atom_property])
-            except:
-                error_msg = 'Atom property %s is not valid. Valid atom properties are: %s'
-                raise KeyError(error_msg % (atom_property, self._atom_annotations.keys()))
-
         if ignore is not None:
             if not isinstance(ignore, (list, tuple, np.ndarray)):
                 ignore = [ignore]
             index = index.difference([i for i in ignore])
 
         index = list(index)
-        atoms = self._atoms[index].copy()
+        atoms = self._atoms[index]
 
-        return atoms
+        # Select atoms only with these atom types
+        if atom_types is not None:
+            mask = np.isin(atoms['atom_type'], atom_types)
+            atoms = atoms[mask]
 
-    def closest_atoms(self, atom_idx, radius, atom_properties=None):
+        return atoms.copy()
+
+    def closest_atoms(self, atom_idx, radius, atom_types=None):
         """Retrieve indices of the closest atoms around a positions/coordinates 
         at a certain radius.
 
         Args:
             atom_idx (int, list): index of one or multiple atoms (0-based)
-            raidus (float): radius
-            atom_properties (str or list): property of the atoms to retrieve 
-                (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
+            radius (float): radius in Angstrom
+            atom_types (str, list of str): AutoDock atom type or list or atom types (default: None)
 
         Returns:
             ndarray: 2d ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
 
         """
-        return self.closest_atoms_from_positions(self._atoms[atom_idx]['xyz'], radius, atom_properties, atom_idx)
+        return self.closest_atoms_from_positions(self._atoms[atom_idx]['xyz'], radius, atom_types, atom_idx)
 
     def neighbor_atoms(self, atom_idx):
         """Return neighbor (bonded) atoms

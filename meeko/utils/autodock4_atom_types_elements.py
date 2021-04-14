@@ -44,5 +44,6 @@ autodock4_atom_types_elements = {
     'CG1': 'C',
     'CG2': 'C',
     'CG3': 'C',
-    'W':   'O'
+    'W':   'O',
+    'TZ':  'D'  # Pseudo-atom for Zn (Dummy element)
 }
