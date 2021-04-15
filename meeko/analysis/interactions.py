@@ -97,17 +97,17 @@ class _DistanceBased(_Interaction):
 
 
 class Hydrophobic(_DistanceBased):
-    def __init__(self, distance=4.5,
-                 lig_atom_types=['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'],
-                 rec_atom_types=['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl']):
+    def __init__(self, distance=4.0,
+                 lig_atom_types=['NA', 'OA', 'SA', 'OS', 'NS', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'],
+                 rec_atom_types=['NA', 'OA', 'SA', 'OS', 'NS', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl']):
         """Hydrophobic interactions
 
         Args:
-            distance (float): distance cutoff between ligand and receptor/flexible sidechain atoms (default: 4.5)
+            distance (float): distance cutoff between ligand and receptor/flexible sidechain atoms (default: 4.0)
             lig_atom_types (list of str): list of ligand hydrophobic AutoDock atom types
-                (default: ['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'])
+                (default: ['NA', 'OA', 'SA', 'OS', 'NS', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'])
             rec_atom_types (list of str): list of receptor hydrophobic AutoDock atom types
-                (default: ['H', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'])
+                (default: ['NA', 'OA', 'SA', 'OS', 'NS', 'C', 'A', 'N', 'P', 'S', 'Br', 'I', 'F', 'Cl'])
 
         """
         super().__init__(distance, lig_atom_types, rec_atom_types)
@@ -338,7 +338,7 @@ class HBAcceptor(_HBBased):
 
 
 class Water(_HBBased):
-    def __init__(self, distance=3.2, angles=(120, 90),
+    def __init__(self, distance=3.5, angles=(120, 90),
                  lig_atom_types=['W'],
                  rec_atom_types=['HD', 'HS', 'NA', 'OA', 'SA', 'OS', 'NS']):
         """Interaction between donor/acceptor water molecules (attached to the ligand) and receptor (donor/acceptor)
@@ -358,7 +358,7 @@ class Water(_HBBased):
 
 
 class WaterDonor(_HBBased):
-    def __init__(self, distance=3.2, angle=90,
+    def __init__(self, distance=3.5, angle=90,
                  lig_atom_types=['W'],
                  rec_atom_types=['NA', 'OA', 'SA', 'OS', 'NS']):
         """Interaction between donor water molecules (attached to the ligand) and receptor (acceptor)
@@ -377,7 +377,7 @@ class WaterDonor(_HBBased):
 
 
 class WaterAcceptor(_HBBased):
-    def __init__(self, distance=3.2, angle=120,
+    def __init__(self, distance=3.5, angle=120,
                  lig_atom_types=['W'],
                  rec_atom_types=['HD', 'HS']):
         """Interaction between acceptor water molecules (attached to the ligand) and receptor (donor)
