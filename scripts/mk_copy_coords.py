@@ -47,9 +47,9 @@ if __name__ == '__main__':
     if not success:
         raise RuntimeError("file format %s not recognized by openbabel" % output_format)
 
-    for pose in pdbqt_mol:
+    for i in pdbqt_mol:
         tmp_obmol = ob.OBMol(obmol) # connectivity may be corrupted by removing and adding Hs multiple times
-        pose.copy_coordinates_to_obmol(tmp_obmol)
+        pdbqt_mol[i].copy_coordinates_to_obmol(tmp_obmol)
         output_string += conv.WriteString(tmp_obmol)
 
     if output_filename is None:
