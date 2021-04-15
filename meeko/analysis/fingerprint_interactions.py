@@ -56,7 +56,7 @@ class FingerprintInteractions:
 
         return number_interactions
 
-    def remove_interaction(self, indices):
+    def remove_interactions(self, indices):
         """Remove interaction
         
         Args:
