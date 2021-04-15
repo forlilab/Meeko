@@ -9,6 +9,8 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
+from ..utils.autodock4_atom_types_elements import autodock4_atom_types_elements
+
 
 def _compute_angle(v1, v2):
     unit_vector_1 = v1 / np.linalg.norm(v1)
@@ -21,11 +23,15 @@ def _compute_angle(v1, v2):
 class _Interaction(ABC):
     """Abstract class for molecular interactions"""
     @abstractmethod
-    def find(self, **kwargs):
+    def __repr__(self):
         pass
 
     @abstractmethod
     def name(self):
+        pass
+
+    @abstractmethod
+    def find(self, **kwargs):
         pass
 
 
@@ -39,6 +45,14 @@ class _DistanceBased(_Interaction):
         self._distance = distance
         self._lig_atom_types = lig_atom_types
         self._rec_atom_types = rec_atom_types
+
+    def __repr__(self):
+        repr_str = '- Name: %s\n' % self.name
+        repr_str += '    type: Distance based interaction\n'
+        repr_str += '    distance: %3.1f\n' % self._distance
+        repr_str += '    ligand atom types  : %s\n' % self._lig_atom_types
+        repr_str += '    receptor atom types: %s\n' % self._rec_atom_types
+        return repr_str
 
     @property
     def name(self):
@@ -64,8 +78,8 @@ class _DistanceBased(_Interaction):
         has_flexible_residues = molecule.has_flexible_residues()
         lig_atoms = molecule.ligands(self._lig_atom_types)
 
-        # When searching for ligand -- flexible/water interactions
-        # we are going to ignore those atoms (ligand)
+        """We are going to ignore ligand atoms and water molecules
+        when searching for ligand -- flexible receptor interactions"""
         to_ignore = list(lig_atoms['idx'])
         if molecule.has_water_molecules():
             to_ignore += list(molecule.water_molecules()['idx'])
@@ -137,16 +151,33 @@ class Metal(_DistanceBased):
 
 class _HBBased(_Interaction):
     """Generic class for hydrogen bond-like interactions"""
-    def __init__(self, distance, angles, lig_atom_types, rec_atom_types):
+    def __init__(self, distance, angles, lig_atom_types, rec_atom_types, hb_type):
         assert distance > 0, 'Distance must be superior than 0 Angstrom'
         assert len(angles) == 2, 'An array-like of two angles must be defined'
         assert len(lig_atom_types) > 0, 'ligand atom types must be defined'
         assert len(rec_atom_types) > 0, 'receptor atom types must be defined'
+        assert hb_type in ['donor', 'acceptor', 'both'], 'lig HBond can be only donor, acceptor or both'
 
         self._distance = distance
         self._angles = [np.radians(angle) for angle in angles]
         self._lig_atom_types = lig_atom_types
         self._rec_atom_types = rec_atom_types
+        self._hb_type = hb_type
+
+    def __repr__(self):
+        repr_str = '- Name: %s\n' % self.name
+        repr_str += '    type: HBond based interaction\n'
+        repr_str += '    distance: %3.1f\n' % self._distance
+        repr_str += '    angle:\n'
+        if self._hb_type in ['donor', 'both']:
+            angle_1, angle_2 = np.degrees(self._angles)
+        else:
+            angle_2, angle_1 = np.degrees(self._angles)
+        repr_str += '        - Donor-H -- acceptor angle       : %5.2f\n' % angle_1
+        repr_str += '        - Pre_acceptor-acceptor -- H angle: %5.2f\n' % angle_2
+        repr_str += '    ligand atom types  : %s\n' % self._lig_atom_types
+        repr_str += '    receptor atom types: %s\n' % self._rec_atom_types
+        return repr_str
 
     @property
     def name(self):
@@ -173,16 +204,24 @@ class _HBBased(_Interaction):
         lig_hb_pre_position = None
         rec_hb_pre_position = None
         has_flexible_residues = molecule.has_flexible_residues()
+        max_distance = self._distance
 
         lig_atoms = molecule.ligands(self._lig_atom_types)
         if molecule.has_water_molecules():
             lig_atoms = np.concatenate((lig_atoms, molecule.water_molecules()))
 
-        # When searching for ligand -- flexible/water interactions
-        # we are going to ignore those atoms (ligand)
+        """We are going to ignore ligand atoms
+        when searching for ligand -- flexible/water interactions"""
         to_ignore = list(lig_atoms['idx'])
 
         for lig_atom in lig_atoms:
+            # Dirty trick to avoid looking at attached heavy atom
+            # ... and we assume that donor atoms are all going to be hydrogen atoms
+            if lig_atom['atom_type'][0].upper() == 'H':
+                max_distance = self._distance - 1.0
+            else:
+                max_distance = self._distance
+
             # Get pre-acceptor position (if acceptor) or pre-hydrogen position (if donor) for that atom in the ligand
             lig_bound_atoms_index = molecule.neighbor_atoms(lig_atom['idx'])
             if any(lig_bound_atoms_index):
@@ -210,9 +249,16 @@ class _HBBased(_Interaction):
             # Add interactions
             for rec, rec_atoms, rec_type in zip(rec_rigid_flex, rec_rigid_flex_atoms, rec_rigid_flex_types):
                 for rec_atom in rec_atoms:
+                    # Dirty trick to avoid looking at attached heavy atom
+                    # ... and we assume that donor atoms are all going to be hydrogen atoms
+                    if rec_atom['atom_type'][0].upper() == 'H':
+                        max_distance = self._distance - 1.0
+                    else:
+                        max_distance = self._distance
+
                     distance = np.linalg.norm(lig_atom['xyz'] - rec_atom['xyz'])
 
-                    if distance <= self._distance:
+                    if distance <= max_distance:
                         # Get pre-acceptor position (if acceptor) or pre-hydrogen position (if donor) for that atom in the ligand
                         rec_bound_atoms_index = rec.neighbor_atoms(rec_atom['idx'])
                         if any(rec_bound_atoms_index):
@@ -234,12 +280,7 @@ class _HBBased(_Interaction):
                             angle_2 = np.radians(180)
 
                         if (angle_1 >= self._angles[0]) & (angle_2 >= self._angles[1]):
-                            tmp = [lig_atom['idx'], rec_atom['idx'], distance]
-                            # This is a very dirty trick...
-                            if 'HD' in self._lig_atom_types:
-                                tmp += [np.degrees(angle_1), np.degrees(angle_2)]
-                            else:
-                                tmp += [np.degrees(angle_2), np.degrees(angle_1)]
+                            tmp = [lig_atom['idx'], rec_atom['idx'], distance, np.degrees(angle_1), np.degrees(angle_2)]
 
                             if rec_type == 'rigid':
                                 rigid_interactions.append(tuple(tmp))
@@ -267,7 +308,7 @@ class HBDonor(_HBBased):
 
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
-        super().__init__(distance - 1., angles, lig_atom_types, rec_atom_types)
+        super().__init__(distance, angles, lig_atom_types, rec_atom_types, 'donor')
 
 
 class HBAcceptor(_HBBased):
@@ -288,7 +329,35 @@ class HBAcceptor(_HBBased):
 
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
-        super().__init__(distance - 1., angles[::-1], lig_atom_types, rec_atom_types)
+        super().__init__(distance, angles[::-1], lig_atom_types, rec_atom_types, 'acceptor')
+
+    def find(self, molecule, receptor):
+        rigid_interactions, flex_interactions = super().find(molecule, receptor)
+        # swap angle_1 and angle_2 columns in order to have donor angle first
+        rigid_interactions[['angle_don', 'angle_acc']] = rigid_interactions[['angle_acc', 'angle_don']]
+        flex_interactions[['angle_don', 'angle_acc']] = flex_interactions[['angle_acc', 'angle_don']]
+
+        return rigid_interactions, flex_interactions
+
+
+class Water(_HBBased):
+    def __init__(self, distance=3.2, angles=(120, 90),
+                 lig_atom_types=['W'],
+                 rec_atom_types=['HD', 'HS', 'NA', 'OA', 'SA', 'OS', 'NS']):
+        """Interaction between donor/acceptor water molecules (attached to the ligand) and receptor (donor/acceptor)
+        
+        Args:
+            distance (float): distance cutoff between donor water molecule and acceptor atoms (default: 3.2)
+            angle (float): angle between donor water molecule and acceptor atoms (default: (120, 90))
+                Donor-H -- W_acceptor angle              (angle_1)
+                Pre_acceptor-acceptor -- W_donor angle   (angle_2)
+            lig_atom_types (list of str): list of water AutoDock atom types
+                (default: ['W'])
+            rec_atom_types (list of str): list of receptor HB acceptor AutoDock atom types
+                (default: ['HD', 'HS', 'NA', 'OA', 'SA', 'OS', 'NS'])
+
+        """
+        super().__init__(distance, angles, lig_atom_types, rec_atom_types, 'both')
 
 
 class WaterDonor(_HBBased):
@@ -307,7 +376,7 @@ class WaterDonor(_HBBased):
                 (default: ['NA', 'OA', 'SA', 'OS', 'NS'])
 
         """
-        super().__init__(distance, (0, angle), lig_atom_types, rec_atom_types)
+        super().__init__(distance, (0, angle), lig_atom_types, rec_atom_types, 'donor')
 
 
 class WaterAcceptor(_HBBased):
@@ -327,4 +396,12 @@ class WaterAcceptor(_HBBased):
 
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
-        super().__init__(distance - 1., (0, angle), lig_atom_types, rec_atom_types)
+        super().__init__(distance, (0, angle), lig_atom_types, rec_atom_types, 'acceptor')
+
+    def find(self, molecule, receptor):
+        rigid_interactions, flex_interactions = super().find(molecule, receptor)
+        # swap angle_1 and angle_2 columns in order to have donor angle first
+        rigid_interactions[['angle_don', 'angle_acc']] = rigid_interactions[['angle_acc', 'angle_don']]
+        flex_interactions[['angle_don', 'angle_acc']] = flex_interactions[['angle_acc', 'angle_don']]
+
+        return rigid_interactions, flex_interactions

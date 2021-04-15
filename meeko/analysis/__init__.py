@@ -6,8 +6,9 @@
 
 from .fingerprint_interactions import FingerprintInteractions
 from .interactions import Hydrophobic, Reactive, Metal
-from .interactions import HBDonor, HBAcceptor, WaterDonor, WaterAcceptor
+from .interactions import HBDonor, HBAcceptor, Water, WaterDonor, WaterAcceptor
 
 __all__ = ['FingerprintInteractions', 
            'Hydrophobic', 'Reactive', 'Metal', 
-           'HBDonor', 'HBAcceptor', 'WaterDonor', 'WaterAcceptor']
+           'HBDonor', 'HBAcceptor', 
+           'Water', 'WaterDonor', 'WaterAcceptor']

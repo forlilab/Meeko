@@ -9,8 +9,9 @@ import os
 import numpy as np
 import pandas as pd
 
+from .interactions import _DistanceBased, _HBBased
 from .interactions import Hydrophobic, Reactive, Metal
-from .interactions import HBDonor, HBAcceptor, WaterDonor, WaterAcceptor
+from .interactions import HBDonor, HBAcceptor, Water
 
 
 class FingerprintInteractions:
@@ -24,12 +25,45 @@ class FingerprintInteractions:
         """
         self._data = []
         self._interactions = [Hydrophobic(),
-                              Reactive(),
-                              Metal(), 
                               HBDonor(), HBAcceptor(),
-                              WaterDonor(), WaterAcceptor()]
+                              Metal(), Water()]
         self._unique_interactions = {interaction.name: {*()} for interaction in self._interactions}
         self._receptor = receptor
+
+    def show_interactions(self):
+        for i, interaction in enumerate(self._interactions):
+            print('Interaction No: %d' % i)
+            print(interaction)
+
+    def add_interaction(self, interaction):
+        """Add new interaction
+        
+        Args:
+            interaction (_Interaction): interaction (based on abstract class _Interaction)
+
+        Returns:
+            int: index of the new interaction
+
+        """
+        if not isinstance(interaction, (_DistanceBased, _HBBased)):
+            error_msg = 'New interaction (type: %s) must be a DistanceBased or HBBased interaction.'
+            raise TypeError(error_msg % type(interaction))
+
+        number_interactions = len(self._interactions)
+        self._interactions.append(interaction)
+        if not interaction.name in self._unique_interactions:
+            self._unique_interactions.update({interaction.name: {*()}})
+
+        return number_interactions
+
+    def remove_interaction(self, index):
+        """Remove interaction
+        
+        Args:
+            index (int): index of the interaction to remove (0-based)
+
+        """
+        self._interactions.pop(index)
 
     def run(self, molecules):
         """Run the fingerprint interactions.
@@ -50,7 +84,7 @@ class FingerprintInteractions:
                 for interaction in self._interactions:
                     resids = ''
                     columns = ['chain', 'resid']
-                    if interaction.name in ['HBDonor', 'HBAcceptor', 'WaterDonor', 'WaterAcceptor']:
+                    if isinstance(interaction, _HBBased):
                         columns += ['name']
 
                     rigid_interactions, flex_interactions = interaction.find(molecule[i], self._receptor)

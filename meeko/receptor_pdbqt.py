@@ -5,13 +5,11 @@
 #
 
 import os
-from collections import defaultdict
 
 import numpy as np
 from scipy import spatial
 
-from .utils.covalent_radius_table import covalent_radius
-from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
+from .utils.utils import _identify_bonds
 
 
 def _read_receptor_pdbqt_file(pdbqt_filename):
@@ -37,7 +35,7 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
                 atom_type = line[77:79].strip()
 
                 atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
-                
+
                 i += 1
 
     atoms = np.array(atoms, dtype=atoms_dtype)
@@ -45,28 +43,18 @@ def _read_receptor_pdbqt_file(pdbqt_filename):
     return atoms
 
 
-def _identify_bonds(atom_idx, positions, atom_types):
-    bonds = defaultdict(list)
-    KDTree = spatial.cKDTree(positions)
-    bond_allowance_factor = 1.1
-    # If we ask more than the number of coordinates/element
-    # in the BHTree, we will end up with some inf values
-    k = 5 if len(atom_idx) > 5 else len(atom_idx)
-    atom_idx = np.array(atom_idx)
-
-    for atom_i, position, atom_type in zip(atom_idx, positions, atom_types):
-        distances, indices = KDTree.query(position, k=k)
-        r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
-
-        optimal_distances = [bond_allowance_factor * (r_cov + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
-        bonds[atom_i] = atom_idx[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
-
-    return bonds
-
-
 class PDBQTReceptor:
 
-    def __init__(self, pdbqt_filename):
+    def __init__(self, pdbqt_filename, extra_atom_types=None):
+        """PDBQTReceptor class for reading PDBQT files for AutoDock4, AutoDock-GPU or AutoDock-Vina
+
+        Args:
+            pdbqt_filename (str): pdbqt filename
+            extra_atom_types (dict): dictionary for defining new non-standard AutoDock atom types. (default: None)
+                Used for identifying bonds in the molecule.
+                Dictionary: {<new_atom_type1 (str)>: <element (str)>, ..., <new_atom_typeN (str)>: <element (str)>}
+
+        """
         self._pdbqt_filename = pdbqt_filename
         self._atoms = None
         self._atom_annotations = None
@@ -75,7 +63,8 @@ class PDBQTReceptor:
         self._atoms = _read_receptor_pdbqt_file(self._pdbqt_filename)
         # We add to the KDTree only the rigid part of the receptor
         self._KDTree = spatial.cKDTree(self._atoms['xyz'])
-        self._bonds = _identify_bonds(self._atoms['idx'], self._atoms['xyz'], self._atoms['atom_type'])
+        self._bonds = _identify_bonds(self._atoms['idx'], self._atoms['xyz'],
+                                      self._atoms['atom_type'], extra_atom_types)
 
     def __repr__(self):
         return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))

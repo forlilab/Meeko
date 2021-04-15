@@ -8,15 +8,18 @@
 import os
 import re
 import sys
-
-
-
+from collections import defaultdict
 
 if sys.version_info >= (3, ):
     import importlib
 else:
     import imp
 
+import numpy as np
+from scipy import spatial
+
+from .covalent_radius_table import covalent_radius
+from .autodock4_atom_types_elements import autodock4_atom_types_elements
 
 nucleic = ['U', 'A', 'C', 'G', 'T']
 
@@ -121,3 +124,44 @@ def get_data_file(file_handle, dir_name, data_file):
     DATAPATH = os.path.join(module_dir, dir_name, data_file)
     return DATAPATH
 
+
+def _identify_bonds(atom_idx, positions, atom_types, extra_atom_types=None):
+    bonds = defaultdict(list)
+    KDTree = spatial.cKDTree(positions)
+    bond_allowance_factor = 1.1
+    # If we ask more than the number of coordinates/element
+    # in the BHTree, we will end up with some inf values
+    k = 5 if len(atom_idx) > 5 else len(atom_idx)
+    atom_idx = np.array(atom_idx)
+
+    if extra_atom_types is None:
+        extra_atom_types = {}
+    autodock4_atom_types_elements.update(extra_atom_types)
+
+    for atom_i, position, atom_type in zip(atom_idx, positions, atom_types):
+        r_cov_js = []
+        distances, indices = KDTree.query(position, k=k)
+
+        try:
+            element = autodock4_atom_types_elements[atom_type]
+        except:
+            error_msg = 'No element associated to atom type %s.'
+            error_msg += ' Use extra_atom_types argument to define it.'
+            raise KeyError(error_msg % atom_type)
+        finally:
+            r_cov_i = covalent_radius[element]
+
+        for i in indices[1:]:
+            try:
+                element = autodock4_atom_types_elements[atom_types[i]]
+            except:
+                error_msg = 'No element associated to atom type %s.'
+                error_msg += ' Use extra_atom_types argument to define it.'
+                raise KeyError(error_msg % atom_type)
+            finally:
+                r_cov_js.append(covalent_radius[element])
+
+        optimal_distances = [bond_allowance_factor * (r_cov_i + r_cov_j) for r_cov_j in r_cov_js]
+        bonds[atom_i] = atom_idx[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
+
+    return bonds

@@ -5,14 +5,12 @@
 #
 
 import os
-from collections import defaultdict
 
 import numpy as np
 from scipy import spatial
 from openbabel import openbabel as ob
 
-from .utils.covalent_radius_table import covalent_radius
-from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
+from .utils.utils import _identify_bonds
 
 
 def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, is_dlg=False):
@@ -200,28 +198,9 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
     return atoms, positions, pose_data
 
 
-def _identify_bonds(atom_idx, positions, atom_types):
-    bonds = defaultdict(list)
-    KDTree = spatial.cKDTree(positions)
-    bond_allowance_factor = 1.1
-    # If we ask more than the number of coordinates/element
-    # in the BHTree, we will end up with some inf values
-    k = 5 if len(atom_idx) > 5 else len(atom_idx)
-    atom_idx = np.array(atom_idx)
-
-    for atom_i, position, atom_type in zip(atom_idx, positions, atom_types):
-        distances, indices = KDTree.query(position, k=k)
-        r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
-
-        optimal_distances = [bond_allowance_factor * (r_cov + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
-        bonds[atom_i] = atom_idx[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
-
-    return bonds
-
-
 class PDBQTMolecule:
 
-    def __init__(self, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False):
+    def __init__(self, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False, extra_atom_types=None):
         """PDBQTMolecule class for reading PDBQT (or dlg) files from AutoDock4, AutoDock-GPU or AutoDock-Vina
 
         Contains both __getitem__ and __iter__ methods, someone might lose his mind because of this.
@@ -233,6 +212,9 @@ class PDBQTMolecule:
             energy_range (float): read docked poses until the maximum energy difference 
                 from best pose is reach, for example 2.5 kcal/mol (default: Non, read all)
             is_dlg (bool): input file is in dlg (AutoDock docking log) format (default: False)
+            extra_atom_types (dict): dictionary for defining new non-standard AutoDock atom types. (default: None)
+                Used for identifying bonds in the molecule.
+                Dictionary: {<new_atom_type1 (str)>: <element (str)>, ..., <new_atom_typeN (str)>: <element (str)>}
 
         """
         self._current_pose = 0
@@ -257,11 +239,12 @@ class PDBQTMolecule:
 
         # Identify bonds in the ligands
         ligand_atoms = self.ligands()
-        self._bonds = _identify_bonds(ligand_atoms['idx'], ligand_atoms['xyz'], ligand_atoms['atom_type'])
+        self._bonds = _identify_bonds(ligand_atoms['idx'], ligand_atoms['xyz'],
+                                      ligand_atoms['atom_type'], extra_atom_types)
 
         """... then in the flexible residues 
         Since we are extracting bonds from docked poses, we might be in the situation
-        where the ligand reacted with one of the flexible residues and we don't want to 
+        where the ligand reacted with one of the flexible residues and we don't want to
         consider them as normally bonded..."""
         if self.has_flexible_residues():
             flex_atoms = self.flexible_residues()
