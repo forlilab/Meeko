@@ -9,8 +9,6 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from ..utils.autodock4_atom_types_elements import autodock4_atom_types_elements
-
 
 def _compute_angle(v1, v2):
     unit_vector_1 = v1 / np.linalg.norm(v1)
@@ -204,7 +202,6 @@ class _HBBased(_Interaction):
         lig_hb_pre_position = None
         rec_hb_pre_position = None
         has_flexible_residues = molecule.has_flexible_residues()
-        max_distance = self._distance
 
         lig_atoms = molecule.ligands(self._lig_atom_types)
         if molecule.has_water_molecules():
@@ -215,7 +212,7 @@ class _HBBased(_Interaction):
         to_ignore = list(lig_atoms['idx'])
 
         for lig_atom in lig_atoms:
-            # Dirty trick to avoid looking at attached heavy atom
+            # Dirty trick to avoid looking at theattached heavy atom
             # ... and we assume that donor atoms are all going to be hydrogen atoms
             if lig_atom['atom_type'][0].upper() == 'H':
                 max_distance = self._distance - 1.0
@@ -233,7 +230,7 @@ class _HBBased(_Interaction):
                 lig_hb_pre_position = None
 
             # Get interactions with the rigid part of the receptor
-            rec_rigid_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], self._distance, self._rec_atom_types)
+            rec_rigid_atoms = receptor.closest_atoms_from_positions(lig_atom['xyz'], max_distance, self._rec_atom_types)
             rec_rigid_flex = [receptor]
             rec_rigid_flex_atoms = [rec_rigid_atoms]
             rec_rigid_flex_types = ['rigid']
@@ -241,7 +238,7 @@ class _HBBased(_Interaction):
             # If present, get interactions with the flexible sidechain atoms (part of the receptor)
             # But we ignore the ligand itself
             if has_flexible_residues:
-                rec_flex_atoms = molecule.closest_atoms_from_positions(lig_atom['xyz'], self._distance, self._rec_atom_types, to_ignore)
+                rec_flex_atoms = molecule.closest_atoms_from_positions(lig_atom['xyz'], max_distance, self._rec_atom_types, to_ignore)
                 rec_rigid_flex.append(molecule)
                 rec_rigid_flex_atoms.append(rec_flex_atoms)
                 rec_rigid_flex_types.append('flex')
@@ -249,7 +246,7 @@ class _HBBased(_Interaction):
             # Add interactions
             for rec, rec_atoms, rec_type in zip(rec_rigid_flex, rec_rigid_flex_atoms, rec_rigid_flex_types):
                 for rec_atom in rec_atoms:
-                    # Dirty trick to avoid looking at attached heavy atom
+                    # Dirty trick to avoid looking at the attached heavy atom
                     # ... and we assume that donor atoms are all going to be hydrogen atoms
                     if rec_atom['atom_type'][0].upper() == 'H':
                         max_distance = self._distance - 1.0
