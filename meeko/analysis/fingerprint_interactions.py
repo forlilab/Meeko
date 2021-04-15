@@ -82,7 +82,7 @@ class FingerprintInteractions:
                 tmp = {}
 
                 for interaction in self._interactions:
-                    resids = ''
+                    resids = []
                     columns = ['chain', 'resid']
                     if isinstance(interaction, _HBBased):
                         columns += ['name']
@@ -94,7 +94,7 @@ class FingerprintInteractions:
 
                     if rec_rigid_atoms.size > 0:
                         unique_resids = np.unique(rec_rigid_atoms[columns])
-                        resids = [':'.join([interaction.name] + [str(v) for v in u]) for u in unique_resids]
+                        resids += [':'.join([interaction.name] + [str(v) for v in u]) for u in unique_resids]
 
                     if rec_flex_atoms.size > 0:
                         unique_resids = np.unique(rec_flex_atoms[columns])
