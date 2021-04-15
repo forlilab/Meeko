@@ -56,14 +56,18 @@ class FingerprintInteractions:
 
         return number_interactions
 
-    def remove_interaction(self, index):
+    def remove_interaction(self, indices):
         """Remove interaction
         
         Args:
-            index (int): index of the interaction to remove (0-based)
+            indices (int or list of in): indices of the interactions to remove (0-based).
+                Use show_interactions function to see the list of all available interactions
 
         """
-        self._interactions.pop(index)
+        if not isinstance(indices, (list, tuple)):
+            indices = [indices]
+
+        [self._interactions.pop(idx) for idx in sorted(indices, reverse=True)]
 
     def run(self, molecules):
         """Run the fingerprint interactions.
