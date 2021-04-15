@@ -157,7 +157,7 @@ def _identify_bonds(atom_idx, positions, atom_types, extra_atom_types=None):
             except:
                 error_msg = 'No element associated to atom type %s.'
                 error_msg += ' Use extra_atom_types argument to define it.'
-                raise KeyError(error_msg % atom_type)
+                raise KeyError(error_msg % atom_types[i])
             finally:
                 r_cov_js.append(covalent_radius[element])
 
