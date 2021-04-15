@@ -277,7 +277,12 @@ class _HBBased(_Interaction):
                             angle_2 = np.radians(180)
 
                         if (angle_1 >= self._angles[0]) & (angle_2 >= self._angles[1]):
-                            tmp = [lig_atom['idx'], rec_atom['idx'], distance, np.degrees(angle_1), np.degrees(angle_2)]
+                            tmp = [lig_atom['idx'], rec_atom['idx'], distance]
+
+                            if self._hb_type in ['donor', 'both']:
+                                tmp += [np.degrees(angle_1), np.degrees(angle_2)]
+                            else:
+                                tmp += [np.degrees(angle_2), np.degrees(angle_1)]
 
                             if rec_type == 'rigid':
                                 rigid_interactions.append(tuple(tmp))
@@ -327,14 +332,6 @@ class HBAcceptor(_HBBased):
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
         super().__init__(distance, angles[::-1], lig_atom_types, rec_atom_types, 'acceptor')
-
-    def find(self, molecule, receptor):
-        rigid_interactions, flex_interactions = super().find(molecule, receptor)
-        # swap angle_1 and angle_2 columns in order to have donor angle first
-        rigid_interactions[['angle_don', 'angle_acc']] = rigid_interactions[['angle_acc', 'angle_don']]
-        flex_interactions[['angle_don', 'angle_acc']] = flex_interactions[['angle_acc', 'angle_don']]
-
-        return rigid_interactions, flex_interactions
 
 
 class Water(_HBBased):
@@ -394,11 +391,3 @@ class WaterAcceptor(_HBBased):
         """
         # Because the distance will be between the acceptor and the hydrogen atoms
         super().__init__(distance, (0, angle), lig_atom_types, rec_atom_types, 'acceptor')
-
-    def find(self, molecule, receptor):
-        rigid_interactions, flex_interactions = super().find(molecule, receptor)
-        # swap angle_1 and angle_2 columns in order to have donor angle first
-        rigid_interactions[['angle_don', 'angle_acc']] = rigid_interactions[['angle_acc', 'angle_don']]
-        flex_interactions[['angle_don', 'angle_acc']] = flex_interactions[['angle_acc', 'angle_don']]
-
-        return rigid_interactions, flex_interactions
