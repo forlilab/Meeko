@@ -23,39 +23,6 @@ class PDBQTWriterLegacy():
         self._atom_counter = {}
         self._resinfo_set = set() # for flexres keywords BEGIN_RES / END_RES
 
-    def _fix_atom_types(self):
-        """ set legacy atom types and update closure atoms"""
-        self._atom_typer.set_param_legacy(self.mol)
-
-        target_table = {'A' :'AG',
-                        'OA':'OG',
-                        'NA':'NG',
-                        'N' :'Ng',
-                        'SA':'SG',
-                        'S' :'Sg',
-                        'C' :'CG0',
-                        #'P' :'PG', #
-                        }
-        neighbor13_14_tab = {'OA':'O1',
-                             'NA':'N1',
-                             'N' :'N2',
-                             'SA':'S1',
-                             'Cl':'Cx',
-                             'Br':'B1',
-                             'HD':'H1',
-                             'P':'P1'}
-
-        for i, bond_id in enumerate(self.model['broken_bonds']):
-            # update target atoms
-            for target_idx in bond_id:
-                # update C-g atoms
-                curr_at_type = self.setup.get_atom_type(target_idx)
-                at_type = target_table.get(curr_at_type, None)
-                if at_type is None:
-                    at_type = "%sG" % curr_at_type
-
-                self.setup.set_atom_type(target_idx, at_type)
-
     def _get_pdbinfo_fitting_pdb_chars(self, pdbinfo):
         """ return strings and integers that are guaranteed
             to fit within the designated chars of the PDB format """
@@ -165,29 +132,17 @@ class PDBQTWriterLegacy():
         root = self.model['root']
         torsdof = len(self.model['rigid_body_graph']) - 1
 
-        # Make sure the atom types are correct
-        self._fix_atom_types()
-
         if 'torsions_org' in self.model:
-            torsdof_org = self.model['torsions_org']
-            self._pdbqt_buffer.append('REMARK Flexibility Score: %2.2f' % self.model['score'] )
-            for bond_id, data in list(self.setup.ring_bond_breakable.items()):
-                if data['active'] == True:
-                    self._pdbqt_buffer.append('REMARK Glue-bond: [% 2d ] :: [% 2d ]' % (bond_id[0], bond_id[1]) )
-            self._pdbqt_buffer.append('REMARK Active torsions [% 2d ] -> [% 2d ]' % (torsdof_org, torsdof) )
-            active_tors = torsdof_org
-        else:
-            active_tors = torsdof
+            self._pdbqt_buffer.append('REMARK Flexibility Score: %4.2f' % self.model['score'] )
+            self._pdbqt_buffer.append('REMARK Active torsions: %d' % torsdof)
 
         self._walk_graph_recursive(root, first=True)
 
         if save_index_map:
-            i = 0
-            for remark_line in self.remark_index_map():
+            for i, remark_line in enumerate(self.remark_index_map()):
                 # need to use 'insert' because self._numbering is calculated
                 # only after self._walk_graph_recursive
                 self._pdbqt_buffer.insert(i, remark_line)
-                i += 1
 
         if is_protein_sidechain:
             if len(self._resinfo_set) > 1:
@@ -201,7 +156,7 @@ class PDBQTWriterLegacy():
             self._pdbqt_buffer.append('END_RES %s' % resinfo_string)
         else: # no TORSDOF in flexres
             # torsdof is always going to be the one of the rigid, non-macrocyclic one
-            self._pdbqt_buffer.append('TORSDOF %d\n' % active_tors)
+            self._pdbqt_buffer.append('TORSDOF %d\n' % torsdof)
 
 
         return '\n'.join(self._pdbqt_buffer) + '\n'

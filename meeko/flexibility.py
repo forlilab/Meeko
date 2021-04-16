@@ -276,10 +276,9 @@ class FlexibilityBuilder:
         neigh_13_14 = []
         broken_bonds = []
         # counter to number glue atoms, G1-G1, G2-G2, ...
-        bond_id_list, ring_id_list, score_list = bonds_to_break
-        closure_count = 0
+        bond_id_list, _, _ = bonds_to_break
 
-        for bond_id in bond_id_list:
+        for i, bond_id in enumerate(bond_id_list):
             bond_data = self._current_setup.ring_bond_breakable[bond_id]
             neigh_13_14.append(bond_data['neigh_13_14'])
             # TODO this part should simply transfer the closure information in the
@@ -287,11 +286,13 @@ class FlexibilityBuilder:
             # the appropriate potentials will be updated (internally)
             # TODO also, the atom type should not be set here
             broken_bonds.append(bond_id)
+            # Add pseudo glue atoms
             for pseudo in bond_data['closure_pseudo']:
-                # print "GGG", pseudo
-                pseudo['atom_type'] = "%s%d" % (pseudo['atom_type'], closure_count)
+                pseudo['atom_type'] = "%s%d" % (pseudo['atom_type'], i)
                 p_idx = self._current_setup.add_pseudo(**pseudo)
-            closure_count += 1
+            # Change atom type of the closure atoms to CGX
+            self._current_setup.set_atom_type(bond_id[0], "CG%d" % i)
+            self._current_setup.set_atom_type(bond_id[1], "CG%d" % i)
 
         return neigh_13_14, broken_bonds
 
