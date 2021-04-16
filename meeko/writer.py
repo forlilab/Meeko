@@ -133,7 +133,11 @@ class PDBQTWriterLegacy():
         torsdof = len(self.model['rigid_body_graph']) - 1
 
         if 'torsions_org' in self.model:
-            self._pdbqt_buffer.append('REMARK Flexibility Score: %4.2f' % self.model['score'])
+            torsdof_org = self.model['torsions_org']
+            self._pdbqt_buffer.append('REMARK Flexibility Score: %2.2f' % self.model['score'] )
+            active_tors = torsdof_org
+        else:
+            active_tors = torsdof
 
         self._walk_graph_recursive(root, first=True)
 
@@ -155,7 +159,7 @@ class PDBQTWriterLegacy():
             self._pdbqt_buffer.append('END_RES %s' % resinfo_string)
         else: # no TORSDOF in flexres
             # torsdof is always going to be the one of the rigid, non-macrocyclic one
-            self._pdbqt_buffer.append('TORSDOF %d\n' % torsdof)
+            self._pdbqt_buffer.append('TORSDOF %d\n' % active_tors)
 
 
         return '\n'.join(self._pdbqt_buffer) + '\n'
