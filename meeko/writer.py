@@ -133,8 +133,7 @@ class PDBQTWriterLegacy():
         torsdof = len(self.model['rigid_body_graph']) - 1
 
         if 'torsions_org' in self.model:
-            self._pdbqt_buffer.append('REMARK Flexibility Score: %4.2f' % self.model['score'] )
-            self._pdbqt_buffer.append('REMARK Active torsions: %d' % torsdof)
+            self._pdbqt_buffer.append('REMARK Flexibility Score: %4.2f' % self.model['score'])
 
         self._walk_graph_recursive(root, first=True)
 
