@@ -36,7 +36,7 @@ class AtomTyperLegacy:
     def _hydrogen_atom_type(self, hydrogen):
         """identify polar HB (HD type)"""
         for n in ob.OBAtomAtomIter(hydrogen):
-            if n.GetAtomicNum() in (7, 8, 16):
+            if n.GetAtomicNum() in (7, 8, 15, 16): # Not sure about P-H bonds. See e.g. ZINC000299754521
                 return "HD"
             return "H"
 
