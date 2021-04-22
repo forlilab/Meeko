@@ -15,20 +15,18 @@ from .utils import obutils
 
 
 class FlexMacrocycle:
-    def __init__(self, min_ring_size=8, max_ring_size=10, force_double_bond=False, double_bond_penalty=50):
+    def __init__(self, min_ring_size=8, max_ring_size=10, double_bond_penalty=50):
         """Initialize macrocycle typer.
         
         Args:
             min_ring_size (int): minimum size of the ring (default: 8)
             max_ring_size (int): maximum size of the ring (default: 10)
-            force_double_bond (bool): (default: False)
             double_bond_penalty (float)
 
         """
         self._min_ring_size = min_ring_size
         self._max_ring_size = max_ring_size
         # accept also double bonds (if nothing better is found)
-        self._force_double_bond = force_double_bond
         self._double_bond_penalty = double_bond_penalty
 
         self._mol = None
@@ -73,31 +71,19 @@ class FlexMacrocycle:
         atom1 = self._mol.GetAtom(atom_idx1)
         atom2 = self._mol.GetAtom(atom_idx2)
         bond = self._mol.GetBond(atom1,atom2)
-        # print("\nSCORE BOND: [%d, %d]" % (atom_idx1, atom_idx2))
-        # test bond order
-        bond_order = bond.GetBondOrder()
-        if bond.IsAromatic():
-            #print("-> [ X ] aromatic bond violation")
+        bond_id = self._mol.setup.get_bond_id(atom_idx1, atom_idx2) 
+        bond_order = self._mol.setup.bond[bond_id]['bond_order']
+        if bond_order not in [1, 2, 3]: # aromatic, double, made rigid explicitly (order=1.1 from --rigidify)
             return -1
         if atom1.GetAtomicNum() != 6 or atom1.IsAromatic() or atom2.GetAtomicNum() != 6 or atom2.IsAromatic():
             return -1
-        if (not bond_order == 1):
-            # triple bond tolerated but not preferred (TODO true?)
-            if bond_order == 3:
-                score -= 30
-                #print("-> [ - ] sp bond penalty")
-            # double bond optionally accepted (but penalized)
-            elif (bond_order == 2):
-                if self._force_double_bond:
-                    #print("-> [ - ] sp2 bond penalty")
-                    score -= self._double_bond_penalty
-                else:
-                    #print("-> [ X ] sp2 violation")
-                    # print("    => SCORE[%d]" % -1)
-                    return -1
+        # triple bond tolerated but not preferred (TODO true?)
+        if bond_order == 3:
+            score -= 30
+        elif (bond_order == 2):
+            score -= self._double_bond_penalty
         if bond.GetIdx() in self._conj_bond_list:
             score -= 30
-            # print("-> [ - ] conjugated bond penalty")
         # atom in more than one *flexible* ring are not acceptable
         # patch pre-botta
         # a_rings1 = set(self._mol.setup.ring_atom_to_ring[atom_idx1])

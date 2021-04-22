@@ -35,7 +35,7 @@ def cmd_lineparser():
     parser.add_argument("-b", "--rigidify_bonds_indices", dest="rigidify_bonds_indices", default=[],
                         action="append", help="indices of two atoms (in the SMARTS) that define a bond (start at 1)",
                         nargs='+', type=int, metavar='i j')
-    parser.add_argument("--double_bond_penalty", default=50, help="penalty > 100 prevents breaking double bonds")
+    parser.add_argument("--double_bond_penalty", default=50, help="penalty > 100 prevents breaking double bonds", type=int)
     parser.add_argument("--no_index_map", dest="save_index_map", default=True,
                         action="store_false", help="do not write map of atom indices from input to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
