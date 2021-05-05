@@ -112,6 +112,7 @@ class FlexibilityBuilder:
         self._rigid_body_members = {}
         self._rigid_body_connectivity = {}
         self._rigid_body_graph = defaultdict(list)
+        self._rigid_index_by_atom = {}
         # START VALUE HERE SHOULD BE MADE MODIFIABLE FOR FLEX CHAIN
         self._rigid_body_count = 0
         self.walk_rigid_body_graph(start=1)
@@ -122,7 +123,7 @@ class FlexibilityBuilder:
         model = {'rigid_body_graph' : deepcopy(self._rigid_body_graph),
                 'rigid_body_connectivity' : deepcopy(self._rigid_body_connectivity),
                 'rigid_body_members' : deepcopy(self._rigid_body_members),
-                'neigh_13_14' : neigh_13_14,
+                #'neigh_13_14' : neigh_13_14,
                 'setup' : self._current_setup,
                 'broken_bonds' : broken_bonds,
                 }
@@ -300,22 +301,33 @@ class FlexibilityBuilder:
         rigid = [start]
         self._visited[start] = True
         current_rigid_body_count = self._rigid_body_count
+        self._rigid_index_by_atom[start] = current_rigid_body_count
+        sprouts_buffer = []
         while idx < len(rigid):
             current = rigid[idx]
             for neigh in self._current_setup.get_neigh(current):
-                if self._visited[neigh]:
-                    continue
                 bond_id = self._current_setup.get_bond_id(current, neigh)
-                bond_info = self._current_setup.get_bond(current,neigh)
-                if bond_info['rotatable'] and (not bond_id in self._frozen_bonds):
-                    self._rigid_body_count+=1
-                    self._rigid_body_connectivity[current_rigid_body_count, self._rigid_body_count] = current, neigh
-                    self._rigid_body_connectivity[self._rigid_body_count, current_rigid_body_count] = neigh, current
-                    self._rigid_body_graph[current_rigid_body_count].append(self._rigid_body_count)
-                    self._rigid_body_graph[self._rigid_body_count].append(current_rigid_body_count)
-                    self.walk_rigid_body_graph(neigh)
+                bond_info = self._current_setup.get_bond(current, neigh)
+                if self._visited[neigh]:
+                    is_rigid_bond = (bond_info['rotatable'] == False) or (bond_id in self._frozen_bonds)
+                    neigh_in_other_rigid_body = current_rigid_body_count != self._rigid_index_by_atom[neigh]
+                    if is_rigid_bond and neigh_in_other_rigid_body:
+                        raise RuntimeError('Flexible bonds within rigid group. We have a problem.')
+                    continue
+                if bond_info['rotatable'] and (bond_id not in self._frozen_bonds):
+                    sprouts_buffer.append((current, neigh))
                 else:
                     rigid.append(neigh)
+                    self._rigid_index_by_atom[neigh] = current_rigid_body_count
                     self._visited[neigh] = True
             idx += 1
         self._rigid_body_members[current_rigid_body_count] = rigid
+        for current, neigh in sprouts_buffer:
+            if self._visited[neigh]: continue
+            self._rigid_body_count+=1
+            self._rigid_body_connectivity[current_rigid_body_count, self._rigid_body_count] = current, neigh
+            self._rigid_body_connectivity[self._rigid_body_count, current_rigid_body_count] = neigh, current
+            self._rigid_body_graph[current_rigid_body_count].append(self._rigid_body_count)
+            self._rigid_body_graph[self._rigid_body_count].append(current_rigid_body_count)
+            self.walk_rigid_body_graph(neigh)
+
