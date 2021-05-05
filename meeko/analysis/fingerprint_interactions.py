@@ -16,11 +16,11 @@ from .interactions import HBDonor, HBAcceptor, Water
 
 class FingerprintInteractions:
 
-    def __init__(self, receptor):
+    def __init__(self, receptor=None):
         """FingerprintInteractions object
 
         Args:
-            receptor (PDBQTReceptor): receptor 
+            receptor (PDBQTReceptor): receptor (default: None)
 
         """
         self._data = []
@@ -69,14 +69,24 @@ class FingerprintInteractions:
 
         [self._interactions.pop(idx) for idx in sorted(indices, reverse=True)]
 
-    def run(self, molecules):
+    def run(self, molecules, receptor=None):
         """Run the fingerprint interactions.
         
         Args:
             molecules (PDBQTMolecule, list of PDBQTMolecule): molecule or list of molecules
+            receptor (PDBQTReceptor): receptor (default:None)
 
         """
         data = []
+
+        assert (self._receptor is not None) or (receptor is not None), 'A PDBQTReceptor must be provided.'
+
+        if self._receptor is not None:
+            # Check that the user is not providing another receptor
+            if receptor is not None:
+                raise ValueError('A PDBQTReceptor was already provided at the initialization.')
+
+            receptor = self._receptor
 
         if not isinstance(molecules, (list, tuple)):
             molecules = [molecules]
@@ -91,9 +101,9 @@ class FingerprintInteractions:
                     if isinstance(interaction, _HBBased):
                         columns += ['name']
 
-                    rigid_interactions, flex_interactions = interaction.find(molecule[i], self._receptor)
+                    rigid_interactions, flex_interactions = interaction.find(molecule[i], receptor)
 
-                    rec_rigid_atoms = self._receptor.atoms(rigid_interactions['receptor_idx'])
+                    rec_rigid_atoms = receptor.atoms(rigid_interactions['receptor_idx'])
                     rec_flex_atoms = molecule[i].atoms(flex_interactions['receptor_idx'])
 
                     if rec_rigid_atoms.size > 0:
