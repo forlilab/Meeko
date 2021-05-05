@@ -20,10 +20,10 @@ def cmd_lineparser():
     parser.add_argument("-c", "--conformers", dest="coords_filename", required=True,
                         action="store", help="PDBQT or DLG file to get coordinates from")
     parser.add_argument("-o", "--output_filename", dest="output_filename",
-                        action="store", help="output molecule file in SDF format")
+                        action="store", help="default is to print to STDOUT. Overrides -w")
+    parser.add_argument("-w", "--outfn_auto", dest="outfn_auto",
+            action="store_true", help="Output filename takes basename and path from --conformers and extension from --original_input. Ignored if -o is specified. WARNING: original input may be overwritten.")
     return parser.parse_args()
-
-
 
 
 if __name__ == '__main__':
@@ -32,6 +32,7 @@ if __name__ == '__main__':
     input_filename = args.input_filename
     coords_filename = args.coords_filename
     output_filename = args.output_filename
+    outfn_auto = args.outfn_auto
 
     output_string = ""
 
@@ -52,7 +53,10 @@ if __name__ == '__main__':
         pose.copy_coordinates_to_obmol(tmp_obmol)
         output_string += conv.WriteString(tmp_obmol)
 
-    if output_filename is None:
+    if (output_filename is None) and (outfn_auto):
+        outfn = os.path.splitext(coords_filename)[0] + os.path.splitext(input_filename)[1]
+        print(output_string, file=open(outfn, 'w'))
+    elif (output_filename is None) and (not outfn_auto):
         print(output_string)
     else:
         print(output_string, file=open(output_filename, 'w'))
