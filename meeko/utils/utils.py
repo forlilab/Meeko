@@ -8,6 +8,7 @@
 import os
 import re
 import sys
+import requests
 from collections import defaultdict
 
 if sys.version_info >= (3, ):
@@ -165,3 +166,33 @@ def _identify_bonds(atom_idx, positions, atom_types, extra_atom_types=None):
         bonds[atom_i] = atom_idx[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
 
     return bonds
+
+
+def get_smiles_from_pdb(compound_id, smiles_type='SMILES', from_program='OpenEye OEToolkits'):
+    """Get SMILES string from the PDB using the compound id
+    
+    Args:
+        compound_id (str): unique ID used by the PBD to identify the compound
+        smiles_types (str): type of SMILES string, either SMILES or SMILES_CANONICAL (default: SMILES)
+        from_program (str): program that generated the SMILES string, OpenEye OEToolkits, CACTVS or ACDLabs (default: 'OpenEye OEToolkits')
+
+    Returns:
+        str: SMILES string or None, otherwise
+
+    """
+    smiles_string = None
+    smiles_type = smiles_type.upper()
+    allowed_smiles_type = ['SMILES', 'SMILES_CANONICAL'] 
+    allowed_programs = ['OpenEye OEToolkits', 'CACTVS', 'ACDLabs']
+
+    assert smiles_type in allowed_smiles_type, 'Type of the SMILES can only be %s' % allowed_smiles_type
+    assert from_program in allowed_programs, 'Program that generated the SMILES can only be %s' % allowed_programs
+
+    resp = requests.get('https://data.rcsb.org/rest/v1/core/chemcomp/%s' % compound_id)
+
+    if resp.status_code == 200:
+        json_data = resp.json()
+        if 'pdbx_chem_comp_descriptor' in json_data:
+            smiles_string = [i['descriptor'] for i in json_data['pdbx_chem_comp_descriptor'] if (i['type'] == smiles_type) & (i['program'] == from_program)][0]
+
+    return smiles_string
