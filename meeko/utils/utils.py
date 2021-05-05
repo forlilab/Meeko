@@ -148,8 +148,8 @@ def _identify_bonds(atom_idx, positions, atom_types, extra_atom_types=None):
             error_msg = 'No element associated to atom type %s.'
             error_msg += ' Use extra_atom_types argument to define it.'
             raise KeyError(error_msg % atom_type)
-        finally:
-            r_cov_i = covalent_radius[element]
+
+        r_cov_i = covalent_radius[element]
 
         for i in indices[1:]:
             try:
@@ -158,8 +158,8 @@ def _identify_bonds(atom_idx, positions, atom_types, extra_atom_types=None):
                 error_msg = 'No element associated to atom type %s.'
                 error_msg += ' Use extra_atom_types argument to define it.'
                 raise KeyError(error_msg % atom_types[i])
-            finally:
-                r_cov_js.append(covalent_radius[element])
+
+            r_cov_js.append(covalent_radius[element])
 
         optimal_distances = [bond_allowance_factor * (r_cov_i + r_cov_j) for r_cov_j in r_cov_js]
         bonds[atom_i] = atom_idx[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
