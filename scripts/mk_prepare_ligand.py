@@ -15,7 +15,7 @@ from meeko import obutils
 
 def cmd_lineparser():
     parser = argparse.ArgumentParser(description="Meeko")
-    parser.add_argument("-i", "--mol", dest="input_molecule_file", required=True,
+    parser.add_argument("-i", "--mol", dest="input_molecule_filename", required=True,
                         action="store", help="molecule file (MOL2, SDF,...)")
     parser.add_argument("-m", "--macrocycle", dest="build_macrocycle", default=False,
                         action="store_true", help="break macrocycle for docking")
@@ -38,17 +38,19 @@ def cmd_lineparser():
     parser.add_argument("--double_bond_penalty", default=50, help="penalty > 100 prevents breaking double bonds", type=int)
     parser.add_argument("--no_index_map", dest="save_index_map", default=True,
                         action="store_false", help="do not write map of atom indices from input to pdbqt")
-    parser.add_argument("-o", "--out", dest="output_pdbqt_file", default=None,
-                        action="store", help="output pdbqt file")
+    parser.add_argument("-o", "--out", dest="output_pdbqt_filename", default=None,
+                        action="store", help="output pdbqt filename")
     parser.add_argument("-v", "--verbose", dest="verbose", default=False,
                         action="store_true", help="print information about molecule setup")
+    parser.add_argument('-', '--',  dest='redirect_stdout', action='store_true',
+                        help='do not write file, redirect output to STDOUT. Argument -o/--out is ignored.')
     return parser.parse_args()
 
 
 def main():
     args = cmd_lineparser()
-    input_molecule_file = args.input_molecule_file
-    output_pdbqt_file = args.output_pdbqt_file
+    input_molecule_filename = args.input_molecule_filename
+    output_pdbqt_filename = args.output_pdbqt_filename
     verbose = args.verbose
     build_macrocycle = args.build_macrocycle
     double_bond_penalty = args.double_bond_penalty
@@ -58,6 +60,7 @@ def main():
     pH_value = args.pH_value
     is_protein_sidechain = args.is_protein_sidechain
     save_index_map = args.save_index_map
+    redirect_stdout = args.redirect_stdout
 
     # SMARTS patterns to make bonds rigid
     rigidify_bonds_smarts = args.rigidify_bonds_smarts
@@ -70,7 +73,7 @@ def main():
         indices[0] = indices[0] - 1 # convert from 1- to 0-index
         indices[1] = indices[1] - 1
 
-    mol = obutils.load_molecule_from_file(input_molecule_file)
+    mol = obutils.load_molecule_from_file(input_molecule_filename)
 
     if pH_value is not None:
         mol.CorrectForPH(float(pH_value))
@@ -91,11 +94,15 @@ def main():
     if verbose:
         preparator.show_setup()
 
-    if output_pdbqt_file is None:
-        text = preparator.write_pdbqt_string(save_index_map)
-        print(text)
+    ligand_prepared = preparator.write_pdbqt_string(save_index_map)
+
+    if not redirect_stdout:
+        if output_pdbqt_filename is None:
+            output_pdbqt_filename = '%s.pdbqt' % os.path.splitext(input_molecule_filename)[0]
+
+        print(ligand_prepared, file=open(output_pdbqt_filename, 'w'))
     else:
-        preparator.write_pdbqt_file(output_pdbqt_file, save_index_map)
+        print(ligand_prepared)
 
 
 if __name__ == '__main__':
