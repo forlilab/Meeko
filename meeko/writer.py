@@ -159,7 +159,7 @@ class PDBQTWriterLegacy():
             self._pdbqt_buffer.append('END_RES %s' % resinfo_string)
         else: # no TORSDOF in flexres
             # torsdof is always going to be the one of the rigid, non-macrocyclic one
-            self._pdbqt_buffer.append('TORSDOF %d\n' % active_tors)
+            self._pdbqt_buffer.append('TORSDOF %d' % active_tors)
 
 
         return '\n'.join(self._pdbqt_buffer) + '\n'
