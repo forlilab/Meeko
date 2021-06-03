@@ -114,7 +114,7 @@ class FlexMacrocycle:
             target = bond_id[1 - idx]
             anchor = bond_id[0 - idx]
             coord = self._mol.setup.get_coord(target)
-            tmp = obutils.getPdbInfo(self._mol.GetAtom(anchor))
+            tmp = obutils.getPdbInfoNoNull(self._mol.GetAtom(anchor))
             pdbinfo = obutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
 
             closure_pseudo.append({

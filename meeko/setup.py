@@ -293,7 +293,7 @@ class MoleculeSetup(object):
             idx = a.GetIdx()
             self.coord[idx] = np.asarray(obutils.getAtomCoords(a), dtype='float')
             self.charge[idx] = a.GetPartialCharge()
-            self.pdbinfo[idx] = obutils.getPdbInfo(a)
+            self.pdbinfo[idx] = obutils.getPdbInfoNoNull(a)
             self.atom_type[idx] = None
             self.graph[idx] = [x.GetIdx() for x in ob.OBAtomAtomIter(a)]
             self.element[idx] = a.GetAtomicNum()

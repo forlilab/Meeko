@@ -13,6 +13,11 @@ from openbabel import openbabel as ob
 from . import geomutils
 from . import utils
 
+mini_periodic_table = {
+        1: 'H', 2: 'He', 3: 'Li', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 11: 'Na', 12: 'Mg',
+        15: 'P', 16: 'S', 17: 'Cl', 19: 'K', 20: 'Ca', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni',
+        29: 'Cu', 30: 'Zn', 34: 'Se', 35: 'Br', 53: 'I'}
+
 
 # named tuple to contain information about an atom
 PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
@@ -112,6 +117,23 @@ def getPdbInfo(atom):
     resNum = int(res.GetNumString())  # safe way for negative resnumbers
     resName = res.GetName()
 
+    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
+
+
+def getPdbInfoNoNull(atom):
+    """extract information for populating an ATOM/HETATM line
+    in the PDB"""
+    res = atom.GetResidue()
+    if res is None:
+        name = '%-2s' % mini_periodic_table[atom.GetAtomicNum()]
+        chain = ' '
+        resNum = 1
+        resName = 'UNL'
+    else:
+        name = res.GetAtomID(atom)
+        chain = res.GetChain()
+        resNum = int(res.GetNumString())  # safe way for negative resnumbers
+        resName = res.GetName()
     return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
 
