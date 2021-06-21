@@ -27,16 +27,26 @@ def _guess_format(filename, file_format=None):
     return file_format
 
 
+def _generate_grid_interpn(points, values):
+    """
+    Return a interpolate function from the grid and the affinity map.
+    This helps to interpolate the energy of coordinates off the grid.
+    """
+    return RegularGridInterpolator(points, values, bounds_error=False, fill_value=np.inf)
+
+
 class Map():
-    def __init__(self, name, grid=None, edges=None, center=None, origin=None, delta=None):
+    def __init__(self, name, grid=None, points=None, center=None, origin=None, delta=None):
         """Create an AutoDock map object"""
 
         self.center = None
         self.delta = None
+        self.edges = None
         self.filename = None
         self.name = name
         self.grid = None
         self._grid_interpn = None
+        self.points = None
         self.origin = None
 
         self._exporters = {'map': self._export_autodock_map}
@@ -56,17 +66,18 @@ class Map():
                 self.load(filename)
                 self._filename = filename
             else:
-                self._load(grid, edges, center, origin, delta)
+                self._load(grid, points, center, origin, delta)
 
     def __repr__(self):
         """Print basic information about the maps"""
-        info = '------ Grid information ------\n'
+        info = '--------- Grid information ---------\n'
         info += 'Grid name      : %s\n' % self.name
         info += 'Grid origin    : %s\n' % ' '.join(['%.3f' % c for c in self.origin])
         info += 'Grid center    : %s\n' % ' '.join(['%.3f' % c for c in self.center])
-        info += 'Grid size      : %s\n' % ' '.join([str(d) for d in self.grid.shape])
+        info += 'Grid points    : %s\n' % ' '.join([str(d) for d in self.grid.shape])
+        info += 'Grid edges     : %s\n' % ' '.join([str(d + 1) for d in self.grid.shape])
         info += 'Grid spacing   : %s\n' % self.delta
-        info += '------------------------------'
+        info += '------------------------------------'
 
         return info
 
@@ -101,49 +112,65 @@ class Map():
     def __rpow__(self, other):
     """
 
-    def _load(self, grid, edges=None, center=None, origin=None, delta=None):
+    def _load(self, grid, points=None, center=None, origin=None, delta=None):
         """Load and check AutoDock Map"""
         if center is not None and origin is not None:
             error_msg = 'Cannot define both origin and center at the same time.'
             raise ValueError(error_msg)
 
         self.grid = np.asanyarray(grid)
+        shape = np.array(self.grid.shape)
 
-        if edges is not None:
-            self.edges = np.asanyarray(edges)
+        if points is not None:
+            # Check the dimension of the points with the grid
+            if len(points) != grid.ndim:
+                error_msg = 'Dimension of points is not the same as grid dimension.'
+                raise TypeError(error_msg)
+            elif not all([len(points[0]) == s for dim, s in enumerate(shape)]):
+                error_msg = 'Number of points is not the same as the grid in (at least) one dimension.'
+                raise TypeError(error_msg)
+
+            # Check that the spacing is constant
+            delta = np.unique(np.diff(points))
+            if delta.size > 1:
+                raise TypeError('The grid spacing (delta) must be the same in all dimension.')
+
+            self.points = np.asanyarray(points)
+            self.center = np.asanyarray([np.mean(point) for point in self.points])
+            self.origin = np.asanyarray([point[0] for point in self.points])
+            self.delta = float(delta[0])
         elif delta is not None and (origin is not None or center is not None):
             self.delta = float(delta)
 
             if origin is not None:
-                self.origin = np.asanyarray(origin)
-
+                # Check the dimension of the origin and the grid
                 if len(origin) != grid.ndim:
                     error_msg = 'Dimension of origin is not the same as grid dimension.'
                     raise TypeError(error_msg)
 
-                # Get edges
-                edges = [self.origin[dim] + np.arange(m) * self.delta for dim, m in enumerate(self.grid.shape)]
+                # Get grid points using the origin information
+                points = [origin[dim] + (np.arange(s)) * self.delta for dim, s in enumerate(shape)]
 
-                self.edges = np.asanyarray(edges)
-                self.center = np.asanyarray([np.mean(edge) for edge in self.edges])
+                self.points = np.asanyarray(points)
+                self.origin = np.asanyarray(origin)
+                self.center = np.asanyarray([np.mean(point) for point in points])
             else:
-                self.center = np.asanyarray(center)
-
+                # Check the dimension of the center and the grid
                 if len(center) != grid.ndim:
                     error_msg = 'Dimension of center is not the same as grid dimension.'
                     raise TypeError(error_msg)
 
-                # Get Min and Max coordinates
-                half_length = (self.delta * self.grid.shape) / 2.
-                xmin, ymin, zmin = self.center - half_length
-                xmax, ymax, zmax = self.center + half_length
-                # Get edges
-                edges = [np.linspace(xmin, xmax, self.grid.shape[0]),
-                         np.linspace(ymin, ymax, self.grid.shape[1]),
-                         np.linspace(zmin, zmax, self.grid.shape[2])]
+                # Get grid points using the center information
+                half_length = (self.delta * (shape - 1)) / 2.
+                xmin, ymin, zmin = center - half_length
+                xmax, ymax, zmax = center + half_length
+                points = [np.linspace(xmin, xmax, shape[0]),
+                          np.linspace(ymin, ymax, shape[1]),
+                          np.linspace(zmin, zmax, shape[2])]
 
-                self.edges = np.asanyarray([x, y, z])
-                self.origin = np.asanyarray([xmin[0], ymin[0], zmax[0]])
+                self.points = np.asanyarray(points)
+                self.origin = np.asanyarray([xmin, ymin, zmin])
+                self.center = np.asanyarray(center)
         else:
             error_msg = 'Wrong/missing data to set up the AutoDock Map. Use'
             error_msg += 'Map(grid=<array>, edges=<list>) or '
@@ -152,6 +179,13 @@ class Map():
             error_msg += 'grid=%s edges=%s center=%s origin=%s delta=%s'
             error_msg = error_msg % (grid, edges, center, origin, delta)
             raise ValueError(error_msg)
+
+        # Get grid edges
+        edges = [self.points[dim][0] + (np.arange(s + 1) - 0.5) * self.delta for dim, s in enumerate(shape)]
+        self.edges = np.asanyarray(edges)
+
+        # Generate interprelator
+        self._grid_interpn = _generate_grid_interpn(self.points, self.grid)
 
     def _load_autdock_map(self, filename):
         center = None
@@ -166,9 +200,9 @@ class Map():
                 if re.search('^SPACING', line):
                     delta = np.float(line.split(' ')[1])
                 elif re.search('^NELEMENTS', line):
-                    nvoxels = np.array(line.split(' ')[1:4], dtype=np.int)
+                    nelements = np.array(line.split(' ')[1:4], dtype=np.int)
                     # Transform even numbers to the nearest odd integer
-                    npts = nvoxels // 2 * 2 + 1
+                    npoints = nelements // 2 * 2 + 1
                 elif re.search('CENTER', line):
                     center = np.array(line.split(' ')[1:4], dtype=np.float)
                 elif re.search('^[0-9]', line):
@@ -176,19 +210,19 @@ class Map():
                     break
 
             # Check that the number of grid points was defined
-            assert npts is not None, 'NELEMENTS of the grid is not defined.'
+            assert npoints is not None, 'NELEMENTS of the grid is not defined.'
 
             # Get the energy for each grid element
             grid = [np.float(line) for line in lines[6:]]
             # Some sorceries happen here --> swap x and z axes
-            grid = np.swapaxes(np.reshape(grid, npts[::-1]), 0, 2)
+            grid = np.swapaxes(np.reshape(grid, npoints[::-1]), 0, 2)
 
         # Check that the center and spacing points were defined
         assert center is not None, 'CENTER of the grid is not defined.'
         assert delta is not None, 'SPACING of the grid is not defined.'
 
         # Compute the origin of the grid
-        xmin, ymin, zmin = center - ((delta * nvoxels) / 2.)
+        xmin, ymin, zmin = center - ((delta * nelements) / 2.)
         origin = np.asanyarray([xmin, ymin, zmin])
 
         self._load(grid, origin=origin, delta=delta)
@@ -214,16 +248,16 @@ class Map():
             grid_data_file (str): name of the fld file (default: NULL)
             macromolecule (str): name of the receptor (default: NULL)
         """
-        grid_shape = np.array(self.grid.shape)
+        shape = np.array(self.grid.shape)
 
          # Check that the number of grid points in all dimension is odd
-        if not all(grid_shape % 2):
-            error_msg = 'Cannot write AutoDock map in map format.'
-            error_msg += ' The number of voxel must be even.\n'
-            error_msg += 'Grid size : %s' % ' '.join([str(d) for d in self.grid.shape])
+        if not all(shape % 2):
+            error_msg = 'Cannot write grid in AutoDock map format.'
+            error_msg += ' The number of points must be odd.\n'
+            error_msg += 'Grid points : %s' % ' '.join([str(d) for d in self.grid.shape])
             raise ValueError(error_msg)
 
-        nvoxels = grid_shape - 1
+        nelements = shape - 1
 
         grid_parameter_file = kwargs.get('grid_parameter_file', 'NULL')
         grid_data_file = kwargs.get('grid_data_file', 'NULL')
@@ -235,7 +269,7 @@ class Map():
             w.write('GRID_DATA_FILE %s\n' % grid_data_file)
             w.write('MACROMOLECULE %s\n' % macromolecule)
             w.write('SPACING %s\n' % self.delta)
-            w.write('NELEMENTS %s\n' % ' '.join(nvoxels.astype(str)))
+            w.write('NELEMENTS %s\n' % ' '.join(nelements.astype(str)))
             w.write('CENTER %s\n' % ' '.join(['%.3f' % c for c in self.center]))
             # Write grid (swap x and z axis before)
             m = np.swapaxes(self.grid, 0, 2).flatten()
