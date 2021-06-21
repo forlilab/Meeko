@@ -24,6 +24,7 @@ def _grid(x):
     except AttributeError:
         return x
 
+
 def _guess_format(filename, file_format=None):
     if file_format is None:
         splitted = os.path.splitext(filename)
@@ -102,9 +103,8 @@ class Map():
             return False
 
         return np.all(other.grid == self.grid) \
-               and np.all(other.origin == self.origin) \
                and np.all([np.all(other_points == self_points) for other_points, \
-                                 self_points in zip(other.points, self.points)])
+                                  self_points in zip(other.points, self.points)])
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -251,7 +251,7 @@ class Map():
     def _load_autdock_map(self, filename):
         center = None
         grid = None
-        npts = None
+        npoints = None
         delta = None
 
         with open(filename) as f:
@@ -284,9 +284,9 @@ class Map():
 
         self._load(grid, center=center, delta=delta)
 
-    def load(self, grid_filename):
+    def load(self, filename):
         """Load AutoDock Map"""
-        file_format = _guess_format(grid_filename)
+        file_format = _guess_format(filename)
 
         try:
             loader = self._loaders[file_format]
@@ -294,7 +294,7 @@ class Map():
             error_msg = 'Cannot read %s file format. Available format: %s' % (file_format, self._loaders.keys())
             raise ValueError(error_msg)
 
-        loader(grid_filename)
+        loader(filename)
 
     def _export_autodock_map(self, filename, **kwargs):
         """
