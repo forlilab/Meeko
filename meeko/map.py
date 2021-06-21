@@ -6,19 +6,16 @@
 # Class to manage autodock maps
 #
 
-import collections
 import os
 import re
-import copy
-import warnings
 
 import numpy as np
 from scipy import spatial
 from scipy.interpolate import RegularGridInterpolator
 
 
-def _grid(x):
-    """Access the underlying ndarray of a Grid object or return the object itself"""
+def _map(x):
+    """Access the underlying ndarray of a Map object or return the object itself"""
     try:
         return x.grid
     except AttributeError:
@@ -35,17 +32,48 @@ def _guess_format(filename, file_format=None):
     return file_format
 
 
-def _generate_grid_interpn(points, values):
-    """
-    Return a interpolate function from the grid and the affinity map.
-    This helps to interpolate the energy of coordinates off the grid.
-    """
-    return RegularGridInterpolator(points, values, bounds_error=False, fill_value=np.inf)
+def _build_kdtree_from_points(points):
+    """Return the kdtree using points (x, y, z)."""
+    X, Y, Z = np.meshgrid(points[0], points[1], points[2])
+    xyz = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+    kdtree = spatial.cKDTree(xyz)
+
+    return kdtree
 
 
 class Map():
+    """Class to manage energy map for AutoDock."""
     def __init__(self, grid=None, points=None, center=None, delta=None):
-        """Create an AutoDock map object"""
+        """Create an AutoDock map object from data.
+        
+        The Map can be manipulated as a standard numpy array or by directly
+        accessing to the internal grid (Map.grid).
+
+        There are multiple ways to create a Map object.
+        
+        From a numpy array::
+
+            grid = np.array(shape=(55, 55, 55))
+            m = Map(grid, center=(0, 0, 0), delta=0.375)
+
+
+        From an existing AutoDock map file::
+
+            m = Map(filename)
+
+        or::
+
+            m = Map()
+            m.load(filename)
+
+
+        Args:
+            grid (ndarray or str): 3D numpy array or filename
+            points (list of arrays): The points along each X Y Z dimensions
+            center (array-like): Center of the grid define by X Y Z coordinates
+            delta (float): Grid spacing in each dimension
+
+        """
 
         self.grid = None
         self._grid_interpn = None
@@ -66,37 +94,43 @@ class Map():
                 try:
                     with open(filename):
                         pass
-                except (OSError, IOError):
-                    filename = None
+                except:
+                    raise
 
                 self.load(filename)
             else:
                 self._load(grid, points, center=center, delta=delta)
 
     def _check_compatible(self, other):
-        """Check if *other* can be used in an arithmetic operation.
-        1) *other* is a scalar
-        2) *other* is a grid defined on the same edges
-        :Raises: :exc:`TypeError` if not compatible.
-        """
-        if not (np.isreal(other) or self == other):
+        if not (np.all(np.isreal(other)) or self == other):
             raise TypeError(
                 "The argument can not be arithmetically combined with the grid. "
                 "It must be a scalar or a grid with identical edges. "
                 "Use Grid.resample(other.edges) to make a new grid that is "
                 "compatible with other.")
+
         return True
 
     def __repr__(self):
-        """Print basic information about the maps"""
-        info = '--------- Grid information ---------\n'
-        info += 'Origin  : %s\n' % ' '.join(['%.3f' % c for c in self.origin])
-        info += 'Center  : %s\n' % ' '.join(['%.3f' % c for c in self.center])
-        info += 'Points  : %s\n' % ' '.join([str(d) for d in self.grid.shape])
-        info += 'Spacing : %s\n' % self.delta
-        info += '------------------------------------'
-
-        return info
+        return f"{self.__class__.__name__}(origin={self.origin}, center={self.center}, shape={self.grid.shape}, spacing={self.delta})"
+    
+    def __array__(self):
+        return self.grid
+    
+    def __iter__(self):
+        for elem in self.grid:
+            yield elem
+    
+    def __getitem__(self, key):
+        return self.grid[key]
+    
+    @property
+    def size(self):
+        return np.prod(self.grid.shape)
+    
+    @property
+    def shape(self):
+        return self.grid.shape
 
     def __eq__(self, other):
         if not isinstance(other, Map):
@@ -111,70 +145,83 @@ class Map():
 
     def __le__(self, other):
         self._check_compatible(other)
-        return self.grid <= _grid(other)
+        return self.grid <= _map(other)
 
     def __lt__(self, other):
         self._check_compatible(other)
-        return self.grid < _grid(other)
+        return self.grid < _map(other)
 
     def __ge__(self, other):
         self._check_compatible(other)
-        return self.grid >= _grid(other)
+        return self.grid >= _map(other)
 
     def __gt__(self, other):
         self._check_compatible(other)
-        return self.grid > _grid(other)
+        return self.grid > _map(other)
 
     def __add__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid + _grid(other), points=self.points)
+        return self.__class__(self.grid + _map(other), points=self.points)
 
     def __sub__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid - _grid(other), points=self.points)
+        return self.__class__(self.grid - _map(other), points=self.points)
 
     def __mul__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid * _grid(other), points=self.points)
+        return self.__class__(self.grid * _map(other), points=self.points)
 
     def __truediv__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid / _grid(other), points=self.points)
+        return self.__class__(self.grid / _map(other), points=self.points)
 
     def __floordiv__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid // _grid(other), points=self.points)
+        return self.__class__(self.grid // _map(other), points=self.points)
 
     def __pow__(self, other):
         self._check_compatible(other)
-        return self.__class__(np.power(self.grid, _grid(other)), points=self.points)
+        return self.__class__(np.power(self.grid, _map(other)), points=self.points)
 
     def __radd__(self, other):
         self._check_compatible(other)
-        return self.__class__(_grid(other) + self.grid, points=self.points)
+        return self.__class__(_map(other) + self.grid, points=self.points)
 
     def __rsub__(self, other):
         self._check_compatible(other)
-        return self.__class__(_grid(other) - self.grid, points=self.points)
+        return self.__class__(_map(other) - self.grid, points=self.points)
 
     def __rmul__(self, other):
         self._check_compatible(other)
-        return self.__class__(_grid(other) * self.grid, points=self.points)
+        return self.__class__(_map(other) * self.grid, points=self.points)
 
     def __rtruediv__(self, other):
         self._check_compatible(other)
-        return self.__class__(_grid(other) / self.grid, points=self.points)
+        return self.__class__(_map(other) / self.grid, points=self.points)
 
     def __rfloordiv__(self, other):
         self._check_compatible(other)
-        return self.__class__(_grid(other) // self.grid, points=self.points)
+        return self.__class__(_map(other) // self.grid, points=self.points)
 
     def __rpow__(self, other):
         self._check_compatible(other)
-        return self.__class__(np.power(_grid(other), self.grid), points=self.points)
+        return self.__class__(np.power(_map(other), self.grid), points=self.points)
+
+    def _update_grid_interpn(self, method='linear', bounds_error=False, fill_value=np.inf):
+        """Update the internal grid interpolator (Map._grid_interpn).
+        
+        Args:
+            method (str): Method of interpolation to perform ("linear" and "nearest"). Default is linear.
+            bounds_error (bool): if True, when interpolated values are requested outside the grid, a ValueError
+                is raised. If False, then the fill_value is used. Default is False.
+            fill_value (float): If provided, the value to use for points outside of the interpolation domain.
+                Default is np.inf.
+
+        """
+        self._grid_interpn = RegularGridInterpolator(self.points, self.grid, method, bounds_error, fill_value)
 
     def _load(self, grid, points=None, center=None, origin=None, delta=None):
-        """Load and check AutoDock Map"""
+        """Load and check energy grid."""
         if center is not None and origin is not None:
             error_msg = 'Cannot define both origin and center at the same time.'
             raise ValueError(error_msg)
@@ -192,11 +239,12 @@ class Map():
                 raise TypeError(error_msg)
 
             # Check that the spacing is constant
-            delta = np.unique(np.diff(points))
+            delta = np.unique(np.around(np.diff(points), 3))
             if delta.size > 1:
                 raise TypeError('The grid spacing (delta) must be the same in all dimension.')
-
-            self.points = np.asanyarray(points, dtype=object)
+            
+            # Store info
+            self.points = tuple(points)
             self.center = np.asanyarray([np.mean(point) for point in self.points])
             self.origin = np.asanyarray([point[0] for point in self.points])
             self.delta = float(delta[0])
@@ -212,7 +260,8 @@ class Map():
                 # Get grid points using the origin information
                 points = [origin[dim] + (np.arange(s)) * self.delta for dim, s in enumerate(shape)]
 
-                self.points = np.asanyarray(points, dtype=object)
+                # Store info
+                self.points = tuple(points)
                 self.origin = np.asanyarray(origin)
                 self.center = np.asanyarray([np.mean(point) for point in points])
             else:
@@ -229,7 +278,8 @@ class Map():
                           np.linspace(ymin, ymax, shape[1]),
                           np.linspace(zmin, zmax, shape[2])]
 
-                self.points = np.asanyarray(points, dtype=object)
+                # Store info
+                self.points = tuple(points)
                 self.origin = np.asanyarray([xmin, ymin, zmin])
                 self.center = np.asanyarray(center)
         else:
@@ -243,12 +293,16 @@ class Map():
 
         # Get grid edges
         edges = [self.points[dim][0] + (np.arange(s + 1) - 0.5) * self.delta for dim, s in enumerate(shape)]
-        self.edges = np.asanyarray(edges, dtype=object)
+        self.edges = tuple(edges)
+
+        # Build KDTree
+        self._kdtree = _build_kdtree_from_points(self.points)
 
         # Generate interprelator
-        self._grid_interpn = _generate_grid_interpn(self.points, self.grid)
+        self._grid_interpn =  self._update_grid_interpn()
 
     def _load_autdock_map(self, filename):
+        """Load energy map in AutoDock map format."""
         center = None
         grid = None
         npoints = None
@@ -285,7 +339,16 @@ class Map():
         self._load(grid, center=center, delta=delta)
 
     def load(self, filename):
-        """Load AutoDock Map"""
+        """Load existing energy map.
+        
+        The format of the input file will be deduced from the suffix of the filename
+
+        Implemented formats: AutoDock map
+
+        Args:
+            filename (str): filename of the output file
+
+        """
         file_format = _guess_format(filename)
 
         try:
@@ -297,14 +360,7 @@ class Map():
         loader(filename)
 
     def _export_autodock_map(self, filename, **kwargs):
-        """
-    
-        Args:
-            map_types (list): list of atom types to export
-            grid_parameter_file (str): name of the gpf file (default: NULL)
-            grid_data_file (str): name of the fld file (default: NULL)
-            macromolecule (str): name of the receptor (default: NULL)
-        """
+        """Export energy map in AutoDock map format."""
         shape = np.array(self.grid.shape)
 
          # Check that the number of grid points in all dimension is odd
@@ -334,7 +390,22 @@ class Map():
             w.write('\n')
     
     def export(self, filename, overwrite=False, **kwargs):
-        """Export AutoDock maps."""
+        """Export energy map to file.
+
+        The format of the output file will be deduced from the suffix of the filename.
+
+        Implemented formats: AutoDock map
+
+        Args:
+            filename (str): filename of the output file
+            overwrite (bool): to allow overwriting over existing file (default: False)
+
+        Kwargs:
+            grid_parameter_file (str): For AutoDock map, name of the gpf file (default: NULL)
+            grid_data_file (str): For AutoDock map, name of the fld file (default: NULL)
+            macromolecule (str): For AutoDock map, name of the receptor (default: NULL)
+
+        """
         file_format = _guess_format(filename)
 
         if not overwrite and os.path.exists(filename):
@@ -350,32 +421,11 @@ class Map():
 
         exporter(filename, **kwargs)
 
-    def is_in_map(self, xyz):
-        """Check if coordinates are in the map.
+    def interpolate_energy(self, xyz, method='linear'):
+        """Interpolate the energy from the grid for each coordinates xyz.
 
         Args:
-            xyz (array_like): Array of 3d coordinates
-
-        Returns:
-            ndarray: 1d Numpy array of boolean
-
-        """
-        xyz = np.atleast_2d(xyz)
-        x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
-
-        x_in = np.logical_and(self._xmin <= x, x <= self._xmax)
-        y_in = np.logical_and(self._ymin <= y, y <= self._ymax)
-        z_in = np.logical_and(self._zmin <= z, z <= self._zmax)
-        all_in = np.all((x_in, y_in, z_in), axis=0)
-        # all_in = np.logical_and(np.logical_and(x_in, y_in), z_in)
-
-        return all_in
-
-    def energy(self, xyz, method='linear'):
-        """Grid energy of each coordinates xyz.
-
-        Args:
-            xyz (array_like): Array of 3d coordinates
+            xyz (array_like): Array of 3D coordinates
             method (str): Interpolate method (default: linear)
 
         Returns:
@@ -384,16 +434,65 @@ class Map():
         """
         return self._grid_interpn(xyz, method=method)
 
-    def add_bias(self, coordinates, bias_value, radius):
+    def is_in_map(self, xyz):
+        """Check if coordinates are in the map.
+
+        Args:
+            xyz (array_like): 3d coordinates (x, y, z) of a point
+
+        Returns:
+            ndarray: 1d Numpy array of boolean
+
+        """
+        xyz = np.atleast_2d(xyz)
+        x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+
+        x_in = np.logical_and(self.points[0][0] <= x, x <= self.points[0][-1])
+        y_in = np.logical_and(self.points[1][0] <= y, y <= self.points[1][-1])
+        z_in = np.logical_and(self.points[2][0] <= z, z <= self.points[2][-1])
+        all_in = np.all((x_in, y_in, z_in), axis=0)
+
+        return all_in
+
+    def neighbor_points(self, xyz, radius, min_radius=0):
+        """Grid coordinates around a point at a certain distance.
+
+        Args:
+            xyz (array_like): 3d coordinates (x, y, z) of a point
+            radius (float): max radius in Angstrom
+            min_radius (float): min radius in Angstrom (default: 0)
+
+        Returns:
+            ndarray: coordinates
+
+        """
+        coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
+        
+        if min_radius > 0:
+            distances = spatial.distance.cdist([xyz], coordinates, "euclidean")[0]
+            coordinates = coordinates[distances >= min_radius]
+
+        return coordinates
+
+    def _cartesian_to_index(self, xyz):
+        """Return the closest grid index of the cartesian grid coordinates."""
+        idx = np.rint((xyz - self._kdtree.mins) / self.delta).astype(np.int)
+        # All the index values outside the grid are clipped (limited) to the nearest index
+        np.clip(idx, [0, 0, 0], self.grid.shape, idx)
+
+        return idx
+
+    def add_bias(self, xyz, bias_value, radius):
         """Add energy bias to map using Juan's method.
 
         Args:
-            coordinates (array_like): array of 3d coordinates
+            xyz (array_like): array of 3d coordinates (x, y, z)
             bias_value (float): energy bias value to add (in kcal/mol)
             radius (float): radius of the bias (in Angtrom)
 
         """
-        coordinates = np.atleast_2d(coordinates)
+        coordinates = np.atleast_2d(xyz)
+        biased_grid = np.copy(self.grid)
 
         # We add all the bias one by one in the new map
         for coordinate in coordinates:
@@ -403,20 +502,34 @@ class Map():
             distances = spatial.distance.cdist([coordinate], sphere_xyz, 'euclidean')[0]
             bias_energy = bias_value * np.exp(-1. * (distances ** 2) / (radius ** 2))
 
-            new_map[indexes[:,0], indexes[:,1], indexes[:,2]] += bias_energy
+            biased_grid[indexes[:,0], indexes[:,1], indexes[:,2]] += bias_energy
 
-        # And we replace the original one only at the end, it is faster
-        self._maps[name] = new_map
-        self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
+        # And we replace the original grid with the biased version
+        self.grid = biased_grid
 
-    def add_mask(self, coordinates, mask_value, radius):
+        self._update_grid_interpn()
+
+    def add_mask(self, xyz, mask_value, radius):
         """Add energy mask to map using Diogo's method.
         
         Args:
-            coordinates (array_like): array of 3d coordinates
+            xyz (array_like): array of 3d coordinates (x, y, z)
             mask_value (float): energy mask value to add (in kcal/mol)
             radius (float): radius of the mask (in Angtrom)
 
         """
-        coordinates = np.atleast_2d(coordinates)
+        coordinates = np.atleast_2d(xyz)
+        masked_grid = np.ones(shape=self.grid.shape) * mask_value
+
+        # We add all the bias one by one in the new map
+        for coordinate in coordinates:
+            sphere_xyz = self.neighbor_points(coordinate, radius)
+            indexes = self._cartesian_to_index(sphere_xyz)
+
+            masked_grid[indexes[:,0], indexes[:,1], indexes[:,2]] = self.grid[indexes[:,0], indexes[:,1], indexes[:,2]]
+
+        # And we replace the original grid with the masked version
+        self.grid = masked_grid
+
+        self._update_grid_interpn()
 
