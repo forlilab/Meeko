@@ -74,7 +74,6 @@ class Map():
             delta (float): Grid spacing in each dimension
 
         """
-
         self.grid = None
         self._grid_interpn = None
         self.points = None
@@ -102,12 +101,18 @@ class Map():
                 self._load(grid, points, center=center, delta=delta)
 
     def _check_compatible(self, other):
-        if not (np.all(np.isreal(other)) or self == other):
-            raise TypeError(
-                "The argument can not be arithmetically combined with the grid. "
-                "It must be a scalar or a grid with identical edges. "
-                "Use Grid.resample(other.edges) to make a new grid that is "
-                "compatible with other.")
+        if isinstance(other, Map):
+            if other.shape != self.grid.shape:
+                raise TypeError('The Maps have different shape.')
+            elif not np.all([np.all(o_pts == s_pts) for o_pts, s_pts in zip(other.points, self.points)]):
+                raise TypeError('The Maps have different grid points.')
+        elif isinstance(other, np.ndarray):
+            if other.shape != self.grid.shape:
+                raise TypeError('The numpy array and the Map have different shape.')
+            elif not np.all(np.isreal(other)):
+                raise TypeError('The numpy array contains not real numbers')
+        elif not np.isreal(other):
+            raise TypeError('The variable is not a real number and cannot be arithmetically combined with the grid.')
 
         return True
 
