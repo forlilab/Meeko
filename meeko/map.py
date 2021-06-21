@@ -45,12 +45,12 @@ class Map():
     """Class to manage energy map for AutoDock."""
     def __init__(self, grid=None, points=None, center=None, delta=None):
         """Create an AutoDock map object from data.
-        
+
         The Map can be manipulated as a standard numpy array or by directly
         accessing to the internal grid (Map.grid).
 
         There are multiple ways to create a Map object.
-        
+
         From a numpy array::
 
             grid = np.array(shape=(55, 55, 55))
@@ -74,13 +74,13 @@ class Map():
             delta (float): Grid spacing in each dimension
 
         """
-        self.grid = None
+        self._grid = None
         self._grid_interpn = None
-        self.points = None
+        self._points = None
         self.center = None
         self.delta = None
         self.origin = None
-        self.edges = None
+        #self.edges = None
 
         self._exporters = {'map': self._export_autodock_map}
         self._loaders = {'map': self._load_autdock_map}
@@ -100,14 +100,59 @@ class Map():
             else:
                 self._load(grid, points, center=center, delta=delta)
 
+    @property
+    def grid(self):
+        return self._grid
+
+    @grid.setter
+    def grid(self, grid):
+        grid = np.asanyarray(grid)
+
+        if not self.shape == grid.shape:
+            raise TypeError('Cannot replace the current grid by a grid with a different shape.')
+
+        self._grid = grid
+        self._update_grid_interpn()
+
+    @property
+    def points(self):
+        return self._points
+
+    @points.setter
+    def points(self, points):
+        points = np.asanyarray(points)
+
+        if np.all([pts.shape == s_pts.shape for pts, s_pts in zip(points, self._points)]):
+            # Check that the spacing of the new points is constant
+            delta = np.unique(np.around(np.diff(points), 3))
+            if delta.size > 1:
+                raise TypeError('The grid spacing (delta) must be the same in all dimension.')
+        else:
+            raise TypeError('Cannot replace the current points by points with a different shape.')
+
+        # Update map info
+        self._points = points
+        self.center = np.asanyarray([np.mean(point) for point in self._points])
+        self.origin = np.asanyarray([point[0] for point in self._points])
+        self.delta = float(delta[0])
+        self._kdtree = _build_kdtree_from_points(self._points)
+
+    @property
+    def size(self):
+        return np.prod(self._grid.shape)
+
+    @property
+    def shape(self):
+        return self._grid.shape
+
     def _check_compatible(self, other):
         if isinstance(other, Map):
-            if other.shape != self.grid.shape:
+            if other.shape != self._grid.shape:
                 raise TypeError('The Maps have different shape.')
-            elif not np.all([np.all(o_pts == s_pts) for o_pts, s_pts in zip(other.points, self.points)]):
+            elif not np.all([np.all(o_pts == s_pts) for o_pts, s_pts in zip(other.points, self._points)]):
                 raise TypeError('The Maps have different grid points.')
         elif isinstance(other, np.ndarray):
-            if other.shape != self.grid.shape:
+            if other.shape != self._grid.shape:
                 raise TypeError('The numpy array and the Map have different shape.')
             elif not np.all(np.isreal(other)):
                 raise TypeError('The numpy array contains not real numbers')
@@ -117,104 +162,96 @@ class Map():
         return True
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(origin={self.origin}, center={self.center}, shape={self.grid.shape}, spacing={self.delta})"
-    
+        return f"{self.__class__.__name__}(origin={self.origin}, center={self.center}, shape={self._grid.shape}, spacing={self.delta})"
+
     def __array__(self):
-        return self.grid
-    
+        return self._grid
+
     def __iter__(self):
-        for elem in self.grid:
+        for elem in self._grid:
             yield elem
-    
+
     def __getitem__(self, key):
-        return self.grid[key]
-    
-    @property
-    def size(self):
-        return np.prod(self.grid.shape)
-    
-    @property
-    def shape(self):
-        return self.grid.shape
+        return self._grid[key]
 
     def __eq__(self, other):
         if not isinstance(other, Map):
             return False
 
-        return np.all(other.grid == self.grid) \
+        return np.all(other.grid == self._grid) \
                and np.all([np.all(other_points == self_points) for other_points, \
-                                  self_points in zip(other.points, self.points)])
+                                  self_points in zip(other.points, self._points)])
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __le__(self, other):
         self._check_compatible(other)
-        return self.grid <= _map(other)
+        return self._grid <= _map(other)
 
     def __lt__(self, other):
         self._check_compatible(other)
-        return self.grid < _map(other)
+        return self._grid < _map(other)
 
     def __ge__(self, other):
         self._check_compatible(other)
-        return self.grid >= _map(other)
+        return self._grid >= _map(other)
 
     def __gt__(self, other):
         self._check_compatible(other)
-        return self.grid > _map(other)
+        return self._grid > _map(other)
 
     def __add__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid + _map(other), points=self.points)
+        return self.__class__(self._grid + _map(other), points=self._points)
 
     def __sub__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid - _map(other), points=self.points)
+        return self.__class__(self._grid - _map(other), points=self._points)
 
     def __mul__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid * _map(other), points=self.points)
+        return self.__class__(self._grid * _map(other), points=self._points)
 
     def __truediv__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid / _map(other), points=self.points)
+        return self.__class__(self._grid / _map(other), points=self._points)
 
     def __floordiv__(self, other):
         self._check_compatible(other)
-        return self.__class__(self.grid // _map(other), points=self.points)
+        return self.__class__(self._grid // _map(other), points=self._points)
 
     def __pow__(self, other):
         self._check_compatible(other)
-        return self.__class__(np.power(self.grid, _map(other)), points=self.points)
+        return self.__class__(np.power(self._grid, _map(other)), points=self._points)
 
     def __radd__(self, other):
         self._check_compatible(other)
-        return self.__class__(_map(other) + self.grid, points=self.points)
+        return self.__class__(_map(other) + self._grid, points=self._points)
 
     def __rsub__(self, other):
         self._check_compatible(other)
-        return self.__class__(_map(other) - self.grid, points=self.points)
+        return self.__class__(_map(other) - self._grid, points=self._points)
 
     def __rmul__(self, other):
         self._check_compatible(other)
-        return self.__class__(_map(other) * self.grid, points=self.points)
+        return self.__class__(_map(other) * self._grid, points=self._points)
 
     def __rtruediv__(self, other):
         self._check_compatible(other)
-        return self.__class__(_map(other) / self.grid, points=self.points)
+        return self.__class__(_map(other) / self._grid, points=self._points)
 
     def __rfloordiv__(self, other):
         self._check_compatible(other)
-        return self.__class__(_map(other) // self.grid, points=self.points)
+        return self.__class__(_map(other) // self._grid, points=self._points)
 
     def __rpow__(self, other):
         self._check_compatible(other)
-        return self.__class__(np.power(_map(other), self.grid), points=self.points)
+        return self.__class__(np.power(_map(other), self._grid), points=self._points)
 
     def _update_grid_interpn(self, method='linear', bounds_error=False, fill_value=np.inf):
         """Update the internal grid interpolator (Map._grid_interpn).
-        
+
         Args:
             method (str): Method of interpolation to perform ("linear" and "nearest"). Default is linear.
             bounds_error (bool): if True, when interpolated values are requested outside the grid, a ValueError
@@ -223,7 +260,7 @@ class Map():
                 Default is np.inf.
 
         """
-        self._grid_interpn = RegularGridInterpolator(self.points, self.grid, method, bounds_error, fill_value)
+        self._grid_interpn = RegularGridInterpolator(self._points, self._grid, method, bounds_error, fill_value)
 
     def _load(self, grid, points=None, center=None, origin=None, delta=None):
         """Load and check energy grid."""
@@ -231,8 +268,8 @@ class Map():
             error_msg = 'Cannot define both origin and center at the same time.'
             raise ValueError(error_msg)
 
-        self.grid = np.asanyarray(grid)
-        shape = np.array(self.grid.shape)
+        self._grid = np.asanyarray(grid)
+        shape = np.array(self._grid.shape)
 
         if points is not None:
             # Check the dimension of the points with the grid
@@ -247,11 +284,11 @@ class Map():
             delta = np.unique(np.around(np.diff(points), 3))
             if delta.size > 1:
                 raise TypeError('The grid spacing (delta) must be the same in all dimension.')
-            
+
             # Store info
-            self.points = tuple(points)
-            self.center = np.asanyarray([np.mean(point) for point in self.points])
-            self.origin = np.asanyarray([point[0] for point in self.points])
+            self._points = tuple(points)
+            self.center = np.asanyarray([np.mean(point) for point in self._points])
+            self.origin = np.asanyarray([point[0] for point in self._points])
             self.delta = float(delta[0])
         elif delta is not None and (origin is not None or center is not None):
             self.delta = float(delta)
@@ -266,7 +303,7 @@ class Map():
                 points = [origin[dim] + (np.arange(s)) * self.delta for dim, s in enumerate(shape)]
 
                 # Store info
-                self.points = tuple(points)
+                self._points = tuple(points)
                 self.origin = np.asanyarray(origin)
                 self.center = np.asanyarray([np.mean(point) for point in points])
             else:
@@ -284,7 +321,7 @@ class Map():
                           np.linspace(zmin, zmax, shape[2])]
 
                 # Store info
-                self.points = tuple(points)
+                self._points = tuple(points)
                 self.origin = np.asanyarray([xmin, ymin, zmin])
                 self.center = np.asanyarray(center)
         else:
@@ -297,11 +334,11 @@ class Map():
             raise ValueError(error_msg)
 
         # Get grid edges
-        edges = [self.points[dim][0] + (np.arange(s + 1) - 0.5) * self.delta for dim, s in enumerate(shape)]
-        self.edges = tuple(edges)
+        #edges = [self._points[dim][0] + (np.arange(s + 1) - 0.5) * self.delta for dim, s in enumerate(shape)]
+        #self.edges = tuple(edges)
 
         # Build KDTree
-        self._kdtree = _build_kdtree_from_points(self.points)
+        self._kdtree = _build_kdtree_from_points(self._points)
 
         # Generate interprelator
         self._grid_interpn =  self._update_grid_interpn()
@@ -345,7 +382,7 @@ class Map():
 
     def load(self, filename):
         """Load existing energy map.
-        
+
         The format of the input file will be deduced from the suffix of the filename
 
         Implemented formats: AutoDock map
@@ -366,13 +403,13 @@ class Map():
 
     def _export_autodock_map(self, filename, **kwargs):
         """Export energy map in AutoDock map format."""
-        shape = np.array(self.grid.shape)
+        shape = np.array(self._grid.shape)
 
          # Check that the number of grid points in all dimension is odd
         if not all(shape % 2):
             error_msg = 'Cannot write grid in AutoDock map format.'
             error_msg += ' The number of points must be odd.\n'
-            error_msg += 'Grid points : %s' % ' '.join([str(d) for d in self.grid.shape])
+            error_msg += 'Grid points : %s' % ' '.join([str(d) for d in self._grid.shape])
             raise ValueError(error_msg)
 
         nelements = shape - 1
@@ -390,10 +427,10 @@ class Map():
             w.write('NELEMENTS %s\n' % ' '.join(nelements.astype(str)))
             w.write('CENTER %s\n' % ' '.join(['%.3f' % c for c in self.center]))
             # Write grid (swap x and z axis before)
-            m = np.swapaxes(self.grid, 0, 2).flatten()
+            m = np.swapaxes(self._grid, 0, 2).flatten()
             w.write('\n'.join(m.astype(str)))
             w.write('\n')
-    
+
     def export(self, filename, overwrite=False, **kwargs):
         """Export energy map to file.
 
@@ -452,9 +489,9 @@ class Map():
         xyz = np.atleast_2d(xyz)
         x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
 
-        x_in = np.logical_and(self.points[0][0] <= x, x <= self.points[0][-1])
-        y_in = np.logical_and(self.points[1][0] <= y, y <= self.points[1][-1])
-        z_in = np.logical_and(self.points[2][0] <= z, z <= self.points[2][-1])
+        x_in = np.logical_and(self._points[0][0] <= x, x <= self._points[0][-1])
+        y_in = np.logical_and(self._points[1][0] <= y, y <= self._points[1][-1])
+        z_in = np.logical_and(self._points[2][0] <= z, z <= self._points[2][-1])
         all_in = np.all((x_in, y_in, z_in), axis=0)
 
         return all_in
@@ -472,7 +509,7 @@ class Map():
 
         """
         coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
-        
+
         if min_radius > 0:
             distances = spatial.distance.cdist([xyz], coordinates, "euclidean")[0]
             coordinates = coordinates[distances >= min_radius]
@@ -483,7 +520,7 @@ class Map():
         """Return the closest grid index of the cartesian grid coordinates."""
         idx = np.rint((xyz - self._kdtree.mins) / self.delta).astype(np.int)
         # All the index values outside the grid are clipped (limited) to the nearest index
-        np.clip(idx, [0, 0, 0], self.grid.shape, idx)
+        np.clip(idx, [0, 0, 0], self._grid.shape, idx)
 
         return idx
 
@@ -497,7 +534,7 @@ class Map():
 
         """
         coordinates = np.atleast_2d(xyz)
-        biased_grid = np.copy(self.grid)
+        biased_grid = np.copy(self._grid)
 
         # We add all the bias one by one in the new map
         for coordinate in coordinates:
@@ -510,13 +547,13 @@ class Map():
             biased_grid[indexes[:,0], indexes[:,1], indexes[:,2]] += bias_energy
 
         # And we replace the original grid with the biased version
-        self.grid = biased_grid
+        self._grid = biased_grid
 
         self._update_grid_interpn()
 
     def add_mask(self, xyz, mask_value, radius):
         """Add energy mask to map using Diogo's method.
-        
+
         Args:
             xyz (array_like): array of 3d coordinates (x, y, z)
             mask_value (float): energy mask value to add (in kcal/mol)
@@ -524,17 +561,16 @@ class Map():
 
         """
         coordinates = np.atleast_2d(xyz)
-        masked_grid = np.ones(shape=self.grid.shape) * mask_value
+        masked_grid = np.ones(shape=self._grid.shape) * mask_value
 
         # We add all the bias one by one in the new map
         for coordinate in coordinates:
             sphere_xyz = self.neighbor_points(coordinate, radius)
             indexes = self._cartesian_to_index(sphere_xyz)
 
-            masked_grid[indexes[:,0], indexes[:,1], indexes[:,2]] = self.grid[indexes[:,0], indexes[:,1], indexes[:,2]]
+            masked_grid[indexes[:,0], indexes[:,1], indexes[:,2]] = self._grid[indexes[:,0], indexes[:,1], indexes[:,2]]
 
         # And we replace the original grid with the masked version
-        self.grid = masked_grid
+        self._grid = masked_grid
 
         self._update_grid_interpn()
-
