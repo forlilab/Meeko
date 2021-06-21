@@ -17,6 +17,13 @@ from scipy import spatial
 from scipy.interpolate import RegularGridInterpolator
 
 
+def _grid(x):
+    """Access the underlying ndarray of a Grid object or return the object itself"""
+    try:
+        return x.grid
+    except AttributeError:
+        return x
+
 def _guess_format(filename, file_format=None):
     if file_format is None:
         splitted = os.path.splitext(filename)
@@ -36,18 +43,16 @@ def _generate_grid_interpn(points, values):
 
 
 class Map():
-    def __init__(self, name, grid=None, points=None, center=None, origin=None, delta=None):
+    def __init__(self, grid=None, points=None, center=None, delta=None):
         """Create an AutoDock map object"""
 
-        self.center = None
-        self.delta = None
-        self.edges = None
-        self.filename = None
-        self.name = name
         self.grid = None
         self._grid_interpn = None
         self.points = None
+        self.center = None
+        self.delta = None
         self.origin = None
+        self.edges = None
 
         self._exporters = {'map': self._export_autodock_map}
         self._loaders = {'map': self._load_autdock_map}
@@ -64,53 +69,109 @@ class Map():
                     filename = None
 
                 self.load(filename)
-                self._filename = filename
             else:
-                self._load(grid, points, center, origin, delta)
+                self._load(grid, points, center=center, delta=delta)
+
+    def _check_compatible(self, other):
+        """Check if *other* can be used in an arithmetic operation.
+        1) *other* is a scalar
+        2) *other* is a grid defined on the same edges
+        :Raises: :exc:`TypeError` if not compatible.
+        """
+        if not (np.isreal(other) or self == other):
+            raise TypeError(
+                "The argument can not be arithmetically combined with the grid. "
+                "It must be a scalar or a grid with identical edges. "
+                "Use Grid.resample(other.edges) to make a new grid that is "
+                "compatible with other.")
+        return True
 
     def __repr__(self):
         """Print basic information about the maps"""
         info = '--------- Grid information ---------\n'
-        info += 'Grid name      : %s\n' % self.name
-        info += 'Grid origin    : %s\n' % ' '.join(['%.3f' % c for c in self.origin])
-        info += 'Grid center    : %s\n' % ' '.join(['%.3f' % c for c in self.center])
-        info += 'Grid points    : %s\n' % ' '.join([str(d) for d in self.grid.shape])
-        info += 'Grid edges     : %s\n' % ' '.join([str(d + 1) for d in self.grid.shape])
-        info += 'Grid spacing   : %s\n' % self.delta
+        info += 'Origin  : %s\n' % ' '.join(['%.3f' % c for c in self.origin])
+        info += 'Center  : %s\n' % ' '.join(['%.3f' % c for c in self.center])
+        info += 'Points  : %s\n' % ' '.join([str(d) for d in self.grid.shape])
+        info += 'Spacing : %s\n' % self.delta
         info += '------------------------------------'
 
         return info
 
-    """
     def __eq__(self, other):
+        if not isinstance(other, Map):
+            return False
+
+        return np.all(other.grid == self.grid) \
+               and np.all(other.origin == self.origin) \
+               and np.all([np.all(other_points == self_points) for other_points, \
+                                 self_points in zip(other.points, self.points)])
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __le__(self, other):
+        self._check_compatible(other)
+        return self.grid <= _grid(other)
+
+    def __lt__(self, other):
+        self._check_compatible(other)
+        return self.grid < _grid(other)
+
+    def __ge__(self, other):
+        self._check_compatible(other)
+        return self.grid >= _grid(other)
+
+    def __gt__(self, other):
+        self._check_compatible(other)
+        return self.grid > _grid(other)
+
     def __add__(self, other):
+        self._check_compatible(other)
+        return self.__class__(self.grid + _grid(other), points=self.points)
 
     def __sub__(self, other):
+        self._check_compatible(other)
+        return self.__class__(self.grid - _grid(other), points=self.points)
 
     def __mul__(self, other):
+        self._check_compatible(other)
+        return self.__class__(self.grid * _grid(other), points=self.points)
 
     def __truediv__(self, other):
+        self._check_compatible(other)
+        return self.__class__(self.grid / _grid(other), points=self.points)
 
     def __floordiv__(self, other):
+        self._check_compatible(other)
+        return self.__class__(self.grid // _grid(other), points=self.points)
 
     def __pow__(self, other):
+        self._check_compatible(other)
+        return self.__class__(np.power(self.grid, _grid(other)), points=self.points)
 
     def __radd__(self, other):
+        self._check_compatible(other)
+        return self.__class__(_grid(other) + self.grid, points=self.points)
 
     def __rsub__(self, other):
+        self._check_compatible(other)
+        return self.__class__(_grid(other) - self.grid, points=self.points)
 
     def __rmul__(self, other):
+        self._check_compatible(other)
+        return self.__class__(_grid(other) * self.grid, points=self.points)
 
     def __rtruediv__(self, other):
+        self._check_compatible(other)
+        return self.__class__(_grid(other) / self.grid, points=self.points)
 
     def __rfloordiv__(self, other):
+        self._check_compatible(other)
+        return self.__class__(_grid(other) // self.grid, points=self.points)
 
     def __rpow__(self, other):
-    """
+        self._check_compatible(other)
+        return self.__class__(np.power(_grid(other), self.grid), points=self.points)
 
     def _load(self, grid, points=None, center=None, origin=None, delta=None):
         """Load and check AutoDock Map"""
@@ -135,7 +196,7 @@ class Map():
             if delta.size > 1:
                 raise TypeError('The grid spacing (delta) must be the same in all dimension.')
 
-            self.points = np.asanyarray(points)
+            self.points = np.asanyarray(points, dtype=object)
             self.center = np.asanyarray([np.mean(point) for point in self.points])
             self.origin = np.asanyarray([point[0] for point in self.points])
             self.delta = float(delta[0])
@@ -151,7 +212,7 @@ class Map():
                 # Get grid points using the origin information
                 points = [origin[dim] + (np.arange(s)) * self.delta for dim, s in enumerate(shape)]
 
-                self.points = np.asanyarray(points)
+                self.points = np.asanyarray(points, dtype=object)
                 self.origin = np.asanyarray(origin)
                 self.center = np.asanyarray([np.mean(point) for point in points])
             else:
@@ -168,7 +229,7 @@ class Map():
                           np.linspace(ymin, ymax, shape[1]),
                           np.linspace(zmin, zmax, shape[2])]
 
-                self.points = np.asanyarray(points)
+                self.points = np.asanyarray(points, dtype=object)
                 self.origin = np.asanyarray([xmin, ymin, zmin])
                 self.center = np.asanyarray(center)
         else:
@@ -182,7 +243,7 @@ class Map():
 
         # Get grid edges
         edges = [self.points[dim][0] + (np.arange(s + 1) - 0.5) * self.delta for dim, s in enumerate(shape)]
-        self.edges = np.asanyarray(edges)
+        self.edges = np.asanyarray(edges, dtype=object)
 
         # Generate interprelator
         self._grid_interpn = _generate_grid_interpn(self.points, self.grid)
@@ -221,11 +282,7 @@ class Map():
         assert center is not None, 'CENTER of the grid is not defined.'
         assert delta is not None, 'SPACING of the grid is not defined.'
 
-        # Compute the origin of the grid
-        xmin, ymin, zmin = center - ((delta * nelements) / 2.)
-        origin = np.asanyarray([xmin, ymin, zmin])
-
-        self._load(grid, origin=origin, delta=delta)
+        self._load(grid, center=center, delta=delta)
 
     def load(self, grid_filename):
         """Load AutoDock Map"""
