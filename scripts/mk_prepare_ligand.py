@@ -6,6 +6,7 @@
 import argparse
 import os
 import sys
+import json
 
 from openbabel import openbabel as ob
 
@@ -35,6 +36,8 @@ def cmd_lineparser():
     parser.add_argument("-b", "--rigidify_bonds_indices", dest="rigidify_bonds_indices", default=[],
                         action="append", help="indices of two atoms (in the SMARTS) that define a bond (start at 1)",
                         nargs='+', type=int, metavar='i j')
+    parser.add_argument("-p", "--param", dest="params_filename", default=None,
+                        action="store", help="SMARTS based atom typing (JSON format)")
     parser.add_argument("--double_bond_penalty", default=50, help="penalty > 100 prevents breaking double bonds", type=int)
     parser.add_argument("--no_index_map", dest="save_index_map", default=True,
                         action="store_false", help="do not write map of atom indices from input to pdbqt")
@@ -62,6 +65,12 @@ def main():
     save_index_map = args.save_index_map
     redirect_stdout = args.redirect_stdout
 
+    # read parameters JSON file
+    parameters = {}
+    if args.params_filename is not None:
+        with open(args.params_filename) as f:
+            parameters.update(json.load(f))
+
     # SMARTS patterns to make bonds rigid
     rigidify_bonds_smarts = args.rigidify_bonds_smarts
     rigidify_bonds_indices = args.rigidify_bonds_indices
@@ -87,7 +96,8 @@ def main():
                                      hydrate=add_water, amide_rigid=True,
                                      rigidify_bonds_smarts=rigidify_bonds_smarts,
                                      rigidify_bonds_indices=rigidify_bonds_indices,
-                                     double_bond_penalty=double_bond_penalty)
+                                     double_bond_penalty=double_bond_penalty,
+                                     parameters=parameters)
     preparator.prepare(mol, is_protein_sidechain)
 
     # maybe verbose could be an option and it will show the various bond scores and breakdowns?

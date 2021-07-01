@@ -11,7 +11,7 @@ from collections import OrderedDict
 from openbabel import openbabel as ob
 
 from .setup import MoleculeSetup
-from .atomtyper import AtomTyperLegacy
+from .atomtyper import AtomTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
@@ -22,7 +22,8 @@ from .utils import obutils
 
 class MoleculePreparation:
     def __init__(self, merge_hydrogens=True, hydrate=False, macrocycle=False, amide_rigid=True,
-            rigidify_bonds_smarts=[], rigidify_bonds_indices=[], double_bond_penalty=50):
+            rigidify_bonds_smarts=[], rigidify_bonds_indices=[], double_bond_penalty=50,
+            parameters={}):
         self._merge_hydrogens = merge_hydrogens
         self._add_water = hydrate
         self._break_macrocycle = macrocycle
@@ -31,7 +32,7 @@ class MoleculePreparation:
         self._rigidify_bonds_indices = rigidify_bonds_indices
         self._mol = None
 
-        self._atom_typer = AtomTyperLegacy()
+        self._atom_typer = AtomTyper(parameters)
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(min_ring_size=7, max_ring_size=33,
                 double_bond_penalty=double_bond_penalty) #max_ring_size=26, min_ring_size=8)
@@ -54,7 +55,7 @@ class MoleculePreparation:
 
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)
-        self._atom_typer.set_param_legacy(mol)
+        self._atom_typer(mol)
 
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
 
