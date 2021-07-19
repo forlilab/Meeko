@@ -39,12 +39,25 @@ def cmd_lineparser():
     parser.add_argument("--no_index_map", dest="save_index_map", default=True,
                         action="store_false", help="do not write map of atom indices from input to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_filename", default=None,
-                        action="store", help="output pdbqt filename")
+                        action="store", help="output pdbqt filename. Single molecule input only.")
+    parser.add_argument("--multimol_outdir", dest="multimol_output_directory", default=None,
+                        action="store", help="folder to write output pdbqt for multi-mol inputs. Incompatible with -o/--out and -/--.")
+    parser.add_argument("--multimol_prefix", dest="multimol_prefix", default=None,
+                        action="store", help="replace internal molecule name in multi-molecule input by specified prefix. Incompatible with -o/--out and -/--.")
     parser.add_argument("-v", "--verbose", dest="verbose", default=False,
                         action="store_true", help="print information about molecule setup")
     parser.add_argument('-', '--',  dest='redirect_stdout', action='store_true',
-                        help='do not write file, redirect output to STDOUT. Argument -o/--out is ignored.')
-    return parser.parse_args()
+                        help='do not write file, redirect output to STDOUT. Argument -o/--out is ignored. Single molecule input only.')
+    args = parser.parse_args()
+    if args.multimol_output_directory is not None or args.multimol_prefix is not None:
+        if args.output_pdbqt_filename is not None:
+            print("Argument -o/--out incompatible with --multimol_outdir and --multimol_prefix", file=sys.stderr)
+            sys.exit(2)
+        if args.redirect_stdout:
+            print("Argument -/-- incompatible with --multimol_outdir and --multimol_prefix", file=sys.stderr)
+            sys.exit(2)
+
+    return args
 
 
 def main():
@@ -61,6 +74,17 @@ def main():
     is_protein_sidechain = args.is_protein_sidechain
     save_index_map = args.save_index_map
     redirect_stdout = args.redirect_stdout
+    multimol_output_directory = args.multimol_output_directory
+    multimol_prefix = args.multimol_prefix
+
+    do_process_multimol = (multimol_prefix is not None) or (multimol_output_directory is not None)
+    if do_process_multimol:
+        pdbqt_byname = {}
+        duplicates = []
+
+    if multimol_output_directory is not None:
+        if not os.path.exists(multimol_output_directory):
+            os.mkdir(multimol_output_directory)
 
     # SMARTS patterns to make bonds rigid
     rigidify_bonds_smarts = args.rigidify_bonds_smarts
@@ -73,37 +97,77 @@ def main():
         indices[0] = indices[0] - 1 # convert from 1- to 0-index
         indices[1] = indices[1] - 1
 
-    mol = obutils.load_molecule_from_file(input_molecule_filename)
+    frmt = os.path.splitext(input_molecule_filename)[1][1:]
+    with open(input_molecule_filename) as f:
+        input_string = f.read()
+    obmol_supplier = obutils.OBMolSupplier(input_string, frmt)
 
-    if pH_value is not None:
-        mol.CorrectForPH(float(pH_value))
+    mol_counter = 0
 
-    if add_hydrogen:
-        mol.AddHydrogens()
-        charge_model = ob.OBChargeModel.FindType("Gasteiger")
-        charge_model.ComputeCharges(mol)
+    for mol in obmol_supplier:
 
-    preparator = MoleculePreparation(merge_hydrogens=no_merge_hydrogen, macrocycle=build_macrocycle, 
-                                     hydrate=add_water, amide_rigid=True,
-                                     rigidify_bonds_smarts=rigidify_bonds_smarts,
-                                     rigidify_bonds_indices=rigidify_bonds_indices,
-                                     double_bond_penalty=double_bond_penalty)
-    preparator.prepare(mol, is_protein_sidechain)
+        mol_counter += 1
 
-    # maybe verbose could be an option and it will show the various bond scores and breakdowns?
-    if verbose:
-        preparator.show_setup()
+        if mol_counter > 1 and do_process_multimol == False:
+            print("Processed only the first molecule of multiple molecule input.")
+            print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
+                input_molecule_filename))
+            break
 
-    ligand_prepared = preparator.write_pdbqt_string(save_index_map)
+        if pH_value is not None:
+            mol.CorrectForPH(float(pH_value))
 
-    if not redirect_stdout:
-        if output_pdbqt_filename is None:
-            output_pdbqt_filename = '%s.pdbqt' % os.path.splitext(input_molecule_filename)[0]
+        if add_hydrogen:
+            mol.AddHydrogens()
+            charge_model = ob.OBChargeModel.FindType("Gasteiger")
+            charge_model.ComputeCharges(mol)
 
-        print(ligand_prepared, file=open(output_pdbqt_filename, 'w'))
-    else:
-        print(ligand_prepared)
+        preparator = MoleculePreparation(merge_hydrogens=no_merge_hydrogen, macrocycle=build_macrocycle, 
+                                         hydrate=add_water, amide_rigid=True,
+                                         rigidify_bonds_smarts=rigidify_bonds_smarts,
+                                         rigidify_bonds_indices=rigidify_bonds_indices,
+                                         double_bond_penalty=double_bond_penalty)
+        preparator.prepare(mol, is_protein_sidechain)
 
+        # maybe verbose could be an option and it will show the various bond scores and breakdowns?
+        if verbose:
+            preparator.show_setup()
+
+        ligand_prepared = preparator.write_pdbqt_string(save_index_map)
+
+        # single molecule mode (no --multimol_* arguments were provided)
+        if not do_process_multimol:
+            if not redirect_stdout:
+                if output_pdbqt_filename is None:
+                    output_pdbqt_filename = '%s.pdbqt' % os.path.splitext(input_molecule_filename)[0]
+
+                print(ligand_prepared, file=open(output_pdbqt_filename, 'w'))
+            else:
+                print(ligand_prepared)
+
+        # multiple molecule mode        
+        else:
+            name = mol.GetTitle()
+            if name in pdbqt_byname:
+                duplicates.append(name)
+            if multimol_prefix is not None:
+                name = '%s-%d' % (multimol_prefix, mol_counter)
+                pdbqt_byname[name] = ligand_prepared
+            elif name not in duplicates:
+                pdbqt_byname[name] = ligand_prepared
+
+    if do_process_multimol:
+        if len(duplicates):
+            if multimol_prefix:
+                print("Warning: %d molecules had duplicated names, e.g. %s" % (len(duplicates), duplicates[0]))
+            else:
+                print("Warning: %d molecules with duplicated names were NOT processed, e.g. %s" % (len(duplicates), duplicates[0]))
+
+        if multimol_output_directory is None: multimol_output_directory = '.'
+        for name in pdbqt_byname:
+            fname = os.path.join(multimol_output_directory, name + '.pdbqt')
+            with open(fname, 'w') as f:
+                f.write(pdbqt_byname[name])
 
 if __name__ == '__main__':
     main()
