@@ -181,3 +181,31 @@ class SMARTSmatcher(object):
             return [list(x) for x in self._finder.GetUMapList()]
         else:
             return [list(x) for x in self._finder.GetMapList()]
+
+
+class OBMolSupplier:
+    """iterator returning OBMols from multi-molecule string (MOL2, SDF, etc)"""
+
+    def __init__(self, string, _format):
+        self.string = string
+        self.format = _format
+
+    def __iter__(self):
+        self.conv = ob.OBConversion()
+        status = self.conv.SetInFormat(self.format)
+        if not status:
+            raise RuntimeError('could not set OBConversion input format: %s' % self.format)
+        self.mol = ob.OBMol()
+        self.keep_reading = self.conv.ReadString(self.mol, self.string)
+        if not self.keep_reading:
+            raise RuntimeError
+        return self
+
+    def __next__(self):
+        if self.keep_reading:
+            oldmol = self.mol
+            self.mol = ob.OBMol()
+            self.keep_reading = self.conv.Read(self.mol)
+            return oldmol
+        else:
+            raise StopIteration
