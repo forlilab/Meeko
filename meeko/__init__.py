@@ -11,8 +11,9 @@ from .utils import geomutils
 from .atomtyper import AtomTyper
 from .receptor_pdbqt import PDBQTReceptor
 from .molecule_pdbqt import PDBQTMolecule
+from .mk_config import MeekoConfig
 from . import analysis
 
 __all__ = ['MoleculePreparation', 'obutils', 'geomutils', 
            'MoleculeSetup', 'AtomTyperLegacy', 'PDBQTMolecule',
-           'PDBQTReceptor', 'analysis']
+           'PDBQTReceptor', 'analysis','MeekoConfig']

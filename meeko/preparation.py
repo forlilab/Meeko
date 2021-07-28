@@ -21,21 +21,20 @@ from .utils import obutils
 
 
 class MoleculePreparation:
-    def __init__(self, merge_hydrogens=True, hydrate=False, macrocycle=False, amide_rigid=True,
-            rigidify_bonds_smarts=[], rigidify_bonds_indices=[], double_bond_penalty=50,
-            parameters={}):
-        self._merge_hydrogens = merge_hydrogens
-        self._add_water = hydrate
-        self._break_macrocycle = macrocycle
-        self._keep_amide_rigid = amide_rigid
-        self._rigidify_bonds_smarts = rigidify_bonds_smarts
-        self._rigidify_bonds_indices = rigidify_bonds_indices
+    def __init__(self, mk_config):
+        self._merge_hydrogens = mk_config.merge_hydrogens
+        self._add_water = mk_config.hydrate
+        self._break_macrocycle = mk_config.break_macrocycle
+        self._keep_amide_rigid = mk_config.amide_rigid
+        self._rigidify_bonds_smarts = mk_config.rigidify_bonds_smarts
+        self._rigidify_bonds_indices = mk_config.rigidify_bonds_indices
         self._mol = None
-
-        self._atom_typer = AtomTyper(parameters)
+        
+        mk_config.load_param_file()
+        self._atom_typer = AtomTyper(mk_config.parameters)
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(min_ring_size=7, max_ring_size=33,
-                double_bond_penalty=double_bond_penalty) #max_ring_size=26, min_ring_size=8)
+                double_bond_penalty=mk_config.double_bond_penalty) #max_ring_size=26, min_ring_size=8)
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
