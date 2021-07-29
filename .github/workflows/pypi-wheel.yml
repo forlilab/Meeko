@@ -1,0 +1,39 @@
+name: Build and upload wheel Package to PyPI
+
+on:
+  push:
+  pull_request:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+        architecture: 'x64'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel twine flake8
+    - name: Create wheel
+      run: |
+        python setup.py bdist_wheel
+    - name: Upload artifacts for inspection
+      uses: actions/upload-artifact@v2
+      with:
+        name: wheel
+        path: dist/*.whl
+    - name: Publish sdist to PyPI
+      if: ${{ success() && github.event_name == 'release' && github.event.action == 'created' }}
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_FORLILAB }}
+      run: |
+        twine upload dist/*.whl
