@@ -28,7 +28,7 @@ jobs:
     - name: Upload artifacts for inspection
       uses: actions/upload-artifact@v2
       with:
-        name: sdist and wheel
+        name: dist
         path: dist/*
     - name: Publish sdist and wheel to PyPI
       if: ${{ success() && github.event_name == 'release' && github.event.action == 'created' }}
