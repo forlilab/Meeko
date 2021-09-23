@@ -21,26 +21,57 @@ from .utils import obutils
 
 
 class MoleculePreparation:
-    def __init__(self, mk_config):
-        self._merge_hydrogens = mk_config.merge_hydrogens
-        self._add_water = mk_config.hydrate
-        self._break_macrocycle = mk_config.break_macrocycle
-        self._keep_amide_rigid = mk_config.amide_rigid
-        self._rigidify_bonds_smarts = mk_config.rigidify_bonds_smarts
-        self._rigidify_bonds_indices = mk_config.rigidify_bonds_indices
+    def __init__(self, merge_hydrogens=True, hydrate=False, amide_rigid=True,
+            macrocycle=False, min_ring_size=7, max_ring_size=33,
+            rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
+            double_bond_penalty=50, atom_type_smarts={},
+            correct_for_pH=False, pH_value=7.4, add_hydrogen=False,
+            is_protein_sidechain=False, save_index_map=True,
+            stop_at_defaults=False):
+
+        self.merge_hydrogens = merge_hydrogens
+        self.hydrate = hydrate
+        self.amide_rigid = amide_rigid
+        self.macrocycle = macrocycle
+        self.min_ring_size = min_ring_size
+        self.max_ring_size = max_ring_size
+        self.rigidify_bonds_smarts = rigidify_bonds_smarts
+        self.rigidify_bonds_indices = rigidify_bonds_indices
+        self.double_bond_penalty = double_bond_penalty
+        self.atom_type_smarts = atom_type_smarts
+        self.correct_for_pH = correct_for_pH
+        self.pH_value = pH_value
+        self.add_hydrogen = add_hydrogen
+        self.is_protein_sidechain = is_protein_sidechain
+        self.save_index_map = save_index_map
+
+        if stop_at_defaults: return # create an object to show just the defaults (e.g. to argparse)
+
         self._mol = None
-        
-        mk_config.load_param_file()
-        self._atom_typer = AtomTyper(mk_config.parameters)
+        self._atom_typer = AtomTyper(self.atom_type_smarts)
         self._bond_typer = BondTyperLegacy()
-        self._macrocycle_typer = FlexMacrocycle(min_ring_size=7, max_ring_size=33,
-                double_bond_penalty=mk_config.double_bond_penalty) #max_ring_size=26, min_ring_size=8)
+        self._macrocycle_typer = FlexMacrocycle(
+                self.min_ring_size, self.max_ring_size, self.double_bond_penalty)
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
 
+    @classmethod
+    def init_just_defaults(cls):
+        return cls(stop_at_defaults=True)
 
-    def prepare(self, mol, is_protein_sidechain=False):
+    @ classmethod
+    def from_config(cls, config):
+        expected_keys = cls.init_just_defaults().__dict__.keys()
+        bad_keys = [k for k in config if k not in expected_keys]
+        for key in bad_keys:
+            print("ERROR: unexpected key \"%s\" in MoleculePreparation.from_config()" % key, file=sys.stderr)
+        if len(bad_keys) > 0:
+            raise ValueError
+        p = cls(**config)
+        return p
+
+    def prepare(self, mol, is_protein_sidechain=self.is_protein_sidechain):
         """ if protein_sidechain, C H N O will be removed,
             root will be CA, and BEGIN/END_RES will be added.
         """
@@ -49,7 +80,6 @@ class MoleculePreparation:
             raise ValueError('Error: no atoms present in the molecule')
 
         self._mol = mol
-        self.is_protein_sidechain = is_protein_sidechain # used in self.write_pdbqt_string
         MoleculeSetup(mol, is_protein_sidechain=is_protein_sidechain)
 
         # 1.  assign atom types (including HB types, vectors and stuff)
@@ -59,20 +89,20 @@ class MoleculePreparation:
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
 
         # 2b. merge_h_classic
-        if self._merge_hydrogens:
+        if self.merge_hydrogens:
             mol.setup.merge_hydrogen()
 
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(mol, self._keep_amide_rigid, self._rigidify_bonds_smarts, self._rigidify_bonds_indices)
+        self._bond_typer(mol, self.amide_rigid, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
 
         # 4 . hydrate molecule
-        if self._add_water:
+        if self.hydrate:
             self._water_builder.hydrate(mol)
 
-        # 5.  scan macrocycles
-        if self._break_macrocycle:
+        # 5.  break macrocycles into open/linear form
+        if self.macrocycle:
             # calculate possible breakable bonds
             self._macrocycle_typer.search_macrocycle(mol)
 
@@ -90,6 +120,7 @@ class MoleculePreparation:
         if is_protein_sidechain:
             calpha_atom_index = self.get_calpha_atom_index(mol) # 1-index
             self._flex_builder(mol, root_atom_index=calpha_atom_index)
+            mol.setup.is_protein_sidechain = True
         else:
             self._flex_builder(mol, root_atom_index=None)
         # TODO re-run typing after breaking bonds
@@ -114,7 +145,6 @@ class MoleculePreparation:
             sys.exit(42)
         return ca_atoms[0].GetIdx()
 
-    
     def show_setup(self):
         if self._mol is not None:
             tot_charge = 0
@@ -148,11 +178,10 @@ class MoleculePreparation:
 
             print('')
     
-    def write_pdbqt_string(self, save_index_map=True):
+    def write_pdbqt_string(self, save_index_map=self.save_index_map):
         if self._mol is not None:
             return self._writer.write_string(
                     self._mol,
-                    is_protein_sidechain=self.is_protein_sidechain,
                     save_index_map=save_index_map)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')

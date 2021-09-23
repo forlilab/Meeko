@@ -56,6 +56,7 @@ class MoleculeSetup(object):
         "ring_bond_breakable",
         "flexibility_model",
         'history',
+        'is_protein_sidechain',
         ]
 
     def __init__(self, obmol, template=None, amide_rigid=True, is_protein_sidechain=False):
@@ -86,6 +87,7 @@ class MoleculeSetup(object):
         self.ring_corners = {}  # used to store corner flexibility
         # this could be used to keep track of transformations? (corner flipping)
         self.history = []
+        self.is_protein_sidechain = False
 
         if template is None:
             self.init_from_obmol(obmol, amide_rigid, is_protein_sidechain)

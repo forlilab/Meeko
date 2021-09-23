@@ -107,7 +107,7 @@ class PDBQTWriterLegacy():
             self._walk_graph_recursive(neigh, edge_start=next_index)
             self._pdbqt_buffer.append("ENDBRANCH %3d %3d" % (begin, end))
 
-    def write_string(self, mol, is_protein_sidechain, save_index_map=False):
+    def write_string(self, mol, save_index_map=False):
         """Output a PDBQT file as a string.
         
         Args:
@@ -147,7 +147,7 @@ class PDBQTWriterLegacy():
                 # only after self._walk_graph_recursive
                 self._pdbqt_buffer.insert(i, remark_line)
 
-        if is_protein_sidechain:
+        if self.setup.is_protein_sidechain:
             if len(self._resinfo_set) > 1:
                 print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
                 print(self._resinfo_set, file=sys.stderr)
