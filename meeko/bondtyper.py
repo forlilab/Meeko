@@ -14,7 +14,7 @@ from openbabel import openbabel as ob
 
 class BondTyperLegacy:
 
-    def __call__(self, mol, keep_amide_rigid, rigidify_bonds_smarts, rigidify_bonds_indices):
+    def __call__(self, mol, amide_flexible, rigidify_bonds_smarts, rigidify_bonds_indices):
         """Typing atom bonds in the legacy way
         
         Args:
@@ -62,7 +62,7 @@ class BondTyperLegacy:
             if mol.setup.is_methyl(begin) or mol.setup.is_methyl(end):
                 rotatable = False
 
-            if ob_bond.IsAmide() and keep_amide_rigid:
+            if ob_bond.IsAmide() and not amide_flexible:
                 bond_order = 99
                 rotatable = False
 

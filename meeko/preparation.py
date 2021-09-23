@@ -21,17 +21,18 @@ from .utils import obutils
 
 
 class MoleculePreparation:
-    def __init__(self, merge_hydrogens=True, hydrate=False, amide_rigid=True,
+    def __init__(self, keep_nonpolar_hydrogens=False,
+            hydrate=False, amide_flexible=False,
             macrocycle=False, min_ring_size=7, max_ring_size=33,
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
             double_bond_penalty=50, atom_type_smarts={},
-            correct_for_pH=False, pH_value=7.4, add_hydrogen=False,
-            is_protein_sidechain=False, save_index_map=True,
+            pH_value=None, add_hydrogens=False,
+            is_protein_sidechain=False, remove_index_map=False,
             stop_at_defaults=False):
 
-        self.merge_hydrogens = merge_hydrogens
+        self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
         self.hydrate = hydrate
-        self.amide_rigid = amide_rigid
+        self.amide_flexible = amide_flexible
         self.macrocycle = macrocycle
         self.min_ring_size = min_ring_size
         self.max_ring_size = max_ring_size
@@ -39,11 +40,10 @@ class MoleculePreparation:
         self.rigidify_bonds_indices = rigidify_bonds_indices
         self.double_bond_penalty = double_bond_penalty
         self.atom_type_smarts = atom_type_smarts
-        self.correct_for_pH = correct_for_pH
         self.pH_value = pH_value
-        self.add_hydrogen = add_hydrogen
+        self.add_hydrogens = add_hydrogens
         self.is_protein_sidechain = is_protein_sidechain
-        self.save_index_map = save_index_map
+        self.remove_index_map = remove_index_map
 
         if stop_at_defaults: return # create an object to show just the defaults (e.g. to argparse)
 
@@ -71,13 +71,25 @@ class MoleculePreparation:
         p = cls(**config)
         return p
 
-    def prepare(self, mol, is_protein_sidechain=self.is_protein_sidechain):
+    def prepare(self, mol, is_protein_sidechain=None):
         """ if protein_sidechain, C H N O will be removed,
             root will be CA, and BEGIN/END_RES will be added.
         """
 
+        if is_protein_sidechain is None: is_protein_sidechain = self.is_protein_sidechain
+
         if mol.NumAtoms() == 0:
             raise ValueError('Error: no atoms present in the molecule')
+
+        if self.pH_value is not None:
+            pH_value = float(self.pH_value)
+            mol.CorrectForPH(pH_value)
+            # TODO add hydrogens?
+
+        if self.add_hydrogens:
+            mol.AddHydrogens()
+            charge_model = ob.OBChargeModel.FindType('Gasteiger')
+            charge_model.ComputeCharges(mol)
 
         self._mol = mol
         MoleculeSetup(mol, is_protein_sidechain=is_protein_sidechain)
@@ -89,13 +101,13 @@ class MoleculePreparation:
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
 
         # 2b. merge_h_classic
-        if self.merge_hydrogens:
+        if not self.keep_nonpolar_hydrogens:
             mol.setup.merge_hydrogen()
 
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(mol, self.amide_rigid, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
+        self._bond_typer(mol, self.amide_flexible, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
 
         # 4 . hydrate molecule
         if self.hydrate:
@@ -178,17 +190,17 @@ class MoleculePreparation:
 
             print('')
     
-    def write_pdbqt_string(self, save_index_map=self.save_index_map):
+    def write_pdbqt_string(self, remove_index_map=None):
+        if remove_index_map is None: remove_index_map = self.remove_index_map
         if self._mol is not None:
-            return self._writer.write_string(
-                    self._mol,
-                    save_index_map=save_index_map)
+            return self._writer.write_string(self._mol, remove_index_map)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 
-    def write_pdbqt_file(self, pdbqt_filename, save_index_map=True):
+    def write_pdbqt_file(self, pdbqt_filename, remove_index_map=None):
+        if remove_index_map is None: remove_index_map = self.remove_index_map
         try:
             with open(pdbqt_filename,'w') as w:
-                w.write(self.write_pdbqt_string(save_index_map))
+                w.write(self.write_pdbqt_string(remove_index_map))
         except:
             raise RuntimeError('Cannot write PDBQT file %s.' % pdbqt_filename)

@@ -107,7 +107,7 @@ class PDBQTWriterLegacy():
             self._walk_graph_recursive(neigh, edge_start=next_index)
             self._pdbqt_buffer.append("ENDBRANCH %3d %3d" % (begin, end))
 
-    def write_string(self, mol, save_index_map=False):
+    def write_string(self, mol, remove_index_map=False):
         """Output a PDBQT file as a string.
         
         Args:
@@ -141,7 +141,7 @@ class PDBQTWriterLegacy():
 
         self._walk_graph_recursive(root, first=True)
 
-        if save_index_map:
+        if not remove_index_map:
             for i, remark_line in enumerate(self.remark_index_map()):
                 # need to use 'insert' because self._numbering is calculated
                 # only after self._walk_graph_recursive
