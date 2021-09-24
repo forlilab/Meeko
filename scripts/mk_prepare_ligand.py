@@ -39,8 +39,6 @@ def cmd_lineparser():
                         action="store_true", help="add water molecules for hydrated docking")
     parser.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",
                         action="store_true", help="keep non-polar hydrogens (default: merge onto heavy atom)")
-    parser.add_argument("--add_hydrogens", dest="add_hydrogens",
-                        action="store_true", help="add hydrogen atoms")
     parser.add_argument("--pH", dest="pH_value",
                         action="store", help="correct protonation for pH (default: No correction)")
     parser.add_argument("-f", "--flex", dest="is_protein_sidechain",
@@ -94,7 +92,6 @@ def cmd_lineparser():
 
 if __name__ == '__main__':
     args, config = cmd_lineparser()
-    for k, v in config.items(): print(k, v)
     multimol_output_directory = args.multimol_output_directory
     multimol_prefix = args.multimol_prefix
     input_molecule_filename = args.input_molecule_filename

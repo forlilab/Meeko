@@ -26,7 +26,7 @@ class MoleculePreparation:
             macrocycle=False, min_ring_size=7, max_ring_size=33,
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
             double_bond_penalty=50, atom_type_smarts={},
-            pH_value=None, add_hydrogens=False,
+            pH_value=None,
             is_protein_sidechain=False, remove_index_map=False,
             stop_at_defaults=False):
 
@@ -41,7 +41,6 @@ class MoleculePreparation:
         self.double_bond_penalty = double_bond_penalty
         self.atom_type_smarts = atom_type_smarts
         self.pH_value = pH_value
-        self.add_hydrogens = add_hydrogens
         self.is_protein_sidechain = is_protein_sidechain
         self.remove_index_map = remove_index_map
 
@@ -84,12 +83,14 @@ class MoleculePreparation:
         if self.pH_value is not None:
             pH_value = float(self.pH_value)
             mol.CorrectForPH(pH_value)
-            # TODO add hydrogens?
 
-        if self.add_hydrogens:
-            mol.AddHydrogens()
-            charge_model = ob.OBChargeModel.FindType('Gasteiger')
-            charge_model.ComputeCharges(mol)
+        # always add hydrogens just in case. Also, correcting for pH deletes hydrogens
+        mol.AddHydrogens() 
+
+        # seems like gasteigar charges are calculated by default. Calling the method
+        # again continues performing iterations from the existing charges
+        #charge_model = ob.OBChargeModel.FindType('Gasteiger')
+        #charge_model.ComputeCharges(mol)
 
         self._mol = mol
         MoleculeSetup(mol, is_protein_sidechain=is_protein_sidechain)

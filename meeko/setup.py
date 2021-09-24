@@ -337,7 +337,7 @@ class MoleculeSetup(object):
                 graph[member] = self.walk_recursive(member, collected=[], exclude=list(ring_id))
             self.rings[ring_id]['graph'] = graph
     
-    def init_bond(self, flexible_rigid):
+    def init_bond(self, amide_flexible):
         """initialize bond data table"""
         for b in ob.OBMolBondIter(self.mol):
             idx1 = b.GetBeginAtomIdx()
