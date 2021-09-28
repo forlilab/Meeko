@@ -37,7 +37,7 @@ def cmd_lineparser():
                         action="store_true", help="break macrocycle for docking")
     parser.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
-    parser.add_argument("--nonpolar_hydrogens", dest="nonpolar_hydrogens",
+    parser.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",
                         action="store_true", help="keep non-polar hydrogens (default: merge onto heavy atom)")
     parser.add_argument("--pH", dest="pH_value",
                         action="store", help="correct protonation for pH (default: No correction)")
@@ -49,7 +49,7 @@ def cmd_lineparser():
     parser.add_argument("-b", "--rigidify_bonds_indices", dest="rigidify_bonds_indices",
                         action="append", help="indices of two atoms (in the SMARTS) that define a bond (start at 1)",
                         nargs='+', type=int, metavar='i j')
-    parser.add_argument("-a", "--amide_flexible", dest="amide_flexible",
+    parser.add_argument("-a", "--flexible_amides", dest="flexible_amides",
                         action="store_true", help="allow amide bonds to rotate and be non-planar, which is bad")
     parser.add_argument("-p", "--atom_type_smarts", dest="atom_type_smarts_json",
                         action="store", help="SMARTS based atom typing (JSON format)")

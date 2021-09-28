@@ -21,8 +21,8 @@ from .utils import obutils
 
 
 class MoleculePreparation:
-    def __init__(self, nonpolar_hydrogens=False,
-            hydrate=False, amide_flexible=False,
+    def __init__(self, keep_nonpolar_hydrogens=False,
+            hydrate=False, flexible_amides=False,
             macrocycle=False, min_ring_size=7, max_ring_size=33,
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
             double_bond_penalty=50, atom_type_smarts={},
@@ -30,9 +30,9 @@ class MoleculePreparation:
             is_protein_sidechain=False, remove_index_map=False,
             stop_at_defaults=False):
 
-        self.nonpolar_hydrogens = nonpolar_hydrogens
+        self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
         self.hydrate = hydrate
-        self.amide_flexible = amide_flexible
+        self.flexible_amides = flexible_amides
         self.macrocycle = macrocycle
         self.min_ring_size = min_ring_size
         self.max_ring_size = max_ring_size
@@ -102,13 +102,13 @@ class MoleculePreparation:
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
 
         # 2b. merge_h_classic
-        if not self.nonpolar_hydrogens:
+        if not self.keep_nonpolar_hydrogens:
             mol.setup.merge_hydrogen()
 
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(mol, self.amide_flexible, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
+        self._bond_typer(mol, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
 
         # 4 . hydrate molecule
         if self.hydrate:

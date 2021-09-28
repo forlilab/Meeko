@@ -59,7 +59,7 @@ class MoleculeSetup(object):
         'is_protein_sidechain',
         ]
 
-    def __init__(self, obmol, template=None, amide_flexible=False, is_protein_sidechain=False):
+    def __init__(self, obmol, template=None, flexible_amides=False, is_protein_sidechain=False):
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
@@ -90,7 +90,7 @@ class MoleculeSetup(object):
         self.is_protein_sidechain = False
 
         if template is None:
-            self.init_from_obmol(obmol, amide_flexible, is_protein_sidechain)
+            self.init_from_obmol(obmol, flexible_amides, is_protein_sidechain)
         elif isinstance(template, MoleculeSetup):
             self.init_from_template(template)
         else:
@@ -337,7 +337,7 @@ class MoleculeSetup(object):
                 graph[member] = self.walk_recursive(member, collected=[], exclude=list(ring_id))
             self.rings[ring_id]['graph'] = graph
     
-    def init_bond(self, amide_flexible):
+    def init_bond(self, flexible_amides):
         """initialize bond data table"""
         for b in ob.OBMolBondIter(self.mol):
             idx1 = b.GetBeginAtomIdx()
@@ -346,7 +346,7 @@ class MoleculeSetup(object):
             if b.IsAromatic():
                 bond_order = 5
             if b.IsAmide() and not b.IsTertiaryAmide():
-                if not amide_flexible:
+                if not flexible_amides:
                     bond_order = 999
             # check if bond is a ring bond, i.e., both atoms belongs to the same ring
             # TODO make this a single int value
@@ -360,7 +360,7 @@ class MoleculeSetup(object):
                 in_rings = []
             self.add_bond(idx1, idx2, order=bond_order, in_rings=in_rings)
 
-    def init_from_obmol(self, obmol, amide_flexible=False, is_protein_sidechain=False):
+    def init_from_obmol(self, obmol, flexible_amides=False, is_protein_sidechain=False):
         """generate a new molecule setup
 
             NOTE: OpenBabel uses 1-based index
@@ -371,7 +371,7 @@ class MoleculeSetup(object):
         self.atom_true_count = self.mol.NumAtoms()
         self.init_atom()
         self.perceive_rings()
-        self.init_bond(amide_flexible)
+        self.init_bond(flexible_amides)
         self.mol.setup = self
         if is_protein_sidechain:
             self.ignore_backbone()
