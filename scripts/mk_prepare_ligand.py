@@ -37,7 +37,7 @@ def cmd_lineparser():
                         action="store_true", help="break macrocycle for docking")
     parser.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
-    parser.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",
+    parser.add_argument("--nonpolar_hydrogens", dest="nonpolar_hydrogens",
                         action="store_true", help="keep non-polar hydrogens (default: merge onto heavy atom)")
     parser.add_argument("--pH", dest="pH_value",
                         action="store", help="correct protonation for pH (default: No correction)")

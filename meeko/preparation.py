@@ -21,7 +21,7 @@ from .utils import obutils
 
 
 class MoleculePreparation:
-    def __init__(self, keep_nonpolar_hydrogens=False,
+    def __init__(self, nonpolar_hydrogens=False,
             hydrate=False, amide_flexible=False,
             macrocycle=False, min_ring_size=7, max_ring_size=33,
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
@@ -30,7 +30,7 @@ class MoleculePreparation:
             is_protein_sidechain=False, remove_index_map=False,
             stop_at_defaults=False):
 
-        self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
+        self.nonpolar_hydrogens = nonpolar_hydrogens
         self.hydrate = hydrate
         self.amide_flexible = amide_flexible
         self.macrocycle = macrocycle
@@ -102,7 +102,7 @@ class MoleculePreparation:
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
 
         # 2b. merge_h_classic
-        if not self.keep_nonpolar_hydrogens:
+        if not self.nonpolar_hydrogens:
             mol.setup.merge_hydrogen()
 
         # 3.  assign bond types by using SMARTS...
