@@ -9,13 +9,10 @@ import sys
 from openbabel import openbabel as ob
 from .utils import obutils
 
-from .atomtyper import AtomTyperLegacy
-
 
 class PDBQTWriterLegacy():
     def __init__(self):
         """Initialize the PDBQT writer."""
-        self._atom_typer = AtomTyperLegacy()
         self._count = 1
         self._visited = []
         self._numbering = {}
@@ -107,7 +104,7 @@ class PDBQTWriterLegacy():
             self._walk_graph_recursive(neigh, edge_start=next_index)
             self._pdbqt_buffer.append("ENDBRANCH %3d %3d" % (begin, end))
 
-    def write_string(self, mol, is_protein_sidechain, save_index_map=False):
+    def write_string(self, mol, remove_index_map=False):
         """Output a PDBQT file as a string.
         
         Args:
@@ -141,13 +138,13 @@ class PDBQTWriterLegacy():
 
         self._walk_graph_recursive(root, first=True)
 
-        if save_index_map:
+        if not remove_index_map:
             for i, remark_line in enumerate(self.remark_index_map()):
                 # need to use 'insert' because self._numbering is calculated
                 # only after self._walk_graph_recursive
                 self._pdbqt_buffer.insert(i, remark_line)
 
-        if is_protein_sidechain:
+        if self.setup.is_protein_sidechain:
             if len(self._resinfo_set) > 1:
                 print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
                 print(self._resinfo_set, file=sys.stderr)

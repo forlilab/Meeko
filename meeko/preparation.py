@@ -11,7 +11,7 @@ from collections import OrderedDict
 from openbabel import openbabel as ob
 
 from .setup import MoleculeSetup
-from .atomtyper import AtomTyperLegacy
+from .atomtyper import AtomTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
@@ -21,58 +21,101 @@ from .utils import obutils
 
 
 class MoleculePreparation:
-    def __init__(self, merge_hydrogens=True, hydrate=False, macrocycle=False, amide_rigid=True,
-            rigidify_bonds_smarts=[], rigidify_bonds_indices=[], double_bond_penalty=50):
-        self._merge_hydrogens = merge_hydrogens
-        self._add_water = hydrate
-        self._break_macrocycle = macrocycle
-        self._keep_amide_rigid = amide_rigid
-        self._rigidify_bonds_smarts = rigidify_bonds_smarts
-        self._rigidify_bonds_indices = rigidify_bonds_indices
-        self._mol = None
+    def __init__(self, keep_nonpolar_hydrogens=False,
+            hydrate=False, flexible_amides=False,
+            macrocycle=False, min_ring_size=7, max_ring_size=33,
+            rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
+            double_bond_penalty=50, atom_type_smarts={},
+            pH_value=None,
+            is_protein_sidechain=False, remove_index_map=False,
+            stop_at_defaults=False):
 
-        self._atom_typer = AtomTyperLegacy()
+        self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
+        self.hydrate = hydrate
+        self.flexible_amides = flexible_amides
+        self.macrocycle = macrocycle
+        self.min_ring_size = min_ring_size
+        self.max_ring_size = max_ring_size
+        self.rigidify_bonds_smarts = rigidify_bonds_smarts
+        self.rigidify_bonds_indices = rigidify_bonds_indices
+        self.double_bond_penalty = double_bond_penalty
+        self.atom_type_smarts = atom_type_smarts
+        self.pH_value = pH_value
+        self.is_protein_sidechain = is_protein_sidechain
+        self.remove_index_map = remove_index_map
+
+        if stop_at_defaults: return # create an object to show just the defaults (e.g. to argparse)
+
+        self._mol = None
+        self._atom_typer = AtomTyper(self.atom_type_smarts)
         self._bond_typer = BondTyperLegacy()
-        self._macrocycle_typer = FlexMacrocycle(min_ring_size=7, max_ring_size=33,
-                double_bond_penalty=double_bond_penalty) #max_ring_size=26, min_ring_size=8)
+        self._macrocycle_typer = FlexMacrocycle(
+                self.min_ring_size, self.max_ring_size, self.double_bond_penalty)
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
 
+    @classmethod
+    def init_just_defaults(cls):
+        return cls(stop_at_defaults=True)
 
-    def prepare(self, mol, is_protein_sidechain=False):
+    @ classmethod
+    def from_config(cls, config):
+        expected_keys = cls.init_just_defaults().__dict__.keys()
+        bad_keys = [k for k in config if k not in expected_keys]
+        for key in bad_keys:
+            print("ERROR: unexpected key \"%s\" in MoleculePreparation.from_config()" % key, file=sys.stderr)
+        if len(bad_keys) > 0:
+            raise ValueError
+        p = cls(**config)
+        return p
+
+    def prepare(self, mol, is_protein_sidechain=None):
         """ if protein_sidechain, C H N O will be removed,
             root will be CA, and BEGIN/END_RES will be added.
         """
 
+        if is_protein_sidechain is None: is_protein_sidechain = self.is_protein_sidechain
+
         if mol.NumAtoms() == 0:
             raise ValueError('Error: no atoms present in the molecule')
 
+        if self.pH_value is not None:
+            pH_value = float(self.pH_value)
+            mol.CorrectForPH(pH_value)
+
+        # always add hydrogens just in case. Also, correcting for pH deletes hydrogens
+        mol.AddHydrogens() 
+
+        # seems like gasteigar charges are calculated by default. Calling the method
+        # again continues performing iterations from the existing charges
+        #charge_model = ob.OBChargeModel.FindType('Gasteiger')
+        #charge_model.ComputeCharges(mol)
+
         self._mol = mol
-        self.is_protein_sidechain = is_protein_sidechain # used in self.write_pdbqt_string
         MoleculeSetup(mol, is_protein_sidechain=is_protein_sidechain)
 
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)
-        self._atom_typer.set_param_legacy(mol)
+        self._atom_typer(mol)
 
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
 
         # 2b. merge_h_classic
-        if self._merge_hydrogens:
+        if not self.keep_nonpolar_hydrogens:
             mol.setup.merge_hydrogen()
 
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(mol, self._keep_amide_rigid, self._rigidify_bonds_smarts, self._rigidify_bonds_indices)
+        self._bond_typer(mol, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
 
         # 4 . hydrate molecule
-        if self._add_water:
+        if self.hydrate:
             self._water_builder.hydrate(mol)
 
-        # 5.  scan macrocycles
-        if self._break_macrocycle:
+        # 5.  break macrocycles into open/linear form
+        if self.macrocycle:
             # calculate possible breakable bonds
             self._macrocycle_typer.search_macrocycle(mol)
 
@@ -90,6 +133,7 @@ class MoleculePreparation:
         if is_protein_sidechain:
             calpha_atom_index = self.get_calpha_atom_index(mol) # 1-index
             self._flex_builder(mol, root_atom_index=calpha_atom_index)
+            mol.setup.is_protein_sidechain = True
         else:
             self._flex_builder(mol, root_atom_index=None)
         # TODO re-run typing after breaking bonds
@@ -114,7 +158,6 @@ class MoleculePreparation:
             sys.exit(42)
         return ca_atoms[0].GetIdx()
 
-    
     def show_setup(self):
         if self._mol is not None:
             tot_charge = 0
@@ -148,18 +191,17 @@ class MoleculePreparation:
 
             print('')
     
-    def write_pdbqt_string(self, save_index_map=True):
+    def write_pdbqt_string(self, remove_index_map=None):
+        if remove_index_map is None: remove_index_map = self.remove_index_map
         if self._mol is not None:
-            return self._writer.write_string(
-                    self._mol,
-                    is_protein_sidechain=self.is_protein_sidechain,
-                    save_index_map=save_index_map)
+            return self._writer.write_string(self._mol, remove_index_map)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 
-    def write_pdbqt_file(self, pdbqt_filename, save_index_map=True):
+    def write_pdbqt_file(self, pdbqt_filename, remove_index_map=None):
+        if remove_index_map is None: remove_index_map = self.remove_index_map
         try:
             with open(pdbqt_filename,'w') as w:
-                w.write(self.write_pdbqt_string(save_index_map))
+                w.write(self.write_pdbqt_string(remove_index_map))
         except:
             raise RuntimeError('Cannot write PDBQT file %s.' % pdbqt_filename)

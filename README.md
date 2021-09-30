@@ -34,7 +34,7 @@ from meeko import obutils
 input_molecule_file = 'example/BACE_macrocycle/BACE_4.mol2'
 mol = obutils.load_molecule_from_file(input_molecule_file)
 
-preparator = MoleculePreparation(merge_hydrogens=True, macrocycle=True, hydrate=True)
+preparator = MoleculePreparation(keep_nonpolar_hydrogens=False, macrocycle=True, hydrate=True)
 preparator.prepare(mol)
 preparator.show_setup()
 
