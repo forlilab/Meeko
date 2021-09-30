@@ -9,13 +9,10 @@ import sys
 from openbabel import openbabel as ob
 from .utils import obutils
 
-from .atomtyper import AtomTyperLegacy
-
 
 class PDBQTWriterLegacy():
     def __init__(self):
         """Initialize the PDBQT writer."""
-        self._atom_typer = AtomTyperLegacy()
         self._count = 1
         self._visited = []
         self._numbering = {}

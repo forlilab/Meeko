@@ -14,5 +14,5 @@ from .molecule_pdbqt import PDBQTMolecule
 from . import analysis
 
 __all__ = ['MoleculePreparation', 'obutils', 'geomutils', 
-           'MoleculeSetup', 'AtomTyperLegacy', 'PDBQTMolecule',
+           'MoleculeSetup', 'PDBQTMolecule',
            'PDBQTReceptor', 'analysis']
