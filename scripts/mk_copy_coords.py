@@ -48,7 +48,7 @@ if __name__ == '__main__':
     ori_obmol = obutils.load_molecule_from_file(input_filename)
 
     is_dlg = coords_filename.endswith('.dlg')
-    pdbqt_mol = PDBQTMolecule(coords_filename, is_dlg=is_dlg)
+    pdbqt_mol = PDBQTMolecule.from_file(coords_filename, is_dlg=is_dlg)
 
     if not redirect_stdout and output_filename is not None:
         # If no output_filename is specified, the format will be the

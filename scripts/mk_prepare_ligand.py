@@ -56,6 +56,8 @@ def cmd_lineparser():
     parser.add_argument("--double_bond_penalty", help="penalty > 100 prevents breaking double bonds", type=int)
     parser.add_argument("--remove_index_map", dest="remove_index_map",
                         action="store_true", help="do not write map of atom indices from input to pdbqt")
+    parser.add_argument("--remove_smiles", dest="remove_smiles",
+                        action="store_true", help="do not write smiles as remark to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_filename",
                         action="store", help="output pdbqt filename. Single molecule input only.")
     parser.add_argument("--multimol_outdir", dest="multimol_output_directory",
@@ -152,7 +154,7 @@ if __name__ == '__main__':
 
                 print(ligand_prepared, file=open(output_pdbqt_filename, 'w'))
             else:
-                print(ligand_prepared)
+                print(ligand_prepared, end='')
 
         # multiple molecule mode        
         else:

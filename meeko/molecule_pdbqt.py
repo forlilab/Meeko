@@ -10,6 +10,8 @@ from collections import defaultdict
 import numpy as np
 from scipy import spatial
 from openbabel import openbabel as ob
+from rdkit import Chem
+from rdkit.Geometry import Point3D
 
 from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
@@ -26,7 +28,7 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
-def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, is_dlg=False):
+def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_dlg=False):
     i = 0
     n_poses = 0
     previous_serial = 0
@@ -50,159 +52,172 @@ def _read_ligand_pdbqt_file(pdbqt_filename, poses_to_read=-1, energy_range=-1, i
                         'all': [], 'vdw': [],
                         'glue': [], 'reactive': [], 'metal': []}
     pose_data = {'n_poses': None, 'active_atoms': [], 'free_energies': [], 
-                 'index_map': {}, 'pdbqt_string': []}
+                 'index_map': {}, 'pdbqt_string': [],
+                 'smiles': None, 'smiles_index_map': {}, 'smiles_h_parent': []}
 
-    with open(pdbqt_filename) as f:
-        lines = f.readlines()
+    lines = pdbqt_string.split('\n')
+    if len(lines[-1]) == 0: lines = lines[:-1]
+    lines = [line + '\n' for line in lines]
+    for line in lines:
+        if is_dlg:
+            if line.startswith('DOCKED'):
+                line = line[8:]
+            else:
+                continue
 
-        for line in lines:
-            if is_dlg:
-                if line.startswith('DOCKED'):
-                    line = line[8:]
-                else:
-                    continue
+        if not line.startswith(('MODEL', 'ENDMDL')):
+            """This is very lazy I know...
+            But would you rather spend time on rebuilding the whole torsion tree and stuff
+            for writing PDBQT files or drinking margarita? Energy was already spend to build
+            that, so let's re-use it!"""
+            tmp_pdbqt_string += line
 
-            if not line.startswith(('MODEL', 'ENDMDL')):
-                """This is very lazy I know...
-                But would you rather spend time on rebuilding the whole torsion tree and stuff
-                for writing PDBQT files or drinking margarita? Energy was already spend to build
-                that, so let's re-use it!"""
-                tmp_pdbqt_string += line
+        if line.startswith('MODEL'):
+            # Reinitialize variables
+            i = 0
+            previous_serial = 0
+            tmp_positions = []
+            tmp_atoms = []
+            tmp_actives = []
+            tmp_pdbqt_string = ''
+            is_model = True
+        elif line.startswith('ATOM') or line.startswith("HETATM"):
+            serial = int(line[6:11].strip())
+            name = line[12:16].strip()
+            resname = line[17:20].strip()
+            chainid = line[21].strip()
+            resid = int(line[22:26].strip())
+            xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=float)
+            try:
+                # PDBQT files from dry.py script are stripped from their partial charges. sigh...
+                partial_charges = float(line[71:77].strip())
+            except:
+                partial_charges = 0.0
+            atom_type = line[77:-1].strip()
 
-            if line.startswith('MODEL'):
-                # Reinitialize variables
-                i = 0
-                previous_serial = 0
-                tmp_positions = []
-                tmp_atoms = []
-                tmp_actives = []
-                tmp_pdbqt_string = ''
-                is_model = True
-            elif line.startswith('ATOM') or line.startswith("HETATM"):
-                serial = int(line[6:11].strip())
-                name = line[12:16].strip()
-                resname = line[17:20].strip()
-                chainid = line[21].strip()
-                resid = int(line[22:26].strip())
-                xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=float)
+            """ We are looking for gap in the serial atom numbers. Usually if they
+            are not following it means that atoms are missing. This will happen with
+            water molecules after using dry.py, only non-overlapping water molecules
+            are kept. Also if the current serial becomes suddenly inferior than the
+            previous and equal to 1, it means that we are now in another molecule/flexible 
+            residue. So here we are adding dummy atoms
+            """
+            if (previous_serial + 1 != serial) and not (serial < previous_serial and serial == 1):
+                diff = serial - previous_serial - 1
+                for _ in range(diff):
+                    xyz_nan = [999.999, 999.999, 999.999]
+                    tmp_atoms.append((i, 9999, 'XXXX', 9999, 'XXX', 'X', xyz_nan, 999.999, 'XX'))
+                    tmp_positions.append(xyz_nan)
+                    i += 1
+
+            # Once it is done, we can return to a normal life... and add existing atoms
+            tmp_atoms.append((i, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
+            tmp_positions.append(xyz)
+            tmp_actives.append(i)
+
+            # We store water idx separately from the rest since their number can be variable
+            if is_first_pose and atom_type != 'W':
+                atom_annotations[location].append(i)
+                atom_annotations['all'].append(i)
+                atom_annotations[atom_property_definitions[atom_type]].append(i)
+
+            if atom_type == 'W':
+                water_indices.update([i])
+
+            previous_serial = serial
+            i += 1
+        elif line.startswith('REMARK'):
+            if line.startswith('REMARK INDEX MAP') and is_first_pose:
+                integers = [int(integer) for integer in line.split()[3:]]
+                if len(integers) % 2 == 1:
+                    raise RuntimeError("Number of indices in INDEX MAP is odd")
+                for j in range(int(len(integers) / 2)): 
+                    pose_data['index_map'][integers[j*2]] = integers[j*2 + 1]
+            elif line.startswith('REMARK SMILES IDX') and is_first_pose:
+                integers = [int(integer) for integer in line.split()[3:]]
+                if len(integers) % 2 == 1:
+                    raise RuntimeError("Number of indices in SMILES IDX is odd")
+                for j in range(int(len(integers) / 2)): 
+                    pose_data['smiles_index_map'][integers[j*2]] = integers[j*2 + 1]
+            elif line.startswith('REMARK H PARENT') and is_first_pose:
+                integers = [int(integer) for integer in line.split()[3:]]
+                if len(integers) % 2 == 1:
+                    raise RuntimeError("Number of indices in H PARENT is odd")
+                for j in range(int(len(integers) / 2)): 
+                    pose_data['smiles_h_parent'].append((integers[j*2], integers[j*2 + 1]))
+            elif line.startswith('REMARK SMILES') and is_first_pose: # must check after SMILES IDX
+                pose_data['smiles'] = line.split()[2]
+            elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
+                # Read free energy from output PDBQT files
                 try:
-                    # PDBQT files from dry.py script are stripped from their partial charges. sigh...
-                    partial_charges = float(line[71:77].strip())
+                    # Vina
+                    energy = float(line.split()[3])
                 except:
-                    partial_charges = 0.0
-                atom_type = line[77:-1].strip()
+                    # AD4
+                    energy = float(line.split()[7])
 
-                """ We are looking for gap in the serial atom numbers. Usually if they
-                are not following it means that atoms are missing. This will happen with
-                water molecules after using dry.py, only non-overlapping water molecules
-                are kept. Also if the current serial becomes suddenly inferior than the
-                previous and equal to 1, it means that we are now in another molecule/flexible 
-                residue. So here we are adding dummy atoms
-                """
-                if (previous_serial + 1 != serial) and not (serial < previous_serial and serial == 1):
-                    diff = serial - previous_serial - 1
-                    for _ in range(diff):
-                        xyz_nan = [999.999, 999.999, 999.999]
-                        tmp_atoms.append((i, 9999, 'XXXX', 9999, 'XXX', 'X', xyz_nan, 999.999, 'XX'))
-                        tmp_positions.append(xyz_nan)
-                        i += 1
+                if energy_best_pose is None:
+                    energy_best_pose = energy
+                energy_current_pose = energy
 
-                # Once it is done, we can return to a normal life... and add existing atoms
-                tmp_atoms.append((i, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
-                tmp_positions.append(xyz)
-                tmp_actives.append(i)
-
-                # We store water idx separately from the rest since their number can be variable
-                if is_first_pose and atom_type != 'W':
-                    atom_annotations[location].append(i)
-                    atom_annotations['all'].append(i)
-                    atom_annotations[atom_property_definitions[atom_type]].append(i)
-
-                if atom_type == 'W':
-                    water_indices.update([i])
-
-                previous_serial = serial
-                i += 1
-            elif line.startswith('REMARK'):
-                if line.startswith('REMARK INDEX MAP') and is_first_pose:
-                    integers = [int(integer) for integer in line.split()[3:]]
-
-                    if len(integers) % 2 == 1:
-                        raise RuntimeError("Number of indices in INDEX MAP is odd")
-
-                    for j in range(int(len(integers) / 2)): 
-                        pose_data['index_map'][integers[j*2]] = integers[j*2 + 1]
-                elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
-                    # Read free energy from output PDBQT files
-                    try:
-                        # Vina
-                        energy = float(line.split()[3])
-                    except:
-                        # AD4
-                        energy = float(line.split()[7])
-
-                    if energy_best_pose is None:
-                        energy_best_pose = energy
-                    energy_current_pose = energy
-
-                    diff_energy = energy_current_pose - energy_best_pose
-                    if (energy_range <= diff_energy and energy_range != -1):
-                        break
-
-                    pose_data['free_energies'].append(energy)
-            elif line.startswith('BEGIN_RES'):
-                location = 'flexible_residue'
-            elif line.startswith('END_RES'):
-                # We never know if there is a molecule just after the flexible residue...
-                location = 'ligand'
-            elif line.startswith('ENDMDL'):
-                n_poses += 1
-                # After reading the first pose no need to store atom properties
-                # anymore, it is the same for every pose
-                is_first_pose = False
-
-                tmp_atoms = np.array(tmp_atoms, dtype=atoms_dtype)
-
-                if atoms is None:
-                    """We store the atoms (topology) only once, since it is supposed to be
-                    the same for all the molecules in the PDBQT file (except when water molecules
-                    are involved... classic). But we will continue to compare the topology of
-                    the current pose with the first one seen in the PDBQT file, to be sure only
-                    the atom positions are changing."""
-                    atoms = tmp_atoms.copy()
-                else:
-                    # Check if the molecule topology is the same for each pose
-                    # We ignore water molecules (W) and atom type XX
-                    columns = ['idx', 'serial', 'name', 'resid', 'resname', 'chain', 'partial_charges', 'atom_type']
-                    top1 = atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
-                    top2 = tmp_atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
-
-                    if not np.array_equal(top1, top2):
-                        error_msg = 'PDBQT file %s does contain molecules with different topologies'
-                        raise RuntimeError(error_msg % pdbqt_filename)
-
-                    # Update information about water molecules (W) as soon as we find new ones
-                    tmp_water_molecules_idx = tmp_atoms[tmp_atoms['atom_type'] == 'W']['idx']
-                    water_molecules_idx = atoms[atoms['atom_type'] == 'XX']['idx']
-                    new_water_molecules_idx = list(set(tmp_water_molecules_idx).intersection(water_molecules_idx))
-                    atoms[new_water_molecules_idx] = tmp_atoms[new_water_molecules_idx]
-
-                positions.append(tmp_positions)
-                pose_data['active_atoms'].append(tmp_actives)
-                pose_data['pdbqt_string'].append(tmp_pdbqt_string)
-
-                if (n_poses >= poses_to_read and poses_to_read != -1):
+                diff_energy = energy_current_pose - energy_best_pose
+                if (energy_range <= diff_energy and energy_range != -1):
                     break
 
-        """ if there is no model, it means that there is only one molecule
-        so when we reach the end of the file, we store the atoms, 
-        positions and actives stuff. """
-        if not is_model:
+                pose_data['free_energies'].append(energy)
+        elif line.startswith('BEGIN_RES'):
+            location = 'flexible_residue'
+        elif line.startswith('END_RES'):
+            # We never know if there is a molecule just after the flexible residue...
+            location = 'ligand'
+        elif line.startswith('ENDMDL'):
             n_poses += 1
-            atoms = np.array(tmp_atoms, dtype=atoms_dtype)
+            # After reading the first pose no need to store atom properties
+            # anymore, it is the same for every pose
+            is_first_pose = False
+
+            tmp_atoms = np.array(tmp_atoms, dtype=atoms_dtype)
+
+            if atoms is None:
+                """We store the atoms (topology) only once, since it is supposed to be
+                the same for all the molecules in the PDBQT file (except when water molecules
+                are involved... classic). But we will continue to compare the topology of
+                the current pose with the first one seen in the PDBQT file, to be sure only
+                the atom positions are changing."""
+                atoms = tmp_atoms.copy()
+            else:
+                # Check if the molecule topology is the same for each pose
+                # We ignore water molecules (W) and atom type XX
+                columns = ['idx', 'serial', 'name', 'resid', 'resname', 'chain', 'partial_charges', 'atom_type']
+                top1 = atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
+                top2 = tmp_atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
+
+                if not np.array_equal(top1, top2):
+                    error_msg = 'molecules have different topologies'
+                    raise RuntimeError(error_msg)
+
+                # Update information about water molecules (W) as soon as we find new ones
+                tmp_water_molecules_idx = tmp_atoms[tmp_atoms['atom_type'] == 'W']['idx']
+                water_molecules_idx = atoms[atoms['atom_type'] == 'XX']['idx']
+                new_water_molecules_idx = list(set(tmp_water_molecules_idx).intersection(water_molecules_idx))
+                atoms[new_water_molecules_idx] = tmp_atoms[new_water_molecules_idx]
+
             positions.append(tmp_positions)
             pose_data['active_atoms'].append(tmp_actives)
             pose_data['pdbqt_string'].append(tmp_pdbqt_string)
+
+            if (n_poses >= poses_to_read and poses_to_read != -1):
+                break
+
+    """ if there is no model, it means that there is only one molecule
+    so when we reach the end of the file, we store the atoms, 
+    positions and actives stuff. """
+    if not is_model:
+        n_poses += 1
+        atoms = np.array(tmp_atoms, dtype=atoms_dtype)
+        positions.append(tmp_positions)
+        pose_data['active_atoms'].append(tmp_actives)
+        pose_data['pdbqt_string'].append(tmp_pdbqt_string)
 
     positions = np.array(positions).reshape((n_poses, atoms.shape[0], 3))
 
@@ -236,13 +251,13 @@ def _identify_bonds(atom_idx, positions, atom_types):
 
 class PDBQTMolecule:
 
-    def __init__(self, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False):
+    def __init__(self, pdbqt_string, name=None, poses_to_read=None, energy_range=None, is_dlg=False):
         """PDBQTMolecule class for reading PDBQT (or dlg) files from AutoDock4, AutoDock-GPU or AutoDock-Vina
 
         Contains both __getitem__ and __iter__ methods, someone might lose his mind because of this.
 
         Args:
-            pdbqt_filename (str): pdbqt filename
+            pdbqt_string (str): pdbqt string
             name (str): name of the molecule (default: None, use filename without pdbqt suffix)
             poses_to_read (int): total number of poses to read (default: None, read all)
             energy_range (float): read docked poses until the maximum energy difference 
@@ -251,22 +266,22 @@ class PDBQTMolecule:
 
         """
         self._current_pose = 0
-        self._pdbqt_filename = pdbqt_filename
+        self._pdbqt_filename = None
         self._atoms = None
         self._positions = None
         self._bonds = None
         self._atom_annotations = None
         self._pose_data = None
-        if name is None:
-            self._name = os.path.splitext(os.path.basename(self._pdbqt_filename))[0]
-        else:
-            self._name = name
+        self._name = name
 
         # Juice all the information from that PDBQT file
         poses_to_read = poses_to_read if poses_to_read is not None else -1
         energy_range = energy_range if energy_range is not None else -1
-        results = _read_ligand_pdbqt_file(self._pdbqt_filename, poses_to_read, energy_range, is_dlg)
+        results = _read_ligand_pdbqt_file(pdbqt_string, poses_to_read, energy_range, is_dlg)
         self._atoms, self._positions, self._atom_annotations, self._pose_data = results
+
+        if self._atoms.shape[0] == 0:
+            raise RuntimeError('read 0 atoms. Consider PDBQTMolecule.from_file(fname)')
 
         # Build KDTrees for each pose (search closest atoms by distance)
         self._KDTrees = [spatial.cKDTree(positions) for positions in self._positions]
@@ -282,6 +297,16 @@ class PDBQTMolecule:
         if self.has_flexible_residues():
             flex_atoms = self._atoms[self._atom_annotations['flexible_residue']]
             self._bonds.update(_identify_bonds(self._atom_annotations['flexible_residue'], flex_atoms['xyz'], flex_atoms['atom_type']))
+
+    @classmethod
+    def from_file(cls, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False): 
+        if name is None:
+            name = os.path.splitext(os.path.basename(pdbqt_filename))[0]
+        with open(pdbqt_filename) as f:
+            pdbqt_string = f.read()
+        instance = cls(pdbqt_string, name, poses_to_read, energy_range, is_dlg) 
+        instance._pdbqt_filename = pdbqt_filename
+        return instance
 
     def __getitem__(self, value):
         if isinstance(value, int):
@@ -308,8 +333,8 @@ class PDBQTMolecule:
         return self
 
     def __repr__(self):
-        repr_str = '<Molecule from PDBQT file %s containing %d poses of %d atoms>'
-        return (repr_str % (self._pdbqt_filename, self._pose_data['n_poses'], self._atoms.shape[0]))
+        repr_str = '<Molecule named %s containing %d poses of %d atoms>'
+        return (repr_str % (self._name, self._pose_data['n_poses'], self._atoms.shape[0]))
 
     @property    
     def name(self):
@@ -643,3 +668,35 @@ class PDBQTMolecule:
         if obmol.NumAtoms() != n_atoms:
             raise RuntimeError('Number of atoms changed after deleting and adding hydrogens')
 
+    def export_rdkit_mol(self, exclude_hydrogens=False):
+        smiles = self._pose_data['smiles'] # REMARK SMILES
+        if smiles is None:
+            raise RuntimeError("need REMARK SMILES in PDBQT file")
+        index_map = self._pose_data['smiles_index_map'] # REMARK SMILES IDS
+        h_parents = self._pose_data['smiles_h_parent'] # REMARK H PARENT
+        mol = Chem.MolFromSmiles(smiles)
+        n_atoms = mol.GetNumAtoms()
+        # https://sourceforge.net/p/rdkit/mailman/message/36474923/
+        conf = Chem.Conformer(n_atoms)
+        n_matched_atoms = 0
+        for i in range(n_atoms):
+            pdbqt_index = index_map[i+1] - 1
+            x, y, z = self._positions[self._current_pose][pdbqt_index, :]
+            conf.SetAtomPosition(i, Point3D(x, y, z))
+        conf_id = mol.AddConformer(conf)
+        if exclude_hydrogens:
+            return mol
+        mol = Chem.AddHs(mol, addCoords=True)
+        conf = mol.GetConformer()
+        used_h = []
+        for (parent_rdkit_index, h_pdbqt_index) in h_parents:
+            h_pdbqt_index -= 1
+            x, y, z = self._positions[self._current_pose][h_pdbqt_index, :]
+            parent_atom = mol.GetAtomWithIdx(parent_rdkit_index - 1)
+            candidate_hydrogens = [atom.GetIdx() for atom in parent_atom.GetNeighbors() if atom.GetAtomicNum() == 1]
+            for h_rdkit_index in candidate_hydrogens:
+                if h_rdkit_index not in used_h:
+                    break
+            used_h.append(h_rdkit_index)
+            conf.SetAtomPosition(h_rdkit_index, Point3D(x, y, z))
+        return mol
