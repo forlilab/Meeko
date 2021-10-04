@@ -5,8 +5,11 @@
 #
 
 import sys
+import json
 
+import numpy as np
 from openbabel import openbabel as ob
+from rdkit import Chem
 from .utils import obutils
 
 
@@ -104,7 +107,7 @@ class PDBQTWriterLegacy():
             self._walk_graph_recursive(neigh, edge_start=next_index)
             self._pdbqt_buffer.append("ENDBRANCH %3d %3d" % (begin, end))
 
-    def write_string(self, mol, remove_index_map=False):
+    def write_string(self, mol, remove_index_map=False, remove_smiles=False):
         """Output a PDBQT file as a string.
         
         Args:
@@ -144,6 +147,66 @@ class PDBQTWriterLegacy():
                 # only after self._walk_graph_recursive
                 self._pdbqt_buffer.insert(i, remark_line)
 
+        if not remove_smiles:
+            sdfstring = obutils.writeMolecule(mol, ftype='sdf')
+            ob_smiles = obutils.writeMolecule(mol, ftype='smi')
+            rdmol = Chem.MolFromMolBlock(sdfstring, removeHs=False)
+            rdmol_noH = Chem.RemoveHs(rdmol)
+            rdkit_smiles = Chem.MolToSmiles(rdmol_noH)
+            #rdmol_noH.Debug()
+            #print('ob:   ', ob_smiles)
+            #print('rdkit:', rdkit_smiles)
+            #tmp = Chem.MolFromSmiles(rdkit_smiles)
+            #tmp.Debug()
+
+            # map smiles noH to smiles with H
+            noH_to_H = []
+            for (index, atom) in enumerate(rdmol.GetAtoms()):
+                if atom.GetAtomicNum() > 1:
+                    noH_to_H.append(index)
+
+            # notably, 3D SDF files written by other toolkits (OEChem, ChemAxon)
+            # seem to not include the chiral flag in the bonds block, only in
+            # the atoms block. RDKit ignores the atoms chiral flag as per the
+            # spec. Since OpenBabel writes 3D SDF files with chiral flags on the bonds
+            # we are good here. Otherwise, when reading SDF (e.g. from PubChem/PDB),
+            # we may need to have RDKit assign stereo from coordinates, see:
+            # https://sourceforge.net/p/rdkit/mailman/message/34399371/
+            order_string = rdmol_noH.GetProp("_smilesAtomOutputOrder")
+            order_string = order_string.replace(',]', ']') # remove trailing comma
+            order = json.loads(order_string) # rdmol_noH to smiles
+            order = list(np.argsort(order))
+            order = {noH_to_H[i]+1: order[i]+1 for i in range(len(order))} # 1-index
+
+            # identify polar hydrogens, which are not in the smiles
+            missing_h = []
+            strings_h_parent = []
+            for key in self._numbering:
+                if key in self.setup.atom_pseudo: continue
+                if key not in order:
+                    atom = mol.GetAtom(key)
+                    if atom.GetAtomicNum() != 1:
+                        raise RuntimeError("non-Hydrogen atom unexpectedely missing from RDKit smiles!?")
+                    missing_h.append(key)
+                    parents = [a for a in ob.OBAtomAtomIter(atom)]
+                    if len(parents) != 1:
+                        raise RuntimeError("expected hydrogen to have exactly one parent")
+                    parent_idx = order[parents[0].GetIdx()]
+                    string = ' %d %d' % (parent_idx, self._numbering[key])
+                    strings_h_parent.append(string)
+            remarks_h_parent = self.strings_to_remarks(strings_h_parent, "REMARK H PARENT")
+            remark_prefix = "REMARK SMILES IDX"
+            remark_idxmap = self.remark_index_map(order, remark_prefix, missing_h)
+            remarks = []
+            remarks.append("REMARK SMILES %s" % rdkit_smiles) # break line at 79 chars?
+            remarks.extend(remark_idxmap)
+            remarks.extend(remarks_h_parent)
+
+            for i, remark_line in enumerate(remarks):
+                # need to use 'insert' because self._numbering is calculated
+                # only after self._walk_graph_recursive
+                self._pdbqt_buffer.insert(i, remark_line)
+
         if self.setup.is_protein_sidechain:
             if len(self._resinfo_set) > 1:
                 print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
@@ -162,19 +225,36 @@ class PDBQTWriterLegacy():
         return '\n'.join(self._pdbqt_buffer) + '\n'
 
 
-    def remark_index_map(self):
-        """ write mapping of atom indices from input molecule to output PDBQT """
+    def remark_index_map(self, order=None, prefix="REMARK INDEX MAP", missing_h=[]):
+        """ write mapping of atom indices from input molecule to output PDBQT
+            order[ob_index(i.e. 'key')] = smiles_index
+        """
 
-        max_line_length = 79
-        remark_lines = []
-        line = 'REMARK INDEX MAP'
+        if order is None: order = {key: key for key in self._numbering}
+        #max_line_length = 79
+        #remark_lines = []
+        #line = prefix
+        strings = []
         for key in self._numbering:
-            if key not in self.setup.atom_pseudo:
-                candidate_text = " %d %d" % (key, self._numbering[key])
-                if (len(line) + len(candidate_text)) < max_line_length:
-                    line += candidate_text
-                else:
-                    remark_lines.append(line)
-                    line = 'REMARK INDEX MAP' + candidate_text
-        remark_lines.append(line)
-        return remark_lines
+            if key in self.setup.atom_pseudo: continue
+            if key in missing_h: continue
+            string = " %d %d" % (order[key], self._numbering[key])
+            strings.append(string)
+        return self.strings_to_remarks(strings, prefix)
+        #    candidate_text = " %d %d" % (order[key], self._numbering[key])
+        #    if (len(line) + len(candidate_text)) < max_line_length:
+        #        line += candidate_text
+        #    else:
+        #        remark_lines.append(line)
+        #        line = 'REMARK INDEX MAP' + candidate_text
+        #remark_lines.append(line)
+        #return remark_lines
+
+    def strings_to_remarks(self, strings, prefix, max_line_length=79):
+        remarks = [prefix]
+        for string in strings:
+            if (len(remarks[-1]) + len(string)) < max_line_length:
+                remarks[-1] += string
+            else:
+                remarks.append(prefix + string)
+        return remarks

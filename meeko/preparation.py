@@ -28,7 +28,7 @@ class MoleculePreparation:
             double_bond_penalty=50, atom_type_smarts={},
             pH_value=None,
             is_protein_sidechain=False, remove_index_map=False,
-            stop_at_defaults=False):
+            stop_at_defaults=False, remove_smiles=False):
 
         self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
         self.hydrate = hydrate
@@ -43,6 +43,7 @@ class MoleculePreparation:
         self.pH_value = pH_value
         self.is_protein_sidechain = is_protein_sidechain
         self.remove_index_map = remove_index_map
+        self.remove_smiles = remove_smiles
 
         if stop_at_defaults: return # create an object to show just the defaults (e.g. to argparse)
 
@@ -191,17 +192,17 @@ class MoleculePreparation:
 
             print('')
     
-    def write_pdbqt_string(self, remove_index_map=None):
+    def write_pdbqt_string(self, remove_index_map=None, remove_smiles=None):
         if remove_index_map is None: remove_index_map = self.remove_index_map
+        if remove_smiles is None: remove_smiles = self.remove_smiles
         if self._mol is not None:
-            return self._writer.write_string(self._mol, remove_index_map)
+            return self._writer.write_string(self._mol, remove_index_map, remove_smiles)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 
-    def write_pdbqt_file(self, pdbqt_filename, remove_index_map=None):
-        if remove_index_map is None: remove_index_map = self.remove_index_map
+    def write_pdbqt_file(self, pdbqt_filename, remove_index_map=None, remove_smiles=None):
         try:
             with open(pdbqt_filename,'w') as w:
-                w.write(self.write_pdbqt_string(remove_index_map))
+                w.write(self.write_pdbqt_string(remove_index_map, remove_smiles))
         except:
             raise RuntimeError('Cannot write PDBQT file %s.' % pdbqt_filename)
