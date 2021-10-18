@@ -150,20 +150,46 @@ class PDBQTWriterLegacy():
         if not remove_smiles:
             sdfstring = obutils.writeMolecule(mol, ftype='sdf')
             ob_smiles = obutils.writeMolecule(mol, ftype='smi')
+
             rdmol = Chem.MolFromMolBlock(sdfstring, removeHs=False)
-            rdmol_noH = Chem.RemoveHs(rdmol)
+            rdmol_noH = Chem.MolFromMolBlock(sdfstring)
             rdkit_smiles = Chem.MolToSmiles(rdmol_noH)
-            #rdmol_noH.Debug()
-            #print('ob:   ', ob_smiles)
-            #print('rdkit:', rdkit_smiles)
-            #tmp = Chem.MolFromSmiles(rdkit_smiles)
-            #tmp.Debug()
 
             # map smiles noH to smiles with H
+            atomic_num_rdmol_noH = [atom.GetAtomicNum() for atom in rdmol_noH.GetAtoms()]
             noH_to_H = []
+            num_H_in_noH = 0 # e.g. stereo imines [H]/N=C keep [H] after RemoveHs()
             for (index, atom) in enumerate(rdmol.GetAtoms()):
-                if atom.GetAtomicNum() > 1:
-                    noH_to_H.append(index)
+                if atom.GetAtomicNum() == 1: continue
+                for i in range(len(noH_to_H), len(atomic_num_rdmol_noH)):
+                    if atomic_num_rdmol_noH[i] > 1: break
+                    noH_to_H.append('H')
+                noH_to_H.append(index)
+            extra_hydrogens = len(atomic_num_rdmol_noH) - len(noH_to_H)
+            if extra_hydrogens > 0:
+                assert(set(atomic_num_rdmol_noH[len(noH_to_H):]) == {1}) 
+                noH_to_H.extend(['H'] * extra_hydrogens)
+
+            # map indices of explicit hydrogens, e.g. stereo imine [H]/N=C
+            for index in range(len(noH_to_H)):
+                if noH_to_H[index] != 'H': continue
+                h_atom = rdmol_noH.GetAtomWithIdx(index)
+                assert(h_atom.GetAtomicNum() == 1)
+                parents = h_atom.GetNeighbors()
+                assert(len(parents) == 1)
+                num_h_in_parent = len([a for a in parents[0].GetNeighbors() if a.GetAtomicNum() == 1])
+                if num_h_in_parent != 1:
+                    msg = "Can't handle %d explicit H for each heavy atomin noH mol.\n" % num_h_in_parent
+                    msg += "Was expecting only imines [H]N=\n"
+                    raise RuntimeError(msg)
+                parent_index_in_mol_with_H = noH_to_H[parents[0].GetIdx()]
+                parent_in_mol_with_H = rdmol.GetAtomWithIdx(parent_index_in_mol_with_H)
+                h_in_mol_with_H = [a for a in parent_in_mol_with_H.GetNeighbors() if a.GetAtomicNum() == 1]  
+                if len(h_in_mol_with_H) != 1:
+                    msg = "Can't handle %d explicit H for each heavy atomin noH mol.\n" % len(h_in_mol_with_H)
+                    msg += "Was expecting only imines [H]N=\n"
+                    raise RuntimeError(msg)
+                noH_to_H[index] = h_in_mol_with_H[0].GetIdx()
 
             # notably, 3D SDF files written by other toolkits (OEChem, ChemAxon)
             # seem to not include the chiral flag in the bonds block, only in
