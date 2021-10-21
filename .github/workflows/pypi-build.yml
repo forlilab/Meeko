@@ -43,7 +43,7 @@ jobs:
         name: dist
         path: dist/*
     - name: Publish sdist and wheel to PyPI
-      if: ${{ success() && github.event_name == 'release' && github.event.action == 'created' }}
+      if: github.event_name == 'release' && github.event.action == 'published'
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_FORLILAB }}
