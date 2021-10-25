@@ -8,9 +8,11 @@ from copy import deepcopy
 from collections import defaultdict, OrderedDict
 
 import numpy as np
-from openbabel import openbabel as ob
 
-from .utils import obutils
+try:
+    from .utils import obutils
+except:
+    from meeko.utils import obutils
 
 
 # based on the assumption we are using OpenBabel
@@ -59,14 +61,13 @@ class MoleculeSetup(object):
         'is_protein_sidechain',
         ]
 
-    def __init__(self, obmol, template=None, flexible_amides=False, is_protein_sidechain=False):
+    def __init__(self, mol, template=None):
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
-        if not isinstance(obmol, ob.OBMol):
-            raise TypeError('Input molecule must be an OBMol but is %s' % type(obmol))
-
         # TODO might be useless, a counter (int) might be enough
+        self.mol = mol
+        self.mol.setup = self
         self.atom_pseudo = []
         self.coord = OrderedDict()  # FIXME all OrderedDict shuold be converted to lists?
         self.charge = OrderedDict()
@@ -88,33 +89,94 @@ class MoleculeSetup(object):
         # this could be used to keep track of transformations? (corner flipping)
         self.history = []
         self.is_protein_sidechain = False
-
-        if template is None:
-            self.init_from_obmol(obmol, flexible_amides, is_protein_sidechain)
-        elif isinstance(template, MoleculeSetup):
+        if isinstance(template, MoleculeSetup):
             self.init_from_template(template)
-        else:
-            raise TypeError('FATAL: template must be an instance of MoleculeSetup')
+        # else:
+        #     raise TypeError('FATAL: template must be an instance of MoleculeSetup')
 
     def copy(self):
         """ return a copy of the current setup"""
         return MoleculeSetup(self.mol, template=self)
 
+
+    def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'), element=None, charge=0.0, atom_type=None, pdbinfo=None, neighbors=None, ignore=False, overwrite=False):
+        """ function to add all atom information at once """
+        if idx is None:
+            idx = len(self.coord)
+        if idx in self.coord and not overwrite:
+            print("ADD_ATOM> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
+            return False
+        self.set_coord(idx, coord)
+        self.set_charge(idx, charge)
+        self.set_element(idx, element)
+        self.set_atom_type(idx, atom_type)
+        if neighbors is None:
+            neighbors = []
+        self.set_neigh(idx, neighbors)
+        self.set_ignore(idx, ignore)
+        return idx
+
+    # pseudo-atoms
+    def add_pseudo(self, coord=np.array([0.0,0.0,0.0], dtype='float'), charge=0.0, anchor_list=None, atom_type=None, bond_type=None, rotatable=False, pdbinfo=None, directional_vectors=None, ignore=False, overwrite=False):
+        """ add a new pseudoatom
+            multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
+
+            if rotatable, makes the anchor atom rotatable to allow the pseudoatom movement
+        """
+        idx = self.atom_true_count + len(self.atom_pseudo) + 1
+        if idx in self.coord and not overwrite:
+            print("ADD_PSEUDO> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
+            return False
+        self.atom_pseudo.append(idx)
+        # add the pseudoatom information to the atoms
+        self.add_atom(idx=idx, coord=coord, 
+                element=0,
+                charge=charge, 
+                atom_type=atom_type,
+                pdbinfo=pdbinfo, 
+                neighbors=neighbors,
+                ignore=ignore,
+                overwrite=overwrite)
+        # self.coord[idx] = coord
+        # self.charge[idx] = charge
+        # self.pdbinfo[idx] = pdbinfo
+        # self.atom_type[idx] = atom_type
+        # self.graph[idx] = []
+        # self.element[idx] = 0
+        # self.set_ignore(idx, ignore)
+        if not anchor_list is None:
+            for anchor in anchor_list:
+                self.add_bond(idx, anchor, 0, rotatable, bond_type=bond_type)
+        if not directional_vectors is None:
+            self.add_interaction_vector(idx, directional_vectors)
+        return idx
+    
+    # Bonds
+    def add_bond(self, idx1, idx2, order=0, rotatable=False, in_rings=None, bond_type=None):
+        """ bond_type default: 0 (non rotatable) """
+        # NOTE: in_ring is used during bond typing to keep endo-cyclic rotatable bonds (e.g., sp3)
+        #       as non-rotatable. Possibly, this might be handled by the bond typer itself?
+        #       the type would allow it
+        # TODO check if in_rings should be checked by this function?
+        if in_rings is None:
+            in_rings = []
+        if not idx2 in self.graph[idx1]:
+            self.graph[idx1].append(idx2)
+        if not idx1 in self.graph[idx2]:
+            self.graph[idx2].append(idx1)
+        self.set_bond(idx1, idx2, order, rotatable, in_rings, bond_type)
+
     # atom types
     def set_atom_type(self, idx, atom_type):
         """ set the atom type for atom index
-
         atom_type : int or str?
-
         return: void
         """
         self.atom_type[idx] = atom_type
 
     def get_atom_type(self, idx):
         """ return the atom type for atom index in the lookup table
-
         idx : int
-
         return: str
         """
         return self.atom_type[idx]
@@ -123,10 +185,8 @@ class MoleculeSetup(object):
     def set_ignore(self, idx, state):
         """ set the ignore flag (bool) for the atom
         (used formerged hydrogen)
-
         idx: int
         state: bool
-
         """
         self.atom_ignore[idx] = state
 
@@ -154,6 +214,18 @@ class MoleculeSetup(object):
         """ return atoms connected to atom index"""
         return self.graph[idx]
 
+    def set_neigh(self, idx, neigh_list):
+        """ update the molecular graph with the neighbor indices provided """
+        if not idx in self.graph:
+            self.graph[idx] = []
+        for n in neigh_list:
+            if not n in self.graph[idx]:
+                self.graph[idx].append(n)
+            if not n in self.graph:
+                self.graph[n] = []
+            if not idx in self.graph[n]:
+                self.graph[n].append(idx)
+
     def get_ignore(self, idx):
         """ return if the atom is ignored"""
         return bool(self.atom_ignore[idx])
@@ -168,7 +240,15 @@ class MoleculeSetup(object):
 
     def get_atom_ring_count(self, idx):
         """ return the number of rings to which this atom belongs"""
+        # FIXME this should be replaced by self.get_atom_rings()
         return len(self.ring_atom_to_ring_id[idx])
+
+    def get_atom_rings(self, idx):
+        # FIXME this should replace self.get_atom_ring_count()
+        """ return the list of rings to which the atom idx belongs"""
+        if idx in self.ring_atom_to_ring_id:
+            return self.ring_atom_to_ring_id[idx]
+        return []
 
     # interaction vectors
     def add_interaction_vector(self, idx, vector_list):
@@ -186,43 +266,10 @@ class MoleculeSetup(object):
         """ delete list of directional interaction vectors for atom idx"""
         del self.interaction_vector[idx]
 
-    # Pseudo-atoms
-    def add_pseudo(self, coord, charge, anchor_list, atom_type, bond_type, rotatable, pdbinfo=None, directional_vectors=None, ignore=False):
-        """ add data about pseudoatom
-            multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
+    def set_pdbinfo(self, idx, data):
+        """ add PDB data (resname/num, atom name, etc.) to the atom """
+        self.pdbinfo[idx] = data
 
-            if rotatable, makes the anchor atom rotatable to allow the pseudoatom movement
-        """
-        idx = self.atom_true_count + len(self.atom_pseudo) + 1
-        self.atom_pseudo.append(idx)
-        self.coord[idx] = coord
-        self.charge[idx] = charge
-        self.pdbinfo[idx] = pdbinfo
-        self.atom_type[idx] = atom_type
-        self.graph[idx] = []
-        self.element[idx] = 0
-        for anchor in anchor_list:
-            self.add_bond(idx, anchor, 0, rotatable, bond_type=bond_type)
-        if not directional_vectors is None:
-            self.add_interaction_vector(idx, directional_vectors)
-        self.set_ignore(idx, ignore)
-        return idx
-    
-    # Bonds
-    def add_bond(self, idx1, idx2, order=0, rotatable=False, in_rings=None, bond_type=None):
-        """ bond_type default: 0 (non rotatable) """
-        # NOTE: in_ring is used during bond typing to keep endo-cyclic rotatable bonds (e.g., sp3)
-        #       as non-rotatable. Possibly, this might be handled by the bond typer itself?
-        #       the type would allow it
-        if in_rings is None:
-            in_rings = []
-        if not idx2 in self.graph[idx1]:
-            self.graph[idx1].append(idx2)
-        if not idx1 in self.graph[idx2]:
-            self.graph[idx2].append(idx1)
-        # bond_id = self.get_bond_id(idx1, idx2)
-        # self.bond[bond_id] = {}
-        self.set_bond(idx1, idx2, order, rotatable, in_rings, bond_type)
 
     def set_bond(self, idx1, idx2, order=None, rotatable=None, in_rings=None, bond_type=None):
         """ populate bond lookup table with properties
@@ -254,11 +301,12 @@ class MoleculeSetup(object):
         bond_id = self.get_bond_id(idx1, idx2)
         del self.bond[bond_id]
         self.graph[idx1].remove(idx2)
-        if not self.graph[idx1]:
-            del self.graph[idx1]
+        # TODO check if we want to delete nodes that have no connections (we might want to keep them)
+        # if not self.graph[idx1]:
+        #     del self.graph[idx1]
         self.graph[idx2].remove(idx1)
-        if not self.graph[idx2]:
-            del self.graph[idx2]
+        # if not self.graph[idx2]:
+        #     del self.graph[idx2]
 
     def get_bond(self, idx1, idx2):
         """ return properties of a bond in the lookup table
@@ -281,26 +329,6 @@ class MoleculeSetup(object):
         idx_max = max(idx1, idx2)
         return (idx_min, idx_max)
 
-    def is_methyl(self, atom_idx):
-        """ identify methyl groups (to be done with SMARTS)"""
-        atom = self.mol.GetAtom(atom_idx)
-        if not (atom.GetAtomicNum() == 6):
-            return False
-        h_count = len([x for x in ob.OBAtomAtomIter(atom) if x.GetAtomicNum() == 1])
-        return h_count == 3
-
-    def init_atom(self):
-        """initialize atom data table"""
-        for a in ob.OBMolAtomIter(self.mol):
-            idx = a.GetIdx()
-            self.coord[idx] = np.asarray(obutils.getAtomCoords(a), dtype='float')
-            self.charge[idx] = a.GetPartialCharge()
-            self.pdbinfo[idx] = obutils.getPdbInfoNoNull(a)
-            self.atom_type[idx] = None
-            self.graph[idx] = [x.GetIdx() for x in ob.OBAtomAtomIter(a)]
-            self.element[idx] = a.GetAtomicNum()
-            # by default all atoms are considered
-            self.set_ignore(idx, False)
 
     def ring_atom_to_ring(self, arg):
         #print("RACCOON core/docking/setup.py  UPDATE YOUR CODE")
@@ -321,61 +349,6 @@ class MoleculeSetup(object):
             self.walk_recursive(neigh, collected, exclude)
         return collected
 
-    def perceive_rings(self):
-        """ collect information about rings"""
-        perceived = self.mol.GetSSSR()
-        for r in perceived:
-            ring_id = tuple(r._path)
-            if r.IsAromatic():
-                self.rings_aromatic.append(ring_id)
-            self.rings[ring_id] = {'corner_flip': False}
-            graph = {}
-            for member in ring_id:
-                # atom to ring lookup
-                self.ring_atom_to_ring_id[member].append(ring_id)
-                # graph of atoms affected by potentia ring movements
-                graph[member] = self.walk_recursive(member, collected=[], exclude=list(ring_id))
-            self.rings[ring_id]['graph'] = graph
-    
-    def init_bond(self, flexible_amides):
-        """initialize bond data table"""
-        for b in ob.OBMolBondIter(self.mol):
-            idx1 = b.GetBeginAtomIdx()
-            idx2 = b.GetEndAtomIdx()
-            bond_order = b.GetBondOrder()
-            if b.IsAromatic():
-                bond_order = 5
-            if b.IsAmide() and not b.IsTertiaryAmide():
-                if not flexible_amides:
-                    bond_order = 999
-            # check if bond is a ring bond, i.e., both atoms belongs to the same ring
-            # TODO make this a single int value
-            in_rings = []
-            if idx1 in self.ring_atom_to_ring_id:
-                in_rings.append(self.ring_atom_to_ring_id[idx1])
-            # if not both atoms are in a ring, or not in the same ring, not a ring bond
-            test1 = (not idx2 in self.ring_atom_to_ring_id)
-            test2 = (not self.ring_atom_to_ring_id[idx2] in in_rings)
-            if test1 or test2:
-                in_rings = []
-            self.add_bond(idx1, idx2, order=bond_order, in_rings=in_rings)
-
-    def init_from_obmol(self, obmol, flexible_amides=False, is_protein_sidechain=False):
-        """generate a new molecule setup
-
-            NOTE: OpenBabel uses 1-based index
-        """
-        # storing info
-        self.mol = obmol
-        self.smarts = obutils.SMARTSmatcher(self.mol)
-        self.atom_true_count = self.mol.NumAtoms()
-        self.init_atom()
-        self.perceive_rings()
-        self.init_bond(flexible_amides)
-        self.mol.setup = self
-        if is_protein_sidechain:
-            self.ignore_backbone()
-    
     def init_from_template(self, template):
         """ copy attributes to duplicate the template setup
         NOTE: the molecule will always keep the original setup (i.e., template)"""
@@ -414,18 +387,4 @@ class MoleculeSetup(object):
                     self.set_ignore(a, True)
 
 
-    def ignore_backbone(self):
-        """ set ignore for PDB atom names 'C', 'N', 'H', and 'O'
-            these atoms are kept in the rigid PDBQT by ReactiveReceptor"""
 
-        exclude_pdbname = {'C': 0, 'N': 0, 'H': 0, 'O': 0} # store counts of found atoms
-        for atom in ob.OBMolAtomIter(self.mol):
-            pdbinfo = obutils.getPdbInfo(atom)
-            if pdbinfo.name.strip() in exclude_pdbname:
-                idx = atom.GetIdx()
-                self.set_ignore(idx, True)
-                exclude_pdbname[pdbinfo.name.strip()] += 1
-        for name in exclude_pdbname:
-            n_found = exclude_pdbname[name]
-            if n_found != 1:
-                print("Warning: expected 1 atom with PDB name '%s' but found %d" % (name, n_found))

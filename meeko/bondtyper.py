@@ -16,7 +16,7 @@ class BondTyperLegacy:
 
     def __call__(self, mol, flexible_amides, rigidify_bonds_smarts, rigidify_bonds_indices):
         """Typing atom bonds in the legacy way
-        
+
         Args:
             mol (OBMol): input OBMol molecule object
 
@@ -83,7 +83,7 @@ class BondTyperLegacy:
         if (bgn == 6 and end == 7) or (bgn == 7 and end == 6):
             return True
         return False
-    
+
     def _is_amidine(self, ob_bond):
         """ python version of openbabel pdbqtformat.cpp/IsImide(OBBond* querybond)"""
         if ob_bond.GetBondOrder() != 1:

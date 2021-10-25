@@ -9,8 +9,11 @@ import sys
 from collections import OrderedDict
 
 from openbabel import openbabel as ob
+from rdkit import Chem
 
 from .setup import MoleculeSetup
+from .molprocessor import MoleculeSetupFromRDKit, MoleculeSetupFromOB
+
 from .atomtyper import AtomTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
@@ -78,23 +81,34 @@ class MoleculePreparation:
 
         if is_protein_sidechain is None: is_protein_sidechain = self.is_protein_sidechain
 
-        if mol.NumAtoms() == 0:
-            raise ValueError('Error: no atoms present in the molecule')
-
-        if self.pH_value is not None:
-            pH_value = float(self.pH_value)
-            mol.CorrectForPH(pH_value)
-
-        # always add hydrogens just in case. Also, correcting for pH deletes hydrogens
-        mol.AddHydrogens() 
-
-        # seems like gasteigar charges are calculated by default. Calling the method
-        # again continues performing iterations from the existing charges
-        #charge_model = ob.OBChargeModel.FindType('Gasteiger')
-        #charge_model.ComputeCharges(mol)
-
         self._mol = mol
-        MoleculeSetup(mol, is_protein_sidechain=is_protein_sidechain)
+        # process openbabel molecule
+        if isinstance(mol, ob.OBMol):
+            if mol.NumAtoms() == 0:
+                raise ValueError('Error: no atoms present in the molecule')
+
+            # TODO these operations do not belong to the preparation steps
+            if self.pH_value is not None:
+                pH_value = float(self.pH_value)
+                mol.CorrectForPH(pH_value)
+
+            # always add hydrogens just in case. Also, correcting for pH deletes hydrogens
+            mol.AddHydrogens() 
+            # TODO /end
+
+            # seems like gasteigar charges are calculated by default. Calling the method
+            # again continues performing iterations from the existing charges
+            #charge_model = ob.OBChargeModel.FindType('Gasteiger')
+            #charge_model.ComputeCharges(mol)
+
+            # MoleculeSetup(mol, is_protein_sidechain=is_protein_sidechain)
+
+            MoleculeSetupFromOB(mol, is_protein_sidechain=is_protein_sidechain )
+        elif isinstance(mol, Chem.rdchem.Mol):
+            if mol.GetNumAtoms() == 0:
+                raise ValueError('Error: no atoms present in the molecule')
+            MoleculeSetupFromRdKit(mol, is_protein_sidechain=is_protein_sidechain )
+
 
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)
