@@ -12,8 +12,6 @@ of docking results which are not yet fully developed. Meeko supports the followi
 * Sampling of macrocyclic conformations during docking [(paper)](https://link.springer.com/article/10.1007/s10822-019-00241-9)
 * Creation of RDKit molecules with docked coordinates from PDBQT or DLG files without loss of bond orders.
 
-## About
-
 Meeko is developed by the [Forli lab](https://forlilab.org/) at the
 [Center for Computational Structural Biology (CCSB)](https://ccsb.scripps.edu)
 at [Scripps Research](https://www.scripps.edu/).
@@ -22,13 +20,20 @@ at [Scripps Research](https://www.scripps.edu/).
 
 * Python (>=3.5)
 * Numpy
+* Scipy
 * Openbabel (>=3)
 * RDKit
+
+Conda or Miniconda can install the dependencies:
+```bash
+conda install -c conda-forge numpy scipy openbabel rdkit
+```
 
 ## Installation (from PyPI)
 ```bash
 $ pip install meeko
 ```
+If using conda, `pip` installs the package in the active environment.
 
 ## Installation (from source)
 
