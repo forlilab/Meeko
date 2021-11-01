@@ -11,6 +11,8 @@ import numpy as np
 from openbabel import openbabel as ob
 from rdkit import Chem
 from .utils import obutils
+from .utils import pdbutils
+
 
 
 class PDBQTWriterLegacy():
@@ -43,8 +45,8 @@ class PDBQTWriterLegacy():
         alt_id = " "
         pdbinfo = self.mol.setup.pdbinfo[atom_idx]
         if pdbinfo is None:
-            pdbinfo = obutils.PDBAtomInfo('', '', 0, '')
-        resinfo = obutils.PDBResInfo(pdbinfo.resName, pdbinfo.resNum, pdbinfo.chain)
+            pdbinfo = pdbutils.PDBAtomInfo('', '', 0, '')
+        resinfo = pdbutils.PDBResInfo(pdbinfo.resName, pdbinfo.resNum, pdbinfo.chain)
         self._resinfo_set.add(resinfo)
         atom_name, res_name, res_num, chain = self._get_pdbinfo_fitting_pdb_chars(pdbinfo)
         in_code = ""
@@ -74,7 +76,7 @@ class PDBQTWriterLegacy():
             member_pool = self.model['rigid_body_members'][node][:]
             member_pool.remove(edge_start)
             member_pool = [edge_start] + member_pool
-        
+
         for member in member_pool:
             if self.setup.atom_ignore[member] == 1:
                 continue
@@ -109,7 +111,7 @@ class PDBQTWriterLegacy():
 
     def write_string(self, mol, remove_index_map=False, remove_smiles=False):
         """Output a PDBQT file as a string.
-        
+
         Args:
             mol (OBMol): OBMol that was prepared with Meeko
 
@@ -148,11 +150,16 @@ class PDBQTWriterLegacy():
                 self._pdbqt_buffer.insert(i, remark_line)
 
         if not remove_smiles:
-            sdfstring = obutils.writeMolecule(mol, ftype='sdf')
-            ob_smiles = obutils.writeMolecule(mol, ftype='smi')
-
-            rdmol = Chem.MolFromMolBlock(sdfstring, removeHs=False)
-            rdmol_noH = Chem.MolFromMolBlock(sdfstring)
+            # TODO not sure what this OB code does here
+            # if isinstance(mol, Chem.rdchem.mol):
+            if isinstance(mol, ob.OBMol):
+                sdfstring = obutils.writeMolecule(mol, ftype='sdf')
+                # ob_smiles = obutils.writeMolecule(mol, ftype='smi')
+                rdmol = Chem.MolFromMolBlock(sdfstring, removeHs=False)
+                rdmol_noH = Chem.MolFromMolBlock(sdfstring)
+            else:
+                rdmol = mol
+                rdmol_noH = Chem.RemoveHs(rdmol)
             rdkit_smiles = Chem.MolToSmiles(rdmol_noH)
 
             # map smiles noH to smiles with H
@@ -167,7 +174,7 @@ class PDBQTWriterLegacy():
                 noH_to_H.append(index)
             extra_hydrogens = len(atomic_num_rdmol_noH) - len(noH_to_H)
             if extra_hydrogens > 0:
-                assert(set(atomic_num_rdmol_noH[len(noH_to_H):]) == {1}) 
+                assert(set(atomic_num_rdmol_noH[len(noH_to_H):]) == {1})
                 noH_to_H.extend(['H'] * extra_hydrogens)
 
             # map indices of explicit hydrogens, e.g. stereo imine [H]/N=C
@@ -184,7 +191,7 @@ class PDBQTWriterLegacy():
                     raise RuntimeError(msg)
                 parent_index_in_mol_with_H = noH_to_H[parents[0].GetIdx()]
                 parent_in_mol_with_H = rdmol.GetAtomWithIdx(parent_index_in_mol_with_H)
-                h_in_mol_with_H = [a for a in parent_in_mol_with_H.GetNeighbors() if a.GetAtomicNum() == 1]  
+                h_in_mol_with_H = [a for a in parent_in_mol_with_H.GetNeighbors() if a.GetAtomicNum() == 1]
                 if len(h_in_mol_with_H) != 1:
                     msg = "Can't handle %d explicit H for each heavy atomin noH mol.\n" % len(h_in_mol_with_H)
                     msg += "Was expecting only imines [H]N=\n"
@@ -238,7 +245,7 @@ class PDBQTWriterLegacy():
                 print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
                 print(self._resinfo_set, file=sys.stderr)
             resinfo = list(self._resinfo_set)[0]
-            pdbinfo = obutils.PDBAtomInfo('', resinfo.resName, resinfo.resNum, resinfo.chain)
+            pdbinfo = pdbutils.PDBAtomInfo('', resinfo.resName, resinfo.resNum, resinfo.chain)
             _, res_name, res_num, chain = self._get_pdbinfo_fitting_pdb_chars(pdbinfo)
             resinfo_string = "{:3s} {:1s}{:4d}".format(res_name, chain, res_num)
             self._pdbqt_buffer.insert(0, 'BEGIN_RES %s' % resinfo_string)

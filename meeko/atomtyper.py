@@ -8,10 +8,11 @@ import os
 import json
 from collections import OrderedDict
 
-from openbabel import openbabel as ob
+# from openbabel import openbabel as ob
 import numpy as np
 
-from .utils import utils, obutils
+# TODO why utils?
+from .utils import utils #, pbutils
 
 
 class AtomTyper:
@@ -43,111 +44,81 @@ class AtomTyper:
         }
     }
     """
-
     def __init__(self, parameters={}):
         self.parameters = json.loads(self.defaults_json)
         for key in parameters:
             self.parameters[key] = json.loads(json.dumps(parameters[key])) # a safe copy
 
-    def __call__(self, obmol):
-        self._type_atoms(obmol)
+    def __call__(self, mol):
+        self._type_atoms(mol)
         if 'OFFATOMS' in self.parameters:
-            cached_offatoms = self._cache_offatoms(obmol)
-            coords = np.array([obutils.getAtomCoords(atom) for atom in ob.OBMolAtomIter(obmol)])
-            self._set_offatoms(obmol, cached_offatoms, coords)
+            cached_offatoms = self._cache_offatoms(mol)
+            coords = [x for x in mol.setup.coord.values()]
+            self._set_offatoms(mol, cached_offatoms, coords)
         return
 
-    def _type_atoms(self, obmol):
-        
+    def _type_atoms(self, mol):
         parsmar = self.parameters['ATOM_PARAMS']
-    
         # ensure every "atompar" is defined in a single "smartsgroup"
         ensure = {}
-    
-        n_atoms = obmol.NumAtoms()
-    
         # go over all "smartsgroup"s
         for smartsgroup in parsmar:
             if smartsgroup == 'comment': continue
             for line in parsmar[smartsgroup]: # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
                 smarts = str(line['smarts'])
                 if 'atype' not in line: continue
-    
                 # get indices of the atoms in the smarts to which the parameters will be assigned
                 idxs = [0] # by default, the first atom in the smarts gets parameterized
                 if 'IDX' in line:
                     idxs = [i - 1 for i in line['IDX']] # convert from 1- to 0-indexing
-    
                 # match SMARTS
-                ob_smarts = ob.OBSmartsPattern()
-                ob_smarts.Init(str(smarts))
-                ob_smarts.Match(obmol)
-                hits = list(ob_smarts.GetUMapList())
-   
+                hits = mol.setup.smarts.find_pattern(smarts)
                 atompar = 'atype' # we care only about 'atype', for now, but may want to extend
                 atom_type = line[atompar]
-    
                 # keep track of every "smartsgroup" that modified "atompar"
                 ensure.setdefault(atompar, [])
                 ensure[atompar].append(smartsgroup)
-
                 # Each "hit" is a tuple of atom indeces that matched the smarts
                 # The length of each "hit" is the number of atoms in the smarts
-                for hit in hits: 
-
+                for hit in hits:
                     # Multiple atoms may be targeted by a single smarts:
                     # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
                     # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
                     for idx in idxs:
-                        obmol.setup.set_atom_type(hit[idx], atom_type) # overrides previous calls
-
+                        mol.setup.set_atom_type(hit[idx], atom_type) # overrides previous calls
         # guarantee that each atompar is exclusive of a single group
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
                 msg = 'ERROR: %s is modified in multiple smartsgroups: %s' % (atompar, set(ensure[atompar]))
                 raise RuntimeError(msg)
-
         # verify that all atoms have been typed
-        for idx in obmol.setup.atom_type:
-            atom_type = obmol.setup.atom_type[idx]
-            if atom_type is None:
+        for idx,atype in mol.setup.atom_type.items():
+            if atype is None:
                 raise RuntimeError('atom number %d is None, but should have been typed' % idx)
         return
 
 
-    def _cache_offatoms(self, obmol):
+    def _cache_offatoms(self, mol):
         """ precalculate off-site atoms """
-
         parsmar = self.parameters['OFFATOMS']
-
         cached_offatoms = {}
         n_offatoms = 0
-
         # each parent atom can only be matched once in each smartsgroup
         for smartsgroup in parsmar:
             if smartsgroup == "comment": continue
-
             tmp = {}
-
             for line in parsmar[smartsgroup]:
-
                 # SMARTS
                 smarts = str(line['smarts'])
-                ob_smarts = ob.OBSmartsPattern()
-                ob_smarts.Init(str(smarts))
-                ob_smarts.Match(obmol)
-                hits = list(ob_smarts.GetUMapList())
-
+                hits = mol.setup.smarts.find_pattern(smarts)
                 # atom indexes in smarts string
                 smarts_idxs = [0]
                 if 'IDX' in line:
                     smarts_idxs = [i - 1 for i in line['IDX']]
-
                 for smarts_idx in smarts_idxs:
                     for hit in hits:
                         parent_idx = hit[smarts_idx] - 1
                         tmp.setdefault(parent_idx, []) # TODO tmp[parent_idx] = [], yeah?
-
                         for offatom in line['OFFATOMS']:
                             # set defaults
                             tmp[parent_idx].append(
@@ -159,64 +130,49 @@ class AtomTyper:
                                              'x': []},
                                  'atom_params': {}
                                 })
-
                             for key in offatom:
-
                                 if key in ['distance', 'x90']:
                                     tmp[parent_idx][-1]['offatom'][key] = offatom[key]
-
                                 # replace SMARTS indexes by the atomic index
                                 elif key in ['z', 'x']:
                                     for i in offatom[key]:
                                         idx = hit[i - 1] - 1
                                         tmp[parent_idx][-1]['offatom'][key].append(idx)
-
                                 # convert degrees to radians
                                 elif key in ['theta', 'phi']:
                                     tmp[parent_idx][-1]['offatom'][key] = np.radians(offatom[key])
-
                                 # ignore comments
                                 elif key in ['comment']:
                                     pass
-
                                 elif key == 'atype':
                                     tmp[parent_idx][-1]['atom_params'][key] = offatom[key]
                                 else:
                                     pass
-
-
             for parent_idx in tmp:
                 for offatom_dict in tmp[parent_idx]:
-
                     #print '1-> ', self.atom_params['q'], len(self.coords)
-
                     atom_params = offatom_dict['atom_params']
                     offatom = offatom_dict['offatom']
                     atomgeom = AtomicGeometry(parent_idx,
                                               neigh=offatom['z'],
                                               xneigh=offatom['x'],
                                               x90=offatom['x90'])
-
                     args = (atom_params['atype'],
                             offatom['distance'],
                             offatom['theta'],
                             offatom['phi'])
-
-
                     # number of coordinates (before adding new offatom)
                     cached_offatoms[n_offatoms] = (atomgeom, args)
                     n_offatoms += 1
-
         return cached_offatoms
 
-    def _set_offatoms(self, obmol, cached_offatoms, coords):
+    def _set_offatoms(self, mol, cached_offatoms, coords):
         """add cached offatoms"""
-
         for k, (atomgeom, args) in cached_offatoms.items():
             (atom_type, dist, theta, phi) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
-            tmp = obutils.getPdbInfoNoNull(obmol.GetAtom(atomgeom.parent + 1))
-            pdbinfo = obutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
+            tmp = mol.setup.get_pdbinfo(atomgeom.parent+1)
+            pdbinfo = utils.pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
             pseudo_atom = {
                     'coord': offatom_coords,
                     'anchor_list': [atomgeom.parent + 1], # convert to 1-indexing
@@ -226,10 +182,8 @@ class AtomTyper:
                     'bond_type': 0,
                     'rotatable': False
                     }
-            obmol.setup.add_pseudo(**pseudo_atom)
+            mol.setup.add_pseudo(**pseudo_atom)
         return
-
-
 
 class AtomicGeometry():
     """generate reference frames and add extra sites"""
@@ -249,14 +203,14 @@ class AtomicGeometry():
         for i in neigh:
             if type(i) != int:
                 raise RuntimeError('neigh indices must be int')
-            self.neigh.append(i) 
+            self.neigh.append(i)
 
-        # list of atoms that 
+        # list of atoms that
         self.xneigh = []
         for i in xneigh:
             if type(i) != int:
                 raise RuntimeError('xneigh indices must be int')
-            self.xneigh.append(i) 
+            self.xneigh.append(i)
 
         self.calc_x = len(self.xneigh) > 0
         self.x90 = x90 # y axis becomes x axis (useful to rotate in-plane by 90 deg)
@@ -278,20 +232,20 @@ class AtomicGeometry():
             x = self._calc_x(coords)
             if self.x90:
                 x = np.cross(self.z, x)
-            y = np.cross(z, x) 
+            y = np.cross(z, x)
             pt = z * distance
-            pt = self._rot3D(pt, y, phi)    
+            pt = self._rot3D(pt, y, phi)
             pt = self._rot3D(pt, z, theta)
             pt += np.array(coords[self.parent])
             return pt
- 
+
     def _calc_z(self, coords):
         """ maximize distance from neigh """
         z = np.zeros(3)
         cumsum = np.zeros(3)
         for i in self.neigh:
             v = np.array(coords[self.parent]) - np.array(coords[i])
-            cumsum += v 
+            cumsum += v
             z += self.normalized(v)
         z = self.normalized(z)
         if np.sum(cumsum**2) < self.PLANAR_TOL**2:
@@ -330,7 +284,7 @@ class AtomicGeometry():
         p0 =(u*(ux+vy+wz)+(x*(v*v+w*w)-u*(vy+wz))*ca+(-wy+vz)*sa)
         p1=(v*(ux+vy+wz)+(y*(u*u+w*w)-v*(ux+wz))*ca+(wx-uz)*sa)
         p2=(w*(ux+vy+wz)+(z*(u*u+v*v)-w*(ux+vy))*ca+(-vx+uy)*sa)
-        return (p0, p1, p2)    
+        return (p0, p1, p2)
 
 
     def normalized(self, vec):

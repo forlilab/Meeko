@@ -18,10 +18,22 @@ class BondTyperLegacy:
         """Typing atom bonds in the legacy way
 
         Args:
-            mol (OBMol): input OBMol molecule object
+            mol: input OBMol/RDKit molecule object
 
             rigidify_bond_smarts (list): patterns to freeze bonds, e.g. conjugated carbons
         """
+        def _is_terminal(idx):
+            """ check if the atom has more than one connection with non-hydrogen atoms"""
+            if mol.setup.get_element(idx) == 1:
+                return True
+            return len([x for x in mol.setup.get_neigh(idx) if not mol.setup.get_element(idx) == 1]) == 1
+        # cache aromatic bonds
+        aromatic_bonds = [set(x) for x in mol.setup.smarts.find_pattern('[a]~[a]') ]
+        # TODO figure out if that's what we want?
+        aromatic_bonds = []
+        # cache amidine bonds
+        amide_bonds = [ set(x) for x in mol.setup.smarts.find_pattern('C(=O)-[$([#7X2])]') ]
+        amidine_bonds = [ set(x) for x in  mol.setup.smarts.find_pattern("[$([#6]~[#7])]~[#7]")]
 
         to_rigidify = set()
         n_smarts = len(rigidify_bonds_smarts)
@@ -36,72 +48,35 @@ class BondTyperLegacy:
                 to_rigidify.add((atom_a, atom_b))
                 to_rigidify.add((atom_b, atom_a))
 
-        for ob_bond in ob.OBMolBondIter(mol):
+        for bond_id, bond_info in mol.setup.bond.items():
             rotatable = True
-            begin = ob_bond.GetBeginAtomIdx()
-            end = ob_bond.GetEndAtomIdx()
-            bond_order = ob_bond.GetBondOrder()
-
-            if (begin, end) in to_rigidify:
+            bond_order = mol.setup.bond[bond_id]['bond_order']
+            # bond requested to be rigid
+            if bond_id in to_rigidify:
                 bond_order = 1.1 # macrocycle class breaks bonds if bond_order == 1
                 rotatable = False
-
-            if bond_order > 1:
+            # non-rotatable bond
+            if bond_info['bond_order'] > 1:
                 rotatable = False
-
-            if ob_bond.IsInRing():
+            # in-ring bond
+            if len(bond_info['in_rings']):
                 rotatable = False
-
-            if ob_bond.GetBeginAtom().GetExplicitDegree() == 1 or ob_bond.GetEndAtom().GetExplicitDegree() == 1: # terminal
-                rotatable = False
-
-            if ob_bond.IsAromatic():
+            # bond between aromatics # TODO careful with this?
+            if bond_id in aromatic_bonds:
                 bond_order = 5
                 rotatable = False
-
-            if mol.setup.is_methyl(begin) or mol.setup.is_methyl(end):
+            # it's a terminal atom (methyl, halogen, hydrogen...)
+            if _is_terminal(bond_id[0]) or _is_terminal(bond_id[1]):
                 rotatable = False
-
-            if ob_bond.IsAmide() and not flexible_amides:
+            # check if bond is amide
+            # NOTE this should have been done during the setup, right?
+            if bond_id in amide_bonds and not flexible_amides:
+                rotatable = False
+                bond_order = 99
+            # amidine
+            if bond_id in amidine_bonds:
                 bond_order = 99
                 rotatable = False
-
-            if self._is_amidine(ob_bond):
-                bond_order = 99
-                rotatable = False
-
-            bond_id = mol.setup.get_bond_id(begin, end)
             mol.setup.bond[bond_id]['rotatable'] = rotatable
             mol.setup.bond[bond_id]['bond_order'] = bond_order
 
-    def _is_imide(self, ob_bond):
-        """ python version of openbabel pdbqtformat.cpp/IsImide(OBBond* querybond)"""
-        if ob_bond.GetBondOrder() != 2:
-            return False
-        bgn = ob_bond.GetBeginAtom().GetAtomicNum()
-        end = ob_bond.GetEndAtom().GetAtomicNum()
-        if (bgn == 6 and end == 7) or (bgn == 7 and end == 6):
-            return True
-        return False
-
-    def _is_amidine(self, ob_bond):
-        """ python version of openbabel pdbqtformat.cpp/IsImide(OBBond* querybond)"""
-        if ob_bond.GetBondOrder() != 1:
-            return False
-        bgn = ob_bond.GetBeginAtom().GetAtomicNum()
-        end = ob_bond.GetEndAtom().GetAtomicNum()
-        if bgn == 6 and end == 7:
-            c = ob_bond.GetBeginAtom()
-            n = ob_bond.GetEndAtom()
-        elif bgn == 7 and end == 6:
-            n = ob_bond.GetBeginAtom()
-            c = ob_bond.GetEndAtom()
-        else:
-            return False
-        if n.GetExplicitDegree() != 3:
-            return False
-        # make sure C is attached to =N
-        for b in ob.OBAtomBondIter(c):
-            if self._is_imide(b):
-                return True
-        return False

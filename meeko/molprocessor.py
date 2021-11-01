@@ -3,7 +3,7 @@ from openbabel import openbabel as ob
 
 import numpy as np
 
-from setup import MoleculeSetup
+from .setup import MoleculeSetup
 from .utils import obutils, rdkitutils
 
 
@@ -35,6 +35,8 @@ RDKIT_BOND_TABLE = {
         "TWOANDAHALF" : 8,
                     }
 
+
+# TODO : remove flexible amide option here: it should belong to the legacy bond typer
 
 class MoleculeSetupInit(object):
     """ prototype class for generating molecule setups """
@@ -128,6 +130,7 @@ class MoleculeSetupFromOB():
         # TODO check if the molecule has properties already (populate setup fields from SDF fields)
         # create a setup for the molecule
         self.setup = MoleculeSetup(self.mol)
+        self.setup.name = self.mol.GetTitle()
         # define an OB SMARTS pattern matcher
         self.setup.smarts = obutils.SMARTSmatcher(self.mol)
         # initialize the total count of true atoms
@@ -142,16 +145,6 @@ class MoleculeSetupFromOB():
         if is_protein_sidechain:
             self.ignore_backbone()
 
-    # TODO used only by the legacy bond typer, to be removed once PDBQT is dropped
-    # TODO maybe move into the bond typer as a SMARTS matching pattern?
-    # def is_methyl(self, atom_idx):
-    #     """ identify methyl groups (to be done with SMARTS)"""
-    #     atom = self.mol.GetAtom(atom_idx)
-    #     if not (atom.GetAtomicNum() == 6):
-    #         return False
-    #     h_count = len([x for x in ob.OBAtomAtomIter(atom) if x.GetAtomicNum() == 1])
-    #     return h_count == 3
-
     def init_atom(self):
         """initialize atom data table"""
         for a in ob.OBMolAtomIter(self.mol):
@@ -163,7 +156,8 @@ class MoleculeSetupFromOB():
                     atom_type=None,
                     pdbinfo = obutils.getPdbInfoNoNull(a),
                     neighbors=[x.GetIdx() for x in ob.OBAtomAtomIter(a)],
-                    ignore=False)
+                    ignore=False, chiral=a.IsChiral())
+            # TODO check consistency for chiral model between OB and RDKit
 
     def perceive_rings(self):
         """ collect information about rings"""
@@ -176,7 +170,7 @@ class MoleculeSetupFromOB():
             graph = {}
             for member in ring_id:
                 # atom to ring lookup
-                self.setup.ring_atom_to_ring_id[member].append(ring_id)
+                self.setup.atom_to_ring_id[member].append(ring_id)
                 # graph of atoms affected by potential ring movements
                 graph[member] = self.setup.walk_recursive(member, collected=[], exclude=list(ring_id))
             self.setup.rings[ring_id]['graph'] = graph
@@ -196,6 +190,7 @@ class MoleculeSetupFromOB():
             idx1_rings = set(self.mol.setup.get_atom_rings(idx1))
             idx2_rings = set(self.mol.setup.get_atom_rings(idx2))
             in_rings = list(set.intersection(idx1_rings, idx2_rings))
+            self.setup.add_bond(idx1, idx2, order=bond_order, in_rings=in_rings)
 
     def ignore_backbone(self):
         """ set ignore for PDB atom names 'C', 'N', 'H', and 'O'
@@ -236,6 +231,10 @@ class MoleculeSetupFromRDKit:
         self.mol = mol
         # create a setup for the molecule
         self.setup = MoleculeSetup(self.mol)
+        try:
+            self.setup.name = self.mol.GetProp('_Name')
+        except:
+            pass
         # define an RDKit SMARTS pattern matcher
         # (in RDKit every molecule can match a SMARTS, but for compatibility, we need an object providing find_pattern()
         self.setup.smarts = rdkitutils.RDKitSMARTSHelper(mol)
@@ -257,7 +256,7 @@ class MoleculeSetupFromRDKit:
         """store information used for the bond parametrization """
         for name, pattern_info in self._amide_bonds.items():
             pattern = pattern_info[0]
-            print("processing",name)
+            print("caching",name)
             found = self.setup.smarts.find_pattern(pattern)
             if len(found):
                 for f in found:
@@ -265,20 +264,26 @@ class MoleculeSetupFromRDKit:
 
     def init_atom(self, assign_charges=False):
         """ initialize the atom table information """
-
         # extract the coordinates
         c = self.mol.GetConformers()[0]
         coords = c.GetPositions()
-
         # extract/generate charges
         if assign_charges:
             Chem.AllChem.ComputeGasteigerCharges(self.mol)
             charges = [a.GetDoubleProp('_GasteigerCharge') for a in self.mol.GetAtoms()]
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
+        # perceive chirality
+        # TODO check consistency for chiral model between OB and RDKit
+        chiral_info = {}
+        for data in Chem.FindMolChiralCenters(self.mol, includeUnassigned=True):
+            chiral_info[data[0]] = data[1]
         # register atom
         for a in self.mol.GetAtoms():
             idx = a.GetIdx()
+            chiral = False
+            if idx in chiral_info:
+                chiral = chiral_info[idx]
             self.setup.add_atom(idx,
                     coord=coords[idx],
                     element=a.GetAtomicNum(),
@@ -286,6 +291,7 @@ class MoleculeSetupFromRDKit:
                     atom_type=None,
                     pdbinfo = rdkitutils.getPdbInfoNoNull(a),
                     neighbors = [n.GetIdx() for n in a.GetNeighbors() ],
+                    chiral=False,
                     ignore=False)
 
     def init_bond(self, flexible_amides):
@@ -308,15 +314,6 @@ class MoleculeSetupFromRDKit:
                     bond_order = 999
             else:
                 rotatable = False
-            #    in_rings = []
-            #    # if idx1 in self.ring_atom_to_ring_id:
-            #    #     in_rings.append(self.ring_atom_to_ring_id[idx1])
-            #    in_rings += self.mol.setup.get_atom_rings(idx1)
-            #    # if not both atoms are in a ring, or not in the same ring, not a ring bond
-            #    test1 = (not idx2 in self.setup.ring_atom_to_ring_id)
-            #    test2 = (not self.setup.ring_atom_to_ring_id[idx2] in in_rings)
-            #    if test1 or test2:
-            #        in_rings = []
             idx1_rings = set(self.mol.setup.get_atom_rings(idx1))
             idx2_rings = set(self.mol.setup.get_atom_rings(idx2))
             in_rings = list(set.intersection(idx1_rings, idx2_rings))
@@ -345,7 +342,7 @@ class MoleculeSetupFromRDKit:
             graph = {}
             for member in ring_id:
                 # atom to ring lookup
-                self.setup.ring_atom_to_ring_id[member].append(ring_id)
+                self.setup.atom_to_ring_id[member].append(ring_id)
                 # graph of atoms affected by potential ring movements
                 graph[member] = self.setup.walk_recursive(member, collected=[], exclude=list(ring_id))
             self.setup.rings[ring_id]['graph'] = graph

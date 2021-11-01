@@ -5,13 +5,14 @@
 #
 
 # TODO this should be in its own obabelutils module
-from collections import namedtuple
+# from collections import namedtuple
 
 import numpy as np
 from openbabel import openbabel as ob
 
 from . import geomutils
 from . import utils
+from . import pdbutils
 
 mini_periodic_table = {
         1: 'H', 2: 'He', 3: 'Li', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 11: 'Na', 12: 'Mg',
@@ -20,8 +21,8 @@ mini_periodic_table = {
 
 
 # named tuple to contain information about an atom
-PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
-PDBResInfo  = namedtuple('PDBResInfo',       "resName resNum chain")
+# PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
+# PDBResInfo  = namedtuple('PDBResInfo',       "resName resNum chain")
 
 
 def getAtomIdxCoords(obmol, atom_idx):
@@ -117,7 +118,7 @@ def getPdbInfo(atom):
     resNum = int(res.GetNumString())  # safe way for negative resnumbers
     resName = res.GetName()
 
-    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
+    return pdbutils.PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
 
 def getPdbInfoNoNull(atom):
@@ -134,7 +135,7 @@ def getPdbInfoNoNull(atom):
         chain = res.GetChain()
         resNum = int(res.GetNumString())  # safe way for negative resnumbers
         resName = res.GetName()
-    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
+    return pdbutils.PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
 
 class SmartsFinder:
@@ -183,19 +184,21 @@ class SMARTSmatcher(object):
             return [list(x) for x in self._finder.GetMapList()]
 
 
-class OBMolSupplier:
+class OBMolSupplier_OLD:
     """iterator returning OBMols from multi-molecule string (MOL2, SDF, etc)"""
 
     def __init__(self, string, _format):
+        print("INITIALIZED")
         self.string = string
         self.format = _format
-
-    def __iter__(self):
         self.conv = ob.OBConversion()
         status = self.conv.SetInFormat(self.format)
         if not status:
             raise RuntimeError('could not set OBConversion input format: %s' % self.format)
+
+    def __iter__(self):
         self.mol = ob.OBMol()
+        print("ITER CALLED", self.mol)
         self.keep_reading = self.conv.ReadString(self.mol, self.string)
         if not self.keep_reading:
             raise RuntimeError
@@ -204,8 +207,39 @@ class OBMolSupplier:
     def __next__(self):
         if self.keep_reading:
             oldmol = self.mol
+            print("OLDMOL IS", oldmol)
             self.mol = ob.OBMol()
+            print("NEWMOL IS", self.mol)
             self.keep_reading = self.conv.Read(self.mol)
+
             return oldmol
         else:
             raise StopIteration
+
+
+class OBMolSupplier:
+    def __init__(self, fname, _format):
+        """  """
+        self._c = 0
+        self.fname = fname
+        self.conv = ob.OBConversion()
+        status = self.conv.SetInFormat(_format)
+        if not status:
+            raise RuntimeError('could not set OBConversion input format: %s' % _format)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        mol = ob.OBMol()
+        if self._c == 0:
+            more = self.conv.ReadFile(mol, self.fname)
+        else:
+            more = self.conv.Read(mol)
+        self._c+=1
+        if more:
+            return mol
+        else:
+            raise StopIteration
+
+

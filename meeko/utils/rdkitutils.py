@@ -43,7 +43,7 @@ def getPdbInfoNoNull(atom):
     else:
         name = minfo.GetName()
         chain = minfo.GetChainId()
-        resNum = minfo.GetResidueNum() 
+        resNum = minfo.GetResidueNum()
         resName = minfo.GetResidueName()
     return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
@@ -53,6 +53,48 @@ class RDKitSMARTSHelper:
         self.mol = mol
     def find_pattern(self, pattern):
         patt = Chem.MolFromSmarts(pattern)
-        return self.mol.GetSubstructMatch(patt)
+        return self.mol.GetSubstructMatches(patt)
 
 
+class Mol2MolSupplier():
+    """ RDKit Mol2 molecule supplier.
+    Parameters
+        sanitize: perform RDKit sanitization of Mol2 molecule"""
+    def __init__(self, file, sanitize=True, removeHs=False, cleanupSubstructures=True):
+        self.fp = open(file, 'r')
+        self._opts = {'sanitize':sanitize,
+                'removeHs':removeHs,
+                'cleanupSubstructures':cleanupSubstructures }
+        self.buff = []
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        """ iterator step """
+        while True:
+            line = self.fp.readline()
+            # empty line
+            if not line:
+                if len(self.buff):
+                    # buffer full, returning last molecule
+                    mol=Chem.MolFromMol2Block("".join(self.buff), **self._opts)
+                    self.buff = []
+                    return mol
+                # buffer empty, stopping the iteration
+                self.fp.close()
+                raise StopIteration
+            if '@<TRIPOS>MOLECULE' in line:
+                # first molecule parsed
+                if len(self.buff)==0:
+                    self.buff.append(line)
+                else:
+                    # found the next molecule, breaking to return the complete one
+                    break
+            else:
+                # adding another line in the current molecule
+                self.buff.append(line)
+        # found a complete molecule, returning it
+        mol=Chem.MolFromMol2Block("".join(self.buff), **self._opts)
+        self.buff = [line]
+        return mol

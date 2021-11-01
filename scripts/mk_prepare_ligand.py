@@ -9,15 +9,24 @@ import sys
 import json
 
 from openbabel import openbabel as ob
+from rdkit import Chem
 
 from meeko import MoleculePreparation
+from meeko import rdkitutils
 from meeko import obutils
 
 def cmd_lineparser():
-
+    backend = None
     conf_parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
     conf_parser.add_argument('-c', '--config_file',
             help='configure MoleculePreparation from JSON file. Overriden by command line args.')
+    if '--ob_backend' in sys.argv:
+        backend = 'ob'
+        from meeko import obutils
+        print("\n\n******************************************************************")
+        print(" WARNING! OB backend selected * DO NOT USE IN PRODUCTION")
+        print("******************************************************************\n\n")
+        sys.argv.remove('--ob_backend')
     confargs, remaining_argv = conf_parser.parse_known_args()
 
     # initalize config dict with defaults from MoleculePreparation object
@@ -89,11 +98,12 @@ def cmd_lineparser():
             print("Argument -/-- incompatible with --multimol_outdir and --multimol_prefix", file=sys.stderr)
             sys.exit(2)
 
-    return args, config
+    return args, config, backend
 
 
 if __name__ == '__main__':
-    args, config = cmd_lineparser()
+
+    args, config, backend = cmd_lineparser()
     multimol_output_directory = args.multimol_output_directory
     multimol_prefix = args.multimol_prefix
     input_molecule_filename = args.input_molecule_filename
@@ -118,14 +128,28 @@ if __name__ == '__main__':
         indices[0] = indices[0] - 1 # convert from 1- to 0-index
         indices[1] = indices[1] - 1
 
-    frmt = os.path.splitext(input_molecule_filename)[1][1:]
-    with open(input_molecule_filename) as f:
-        input_string = f.read()
-    obmol_supplier = obutils.OBMolSupplier(input_string, frmt)
 
+    fname, ext = os.path.splitext(input_molecule_filename)
+    ext = ext[1:].lower()
+    # RKDit formats
+    if backend is None:
+        print("BACKEND IS DEFAULT (rdkit)")
+        parsers = {'sdf':Chem.SDMolSupplier, 'mol2': rdkitutils.Mol2MolSupplier}
+        if not ext in parsers:
+            print("*ERROR* Format [%s] not supported." % ext)
+            sys.exit(1)
+        mol_supplier = parsers[ext](input_molecule_filename)
+    elif backend == 'ob':
+        print("DEV-ONLY backend initialized")
+        mol_supplier = obutils.OBMolSupplier(input_molecule_filename, ext)
+    # with open(input_molecule_filename) as f:
+    #     input_string = f.read()
+    # # FIXME this should be replaced by rdkit
+    # # FIXME an option could be provided to parse the file with OB to support multiple formats?
+    # # FIXME if SDF or Mol2 are sufficient, then the OB part here is not necessary)
+    # obmol_supplier = obutils.OBMolSupplier(input_string, ext)
     mol_counter = 0
-
-    for mol in obmol_supplier:
+    for mol in mol_supplier:
 
         mol_counter += 1
 
@@ -148,7 +172,7 @@ if __name__ == '__main__':
         if not do_process_multimol:
             if not args.redirect_stdout:
                 if args.output_pdbqt_filename is None:
-                    output_pdbqt_filename = '%s.pdbqt' % os.path.splitext(input_molecule_filename)[0]
+                    output_pdbqt_filename = '%s.pdbqt' % fname
                 else:
                     output_pdbqt_filename = args.output_pdbqt_filename
 
@@ -156,9 +180,9 @@ if __name__ == '__main__':
             else:
                 print(ligand_prepared, end='')
 
-        # multiple molecule mode        
+        # multiple molecule mode
         else:
-            name = mol.GetTitle()
+            name = mol.setup.name
             if name in pdbqt_byname:
                 duplicates.append(name)
             if multimol_prefix is not None:
