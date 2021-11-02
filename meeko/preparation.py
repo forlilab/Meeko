@@ -85,6 +85,8 @@ class MoleculePreparation:
             raise TypeError("Molecule is not an instance of supported types: %s" % type(mol))
         mol_processor = self._molprocessors[mol_type]
         mol_processor(mol, is_protein_sidechain)
+        if mol_type == ob.OBMol:
+            print("WARNING: copy_coords index maps fail for OB. Change to 0-indices.", file=sys.stderr)
         self.mol = mol
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)

@@ -8,25 +8,24 @@ import os
 import sys
 import json
 
-from openbabel import openbabel as ob
 from rdkit import Chem
 
 from meeko import MoleculePreparation
 from meeko import rdkitutils
 from meeko import obutils
 
+# TODO put openbabel inside a try statement
+from openbabel import openbabel as ob
+from meeko import obutils
+
 def cmd_lineparser():
-    backend = None
+    backend = 'rdkit'
+    if '--ob_backend' in sys.argv:
+        backend = 'ob'
+        sys.argv.remove('--ob_backend')
     conf_parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
     conf_parser.add_argument('-c', '--config_file',
             help='configure MoleculePreparation from JSON file. Overriden by command line args.')
-    if '--ob_backend' in sys.argv:
-        backend = 'ob'
-        from meeko import obutils
-        print("\n\n******************************************************************")
-        print(" WARNING! OB backend selected * DO NOT USE IN PRODUCTION")
-        print("******************************************************************\n\n")
-        sys.argv.remove('--ob_backend')
     confargs, remaining_argv = conf_parser.parse_known_args()
 
     # initalize config dict with defaults from MoleculePreparation object
@@ -128,19 +127,16 @@ if __name__ == '__main__':
         indices[0] = indices[0] - 1 # convert from 1- to 0-index
         indices[1] = indices[1] - 1
 
-
     fname, ext = os.path.splitext(input_molecule_filename)
     ext = ext[1:].lower()
-    # RKDit formats
-    if backend is None:
-        print("BACKEND IS DEFAULT (rdkit)")
-        parsers = {'sdf':Chem.SDMolSupplier, 'mol2': rdkitutils.Mol2MolSupplier}
+    if backend == 'rdkit':
+        parsers = {'sdf': Chem.SDMolSupplier, 'mol2': rdkitutils.Mol2MolSupplier}
         if not ext in parsers:
             print("*ERROR* Format [%s] not supported." % ext)
             sys.exit(1)
-        mol_supplier = parsers[ext](input_molecule_filename)
+        mol_supplier = parsers[ext](input_molecule_filename, removeHs=False) # input must have explicit H
     elif backend == 'ob':
-        print("DEV-ONLY backend initialized")
+        print("Using openbabel instead of rdkit")
         mol_supplier = obutils.OBMolSupplier(input_molecule_filename, ext)
     # with open(input_molecule_filename) as f:
     #     input_string = f.read()

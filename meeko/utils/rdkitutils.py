@@ -60,8 +60,8 @@ class Mol2MolSupplier():
     """ RDKit Mol2 molecule supplier.
     Parameters
         sanitize: perform RDKit sanitization of Mol2 molecule"""
-    def __init__(self, file, sanitize=True, removeHs=False, cleanupSubstructures=True):
-        self.fp = open(file, 'r')
+    def __init__(self, filename, sanitize=True, removeHs=False, cleanupSubstructures=True):
+        self.fp = open(filename, 'r')
         self._opts = {'sanitize':sanitize,
                 'removeHs':removeHs,
                 'cleanupSubstructures':cleanupSubstructures }

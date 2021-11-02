@@ -1,4 +1,5 @@
 from rdkit import Chem
+from rdkit.Chem import rdPartialCharges
 from openbabel import openbabel as ob
 
 import numpy as np
@@ -114,13 +115,13 @@ class MoleculeSetupInit(object):
 # TODO rename MoleculeSetupOB
 class MoleculeSetupFromOB():
     """ create an instance of the setup from an OB molecule """
-    def __init__(self, mol, flexible_amides=False, is_protein_sidechain=False):
+    def __init__(self, mol, flexible_amides=False, is_protein_sidechain=False, assign_charges=True):
         """ initialize the setup definition with an OBMol """
         if not isinstance(mol, ob.OBMol):
             raise TypeError('Input molecule must be an OBMol but is %s' % type(obmol))
-        self.init_mol(mol, flexible_amides, is_protein_sidechain)
+        self.init_mol(mol, flexible_amides, is_protein_sidechain, assign_charges)
 
-    def init_mol(self, mol, flexible_amides=False, is_protein_sidechain=False):
+    def init_mol(self, mol, flexible_amides, is_protein_sidechain, assign_charges):
         """generate a new molecule setup
 
             NOTE: OpenBabel uses 1-based index
@@ -136,7 +137,7 @@ class MoleculeSetupFromOB():
         # initialize the total count of true atoms
         self.setup.atom_true_count = self.mol.NumAtoms()
         # extract atom information
-        self.init_atom()
+        self.init_atom(assign_charges)
         # perceive ring information
         self.perceive_rings()
         # initialize bonds
@@ -145,14 +146,15 @@ class MoleculeSetupFromOB():
         if is_protein_sidechain:
             self.ignore_backbone()
 
-    def init_atom(self):
+    def init_atom(self, assign_charges):
         """initialize atom data table"""
         for a in ob.OBMolAtomIter(self.mol):
             # TODO fix this to be zero-based?
+            partial_charge = a.GetPartialCharge() * float(assign_charges)
             self.setup.add_atom( a.GetIdx(),
                     coord=np.asarray(obutils.getAtomCoords(a), dtype='float'),
                     element=a.GetAtomicNum(),
-                    charge=a.GetPartialCharge(),
+                    charge=partial_charge,
                     atom_type=None,
                     pdbinfo = obutils.getPdbInfoNoNull(a),
                     neighbors=[x.GetIdx() for x in ob.OBAtomAtomIter(a)],
@@ -213,7 +215,7 @@ class MoleculeSetupFromOB():
 
 class MoleculeSetupFromRDKit:
     """ create molecular setup for an RDKit molecule """
-    def __init__(self, mol, flexible_amides=False, is_protein_sidechain=False, assign_charges=False):
+    def __init__(self, mol, flexible_amides=False, is_protein_sidechain=False, assign_charges=True):
         # FIXME these special types are necessary only to keep track of amide bonds
         # to make them non rotatable with the old AD4/Vina force fields
         # eventually it will be removed when the new ff will be deployed
@@ -222,9 +224,9 @@ class MoleculeSetupFromRDKit:
                          }
         if not isinstance(mol, Chem.rdchem.Mol):
             raise TypeError('Input molecule must be a RDKit.Chem.Mol but is %s' % type(mol))
-        self.init_mol(mol, flexible_amides=flexible_amides, is_protein_sidechain=is_protein_sidechain, assign_charges=assign_charges)
+        self.init_mol(mol, flexible_amides, is_protein_sidechain, assign_charges)
 
-    def init_mol(self, mol, flexible_amides=False, is_protein_sidechain=False, assign_charges=True):
+    def init_mol(self, mol, flexible_amides, is_protein_sidechain, assign_charges):
         """perform the list of operations required to process the molecule
         """
         # store molecule object
@@ -262,14 +264,14 @@ class MoleculeSetupFromRDKit:
                 for f in found:
                     self._amide_bonds[name][1].append(set(f))
 
-    def init_atom(self, assign_charges=False):
+    def init_atom(self, assign_charges):
         """ initialize the atom table information """
         # extract the coordinates
         c = self.mol.GetConformers()[0]
         coords = c.GetPositions()
         # extract/generate charges
         if assign_charges:
-            Chem.AllChem.ComputeGasteigerCharges(self.mol)
+            Chem.rdPartialCharges.ComputeGasteigerCharges(self.mol)
             charges = [a.GetDoubleProp('_GasteigerCharge') for a in self.mol.GetAtoms()]
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
@@ -347,13 +349,13 @@ class MoleculeSetupFromRDKit:
                 graph[member] = self.setup.walk_recursive(member, collected=[], exclude=list(ring_id))
             self.setup.rings[ring_id]['graph'] = graph
 
-    def ignore_backbone(self):
+    def ignore_backbone(self): # TODO
         """ ignore backbone information """
-        # TODO
+        raise NotImplementedError
 
     def write_mol(self, fname=None, _format='sdf'):
         """ write the fully configured molecule in a standard format (SDF?) """
-        pass
+        raise NotImplementedError
         # SDF MOL FORMAT
         # - extract coordinates
         # upate molecule coordinates from the setup.coord field:

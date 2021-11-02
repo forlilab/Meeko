@@ -263,7 +263,7 @@ class PDBQTWriterLegacy():
             order[ob_index(i.e. 'key')] = smiles_index
         """
 
-        if order is None: order = {key: key for key in self._numbering}
+        if order is None: order = {key: key+1 for key in self._numbering} # FIXME key+1 breaks OB
         #max_line_length = 79
         #remark_lines = []
         #line = prefix
