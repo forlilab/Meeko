@@ -11,8 +11,8 @@ from collections import OrderedDict
 from openbabel import openbabel as ob
 from rdkit import Chem
 
-from .molprocessor import MoleculeSetupFromOB, MoleculeSetupFromRDKit
-from .setup import MoleculeSetup
+from .setup import OBMoleculeSetup
+from .setup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
@@ -47,7 +47,7 @@ class MoleculePreparation:
 
         if stop_at_defaults: return # create an object to show just the defaults (e.g. to argparse)
 
-        self.mol = None
+        self.setup = None
         self._atom_typer = AtomTyper(self.atom_type_smarts)
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(
@@ -55,9 +55,8 @@ class MoleculePreparation:
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
-        self._molprocessors ={ ob.OBMol: MoleculeSetupFromOB,
-                        Chem.rdchem.Mol: MoleculeSetupFromRDKit,
-                }
+        self._classes_setup = {ob.OBMol: OBMoleculeSetup,
+                        Chem.rdchem.Mol: RDKitMoleculeSetup}
 
     @classmethod
     def init_just_defaults(cls):
@@ -81,32 +80,30 @@ class MoleculePreparation:
         if is_protein_sidechain is None:
             is_protein_sidechain = self.is_protein_sidechain
         mol_type = type(mol)
-        if not mol_type in self._molprocessors:
+        if not mol_type in self._classes_setup:
             raise TypeError("Molecule is not an instance of supported types: %s" % type(mol))
-        mol_processor = self._molprocessors[mol_type]
-        mol_processor(mol, is_protein_sidechain)
-        if mol_type == ob.OBMol:
-            print("WARNING: copy_coords index maps fail for OB. Change to 0-indices.", file=sys.stderr)
-        self.mol = mol
+        setup_class = self._classes_setup[mol_type]
+        setup = setup_class(mol, is_protein_sidechain)
+        self.setup = setup
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)
-        self._atom_typer(mol)
+        self._atom_typer(setup)
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
         # disabled
         # 2b. merge_h_classic
         if not self.keep_nonpolar_hydrogens:
-            mol.setup.merge_hydrogen()
+            setup.merge_hydrogen()
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(mol, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
+        self._bond_typer(setup, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
         # 4 . hydrate molecule
         if self.hydrate:
-            self._water_builder.hydrate(mol)
+            self._water_builder.hydrate(setup)
         # 5.  break macrocycles into open/linear form
         if self.macrocycle:
             # calculate possible breakable bonds
-            self._macrocycle_typer.search_macrocycle(mol)
+            self._macrocycle_typer.search_macrocycle(setup)
         # 6.  build flexibility...
         # 6.1 if macrocycles typed:
         #     - walk the setup graph by skipping proposed closures
@@ -119,11 +116,12 @@ class MoleculePreparation:
         # TODO restore legacy AD types for PDBQT
         #self._atom_typer.set_param_legacy(mol)
         if is_protein_sidechain:
-            calpha_atom_index = self.get_calpha_atom_index(mol) # 1-index
-            self._flex_builder(mol, root_atom_index=calpha_atom_index)
-            mol.setup.is_protein_sidechain = True
+            calpha_atom_index = self.get_calpha_atom_index(setup.mol) # 1-index
+            new_setup = self._flex_builder(mol, root_atom_index=calpha_atom_index)
+            new_setup.is_protein_sidechain = True
         else:
-            self._flex_builder(mol, root_atom_index=None)
+            new_setup = self._flex_builder(setup, root_atom_index=None)
+        self.setup = new_setup
         # TODO re-run typing after breaking bonds
         # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
 
@@ -182,8 +180,8 @@ class MoleculePreparation:
     def write_pdbqt_string(self, remove_index_map=None, remove_smiles=None):
         if remove_index_map is None: remove_index_map = self.remove_index_map
         if remove_smiles is None: remove_smiles = self.remove_smiles
-        if self.mol is not None:
-            return self._writer.write_string(self.mol, remove_index_map, remove_smiles)
+        if self.setup is not None:
+            return self._writer.write_string(self.setup, remove_index_map, remove_smiles)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 

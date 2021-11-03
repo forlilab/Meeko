@@ -116,14 +116,13 @@ class HydrateMoleculeLegacy:
 
         return positions
 
-    def hydrate(self, mol):
+    def hydrate(self, setup):
         """Add water molecules to the ligand
 
         Args:
-            mol (OBMol): input OBMol molecule object
+            setup: MoleculeSetup object
 
         """
-        setup = mol.setup
         water_anchors = []
         water_positions = []
         # It will be the same distance for all of the water molecules

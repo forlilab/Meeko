@@ -49,15 +49,15 @@ class AtomTyper:
         for key in parameters:
             self.parameters[key] = json.loads(json.dumps(parameters[key])) # a safe copy
 
-    def __call__(self, mol):
-        self._type_atoms(mol)
+    def __call__(self, setup):
+        self._type_atoms(setup)
         if 'OFFATOMS' in self.parameters:
-            cached_offatoms = self._cache_offatoms(mol)
-            coords = [x for x in mol.setup.coord.values()]
-            self._set_offatoms(mol, cached_offatoms, coords)
+            cached_offatoms = self._cache_offatoms(setup)
+            coords = [x for x in setup.coord.values()]
+            self._set_offatoms(setup, cached_offatoms, coords)
         return
 
-    def _type_atoms(self, mol):
+    def _type_atoms(self, setup):
         parsmar = self.parameters['ATOM_PARAMS']
         # ensure every "atompar" is defined in a single "smartsgroup"
         ensure = {}
@@ -72,7 +72,7 @@ class AtomTyper:
                 if 'IDX' in line:
                     idxs = [i - 1 for i in line['IDX']] # convert from 1- to 0-indexing
                 # match SMARTS
-                hits = mol.setup.smarts.find_pattern(smarts)
+                hits = setup.find_pattern(smarts)
                 atompar = 'atype' # we care only about 'atype', for now, but may want to extend
                 atom_type = line[atompar]
                 # keep track of every "smartsgroup" that modified "atompar"
@@ -85,20 +85,20 @@ class AtomTyper:
                     # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
                     # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
                     for idx in idxs:
-                        mol.setup.set_atom_type(hit[idx], atom_type) # overrides previous calls
+                        setup.set_atom_type(hit[idx], atom_type) # overrides previous calls
         # guarantee that each atompar is exclusive of a single group
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
                 msg = 'ERROR: %s is modified in multiple smartsgroups: %s' % (atompar, set(ensure[atompar]))
                 raise RuntimeError(msg)
         # verify that all atoms have been typed
-        for idx,atype in mol.setup.atom_type.items():
+        for idx,atype in setup.atom_type.items():
             if atype is None:
                 raise RuntimeError('atom number %d is None, but should have been typed' % idx)
         return
 
 
-    def _cache_offatoms(self, mol):
+    def _cache_offatoms(self, setup):
         """ precalculate off-site atoms """
         parsmar = self.parameters['OFFATOMS']
         cached_offatoms = {}
@@ -110,7 +110,7 @@ class AtomTyper:
             for line in parsmar[smartsgroup]:
                 # SMARTS
                 smarts = str(line['smarts'])
-                hits = mol.setup.smarts.find_pattern(smarts)
+                hits = setup.find_pattern(smarts)
                 # atom indexes in smarts string
                 smarts_idxs = [0]
                 if 'IDX' in line:
@@ -166,12 +166,12 @@ class AtomTyper:
                     n_offatoms += 1
         return cached_offatoms
 
-    def _set_offatoms(self, mol, cached_offatoms, coords):
+    def _set_offatoms(self, setup, cached_offatoms, coords):
         """add cached offatoms"""
         for k, (atomgeom, args) in cached_offatoms.items():
             (atom_type, dist, theta, phi) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
-            tmp = mol.setup.get_pdbinfo(atomgeom.parent+1)
+            tmp = setup.get_pdbinfo(atomgeom.parent+1)
             pdbinfo = utils.pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
             pseudo_atom = {
                     'coord': offatom_coords,
@@ -182,7 +182,7 @@ class AtomTyper:
                     'bond_type': 0,
                     'rotatable': False
                     }
-            mol.setup.add_pseudo(**pseudo_atom)
+            setup.add_pseudo(**pseudo_atom)
         return
 
 class AtomicGeometry():

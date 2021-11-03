@@ -5,8 +5,8 @@
 #
 
 from .preparation import MoleculePreparation
-from .setup import MoleculeSetup
-from .molprocessor import MoleculeSetupFromRDKit, MoleculeSetupFromOB
+from .setup import OBMoleculeSetup
+from .setup import RDKitMoleculeSetup
 from .utils import obutils
 from .utils import rdkitutils
 from .utils import pdbutils
@@ -17,5 +17,5 @@ from .molecule_pdbqt import PDBQTMolecule
 from . import analysis
 
 __all__ = ['MoleculePreparation', 'obutils', 'geomutils', 'rdkitutils', 'pdbutils',
-           'MoleculeSetup', 'PDBQTMolecule', 'MoleculeSetupFromRDKit', 'MoleculeSetupFromOB',
-           'PDBQTReceptor', 'analysis']
+           'OBMoleculeSetup', 'RDKitMoleculeSetup',
+           'PDBQTMolecule', 'PDBQTReceptor', 'analysis']

@@ -138,106 +138,27 @@ def getPdbInfoNoNull(atom):
     return pdbutils.PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
 
-class SmartsFinder:
-    """ simple SMARTS pattern finder"""
-
-    def __init__(self):
-        self.finder = ob.OBSmartsPattern()
-        self.mol = None
-
-    def setMolecule(self, mol):
-        self.mol = mol
-
-    def find(self, pattern):
-        self.finder.Init(pattern)
-        found = self.finder.Match(self.mol)
-        if not found:
-            return None
-        return [list(x) for x in self.finder.GetUMapList()]
-
-
-class SMARTSmatcher(object):
-    """ base class to match SMARTS patterns in an OBMol"""
-
-    def __init__(self, mol):
-        if isinstance(mol, ob.OBMol):
-            # use the OB smarts matcher
-            self._finder = ob.OBSmartsPattern()
-            self.find_pattern = self.find_pattern_OB
-        else:
-            print("Only OBMol supported for now")
-            raise NotImplementedError
-        self.mol = mol
-
-    def find_pattern_OB(self, pattern, unique=True):
-        """ use OB to find SMARTS patterns  """
-        self._finder.Init(pattern)
-        found = self._finder.Match(self.mol)
-        if not found:
-            # print "WARNING: MODIFIED FROM NONE TO []"
-            return []
-        # TODO consider if non-unique pattern matching is what we want
-        # NOTE IMPORTANT!
-        if unique == True:
-            return [list(x) for x in self._finder.GetUMapList()]
-        else:
-            return [list(x) for x in self._finder.GetMapList()]
-
-
-class OBMolSupplier_OLD:
-    """iterator returning OBMols from multi-molecule string (MOL2, SDF, etc)"""
-
-    def __init__(self, string, _format):
-        print("INITIALIZED")
-        self.string = string
-        self.format = _format
-        self.conv = ob.OBConversion()
-        status = self.conv.SetInFormat(self.format)
-        if not status:
-            raise RuntimeError('could not set OBConversion input format: %s' % self.format)
-
-    def __iter__(self):
-        self.mol = ob.OBMol()
-        print("ITER CALLED", self.mol)
-        self.keep_reading = self.conv.ReadString(self.mol, self.string)
-        if not self.keep_reading:
-            raise RuntimeError
-        return self
-
-    def __next__(self):
-        if self.keep_reading:
-            oldmol = self.mol
-            print("OLDMOL IS", oldmol)
-            self.mol = ob.OBMol()
-            print("NEWMOL IS", self.mol)
-            self.keep_reading = self.conv.Read(self.mol)
-
-            return oldmol
-        else:
-            raise StopIteration
-
-
 class OBMolSupplier:
     def __init__(self, fname, _format):
         """  """
-        self._c = 0
         self.fname = fname
         self.conv = ob.OBConversion()
         status = self.conv.SetInFormat(_format)
         if not status:
             raise RuntimeError('could not set OBConversion input format: %s' % _format)
+        self.got_mol_in_cache = False
+        self.cached_mol = None
 
     def __iter__(self):
+        self.cached_mol = ob.OBMol()
+        self.got_mol_in_cache = self.conv.ReadFile(self.cached_mol, self.fname)
         return self
 
     def __next__(self):
-        mol = ob.OBMol()
-        if self._c == 0:
-            more = self.conv.ReadFile(mol, self.fname)
-        else:
-            more = self.conv.Read(mol)
-        self._c+=1
-        if more:
+        if self.got_mol_in_cache:
+            mol = self.cached_mol
+            self.cached_mol = ob.OBMol()
+            self.got_mol_in_cache = self.conv.Read(self.cached_mol)
             return mol
         else:
             raise StopIteration

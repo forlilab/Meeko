@@ -48,14 +48,6 @@ def getPdbInfoNoNull(atom):
     return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
 
-class RDKitSMARTSHelper:
-    def __init__(self, mol):
-        self.mol = mol
-    def find_pattern(self, pattern):
-        patt = Chem.MolFromSmarts(pattern)
-        return self.mol.GetSubstructMatches(patt)
-
-
 class Mol2MolSupplier():
     """ RDKit Mol2 molecule supplier.
     Parameters

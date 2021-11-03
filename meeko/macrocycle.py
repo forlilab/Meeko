@@ -26,7 +26,7 @@ class FlexMacrocycle:
         # accept also double bonds (if nothing better is found)
         self._double_bond_penalty = double_bond_penalty
 
-        self.mol = None
+        self.setup = None
         self._accepted_rings = None
         self._conj_bond_list = None
         self._breakable = None
@@ -34,9 +34,9 @@ class FlexMacrocycle:
     def _collect_rings(self):
         """ retrieve rings and collect them by their size and properties"""
         self._accepted_rings = []
-        for ring_id in list(self.mol.setup.rings.keys()):
+        for ring_id in list(self.setup.rings.keys()):
             # aromatics
-            if ring_id in self.mol.setup.rings_aromatic:
+            if ring_id in self.setup.rings_aromatic:
                 continue
             # wrong size
             size = len(ring_id)
@@ -53,9 +53,9 @@ class FlexMacrocycle:
         self._conj_bond_list = []
         # pattern = "[R0]=[R0]-[R0]=[R0]" # Does not match conjugated bonds inside  the macrocycle?
         pattern = '*=*[*]=,#,:[*]' # from SMARTS_InteLigand.txt
-        found = self.mol.setup.smarts.find_pattern(pattern)
+        found = self.setup.find_pattern(pattern)
         for f in found:
-            self._conj_bond_list.append(set((f[1],f[2])))
+            self._conj_bond_list.append(tuple((f[1],f[2])))
             # atom2 = self.mol.GetAtom(f[2])
             # bond = self.mol.GetBond(atom1,atom2)
             # self._conj_bond_list.append(bond.GetIdx())
@@ -63,38 +63,36 @@ class FlexMacrocycle:
     def _score_bond(self, atom_idx1, atom_idx2):
         """ provide a score for the likeness of the bond to be broken"""
         score = 100
-        bond_id = self.mol.setup.get_bond_id(atom_idx1, atom_idx2)
+        bond_id = self.setup.get_bond_id(atom_idx1, atom_idx2)
 
         ### bond order rules
-        bond_order = self.mol.setup.bond[bond_id]['bond_order']
+        bond_order = self.setup.bond[bond_id]['bond_order']
         if bond_order not in [1, 2, 3]: # aromatic, double, made rigid explicitly (order=1.1 from --rigidify)
             return -1
-        if not self.mol.setup.get_element(atomi_idx1) == 6 or self.mol.setup.is_aromatic(atom_idx1):
+        if not self.setup.get_element(atom_idx1) == 6 or self.setup.is_aromatic(atom_idx1):
             return -1
-        if not self.mol.setup.get_element(atomi_idx2) == 6 or self.mol.setup.is_aromatic(atom_idx2):
+        if not self.setup.get_element(atom_idx2) == 6 or self.setup.is_aromatic(atom_idx2):
             return -1
         # triple bond tolerated but not preferred (TODO true?)
         if bond_order == 3:
             score -= 30
         elif (bond_order == 2):
             score -= self._double_bond_penalty
-        if bond.GetIdx() in self._conj_bond_list:
+        if bond_id in self._conj_bond_list or (bond_id[1], bond_id[0]) in self._conj_bond_list:
             score -= 30
         # atom in more than one *flexible* ring are not acceptable
-        a_rings1 = set(self.mol.setup.get_atom_rings(atom_idx1))
-        a_rings2 = set(self.mol.setup.get_atom_rings(atom_idx2))
+        a_rings1 = set(self.setup.get_atom_rings(atom_idx1))
+        a_rings2 = set(self.setup.get_atom_rings(atom_idx2))
         if len(a_rings1 & a_rings2)>1:
-            v1, v2 = [self.mol.setup.get_atom_rings(x) for x in (atom_idx1, atom_idx2)]
+            v1, v2 = [self.setup.get_atom_rings(x) for x in (atom_idx1, atom_idx2)]
             v1 = ",".join([str(x) for x in v1])
             v2 = ",".join([str(x) for x in v2])
             #print("-> [ X ] multi-ring bond violation, (atom1 %d->%s rings | atom2 %d->%s rings)" % (atom_idx1, v1, atom_idx2, v2))
             #print("=> SCORE[%d]" % -1, "#")
             return -1
         # discourage chiral atoms
-        if self.mol.setup.get_chiral(atom_idx1) or self.mol.setup.get_chiral(atom_idx2):
+        if self.setup.get_chiral(atom_idx1) or self.setup.get_chiral(atom_idx2):
             score -= 20
-            v1, v2 = int(atom1.IsChiral()), int(atom2.IsChiral())
-            #print("-> [ - ] chiral penalty (%d, %d)" % (v1,v2))
         #print("=> [%d] final score" % score)
         return score
 
@@ -104,9 +102,9 @@ class FlexMacrocycle:
         for idx in (0,1):
             target = bond_id[1 - idx]
             anchor = bond_id[0 - idx]
-            coord = self.mol.setup.get_coord(target)
-            anchor_info = self.mol.pdb_info[anchor]
-            pdbinfo = pdbutils.PDBAtomInfo('G', ancor_info.resName, ancor_info.resNum, ancor_info.chain)
+            coord = self.setup.get_coord(target)
+            anchor_info = self.setup.pdbinfo[anchor]
+            pdbinfo = pdbutils.PDBAtomInfo('G', anchor_info.resName, anchor_info.resNum, anchor_info.chain)
             closure_pseudo.append({
                 'coord': coord,
                 'anchor_list': [anchor],
@@ -129,13 +127,13 @@ class FlexMacrocycle:
             a_idx = bond_id[1 - idx]
             b_idx = bond_id[0 - idx]
             neigh_13 = []
-            for n3 in self.mol.setup.graph[b_idx]:
+            for n3 in self.setup.graph[b_idx]:
                 if n3 in bond_id:
                     continue
                 neigh_13.append(n3)
             neigh_14 = []
             for n3 in neigh_13:
-                for n4 in self.mol.setup.graph[n3]:
+                for n4 in self.setup.graph[n3]:
                     if n4 in bond_id:
                         continue
                     if n4 in neigh_13:
@@ -158,7 +156,7 @@ class FlexMacrocycle:
              [1] Forli, Botta, J. Chem. Inf. Model., 2007, 47 (4)
               DOI: 10.1021/ci700036j
         """
-        self._breakable = self.mol.setup.ring_bond_breakable
+        self._breakable = self.setup.ring_bond_breakable
 
         # look for breakable bonds in each ring
         for ring_members in self._accepted_rings:
@@ -170,7 +168,7 @@ class FlexMacrocycle:
                 score = self._score_bond(atom_idx1, atom_idx2)
 
                 if score > 0:
-                    bond_id = self.mol.setup.get_bond_id(atom_idx1, atom_idx2)
+                    bond_id = self.setup.get_bond_id(atom_idx1, atom_idx2)
                     closure_pseudo = self._generate_closure_pseudo(bond_id)
                     neigh_13_14 = self._find_13_14_neighs(bond_id)
                     self._breakable[bond_id] = {'score': score,
@@ -180,28 +178,28 @@ class FlexMacrocycle:
                                           'active': False
                                           }
 
-    def search_macrocycle(self, mol, verbose=False):
+    def search_macrocycle(self, setup, verbose=False):
         """Search for macrocycle in the molecule
 
         Args:
-            mol : OBMol/RDKit that was prepared with Meeko
+            setup : MoleculeSetup object
 
         """
         self._accepted_rings = []
         self._conj_bond_list = []
         self._breakable = {}
-        self.mol = mol
+        self.setup = setup
 
         self._collect_rings()
         self._detect_conj_bonds()
         self._analyze_rings(verbose)
 
     def show_macrocycle_scores(self):
-        if self.mol is not None:
+        if self.setup is not None:
             print("\n==============[ MACROCYCLE SCORES ]================")
             bond_by_ring = defaultdict(list)
 
-            for bond_id, data in list(self.mol.setup.ring_bond_breakable.items()):
+            for bond_id, data in list(self.setup.ring_bond_breakable.items()):
                 ring_id = data['ring_id']
                 bond_by_ring[ring_id].append(bond_id)
 
