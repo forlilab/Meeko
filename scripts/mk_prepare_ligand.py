@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
         # multiple molecule mode
         else:
-            name = preparator.setup.name
+            name = preparator.setup.name # setup.name may be None
             if name in pdbqt_byname:
                 duplicates.append(name)
             if multimol_prefix is not None:

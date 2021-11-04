@@ -568,7 +568,10 @@ class RDKitMoleculeSetup(MoleculeSetup):
         return self.mol.GetSubstructMatches(p)
 
     def get_mol_name(self):
-        return self.mol.GetProp("_Name")
+        if self.mol.HasProp("_Name"):
+            return self.mol.GetProp("_Name")
+        else:
+            return None
 
     def get_num_mol_atoms(self):
         return self.mol.GetNumAtoms()
