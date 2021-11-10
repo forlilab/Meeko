@@ -186,8 +186,5 @@ class MoleculePreparation:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 
     def write_pdbqt_file(self, pdbqt_filename, remove_index_map=None, remove_smiles=None):
-        try:
-            with open(pdbqt_filename,'w') as w:
-                w.write(self.write_pdbqt_string(remove_index_map, remove_smiles))
-        except:
-            raise RuntimeError('Cannot write PDBQT file %s.' % pdbqt_filename)
+        with open(pdbqt_filename,'w') as w:
+            w.write(self.write_pdbqt_string(remove_index_map, remove_smiles))
