@@ -144,7 +144,7 @@ class MoleculePreparation:
         self.is_ok = self._check()
 
 
-    def _check(self)
+    def _check(self):
         # verify that all atoms have been typed
         is_ok = True
         msg = ""
@@ -153,7 +153,7 @@ class MoleculePreparation:
             if atom_type is None:
                 msg += 'atom number %d has None type, mol name: %s' % (idx, self._mol.GetTitle())
                 is_ok = False
-        self.log += msg
+        self.log = msg
         return is_ok 
 
 
