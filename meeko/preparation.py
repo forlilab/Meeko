@@ -55,6 +55,8 @@ class MoleculePreparation:
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
+        self.is_ok = None
+        self.log = None
 
     @classmethod
     def init_just_defaults(cls):
@@ -139,6 +141,20 @@ class MoleculePreparation:
             self._flex_builder(mol, root_atom_index=None)
         # TODO re-run typing after breaking bonds
         # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
+        self.is_ok = self._check()
+
+
+    def _check(self)
+        # verify that all atoms have been typed
+        is_ok = True
+        msg = ""
+        for idx in self._mol.setup.atom_type:
+            atom_type = self._mol.setup.atom_type[idx]
+            if atom_type is None:
+                msg += 'atom number %d has None type, mol name: %s' % (idx, self._mol.GetTitle())
+                is_ok = False
+        self.log += msg
+        return is_ok 
 
 
     def get_calpha_atom_index(self, mol):
@@ -193,6 +209,8 @@ class MoleculePreparation:
             print('')
     
     def write_pdbqt_string(self, remove_index_map=None, remove_smiles=None):
+        if self.is_ok == False:
+            raise RuntimeError("Molecule not OK, refusing to write PDBQT\n\nLOG:\n%s" % self.log)
         if remove_index_map is None: remove_index_map = self.remove_index_map
         if remove_smiles is None: remove_smiles = self.remove_smiles
         if self._mol is not None:

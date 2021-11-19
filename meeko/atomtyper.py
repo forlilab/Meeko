@@ -27,6 +27,7 @@ class AtomTyper:
                 {"smarts": "[#8]",              "atype": "OA"},
                 {"smarts": "[#9]",              "atype": "F"},
                 {"smarts": "[#12]",             "atype": "Mg"},
+                {"smarts": "[#14]",             "atype": "Si"},
                 {"smarts": "[#15]",             "atype": "P"},
                 {"smarts": "[#16]",             "atype": "S"},
                 {"smarts": "[#17]",             "atype": "Cl"},
@@ -106,12 +107,6 @@ class AtomTyper:
             if len(set(ensure[atompar])) > 1:
                 msg = 'ERROR: %s is modified in multiple smartsgroups: %s' % (atompar, set(ensure[atompar]))
                 raise RuntimeError(msg)
-
-        # verify that all atoms have been typed
-        for idx in obmol.setup.atom_type:
-            atom_type = obmol.setup.atom_type[idx]
-            if atom_type is None:
-                raise RuntimeError('atom number %d is None, but should have been typed' % idx)
         return
 
 
