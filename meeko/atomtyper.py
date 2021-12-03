@@ -21,6 +21,7 @@ class AtomTyper:
             "alkyl glue": [
                 {"smarts": "[#1]",                  "atype": "H", "comment": "invisible"},
                 {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"},
+                {"smarts": "[#5]",              "atype": "B"},
                 {"smarts": "[C]",               "atype": "C"},
                 {"smarts": "[c]",               "atype": "A"},
                 {"smarts": "[#7]",              "atype": "NA"},
