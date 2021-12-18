@@ -40,6 +40,7 @@ class AtomTyper:
                 {"smarts": "[#53]",             "atype": "I"},
                 {"smarts": "[#7X3v3][a]",       "atype": "N",  "comment": "pyrrole, aniline"},
                 {"smarts": "[#7X3v3][#6X3v4]",  "atype": "N",  "comment": "amide"},
+                {"smarts": "[#7+1]",            "atype": "N",  "comment": "ammonium, pyridinium"},
                 {"smarts": "[#16X2]",           "atype": "SA", "comment": "sulfur acceptor"}
             ]
         }
