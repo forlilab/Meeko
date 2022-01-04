@@ -576,6 +576,9 @@ class RDKitMoleculeSetup(MoleculeSetup):
     def get_num_mol_atoms(self):
         return self.mol.GetNumAtoms()
 
+    def get_equivalent_atoms(self):
+       return list(Chem.CanonicalRankAtoms(self.mol, breakTies=False))
+
     def init_atom(self, assign_charges):
         """ initialize the atom table information """
         # extract the coordinates
@@ -685,6 +688,9 @@ class OBMoleculeSetup(MoleculeSetup):
 
     def get_num_mol_atoms(self):
         return self.mol.NumAtoms()
+
+    def get_equivalent_atoms(self):
+        raise NotImplementedError 
     
     def init_atom(self, assign_charges):
         """initialize atom data table"""

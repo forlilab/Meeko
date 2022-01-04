@@ -9,8 +9,6 @@ import sys
 from collections import defaultdict
 from operator import itemgetter
 
-from openbabel import openbabel as ob
-
 
 class BondTyperLegacy:
 
@@ -27,8 +25,19 @@ class BondTyperLegacy:
             if setup.get_element(idx) == 1:
                 return True
             return len([x for x in setup.get_neigh(idx) if not setup.get_ignore(x)]) == 1
-        amide_bonds = [(x[0], x[1]) for x in setup.find_pattern('[NX3]-[CX3]=O')]
-        amidine_bonds = [set(x) for x in setup.find_pattern("[$([#6]~[#7])]~[#7]")]
+        amide_bonds = [(x[0], x[1]) for x in setup.find_pattern('[NX3]-[CX3]=[O,N]')] # includes amidines
+
+        # tertiary amides with non-identical substituents will be allowed to rotate
+        tertiary_amides = [x for x in setup.find_pattern('[NX3]([!#1])([!#1])-[CX3]=[O,N]')]
+        equivalent_atoms = setup.get_equivalent_atoms()
+        num_amides_removed = 0
+        num_amides_originally = len(amide_bonds)
+        for x in tertiary_amides:
+            r1, r2 = x[1], x[2]
+            if equivalent_atoms[r1] != equivalent_atoms[r2]:
+                amide_bonds.remove((x[0], x[3]))
+                num_amides_removed += 1
+        assert(num_amides_originally == num_amides_removed + len(amide_bonds))
 
         to_rigidify = set()
         n_smarts = len(rigidify_bonds_smarts)
@@ -64,10 +73,6 @@ class BondTyperLegacy:
             if (bond_id in amide_bonds or (bond_id[1], bond_id[0]) in amide_bonds) and not flexible_amides:
                 rotatable = False
                 bond_order = 99
-            # amidine
-            if bond_id in amidine_bonds:
-                bond_order = 99
-                rotatable = False
             setup.bond[bond_id]['rotatable'] = rotatable
             setup.bond[bond_id]['bond_order'] = bond_order
 
