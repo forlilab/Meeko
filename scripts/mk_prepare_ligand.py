@@ -138,22 +138,26 @@ if __name__ == '__main__':
     elif backend == 'ob':
         print("Using openbabel instead of rdkit")
         mol_supplier = obutils.OBMolSupplier(input_molecule_filename, ext)
-    # with open(input_molecule_filename) as f:
-    #     input_string = f.read()
-    # # FIXME this should be replaced by rdkit
-    # # FIXME an option could be provided to parse the file with OB to support multiple formats?
-    # # FIXME if SDF or Mol2 are sufficient, then the OB part here is not necessary)
-    # obmol_supplier = obutils.OBMolSupplier(input_string, ext)
+
     mol_counter = 0
+    num_skipped = 0
+    is_after_first = False
     for mol in mol_supplier:
-
-        mol_counter += 1
-
-        if mol_counter > 1 and do_process_multimol == False:
+        if is_after_first and do_process_multimol == False:
             print("Processed only the first molecule of multiple molecule input.")
             print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
                 input_molecule_filename))
             break
+        is_after_first = True
+
+        # check that molecule was successfully loaded
+        if backend == 'rdkit':
+            is_valid = mol is not None
+        elif backend == 'ob':
+            is_valid = mol.NumAtoms() > 0
+        mol_counter += int(is_valid==True)
+        num_skipped += int(is_valid==False)
+        if not is_valid: continue
 
         preparator = MoleculePreparation.from_config(config)
         preparator.prepare(mol)
@@ -199,3 +203,6 @@ if __name__ == '__main__':
             fname = os.path.join(multimol_output_directory, name + '.pdbqt')
             with open(fname, 'w') as f:
                 f.write(pdbqt_byname[name])
+
+    print("Processed molecules: %d" % mol_counter)
+    print("Skipped molecules: %d" % num_skipped)
