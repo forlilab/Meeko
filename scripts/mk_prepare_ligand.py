@@ -12,15 +12,19 @@ from rdkit import Chem
 
 from meeko import MoleculePreparation
 from meeko import rdkitutils
-from meeko import obutils
 
-# TODO put openbabel inside a try statement
-from openbabel import openbabel as ob
-from meeko import obutils
+try:
+    from meeko import obutils # fails if openbabel not available
+except:
+    _has_openbabel = False
+else:
+    _has_openbabel = True
 
 def cmd_lineparser():
     backend = 'rdkit'
     if '--ob_backend' in sys.argv:
+        if not _has_openbabel:
+            raise ImportError('--ob_backend requires openbabel which is not available')
         backend = 'ob'
         sys.argv.remove('--ob_backend')
     conf_parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)

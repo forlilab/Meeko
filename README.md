@@ -22,7 +22,6 @@ at [Scripps Research](https://www.scripps.edu/).
 
 * Python (>=3.5)
 * Numpy
-* Openbabel (>=3)
 * RDKit
 
 ## Installation (from PyPI)
@@ -58,10 +57,10 @@ mk_copy_coords.py adgpu_results.dlg -o adgpu_results.sdf
 
 ```python
 from meeko import MoleculePreparation
-from meeko import obutils
+from rdkit import Chem
 
 input_molecule_file = 'example/BACE_macrocycle/BACE_4.mol2'
-mol = obutils.load_molecule_from_file(input_molecule_file)
+mol = Chem.MolFromMol2File(input_molecule_file)
 
 preparator = MoleculePreparation(keep_nonpolar_hydrogens=False, macrocycle=True, hydrate=True)
 preparator.prepare(mol)

@@ -8,11 +8,9 @@ import sys
 import json
 
 import numpy as np
-from openbabel import openbabel as ob
 from rdkit import Chem
-from .utils import obutils
 from .utils import pdbutils
-
+from .utils.rdkitutils import mini_periodic_table
 
 
 class PDBQTWriterLegacy():
@@ -53,7 +51,7 @@ class PDBQTWriterLegacy():
         occupancy = 1.0
         temp_factor = 0.0
         atomic_num = self.setup.element[atom_idx]
-        atom_symbol = ob.GetSymbol(atomic_num)
+        atom_symbol = mini_periodic_table[atomic_num]
         if not atom_symbol in self._atom_counter:
             self._atom_counter[atom_symbol] = 0
         self._atom_counter[atom_symbol] += 1

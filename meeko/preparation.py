@@ -8,7 +8,6 @@ import os
 import sys
 from collections import OrderedDict
 
-from openbabel import openbabel as ob
 from rdkit import Chem
 
 from .setup import OBMoleculeSetup
@@ -19,6 +18,13 @@ from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
 from .flexibility import FlexibilityBuilder
 from .writer import PDBQTWriterLegacy
+
+try:
+    from openbabel import openbabel as ob
+except ImportError:
+    _has_openbabel = False
+else:
+    _has_openbabel = True
 
 
 class MoleculePreparation:
@@ -55,8 +61,9 @@ class MoleculePreparation:
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
-        self._classes_setup = {ob.OBMol: OBMoleculeSetup,
-                        Chem.rdchem.Mol: RDKitMoleculeSetup}
+        self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
+        if _has_openbabel:
+            self._classes_setup[ob.OBMol] = OBMoleculeSetup
 
     @classmethod
     def init_just_defaults(cls):
@@ -145,31 +152,31 @@ class MoleculePreparation:
         return ca_atoms[0]
 
     def show_setup(self):
-        if self.mol is not None:
+        if self.setup is not None:
             tot_charge = 0
 
             print("Molecule setup\n")
             print("==============[ ATOMS ]===================================================")
             print("idx  |          coords            | charge |ign| atype    | connections")
             print("-----+----------------------------+--------+---+----------+--------------- . . . ")
-            for k, v in list(self.mol.setup.coord.items()):
+            for k, v in list(self.setup.coord.items()):
                 print("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
-                      self.mol.setup.charge[k], self.mol.setup.atom_ignore[k]),
-                      "| % -8s |" % self.mol.setup.atom_type[k],
-                      self.mol.setup.graph[k])
-                tot_charge += self.mol.setup.charge[k]
+                      self.setup.charge[k], self.setup.atom_ignore[k]),
+                      "| % -8s |" % self.setup.atom_type[k],
+                      self.setup.graph[k])
+                tot_charge += self.setup.charge[k]
             print("-----+----------------------------+--------+---+----------+--------------- . . . ")
             print("  TOT CHARGE: %3.3f" % tot_charge)
 
             print("\n======[ DIRECTIONAL VECTORS ]==========")
-            for k, v in list(self.mol.setup.coord.items()):
-                if k in self.mol.setup.interaction_vector:
-                    print("% 4d " % k, self.mol.setup.atom_type[k], end=' ')
+            for k, v in list(self.setup.coord.items()):
+                if k in self.setup.interaction_vector:
+                    print("% 4d " % k, self.setup.atom_type[k], end=' ')
 
             print("\n==============[ BONDS ]================")
             # For sanity users, we won't show those keys for now
             keys_to_not_show = ['bond_order', 'type']
-            for k, v in list(self.mol.setup.bond.items()):
+            for k, v in list(self.setup.bond.items()):
                 t = ', '.join('%s: %s' % (i, j) for i, j in v.items() if not i in keys_to_not_show)
                 print("% 8s - " % str(k), t)
 

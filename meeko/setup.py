@@ -12,11 +12,16 @@ import json
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import rdPartialCharges
-from openbabel import openbabel as ob
 
-from .utils import obutils, rdkitutils
+from .utils import rdkitutils
 
-
+try:
+    from openbabel import openbabel as ob
+    from .utils import obutils
+except ImportError:
+    _has_openbabel = False
+else:
+    _has_openbabel = True
 
 # based on the assumption we are using OpenBabel
 
