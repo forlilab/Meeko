@@ -4,8 +4,8 @@
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
 [![PyPI version fury.io](https://img.shields.io/badge/version-0.2-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
 
-Meeko reads a chemoinformatics molecule object (currently Open Babel) and writes a string (or file)
-in PDBQT format for use with [AutoDock-Vina](https://github.com/ccsb-scripps/AutoDock-Vina)
+Meeko reads an RDKit molecule object and writes a PDBQT string (or file)
+for [AutoDock-Vina](https://github.com/ccsb-scripps/AutoDock-Vina)
 and [AutoDock-GPU](https://github.com/ccsb-scripps/AutoDock-GPU). Additionally, it has tools for post-processing
 of docking results which are not yet fully developed. Meeko supports the following features:
 * Docking with explicit water molecules attached to the ligand [(paper)](https://pubs.acs.org/doi/abs/10.1021/jm2005145)
@@ -25,7 +25,7 @@ at [Scripps Research](https://www.scripps.edu/).
 
 Conda or Miniconda can install the dependencies:
 ```bash
-conda install -c conda-forge numpy scipy openbabel rdkit
+conda install -c conda-forge numpy scipy rdkit
 ```
 
 ## Installation (from PyPI)
