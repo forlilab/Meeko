@@ -7,7 +7,7 @@
 import numpy as np
 
 from .utils import geomutils
-from .utils import obutils
+from .utils import pdbutils
 
 
 class HydrateMoleculeLegacy:
@@ -116,14 +116,13 @@ class HydrateMoleculeLegacy:
 
         return positions
 
-    def hydrate(self, mol):
+    def hydrate(self, setup):
         """Add water molecules to the ligand
-        
+
         Args:
-            mol (OBMol): input OBMol molecule object
+            setup: MoleculeSetup object
 
         """
-        setup = mol.setup
         water_anchors = []
         water_positions = []
         # It will be the same distance for all of the water molecules
@@ -173,7 +172,7 @@ class HydrateMoleculeLegacy:
                     # Example: Ammonia
                     neighbor2_xyz = setup.get_coord(neighbors[1])
                     neighbor3_xyz = setup.get_coord(neighbors[2])
-                    positions = self._place_sp3_one_water(anchor_xyz, 
+                    positions = self._place_sp3_one_water(anchor_xyz,
                                                           neighbor1_xyz, neighbor2_xyz, neighbor3_xyz,
                                                           hb_length)
                 elif n_wat == 2:
@@ -192,6 +191,6 @@ class HydrateMoleculeLegacy:
         for water_anchor, waters_on_anchor in zip(water_anchors, water_positions):
             for water_on_anchor in waters_on_anchor:
                 tmp = setup.pdbinfo[water_anchor]
-                pdbinfo = obutils.PDBAtomInfo('WAT', tmp.resName, tmp.resNum, tmp.chain)
+                pdbinfo = pdbutils.PDBAtomInfo('WAT', tmp.resName, tmp.resNum, tmp.chain)
                 setup.add_pseudo(water_on_anchor, self._charge, [water_anchor], self._atom_type,
                                      self._bond_type, self._rotatable, pdbinfo)

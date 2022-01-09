@@ -7,10 +7,7 @@
 import math
 import sys
 
-from openbabel import openbabel as ob
 import numpy as np
-
-from . import obutils
 
 
 def get_vector(coor1, coord2):

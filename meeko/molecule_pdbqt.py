@@ -9,12 +9,18 @@ from collections import defaultdict
 
 import numpy as np
 from scipy import spatial
-from openbabel import openbabel as ob
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 
 from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
+
+try:
+    from openbabel import openbabel as ob
+except ImportError:
+    _has_openbabel = False
+else:
+    _has_openbabel = True
 
 
 atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',

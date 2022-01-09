@@ -8,13 +8,25 @@ import os
 import sys
 import json
 
-from openbabel import openbabel as ob
+from rdkit import Chem
 
 from meeko import MoleculePreparation
-from meeko import obutils
+from meeko import rdkitutils
+
+try:
+    from meeko import obutils # fails if openbabel not available
+except:
+    _has_openbabel = False
+else:
+    _has_openbabel = True
 
 def cmd_lineparser():
-
+    backend = 'rdkit'
+    if '--ob_backend' in sys.argv:
+        if not _has_openbabel:
+            raise ImportError('--ob_backend requires openbabel which is not available')
+        backend = 'ob'
+        sys.argv.remove('--ob_backend')
     conf_parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
     conf_parser.add_argument('-c', '--config_file',
             help='configure MoleculePreparation from JSON file. Overriden by command line args.')
@@ -89,11 +101,12 @@ def cmd_lineparser():
             print("Argument -/-- incompatible with --multimol_outdir and --multimol_prefix", file=sys.stderr)
             sys.exit(2)
 
-    return args, config
+    return args, config, backend
 
 
 if __name__ == '__main__':
-    args, config = cmd_lineparser()
+
+    args, config, backend = cmd_lineparser()
     multimol_output_directory = args.multimol_output_directory
     multimol_prefix = args.multimol_prefix
     input_molecule_filename = args.input_molecule_filename
@@ -118,22 +131,37 @@ if __name__ == '__main__':
         indices[0] = indices[0] - 1 # convert from 1- to 0-index
         indices[1] = indices[1] - 1
 
-    frmt = os.path.splitext(input_molecule_filename)[1][1:]
-    with open(input_molecule_filename) as f:
-        input_string = f.read()
-    obmol_supplier = obutils.OBMolSupplier(input_string, frmt)
+    fname, ext = os.path.splitext(input_molecule_filename)
+    ext = ext[1:].lower()
+    if backend == 'rdkit':
+        parsers = {'sdf': Chem.SDMolSupplier, 'mol2': rdkitutils.Mol2MolSupplier}
+        if not ext in parsers:
+            print("*ERROR* Format [%s] not supported." % ext)
+            sys.exit(1)
+        mol_supplier = parsers[ext](input_molecule_filename, removeHs=False) # input must have explicit H
+    elif backend == 'ob':
+        print("Using openbabel instead of rdkit")
+        mol_supplier = obutils.OBMolSupplier(input_molecule_filename, ext)
 
     mol_counter = 0
-
-    for mol in obmol_supplier:
-
-        mol_counter += 1
-
-        if mol_counter > 1 and do_process_multimol == False:
+    num_skipped = 0
+    is_after_first = False
+    for mol in mol_supplier:
+        if is_after_first and do_process_multimol == False:
             print("Processed only the first molecule of multiple molecule input.")
             print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
                 input_molecule_filename))
             break
+        is_after_first = True
+
+        # check that molecule was successfully loaded
+        if backend == 'rdkit':
+            is_valid = mol is not None
+        elif backend == 'ob':
+            is_valid = mol.NumAtoms() > 0
+        mol_counter += int(is_valid==True)
+        num_skipped += int(is_valid==False)
+        if not is_valid: continue
 
         preparator = MoleculePreparation.from_config(config)
         preparator.prepare(mol)
@@ -148,7 +176,7 @@ if __name__ == '__main__':
         if not do_process_multimol:
             if not args.redirect_stdout:
                 if args.output_pdbqt_filename is None:
-                    output_pdbqt_filename = '%s.pdbqt' % os.path.splitext(input_molecule_filename)[0]
+                    output_pdbqt_filename = '%s.pdbqt' % fname
                 else:
                     output_pdbqt_filename = args.output_pdbqt_filename
 
@@ -156,9 +184,9 @@ if __name__ == '__main__':
             else:
                 print(ligand_prepared, end='')
 
-        # multiple molecule mode        
+        # multiple molecule mode
         else:
-            name = mol.GetTitle()
+            name = preparator.setup.name # setup.name may be None
             if name in pdbqt_byname:
                 duplicates.append(name)
             if multimol_prefix is not None:
@@ -179,3 +207,6 @@ if __name__ == '__main__':
             fname = os.path.join(multimol_output_directory, name + '.pdbqt')
             with open(fname, 'w') as f:
                 f.write(pdbqt_byname[name])
+
+    print("Processed molecules: %d" % mol_counter)
+    print("Skipped molecules: %d" % num_skipped)

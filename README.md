@@ -63,12 +63,12 @@ mk_copy_coords.py adgpu_results.dlg -o adgpu_results.sdf
 
 ```python
 from meeko import MoleculePreparation
-from meeko import obutils
+from rdkit import Chem
 
 input_molecule_file = 'example/BACE_macrocycle/BACE_4.mol2'
-mol = obutils.load_molecule_from_file(input_molecule_file)
+mol = Chem.MolFromMol2File(input_molecule_file)
 
-preparator = MoleculePreparation(keep_nonpolar_hydrogens=False, macrocycle=True, hydrate=True)
+preparator = MoleculePreparation(macrocycle=True, hydrate=True)
 preparator.prepare(mol)
 preparator.show_setup()
 

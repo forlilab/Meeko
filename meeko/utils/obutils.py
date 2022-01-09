@@ -5,13 +5,14 @@
 #
 
 # TODO this should be in its own obabelutils module
-from collections import namedtuple
+# from collections import namedtuple
 
 import numpy as np
 from openbabel import openbabel as ob
 
 from . import geomutils
 from . import utils
+from . import pdbutils
 
 mini_periodic_table = {
         1: 'H', 2: 'He', 3: 'Li', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 11: 'Na', 12: 'Mg',
@@ -20,8 +21,8 @@ mini_periodic_table = {
 
 
 # named tuple to contain information about an atom
-PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
-PDBResInfo  = namedtuple('PDBResInfo',       "resName resNum chain")
+# PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
+# PDBResInfo  = namedtuple('PDBResInfo',       "resName resNum chain")
 
 
 def getAtomIdxCoords(obmol, atom_idx):
@@ -117,7 +118,7 @@ def getPdbInfo(atom):
     resNum = int(res.GetNumString())  # safe way for negative resnumbers
     resName = res.GetName()
 
-    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
+    return pdbutils.PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
 
 def getPdbInfoNoNull(atom):
@@ -134,78 +135,32 @@ def getPdbInfoNoNull(atom):
         chain = res.GetChain()
         resNum = int(res.GetNumString())  # safe way for negative resnumbers
         resName = res.GetName()
-    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
-
-
-class SmartsFinder:
-    """ simple SMARTS pattern finder"""
-
-    def __init__(self):
-        self.finder = ob.OBSmartsPattern()
-        self.mol = None
-
-    def setMolecule(self, mol):
-        self.mol = mol
-
-    def find(self, pattern):
-        self.finder.Init(pattern)
-        found = self.finder.Match(self.mol)
-        if not found:
-            return None
-        return [list(x) for x in self.finder.GetUMapList()]
-
-
-class SMARTSmatcher(object):
-    """ base class to match SMARTS patterns in an OBMol"""
-
-    def __init__(self, mol):
-        if isinstance(mol, ob.OBMol):
-            # use the OB smarts matcher
-            self._finder = ob.OBSmartsPattern()
-            self.find_pattern = self.find_pattern_OB
-        else:
-            print("Only OBMol supported for now")
-            raise NotImplementedError
-        self.mol = mol
-
-    def find_pattern_OB(self, pattern, unique=True):
-        """ use OB to find SMARTS patterns  """
-        self._finder.Init(pattern)
-        found = self._finder.Match(self.mol)
-        if not found:
-            # print "WARNING: MODIFIED FROM NONE TO []"
-            return []
-        # TODO consider if non-unique pattern matching is what we want
-        # NOTE IMPORTANT!
-        if unique == True:
-            return [list(x) for x in self._finder.GetUMapList()]
-        else:
-            return [list(x) for x in self._finder.GetMapList()]
+    return pdbutils.PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
 
 class OBMolSupplier:
-    """iterator returning OBMols from multi-molecule string (MOL2, SDF, etc)"""
-
-    def __init__(self, string, _format):
-        self.string = string
-        self.format = _format
+    def __init__(self, fname, _format):
+        """  """
+        self.fname = fname
+        self.conv = ob.OBConversion()
+        status = self.conv.SetInFormat(_format)
+        if not status:
+            raise RuntimeError('could not set OBConversion input format: %s' % _format)
+        self.got_mol_in_cache = False
+        self.cached_mol = None
 
     def __iter__(self):
-        self.conv = ob.OBConversion()
-        status = self.conv.SetInFormat(self.format)
-        if not status:
-            raise RuntimeError('could not set OBConversion input format: %s' % self.format)
-        self.mol = ob.OBMol()
-        self.keep_reading = self.conv.ReadString(self.mol, self.string)
-        if not self.keep_reading:
-            raise RuntimeError
+        self.cached_mol = ob.OBMol()
+        self.got_mol_in_cache = self.conv.ReadFile(self.cached_mol, self.fname)
         return self
 
     def __next__(self):
-        if self.keep_reading:
-            oldmol = self.mol
-            self.mol = ob.OBMol()
-            self.keep_reading = self.conv.Read(self.mol)
-            return oldmol
+        if self.got_mol_in_cache:
+            mol = self.cached_mol
+            self.cached_mol = ob.OBMol()
+            self.got_mol_in_cache = self.conv.Read(self.cached_mol)
+            return mol
         else:
             raise StopIteration
+
+

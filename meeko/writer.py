@@ -8,9 +8,9 @@ import sys
 import json
 
 import numpy as np
-from openbabel import openbabel as ob
 from rdkit import Chem
-from .utils import obutils
+from .utils import pdbutils
+from .utils.rdkitutils import mini_periodic_table
 
 
 class PDBQTWriterLegacy():
@@ -41,17 +41,17 @@ class PDBQTWriterLegacy():
         """ """
         record_type = "ATOM"
         alt_id = " "
-        pdbinfo = self.mol.setup.pdbinfo[atom_idx]
+        pdbinfo = self.setup.pdbinfo[atom_idx]
         if pdbinfo is None:
-            pdbinfo = obutils.PDBAtomInfo('', '', 0, '')
-        resinfo = obutils.PDBResInfo(pdbinfo.resName, pdbinfo.resNum, pdbinfo.chain)
+            pdbinfo = pdbutils.PDBAtomInfo('', '', 0, '')
+        resinfo = pdbutils.PDBResInfo(pdbinfo.resName, pdbinfo.resNum, pdbinfo.chain)
         self._resinfo_set.add(resinfo)
         atom_name, res_name, res_num, chain = self._get_pdbinfo_fitting_pdb_chars(pdbinfo)
         in_code = ""
         occupancy = 1.0
         temp_factor = 0.0
         atomic_num = self.setup.element[atom_idx]
-        atom_symbol = ob.GetSymbol(atomic_num)
+        atom_symbol = mini_periodic_table[atomic_num]
         if not atom_symbol in self._atom_counter:
             self._atom_counter[atom_symbol] = 0
         self._atom_counter[atom_symbol] += 1
@@ -74,13 +74,13 @@ class PDBQTWriterLegacy():
             member_pool = self.model['rigid_body_members'][node][:]
             member_pool.remove(edge_start)
             member_pool = [edge_start] + member_pool
-        
+
         for member in member_pool:
             if self.setup.atom_ignore[member] == 1:
                 continue
 
             self._pdbqt_buffer.append(self._make_pdbqt_line(member))
-            self._numbering[member] = self._count
+            self._numbering[member] = self._count # _count starts at 1
             self._count += 1
 
         if first:
@@ -107,11 +107,11 @@ class PDBQTWriterLegacy():
             self._walk_graph_recursive(neigh, edge_start=next_index)
             self._pdbqt_buffer.append("ENDBRANCH %3d %3d" % (begin, end))
 
-    def write_string(self, mol, remove_index_map=False, remove_smiles=False):
+    def write_string(self, setup, remove_index_map=False, remove_smiles=False):
         """Output a PDBQT file as a string.
-        
+
         Args:
-            mol (OBMol): OBMol that was prepared with Meeko
+            setup: MoleculeSetup
 
         Returns:
             str: PDBQT string of the molecule
@@ -124,10 +124,10 @@ class PDBQTWriterLegacy():
         self._atom_counter = {}
         self._resinfo_set = set()
 
-        self.mol = mol
-        self.model = mol.setup.flexibility_model
+        self.setup = setup
+        self.model = setup.flexibility_model
         # get a copy of the current setup, since it's going to be messed up by the hacks for legacy, D3R, etc...
-        self.setup = mol.setup.copy()
+        self.setup = setup.copy()
 
         root = self.model['root']
         torsdof = len(self.model['rigid_body_graph']) - 1
@@ -148,83 +148,29 @@ class PDBQTWriterLegacy():
                 self._pdbqt_buffer.insert(i, remark_line)
 
         if not remove_smiles:
-            sdfstring = obutils.writeMolecule(mol, ftype='sdf')
-            ob_smiles = obutils.writeMolecule(mol, ftype='smi')
-
-            rdmol = Chem.MolFromMolBlock(sdfstring, removeHs=False)
-            rdmol_noH = Chem.MolFromMolBlock(sdfstring)
-            rdkit_smiles = Chem.MolToSmiles(rdmol_noH)
-
-            # map smiles noH to smiles with H
-            atomic_num_rdmol_noH = [atom.GetAtomicNum() for atom in rdmol_noH.GetAtoms()]
-            noH_to_H = []
-            num_H_in_noH = 0 # e.g. stereo imines [H]/N=C keep [H] after RemoveHs()
-            for (index, atom) in enumerate(rdmol.GetAtoms()):
-                if atom.GetAtomicNum() == 1: continue
-                for i in range(len(noH_to_H), len(atomic_num_rdmol_noH)):
-                    if atomic_num_rdmol_noH[i] > 1: break
-                    noH_to_H.append('H')
-                noH_to_H.append(index)
-            extra_hydrogens = len(atomic_num_rdmol_noH) - len(noH_to_H)
-            if extra_hydrogens > 0:
-                assert(set(atomic_num_rdmol_noH[len(noH_to_H):]) == {1}) 
-                noH_to_H.extend(['H'] * extra_hydrogens)
-
-            # map indices of explicit hydrogens, e.g. stereo imine [H]/N=C
-            for index in range(len(noH_to_H)):
-                if noH_to_H[index] != 'H': continue
-                h_atom = rdmol_noH.GetAtomWithIdx(index)
-                assert(h_atom.GetAtomicNum() == 1)
-                parents = h_atom.GetNeighbors()
-                assert(len(parents) == 1)
-                num_h_in_parent = len([a for a in parents[0].GetNeighbors() if a.GetAtomicNum() == 1])
-                if num_h_in_parent != 1:
-                    msg = "Can't handle %d explicit H for each heavy atomin noH mol.\n" % num_h_in_parent
-                    msg += "Was expecting only imines [H]N=\n"
-                    raise RuntimeError(msg)
-                parent_index_in_mol_with_H = noH_to_H[parents[0].GetIdx()]
-                parent_in_mol_with_H = rdmol.GetAtomWithIdx(parent_index_in_mol_with_H)
-                h_in_mol_with_H = [a for a in parent_in_mol_with_H.GetNeighbors() if a.GetAtomicNum() == 1]  
-                if len(h_in_mol_with_H) != 1:
-                    msg = "Can't handle %d explicit H for each heavy atomin noH mol.\n" % len(h_in_mol_with_H)
-                    msg += "Was expecting only imines [H]N=\n"
-                    raise RuntimeError(msg)
-                noH_to_H[index] = h_in_mol_with_H[0].GetIdx()
-
-            # notably, 3D SDF files written by other toolkits (OEChem, ChemAxon)
-            # seem to not include the chiral flag in the bonds block, only in
-            # the atoms block. RDKit ignores the atoms chiral flag as per the
-            # spec. Since OpenBabel writes 3D SDF files with chiral flags on the bonds
-            # we are good here. Otherwise, when reading SDF (e.g. from PubChem/PDB),
-            # we may need to have RDKit assign stereo from coordinates, see:
-            # https://sourceforge.net/p/rdkit/mailman/message/34399371/
-            order_string = rdmol_noH.GetProp("_smilesAtomOutputOrder")
-            order_string = order_string.replace(',]', ']') # remove trailing comma
-            order = json.loads(order_string) # rdmol_noH to smiles
-            order = list(np.argsort(order))
-            order = {noH_to_H[i]+1: order[i]+1 for i in range(len(order))} # 1-index
-
-            # identify polar hydrogens, which are not in the smiles
-            missing_h = []
+            smiles, order = self.setup.get_smiles_and_order()
+            missing_h = [] # hydrogens which are not in the smiles
             strings_h_parent = []
             for key in self._numbering:
                 if key in self.setup.atom_pseudo: continue
                 if key not in order:
-                    atom = mol.GetAtom(key)
-                    if atom.GetAtomicNum() != 1:
-                        raise RuntimeError("non-Hydrogen atom unexpectedely missing from RDKit smiles!?")
+                    element = self.setup.get_element(key)
+                    #atom = self.setup.mol.GetAtomWithIdx(key)
+                    if element != 1:
+                        raise RuntimeError("non-Hydrogen atom unexpectedely missing from smiles!?")
                     missing_h.append(key)
-                    parents = [a for a in ob.OBAtomAtomIter(atom)]
+                    parents = self.setup.get_neigh(key)
+                    parents = [i for i in parents if i < self.setup.atom_true_count] # exclude pseudos
                     if len(parents) != 1:
                         raise RuntimeError("expected hydrogen to have exactly one parent")
-                    parent_idx = order[parents[0].GetIdx()]
-                    string = ' %d %d' % (parent_idx, self._numbering[key])
+                    parent_idx = order[parents[0]] # already 1-indexed
+                    string = ' %d %d' % (parent_idx, self._numbering[key]) # key 0-indexed; _numbering[key] 1-indexed
                     strings_h_parent.append(string)
-            remarks_h_parent = self.strings_to_remarks(strings_h_parent, "REMARK H PARENT")
+            remarks_h_parent = self.break_long_remark_lines(strings_h_parent, "REMARK H PARENT")
             remark_prefix = "REMARK SMILES IDX"
             remark_idxmap = self.remark_index_map(order, remark_prefix, missing_h)
             remarks = []
-            remarks.append("REMARK SMILES %s" % rdkit_smiles) # break line at 79 chars?
+            remarks.append("REMARK SMILES %s" % smiles) # break line at 79 chars?
             remarks.extend(remark_idxmap)
             remarks.extend(remarks_h_parent)
 
@@ -238,7 +184,7 @@ class PDBQTWriterLegacy():
                 print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
                 print(self._resinfo_set, file=sys.stderr)
             resinfo = list(self._resinfo_set)[0]
-            pdbinfo = obutils.PDBAtomInfo('', resinfo.resName, resinfo.resNum, resinfo.chain)
+            pdbinfo = pdbutils.PDBAtomInfo('', resinfo.resName, resinfo.resNum, resinfo.chain)
             _, res_name, res_num, chain = self._get_pdbinfo_fitting_pdb_chars(pdbinfo)
             resinfo_string = "{:3s} {:1s}{:4d}".format(res_name, chain, res_num)
             self._pdbqt_buffer.insert(0, 'BEGIN_RES %s' % resinfo_string)
@@ -256,7 +202,7 @@ class PDBQTWriterLegacy():
             order[ob_index(i.e. 'key')] = smiles_index
         """
 
-        if order is None: order = {key: key for key in self._numbering}
+        if order is None: order = {key: key+1 for key in self._numbering} # FIXME key+1 breaks OB
         #max_line_length = 79
         #remark_lines = []
         #line = prefix
@@ -266,7 +212,7 @@ class PDBQTWriterLegacy():
             if key in missing_h: continue
             string = " %d %d" % (order[key], self._numbering[key])
             strings.append(string)
-        return self.strings_to_remarks(strings, prefix)
+        return self.break_long_remark_lines(strings, prefix)
         #    candidate_text = " %d %d" % (order[key], self._numbering[key])
         #    if (len(line) + len(candidate_text)) < max_line_length:
         #        line += candidate_text
@@ -276,7 +222,7 @@ class PDBQTWriterLegacy():
         #remark_lines.append(line)
         #return remark_lines
 
-    def strings_to_remarks(self, strings, prefix, max_line_length=79):
+    def break_long_remark_lines(self, strings, prefix, max_line_length=79):
         remarks = [prefix]
         for string in strings:
             if (len(remarks[-1]) + len(string)) < max_line_length:

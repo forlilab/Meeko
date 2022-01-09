@@ -12,10 +12,10 @@ from operator import itemgetter
 
 class FlexibilityBuilder:
 
-    def __call__(self, mol, freeze_bonds=None, root_atom_index=None):
+    def __call__(self, setup, freeze_bonds=None, root_atom_index=None):
         """ """
         # self.flexibility_models = []
-        self.mol = mol
+        self.setup = setup
         self.flexibility_models = {}
         self._frozen_bonds = []
         if not freeze_bonds is None:
@@ -39,9 +39,9 @@ class FlexibilityBuilder:
         self.select_best_model()
 
         # clean up
-        del self.mol
         del self._frozen_bonds
         del self.flexibility_models
+        return self.setup
 
 
     def select_best_model(self):
@@ -64,10 +64,10 @@ class FlexibilityBuilder:
         
         setup = best_model['setup']
         del best_model['setup']
-        self.mol.setup = setup
+        self.setup = setup
         best_model['torsions_org'] = self.flexibility_models[0]['torsions']
 
-        self.mol.setup.flexibility_model = best_model
+        self.setup.flexibility_model = best_model
 
     def add_flex_model(self, model, score=False, initial_score=0):
         """ add a flexible model to the list of configurations,
@@ -97,7 +97,7 @@ class FlexibilityBuilder:
         """
         # make a copy of the current mol graph, updated with the broken bond
         if bonds_to_break is None:
-            self._current_setup = self.mol.setup
+            self._current_setup = self.setup
             neigh_13_14 = []
             broken_bonds = []
         else:
@@ -139,7 +139,7 @@ class FlexibilityBuilder:
         # TODO This should be well-coordinated to prevent
         # that bonds connected to closure atoms are made rotatable
         # when no hydrogens are attached to them (one rotation matrix less...)
-        setup = self.mol.setup.copy()
+        setup = self.setup.copy()
         deleted_bonds = []
         bond_id_list = bonds_to_break[0]
         rings_to_enable = bonds_to_break[1]
@@ -237,7 +237,7 @@ class FlexibilityBuilder:
             (r1[99], r2[99], ... , rN[99) : scoreMM
         """
         self.breakable_bond_matrix = []
-        breakable_bonds = self.mol.setup.ring_bond_breakable
+        breakable_bonds = self.setup.ring_bond_breakable
         if len(breakable_bonds) == 0:
             return
         ring_bonds = defaultdict(list)
