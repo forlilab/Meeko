@@ -21,7 +21,6 @@ at [Scripps Research](https://www.scripps.edu/).
 * Python (>=3.5)
 * Numpy
 * Scipy
-* Openbabel (>=3)
 * RDKit
 
 Conda or Miniconda can install the dependencies:
