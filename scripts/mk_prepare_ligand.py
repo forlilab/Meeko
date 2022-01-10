@@ -208,5 +208,5 @@ if __name__ == '__main__':
             with open(fname, 'w') as f:
                 f.write(pdbqt_byname[name])
 
-    print("Processed molecules: %d" % mol_counter)
-    print("Skipped molecules: %d" % num_skipped)
+        print("Processed molecules: %d" % mol_counter)
+        print("Skipped molecules: %d" % num_skipped)
