@@ -20,7 +20,6 @@ class PDBQTWriterLegacy():
         self._visited = []
         self._numbering = {}
         self._pdbqt_buffer = []
-        self._atom_counter = {}
         self._resinfo_set = set() # for flexres keywords BEGIN_RES / END_RES
 
     def _get_pdbinfo_fitting_pdb_chars(self, pdbinfo):
@@ -50,12 +49,6 @@ class PDBQTWriterLegacy():
         in_code = ""
         occupancy = 1.0
         temp_factor = 0.0
-        atomic_num = self.setup.element[atom_idx]
-        atom_symbol = mini_periodic_table[atomic_num]
-        if not atom_symbol in self._atom_counter:
-            self._atom_counter[atom_symbol] = 0
-        self._atom_counter[atom_symbol] += 1
-        atom_count = self._atom_counter[atom_symbol]
         coord = self.setup.coord[atom_idx]
         atom_type = self.setup.get_atom_type(atom_idx)
         charge = self.setup.charge[atom_idx]
