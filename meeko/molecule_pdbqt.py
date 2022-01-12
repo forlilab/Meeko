@@ -34,7 +34,7 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
-def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_dlg=False):
+def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_dlg=False, skip_typing=False):
     i = 0
     n_poses = 0
     previous_serial = 0
@@ -125,7 +125,8 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             if is_first_pose and atom_type != 'W':
                 atom_annotations[location].append(i)
                 atom_annotations['all'].append(i)
-                atom_annotations[atom_property_definitions[atom_type]].append(i)
+                if not skip_typing:
+                    atom_annotations[atom_property_definitions[atom_type]].append(i)
 
             if atom_type == 'W':
                 water_indices.update([i])
@@ -257,7 +258,7 @@ def _identify_bonds(atom_idx, positions, atom_types):
 
 class PDBQTMolecule:
 
-    def __init__(self, pdbqt_string, name=None, poses_to_read=None, energy_range=None, is_dlg=False):
+    def __init__(self, pdbqt_string, name=None, poses_to_read=None, energy_range=None, is_dlg=False, skip_typing=False):
         """PDBQTMolecule class for reading PDBQT (or dlg) files from AutoDock4, AutoDock-GPU or AutoDock-Vina
 
         Contains both __getitem__ and __iter__ methods, someone might lose his mind because of this.
@@ -283,7 +284,7 @@ class PDBQTMolecule:
         # Juice all the information from that PDBQT file
         poses_to_read = poses_to_read if poses_to_read is not None else -1
         energy_range = energy_range if energy_range is not None else -1
-        results = _read_ligand_pdbqt_file(pdbqt_string, poses_to_read, energy_range, is_dlg)
+        results = _read_ligand_pdbqt_file(pdbqt_string, poses_to_read, energy_range, is_dlg, skip_typing)
         self._atoms, self._positions, self._atom_annotations, self._pose_data = results
 
         if self._atoms.shape[0] == 0:
@@ -293,24 +294,25 @@ class PDBQTMolecule:
         self._KDTrees = [spatial.cKDTree(positions) for positions in self._positions]
 
         # Identify bonds in the ligands
-        mol_atoms = self._atoms[self._atom_annotations['ligand']]
-        self._bonds = _identify_bonds(self._atom_annotations['ligand'], mol_atoms['xyz'], mol_atoms['atom_type'])
+        if not skip_typing:
+            mol_atoms = self._atoms[self._atom_annotations['ligand']]
+            self._bonds = _identify_bonds(self._atom_annotations['ligand'], mol_atoms['xyz'], mol_atoms['atom_type'])
 
-        """... then in the flexible residues 
-        Since we are extracting bonds from docked poses, we might be in the situation
-        where the ligand reacted with one the flexible residues and we don't want to 
-        consider them as normally bonded..."""
-        if self.has_flexible_residues():
-            flex_atoms = self._atoms[self._atom_annotations['flexible_residue']]
-            self._bonds.update(_identify_bonds(self._atom_annotations['flexible_residue'], flex_atoms['xyz'], flex_atoms['atom_type']))
+            """... then in the flexible residues 
+            Since we are extracting bonds from docked poses, we might be in the situation
+            where the ligand reacted with one the flexible residues and we don't want to 
+            consider them as normally bonded..."""
+            if self.has_flexible_residues():
+                flex_atoms = self._atoms[self._atom_annotations['flexible_residue']]
+                self._bonds.update(_identify_bonds(self._atom_annotations['flexible_residue'], flex_atoms['xyz'], flex_atoms['atom_type']))
 
     @classmethod
-    def from_file(cls, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False): 
+    def from_file(cls, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False, skip_typing=False): 
         if name is None:
             name = os.path.splitext(os.path.basename(pdbqt_filename))[0]
         with open(pdbqt_filename) as f:
             pdbqt_string = f.read()
-        instance = cls(pdbqt_string, name, poses_to_read, energy_range, is_dlg) 
+        instance = cls(pdbqt_string, name, poses_to_read, energy_range, is_dlg, skip_typing) 
         instance._pdbqt_filename = pdbqt_filename
         return instance
 
@@ -620,6 +622,9 @@ class PDBQTMolecule:
             index_map (dict): map of atom indices from obmol (keys) to coords (values) (Default: None)
 
         """
+        if not _has_openbabel:
+            raise ImportError('openbabel is required')
+
         if index_map is None:
             index_map = self._pose_data['index_map']
 

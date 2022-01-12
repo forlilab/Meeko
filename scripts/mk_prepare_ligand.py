@@ -45,8 +45,8 @@ def cmd_lineparser():
     parser.set_defaults(**config)
     parser.add_argument("-i", "--mol", dest="input_molecule_filename", required=True,
                         action="store", help="molecule file (MOL2, SDF,...)")
-    parser.add_argument("-m", "--break_macrocycle",dest="macrocycle",
-                        action="store_true", help="break macrocycle for docking")
+    parser.add_argument("--rigid_macrocycles",dest="rigid_macrocycles",
+                        action="store_true", help="keep macrocycles rigid in input conformation")
     parser.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
     parser.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",
@@ -66,8 +66,8 @@ def cmd_lineparser():
     parser.add_argument("-p", "--atom_type_smarts", dest="atom_type_smarts_json",
                         action="store", help="SMARTS based atom typing (JSON format)")
     parser.add_argument("--double_bond_penalty", help="penalty > 100 prevents breaking double bonds", type=int)
-    parser.add_argument("--remove_index_map", dest="remove_index_map",
-                        action="store_true", help="do not write map of atom indices from input to pdbqt")
+    parser.add_argument("--add_index_map", dest="add_index_map",
+                        action="store_true", help="write map of atom indices from input to pdbqt")
     parser.add_argument("--remove_smiles", dest="remove_smiles",
                         action="store_true", help="do not write smiles as remark to pdbqt")
     parser.add_argument("-o", "--out", dest="output_pdbqt_filename",

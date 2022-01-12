@@ -30,16 +30,16 @@ else:
 class MoleculePreparation:
     def __init__(self, keep_nonpolar_hydrogens=False,
             hydrate=False, flexible_amides=False,
-            macrocycle=False, min_ring_size=7, max_ring_size=33,
+            rigid_macrocycles=False, min_ring_size=7, max_ring_size=33,
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
             double_bond_penalty=50, atom_type_smarts={},
-            is_protein_sidechain=False, remove_index_map=False,
+            is_protein_sidechain=False, add_index_map=False,
             stop_at_defaults=False, remove_smiles=False):
 
         self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
         self.hydrate = hydrate
         self.flexible_amides = flexible_amides
-        self.macrocycle = macrocycle
+        self.rigid_macrocycles = rigid_macrocycles
         self.min_ring_size = min_ring_size
         self.max_ring_size = max_ring_size
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
@@ -47,7 +47,7 @@ class MoleculePreparation:
         self.double_bond_penalty = double_bond_penalty
         self.atom_type_smarts = atom_type_smarts
         self.is_protein_sidechain = is_protein_sidechain
-        self.remove_index_map = remove_index_map
+        self.add_index_map = add_index_map
         self.remove_smiles = remove_smiles
 
         if stop_at_defaults: return # create an object to show just the defaults (e.g. to argparse)
@@ -109,7 +109,7 @@ class MoleculePreparation:
         if self.hydrate:
             self._water_builder.hydrate(setup)
         # 5.  break macrocycles into open/linear form
-        if self.macrocycle:
+        if not self.rigid_macrocycles:
             # calculate possible breakable bonds
             self._macrocycle_typer.search_macrocycle(setup)
         # 6.  build flexibility...
@@ -124,7 +124,7 @@ class MoleculePreparation:
         # TODO restore legacy AD types for PDBQT
         #self._atom_typer.set_param_legacy(mol)
         if is_protein_sidechain:
-            calpha_atom_index = self.get_calpha_atom_index(setup.mol) # 1-index
+            calpha_atom_index = self.get_calpha_atom_index() # 1-index
             new_setup = self._flex_builder(mol, root_atom_index=calpha_atom_index)
             new_setup.is_protein_sidechain = True
         else:
@@ -148,21 +148,21 @@ class MoleculePreparation:
         return is_ok 
 
 
-    def get_calpha_atom_index(self, mol):
+    def get_calpha_atom_index(self):
         """ used for preparing flexible sidechains
             requires exactly 1 atom named "CA"
             returns 1-index of CA atom
         """
 
         ca_atoms = [] # we want exactly 1
-        for atom_idx in mol.get_atom_indices(true_atoms_only=True):
-            pdbinfo = mol.get_pdbinfo(atom_idx)
+        for atom_idx in self.setup.get_atom_indices(true_atoms_only=True):
+            pdbinfo = self.setup.get_pdbinfo(atom_idx)
             if pdbinfo.name.strip() == 'CA':
                 ca_atoms.append(atom_idx)
         if len(ca_atoms) != 1:
             sys.stderr.write("ERROR: flexible residue: need exactly one 'CA' atom.\n")
             sys.stderr.write("       found %d 'CA' atoms\n" % len(ca_atoms))
-            sys.stderr.write("       molecule name: %s\n" % mol.setup.name)
+            sys.stderr.write("       molecule name: %s\n" % self.setup.name)
             sys.exit(42)
         return ca_atoms[0]
 
@@ -199,16 +199,16 @@ class MoleculePreparation:
 
             print('')
 
-    def write_pdbqt_string(self, remove_index_map=None, remove_smiles=None):
+    def write_pdbqt_string(self, add_index_map=None, remove_smiles=None):
         if self.is_ok == False:
             raise RuntimeError("Molecule not OK, refusing to write PDBQT\n\nLOG:\n%s" % self.log)
-        if remove_index_map is None: remove_index_map = self.remove_index_map
+        if add_index_map is None: add_index_map = self.add_index_map
         if remove_smiles is None: remove_smiles = self.remove_smiles
         if self.setup is not None:
-            return self._writer.write_string(self.setup, remove_index_map, remove_smiles)
+            return self._writer.write_string(self.setup, add_index_map, remove_smiles)
         else:
             raise RuntimeError('Cannot generate PDBQT file, the molecule is not prepared.')
 
-    def write_pdbqt_file(self, pdbqt_filename, remove_index_map=None, remove_smiles=None):
+    def write_pdbqt_file(self, pdbqt_filename, add_index_map=None, remove_smiles=None):
         with open(pdbqt_filename,'w') as w:
-            w.write(self.write_pdbqt_string(remove_index_map, remove_smiles))
+            w.write(self.write_pdbqt_string(add_index_map, remove_smiles))

@@ -7,12 +7,10 @@ import argparse
 import os
 import sys
 
-from openbabel import openbabel as ob
 from rdkit import Chem
 from rdkit.six import StringIO
 
 from meeko import PDBQTMolecule
-from meeko import obutils
 
 
 def cmd_lineparser():
@@ -50,7 +48,7 @@ if __name__ == '__main__':
     output_string = ''
 
     is_dlg = docking_results_filename.endswith('.dlg')
-    pdbqt_mol = PDBQTMolecule.from_file(docking_results_filename, is_dlg=is_dlg)
+    pdbqt_mol = PDBQTMolecule.from_file(docking_results_filename, is_dlg=is_dlg, skip_typing=True)
 
     if template_filename is not None: # OBMol from template_filename
         if output_filename is not None:

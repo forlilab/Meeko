@@ -341,7 +341,7 @@ class MoleculeSetup:
         """ add PDB data (resname/num, atom name, etc.) to the atom """
         self.pdbinfo[idx] = data
 
-    def get_pdbinfo(self, idx, data):
+    def get_pdbinfo(self, idx):
         """ retrieve PDB data (resname/num, atom name, etc.) to the atom """
         return self.pdbinfo[idx]
 
