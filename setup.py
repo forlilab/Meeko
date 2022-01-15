@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import glob
 import fnmatch
 from setuptools import setup, find_packages
 
@@ -22,8 +21,8 @@ def find_files(directory):
 
 setup(
     name="meeko",
-    version='0.2',
-    author="Stefano Forli",
+    version='0.3.0',
+    author="Forli Lab",
     author_email="forli@scripps.edu",
     url="https://github.com/ccsb-scripps/meeko",
     description='Python package for preparing small molecule for docking',

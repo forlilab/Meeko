@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
-[![PyPI version fury.io](https://img.shields.io/badge/version-0.2-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
+[![PyPI version fury.io](https://img.shields.io/badge/version-0.3.0-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
 
 Meeko reads an RDKit molecule object and writes a PDBQT string (or file)
 for [AutoDock-Vina](https://github.com/ccsb-scripps/AutoDock-Vina)
@@ -84,10 +84,10 @@ from meeko import PDBQTMolecule
 
 with open("docked.dlg") as f:
     dlg_string = f.read()
-pdbqt_mol = PDBQTMolecule(dlg_string, is_dlg=True)
+pdbqt_mol = PDBQTMolecule(dlg_string, is_dlg=True, skip_typing=True)
 
 # alternatively, read the .dlg file directly
-pdbqt_mol = PDBQTMolecule.from_file("docked.dlg", is_dlg=True)
+pdbqt_mol = PDBQTMolecule.from_file("docked.dlg", is_dlg=True, skip_typing=True)
 
 for pose in pdbqt_mol:
     rdkit_mol = pose.export_rdkit_mol()
@@ -95,5 +95,5 @@ for pose in pdbqt_mol:
 
 For Vina's output PDBQT files, omit `is_dlg=True`.
 ```python
-pdbqt_mol = PDBQTMolecule.from_file("docking_results_from_vina.pdbqt")
+pdbqt_mol = PDBQTMolecule.from_file("docking_results_from_vina.pdbqt", skip_typing=True)
 ```
