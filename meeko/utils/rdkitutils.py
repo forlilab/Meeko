@@ -25,11 +25,6 @@ mini_periodic_table = {
                                 29: 'Cu', 30: 'Zn', 34: 'Se', 35: 'Br', 53: 'I'
         }
 
-
-
-
-
-
 def getPdbInfoNoNull(atom):
     """extract information for populating an ATOM/HETATM line
     in the PDB"""
@@ -43,7 +38,7 @@ def getPdbInfoNoNull(atom):
     else:
         name = minfo.GetName()
         chain = minfo.GetChainId()
-        resNum = minfo.GetResidueNum()
+        resNum = minfo.GetResidueNumber()
         resName = minfo.GetResidueName()
     return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
 
