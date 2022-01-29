@@ -12,7 +12,7 @@ from operator import itemgetter
 
 class BondTyperLegacy:
 
-    def __call__(self, setup, flexible_amides, rigidify_bonds_smarts, rigidify_bonds_indices):
+    def __call__(self, setup, flexible_amides, rigidify_bonds_smarts, rigidify_bonds_indices, not_terminal_atoms=[]):
         """Typing atom bonds in the legacy way
 
         Args:
@@ -66,7 +66,9 @@ class BondTyperLegacy:
             if len(bond_info['in_rings']):
                 rotatable = False
             # it's a terminal atom (methyl, halogen, hydrogen...)
-            if _is_terminal(bond_id[0]) or _is_terminal(bond_id[1]):
+            is_terminal_1 = _is_terminal(bond_id[0]) and (bond_id[0] not in not_terminal_atoms)
+            is_terminal_2 = _is_terminal(bond_id[1]) and (bond_id[1] not in not_terminal_atoms)
+            if is_terminal_1 or is_terminal_2:
                 rotatable = False
             # check if bond is amide
             # NOTE this should have been done during the setup, right?

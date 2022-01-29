@@ -80,7 +80,7 @@ class MoleculePreparation:
         p = cls(**config)
         return p
 
-    def prepare(self, mol, root_atom_index=None):
+    def prepare(self, mol, root_atom_index=None, not_terminal_atoms=[]):
         """ if protein_sidechain, C H N O will be removed,
             root will be CA, and BEGIN/END_RES will be added.
         """
@@ -101,7 +101,7 @@ class MoleculePreparation:
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(setup, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
+        self._bond_typer(setup, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices, not_terminal_atoms)
         # 4 . hydrate molecule
         if self.hydrate:
             self._water_builder.hydrate(setup)
@@ -186,3 +186,30 @@ class MoleculePreparation:
     def write_pdbqt_file(self, pdbqt_filename, add_index_map=None, remove_smiles=None):
         with open(pdbqt_filename,'w') as w:
             w.write(self.write_pdbqt_string(add_index_map, remove_smiles))
+
+    def adapt_pdbqt_for_autodock4_flexres(self, pdbqt_string, res, chain, num):
+        """ adapt pdbqt_string to be compatible with AutoDock4 requirements:
+             - first and second atoms named CA and CB
+             - write BEGIN_RES / END_RES
+             - remove TORSDOF
+            this is for covalent docking (tethered)
+        """
+        new_string = "BEGIN_RES %s %s %s\n" % (res, chain, num)
+        atom_number = 0
+        for line in pdbqt_string.split("\n"):
+            if line == "":
+                continue
+            if line.startswith("TORSDOF"):
+                continue
+            if line.startswith("ATOM"):
+                atom_number+=1
+                if atom_number == 1:
+                    line = line[:13] + 'CA' + line[15:]
+                elif atom_number == 2:
+                    line = line[:13] + 'CB' + line[15:]
+                new_string += line + '\n'
+                continue
+            new_string += line + '\n'
+        new_string += "END_RES %s %s %s\n" % (res, chain, num)
+        return new_string
+

@@ -2,6 +2,7 @@ from collections import namedtuple
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdGeometry
 import prody
+import warnings
 
 
 from collections import defaultdict
@@ -46,32 +47,21 @@ class CovalentBuilder(object):
         ligands can be processed sequentially ( CovalentBuilder.process() )
 
             receptor_mol    :       ProDy molecule
-            residues_list   :       list of residues to process
-                                    [ (chid, res_type, res_num, atname1, atname2), (...) ]
+            residue_string  :       string specifying residues to process. Examples:
+                                    ":LYS:"              (all LYS, default atom names: CA,CB)
+                                    "A:LYS:204:CA,CB"
+                                    "A:HIS::ND1,CE1"     (all HIS on chain A)
 
-        All values in the tuple can be an empty string, except for the res_type, which is required.
         (ProDy regular expressions could be also injected here).
     """
-    def __init__(self, receptor_mol):
+    def __init__(self, receptor_mol, residue_string):
         self.rec = receptor_mol
-        # if residues_list is None:
-        #     print("Error: specify residues to process")
-        #     raise ValueError
-        # self.requested_res = residues_list
-        # self.find_residues()
-
-    def find_residues(self, residue, allow_missing=False):
-        """ identify the residues to be used for the alignment and extract the coordinates of the two atoms to be used
-
-            residue:Tuple       : a tuple containing the following information (chain, res, num, atname1, atname2)
-                                  only 'res' and 'atname[1|2]' are required, the rest is optional,
-                                  e.g: (None, res, None, 'CA', 'CB')
-
-            allow_missing:Bool  : if one of the residue atoms required for the alignment is missing, if True,
-                                  do not raise an exception and continue processing
-        """
-        out = self._generate_prody_selection(residue)
-        self._compact_selection(out, allow_missing=allow_missing)
+        selection_tuple = self.parse_residue_string(residue_string, force_CA_CB=True)
+        # selection tuple: (chain, res, num, atname1, atname2)
+        # only 'res' and 'atname[1|2]' are required, the rest is optional,
+        # e.g: (None, res, None, 'CA', 'CB')
+        out = self._generate_prody_selection(selection_tuple)
+        self._compact_selection(out)
 
     def _generate_prody_selection(self, residue):
         """ generate the string to perform a Prody.Selection """
@@ -86,7 +76,7 @@ class CovalentBuilder(object):
             sel_string.append("resnum %s" % res_num)
         sel_string.append("(name %s or name %s)" % (atname1, atname2))
         sel_string = " and ".join(sel_string)
-        print("CovalentBuilder> searching for residue:",sel_string)
+        #print("CovalentBuilder> searching for residue:",sel_string)
         found = self.rec.select( sel_string )
         if found is None:
             print("ERROR: no residue found with the following specification: chain[%s] residue[%s] number[%s] atom names [%s,%s]"% (
@@ -126,15 +116,16 @@ class CovalentBuilder(object):
         # from pprint import pprint as pp
         # pp(self.residues)
 
-    def process(self, ligand, smarts=None, smarts_indices=None, indices=None, first_only=True):
+    def process(self, ligand, smarts=None, smarts_indices=None, indices=None, first_only=False):
         """ process the ligand for the residue(s) specified for the current receptor"""
         if (smarts is None) and (indices is None):
-            print("Error> specify at least one criterion, either SMARTS pattern or atom indices (2)")
-            raise ValueError
+            raise ValueError("Specify at least one criterion, either SMARTS pattern or atom indices (2)")
         # if SMARTS are specified, use that to define (or override) indices
         if not smarts is None:
             indices = self.find_smarts(ligand, smarts, smarts_indices, first_only)
-        print("CovalentBuilder> Generating %d ouput alignments (%d residues)" % (len(indices)*len(self.residues), len(self.residues) ))
+        if len(indices) == 0:
+            warnings.warn("SMARTS pattern didn't match any atoms", RuntimeWarning)
+        #print("CovalentBuilder> Generating %d ouput alignments (%d residues)" % (len(indices)*len(self.residues), len(self.residues) ))
         # perform alignments
         for i, idx_pair in enumerate(indices):
             for res_info, res_coord in self.residues.items():
@@ -149,18 +140,21 @@ class CovalentBuilder(object):
                 mol = self.transform(ligand, idx_pair, coord)
                 yield CovLigandPrepared(mol, res_info, at_names, smarts, smarts_indices, idx_pair,label)
 
-    def find_smarts(self, mol, smarts, smarts_indices, first_only=True):
+    def find_smarts(self, mol, smarts, smarts_indices, first_only):
         """ find occurrences of the SMARTS indices atoms in the requested SMARTS"""
         indices = []
         patt = Chem.MolFromSmarts(smarts)
+        smarts_size = patt.GetNumAtoms()
+        if smarts_indices[0] >= smarts_size or smarts_indices[1] >= smarts_size:
+            raise ValueError("SMARTS index exceeds number of atoms in SMARTS (%d)" % (smarts_size))
         found = mol.GetSubstructMatches(patt)
-        print("CovalentBuilder> ligand patterns found: ", found, "[ use only first: %s ]" % first_only)
+        #print("CovalentBuilder> ligand patterns found: ", found, "[ use only first: %s ]" % first_only)
         if len(found)>1 and first_only:
             print("WARNING: the specified ligand pattern returned more than one match: [%d] (potential ambiguity?)" % len(found))
         for f in found:
-            print("CovalentBuilder> processing:", f, "with ", smarts_indices)
+            #print("CovalentBuilder> processing:", f, "with ", smarts_indices)
             indices.append([f[x] for x in smarts_indices])
-            print("CovalentBuilder> ligand indices stored:", indices)
+            #print("CovalentBuilder> ligand indices stored:", indices)
             if first_only:
                 return indices
         return indices
@@ -190,3 +184,24 @@ class CovalentBuilder(object):
         Chem.rdMolAlign.AlignMol(mol, target, -1, -1,[(index_pair[0],0), (index_pair[1], 1)] )
         return mol
 
+    @classmethod
+    def parse_residue_string(cls, string, force_CA_CB=True):
+        chain, res, num, *atom_names = string.split(":")
+        #print("PARSED c:%s r:%s n:%s AAA:%s" % (chain, res, num, atom_names))
+        if not num == "":
+            if not num.isdigit():
+                raise ValueError('NUM must be an integer in "CHAIN:RES:NUM" or "CHAIN:RES:NUM:ATOM1,ATOM2"')
+        # parse atom names
+        #  TODO clean all specifications
+        if atom_names == []:
+            atom_names = "CA,CB"
+        else:
+            atom_names = atom_names[0]
+        # trigger error if comma not found
+        a1, a2 = atom_names.split(",")
+        # check that the legacy_format flag is not used
+        if force_CA_CB and (not a1 == 'CA' or not a2 == 'CB'):
+            msg  = "Atom names expected to be CA,CB but got %s,%s instead.\n" % (a1, a2)
+            raise RuntimeError(msg)
+        residue = (chain, res, num, a1, a2)
+        return residue
