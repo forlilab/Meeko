@@ -162,9 +162,8 @@ class Output:
         if multimol_output_dir is None:
             multimol_output_dir = '.'
         self.multimol_output_dir = multimol_output_dir
-        self.multimol_prefix = multimol_prefix
         self.redirect_stdout = redirect_stdout
-        self.output_name = output_filename
+        self.output_filename = output_filename
         self.is_multimol = is_multimol
         self.duplicate_names = []
         self.visited_names = []
@@ -181,28 +180,21 @@ class Output:
             else:
                 self.visited_names.append(name)
                 is_duplicate = False
-            #if self.multimol_prefix is not None:
-            #    filename = '%s-%d.pdbqt' % (multimol_prefix, self.num_files_written)
-            #    fpath = os.path.join(self.multimol_output_dir, filename)
-            #    print(pdbqt_string, end='', file=open(fpath, 'w'))
-            #    with open(fpath, 'w') as f:
-            #        f.write(pdbqt_string)
-            #    self.num_files_written += 1
-            #elif not is_duplicate:
             if is_duplicate:
                 print("Warning: not writing %s because of duplicate filename" % (name), file=sys.stderr)
             else:
                 fpath = os.path.join(self.multimol_output_dir, name + '.pdbqt')
                 print(pdbqt_string, end='', file=open(fpath, 'w'))
                 self.num_files_written += 1
-        elif args.redirect_stdout:
+        elif self.redirect_stdout:
             print(pdbqt_string, end='')
         else:
-            if args.output_pdbqt_filename is None:
+            if self.output_filename is None:
                 filename = '%s.pdbqt' % name
             else:
-                filename = args.output_pdbqt_filename + '.pdbqt'
+                filename = self.output_filename + '.pdbqt'
             print(pdbqt_string, end='', file=open(filename, 'w'))
+            self.num_files_written += 1
 
     def _mkdir(self, multimol_output_dir):
         """make directory if it doesn't exist yet """
@@ -215,10 +207,7 @@ class Output:
             return None
         if len(self.duplicate_names):
             d = self.duplicate_names
-            if self.multimol_prefix:
-                string = "Warning: %d output PDBQTs had duplicated filenames, e.g. %s" % (len(d), d[0])
-            else:
-                string = "Warning: %d output PDBQTs not written due to duplicate filenames, e.g. %s" % (len(d), d[0])
+            string = "Warning: %d output PDBQTs not written due to duplicate filenames, e.g. %s" % (len(d), d[0])
         else:
             string = "No duplicate molecule filenames were found"
         return string
