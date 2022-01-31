@@ -10,8 +10,8 @@ from collections import OrderedDict
 
 from rdkit import Chem
 
-from .setup import OBMoleculeSetup
-from .setup import RDKitMoleculeSetup
+from .molsetup import OBMoleculeSetup
+from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy

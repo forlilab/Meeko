@@ -19,7 +19,7 @@ else:
     _has_prody = True
 
 from .preparation import MoleculePreparation
-from .setup import RDKitMoleculeSetup
+from .molsetup import RDKitMoleculeSetup
 from .utils import rdkitutils
 from .utils import pdbutils
 from .utils import geomutils
@@ -33,7 +33,7 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis']
 
 if _has_openbabel:
-    from .setup import OBMoleculeSetup
+    from .molsetup import OBMoleculeSetup
     from .utils import obutils
     __all__.append("OBMoleculeSetup")
     __all__.append("obutils")
