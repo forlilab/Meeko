@@ -142,7 +142,7 @@ class MoleculePreparation:
         for idx in self.setup.atom_type:
             atom_type = self.setup.atom_type[idx]
             if atom_type is None:
-                msg += 'atom number %d has None type, mol name: %s' % (idx, self.get_mol_name())
+                msg += 'atom number %d has None type, mol name: %s' % (idx, self.setup.get_mol_name())
                 is_ok = False
         self.log = msg
         return is_ok 
