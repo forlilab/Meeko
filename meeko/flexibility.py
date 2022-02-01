@@ -115,7 +115,7 @@ class FlexibilityBuilder:
         self._rigid_index_by_atom = {}
         # START VALUE HERE SHOULD BE MADE MODIFIABLE FOR FLEX CHAIN
         self._rigid_body_count = 0
-        self.walk_rigid_body_graph(start=1)
+        self.walk_rigid_body_graph(start=0)
         # if only a rigid body is found
         if len(self._rigid_body_members) == 1:
             self._rigid_body_connectivity[0] = [0]
