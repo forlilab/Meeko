@@ -109,9 +109,12 @@ class MoleculePreparation:
         if self.hydrate:
             self._water_builder.hydrate(setup)
         # 5.  break macrocycles into open/linear form
-        if not self.rigid_macrocycles:
-            # calculate possible breakable bonds
-            self._macrocycle_typer.search_macrocycle(setup)
+        if self.rigid_macrocycles:
+            break_combo_data = None
+            bonds_in_rigid_rings = None # not true, but this is only needed when breaking macrocycles
+        else:
+            break_combo_data, bonds_in_rigid_rings = self._macrocycle_typer.search_macrocycle(setup)
+
         # 6.  build flexibility...
         # 6.1 if macrocycles typed:
         #     - walk the setup graph by skipping proposed closures
@@ -125,10 +128,16 @@ class MoleculePreparation:
         #self._atom_typer.set_param_legacy(mol)
         if is_protein_sidechain:
             calpha_atom_index = self.get_calpha_atom_index() # 1-index
-            new_setup = self._flex_builder(mol, root_atom_index=calpha_atom_index)
+            new_setup = self._flex_builder(setup,
+                                           root_atom_index=calpha_atom_index,
+                                           break_combo_data=break_combo_data,
+                                           bonds_in_rigid_rings=bonds_in_rigid_rings)
             new_setup.is_protein_sidechain = True
         else:
-            new_setup = self._flex_builder(setup, root_atom_index=None)
+            new_setup = self._flex_builder(setup,
+                                           root_atom_index=None,
+                                           break_combo_data=break_combo_data,
+                                           bonds_in_rigid_rings=bonds_in_rigid_rings)
         self.setup = new_setup
         # TODO re-run typing after breaking bonds
         # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
@@ -195,7 +204,7 @@ class MoleculePreparation:
                 t = ', '.join('%s: %s' % (i, j) for i, j in v.items() if not i in keys_to_not_show)
                 print("% 8s - " % str(k), t)
 
-            self._macrocycle_typer.show_macrocycle_scores()
+            self._macrocycle_typer.show_macrocycle_scores(self.setup)
 
             print('')
 
