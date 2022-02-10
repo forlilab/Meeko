@@ -66,7 +66,6 @@ class MoleculeSetup:
         "rings",
         "rings_aromatic",
         "atom_to_ring_id",
-        "ring_bond_breakable",
         "flexibility_model",
         'history',
         'name',
@@ -100,7 +99,6 @@ class MoleculeSetup:
         self.rings = {}
         self.rings_aromatic = []
         self.atom_to_ring_id = defaultdict(list)
-        self.ring_bond_breakable = defaultdict(dict)  # used by flexible macrocycles
         self.ring_corners = {}  # used to store corner flexibility
         self.name = None
         # this could be used to keep track of transformations? (corner flipping)
@@ -399,6 +397,18 @@ class MoleculeSetup:
     # replaced by
     # def ring_atom_to_ring(self, arg):
     #     return self.atom_to_ring_id[arg]
+
+    def get_bonds_in_ring(self, ring):
+        """ input: 'ring' (list of atom indices)
+            returns list of bonds in ring, each bond is a pair of atom indices
+        """
+        n = len(ring)
+        bonds = []
+        for i in range(n):
+            bond = (ring[i], ring[(i+1) % n])
+            bond = (min(bond), max(bond))
+            bonds.append(bond)
+        return bonds
 
     def walk_recursive(self, idx, collected=None, exclude=None):
         """ walk molecular graph and return subgraphs that are bond-connected"""
