@@ -67,12 +67,26 @@ from rdkit import Chem
 input_molecule_file = 'example/BACE_macrocycle/BACE_4.mol2'
 mol = Chem.MolFromMol2File(input_molecule_file)
 
-preparator = MoleculePreparation(macrocycle=True, hydrate=True)
+preparator = MoleculePreparation(hydrate=True) # macrocycles flexible by default since v0.3.0
 preparator.prepare(mol)
 preparator.show_setup()
 
 output_pdbqt_file = "test_macrocycle_hydrate.pdbqt"
 preparator.write_pdbqt_file(output_pdbqt_file)
+```
+
+Alternatively, the preparator can be initialized from a dictionary,
+which is useful for saving and loading configuration files with json.
+The command line tool `mk_prepare_ligand.py` can read the json files.
+```python
+import json
+from meeko import MoleculePreparation
+
+mk_config = {"hydrate": True}
+print(json.dumps(mk_config), file=open('mk_config.json', 'w'))
+with open('mk_config.json') as f:
+    mk_config = json.load(f)
+preparator = MoleculePreparation.from_config(mk_config)
 ```
 
 #### 2. RDKit molecule from docking results
