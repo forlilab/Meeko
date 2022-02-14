@@ -141,9 +141,12 @@ class FlexMacrocycle:
         """
 
         max_breaks = self.max_breaks
-        break_combos = self._recursive_break(self.breakable_rings, max_breaks, breakable_bonds)
+        break_combos = self._recursive_break(self.breakable_rings, max_breaks, breakable_bonds, set(), [])
         break_combos = list(break_combos) # convert from set
         max_broken_bonds = 0
+        output_break_combos = [] # found new max, discard prior data
+        output_bond_scores = []
+        output_broken_rings = []
         for broken_bonds in break_combos:
             n_broken_bonds = len(broken_bonds)
             bond_score = sum([breakable_bonds[bond]['score'] for bond in broken_bonds])
