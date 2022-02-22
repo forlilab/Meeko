@@ -48,6 +48,10 @@ take effect immediately without the need to run `pip install .` again.
 $ pip install --editable .
 ```
 
+## Usage notes
+Meeko does not calculate 3D coordinates or assign protonation states.
+Input molecules must have explicit hydrogens.
+
 ## Examples using the command line scripts
 ```console
 mk_prepare_ligand.py -i molecule.sdf -o molecule.pdbqt
