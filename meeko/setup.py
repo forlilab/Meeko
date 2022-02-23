@@ -657,29 +657,25 @@ class RDKitMoleculeSetup(MoleculeSetup):
     def perceive_rings(self):
         """ perceive ring information """
 
-        def isRingAromatic(bonds_in_ring):
-            """ Index ID#: RDKitCB_8
-            RDKit recipe for identifying if ring is aromatic
-            """
-            for bond_idx in bonds_in_ring:
-                if not self.mol.GetBondWithIdx(bond_idx).GetIsAromatic():
+        def isRingAromatic(ring_atom_indices):
+            for atom_idx1, atom_idx2 in self.get_bonds_in_ring(ring_atom_indices):
+                bond = self.mol.GetBondBetweenAtoms(atom_idx1, atom_idx2)
+                if not bond.GetIsAromatic():
                     return False
             return True
 
-        ring_info = self.mol.GetRingInfo()
-        perceived = ring_info.AtomRings()
-        bond_rings = ring_info.BondRings()
-        for idx, ring_id in enumerate(perceived):
-            if isRingAromatic(bond_rings[idx]):
-                self.rings_aromatic.append(ring_id)
-            self.rings[ring_id] = {'corner_flip':False}
+        hjk_ring_detection = rdkitutils.HJKRingDetection(self.graph) 
+        rings = hjk_ring_detection.scan() # list of tuples of atom indices
+        for ring_atom_idxs in rings:
+            if isRingAromatic(ring_atom_idxs):
+                self.rings_aromatic.append(ring_atom_idxs)
+            self.rings[ring_atom_idxs] = {'corner_flip':False}
             graph = {}
-            for member in ring_id:
-                # atom to ring lookup
-                self.atom_to_ring_id[member].append(ring_id)
+            for atom_idx in ring_atom_idxs:
+                self.atom_to_ring_id[atom_idx].append(ring_atom_idxs)
                 # graph of atoms affected by potential ring movements
-                graph[member] = self.walk_recursive(member, collected=[], exclude=list(ring_id))
-            self.rings[ring_id]['graph'] = graph
+                graph[atom_idx] = self.walk_recursive(atom_idx, collected=[], exclude=list(ring_atom_idxs))
+            self.rings[ring_atom_idxs]['graph'] = graph
 
     def copy(self):
         """ return a copy of the current setup"""
