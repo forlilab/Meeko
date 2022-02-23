@@ -51,8 +51,6 @@ def cmd_lineparser():
                         action="store_true", help="add water molecules for hydrated docking")
     parser.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",
                         action="store_true", help="keep non-polar hydrogens (default: merge onto heavy atom)")
-    parser.add_argument("--pH", dest="pH_value",
-                        action="store", help="correct protonation for pH (default: No correction)")
     parser.add_argument("-f", "--flex", dest="is_protein_sidechain",
                         action="store_true", help="prepare as flexible protein residue")
     parser.add_argument("-r", "--rigidify_bonds_smarts", dest="rigidify_bonds_smarts",
