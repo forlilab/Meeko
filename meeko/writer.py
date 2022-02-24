@@ -172,7 +172,7 @@ class PDBQTWriterLegacy():
                 # only after self._walk_graph_recursive
                 self._pdbqt_buffer.insert(i, remark_line)
 
-        if self.setup.is_protein_sidechain:
+        if False: #self.setup.is_protein_sidechain:
             if len(self._resinfo_set) > 1:
                 print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
                 print(self._resinfo_set, file=sys.stderr)

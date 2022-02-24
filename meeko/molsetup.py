@@ -68,11 +68,10 @@ class MoleculeSetup:
         "atom_to_ring_id",
         "flexibility_model",
         'history',
-        'is_protein_sidechain',
         'name',
         ]
 
-    def __init__(self, mol, flexible_amides=False, is_protein_sidechain=False, assign_charges=True, template=None):
+    def __init__(self, mol, flexible_amides=False, assign_charges=True, template=None):
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
@@ -104,22 +103,19 @@ class MoleculeSetup:
         self.name = None
         # this could be used to keep track of transformations? (corner flipping)
         self.history = []
-        self.is_protein_sidechain = False
         if template is None:
-            self.process_mol(flexible_amides, is_protein_sidechain, assign_charges)
+            self.process_mol(flexible_amides, assign_charges)
         else:
             if not isinstance(template, MoleculeSetup):
                 raise TypeError('FATAL: template must be an instance of MoleculeSetup')
             self.copy_attributes_from(template)
 
-    def process_mol(self, flexible_amides, is_protein_sidechain, assign_charges):
+    def process_mol(self, flexible_amides, assign_charges):
         self.atom_true_count = self.get_num_mol_atoms()
         self.name = self.get_mol_name()
         self.init_atom(assign_charges)
         self.perceive_rings()
         self.init_bond(flexible_amides)
-        if is_protein_sidechain:
-            self.ignore_backbone()
         return
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
@@ -511,9 +507,6 @@ class MoleculeSetup:
         """
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
-    def ignore_backbone(self):
-        raise NotImplementedError("This method must be overloaded by inheriting class")
-
     def get_mol_name(self):
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
@@ -750,23 +743,6 @@ class OBMoleculeSetup(MoleculeSetup):
             idx2_rings = set(self.get_atom_rings(idx2))
             in_rings = list(set.intersection(idx1_rings, idx2_rings))
             self.add_bond(idx1, idx2, order=bond_order, in_rings=in_rings)
-
-    def ignore_backbone(self):
-        """ set ignore for PDB atom names 'C', 'N', 'H', and 'O'
-            these atoms are kept in the rigid PDBQT by ReactiveReceptor"""
-        # TODO this function is very fragile, to be replaced by SMARTS
-        # also, not sure where it is used...
-        exclude_pdbname = {'C': 0, 'N': 0, 'H': 0, 'O': 0} # store counts of found atoms
-        for atom in ob.OBMolAtomIter(self.mol):
-            pdbinfo = obutils.getPdbInfo(atom)
-            if pdbinfo.name.strip() in exclude_pdbname:
-                idx = atom.GetIdx() - 1
-                self.set_ignore(idx, True)
-                exclude_pdbname[pdbinfo.name.strip()] += 1
-        for name in exclude_pdbname:
-            n_found = exclude_pdbname[name]
-            if n_found != 1:
-                print("Warning: expected 1 atom with PDB name '%s' but found %d" % (name, n_found))
 
     def copy(self):
         """ return a copy of the current setup"""

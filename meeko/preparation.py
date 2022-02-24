@@ -10,8 +10,8 @@ from collections import OrderedDict
 
 from rdkit import Chem
 
-from .setup import OBMoleculeSetup
-from .setup import RDKitMoleculeSetup
+from .molsetup import OBMoleculeSetup
+from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
@@ -33,7 +33,7 @@ class MoleculePreparation:
             rigid_macrocycles=False, min_ring_size=7, max_ring_size=33,
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
             double_bond_penalty=50, atom_type_smarts={},
-            is_protein_sidechain=False, add_index_map=False,
+            add_index_map=False,
             stop_at_defaults=False, remove_smiles=False):
 
         self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
@@ -46,7 +46,6 @@ class MoleculePreparation:
         self.rigidify_bonds_indices = rigidify_bonds_indices
         self.double_bond_penalty = double_bond_penalty
         self.atom_type_smarts = atom_type_smarts
-        self.is_protein_sidechain = is_protein_sidechain
         self.add_index_map = add_index_map
         self.remove_smiles = remove_smiles
 
@@ -81,17 +80,15 @@ class MoleculePreparation:
         p = cls(**config)
         return p
 
-    def prepare(self, mol, is_protein_sidechain=None):
+    def prepare(self, mol, root_atom_index=None, not_terminal_atoms=[]):
         """ if protein_sidechain, C H N O will be removed,
             root will be CA, and BEGIN/END_RES will be added.
         """
-        if is_protein_sidechain is None:
-            is_protein_sidechain = self.is_protein_sidechain
         mol_type = type(mol)
         if not mol_type in self._classes_setup:
             raise TypeError("Molecule is not an instance of supported types: %s" % type(mol))
         setup_class = self._classes_setup[mol_type]
-        setup = setup_class(mol, is_protein_sidechain)
+        setup = setup_class(mol)
         self.setup = setup
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)
@@ -104,7 +101,7 @@ class MoleculePreparation:
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)
-        self._bond_typer(setup, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices)
+        self._bond_typer(setup, self.flexible_amides, self.rigidify_bonds_smarts, self.rigidify_bonds_indices, not_terminal_atoms)
         # 4 . hydrate molecule
         if self.hydrate:
             self._water_builder.hydrate(setup)
@@ -126,18 +123,12 @@ class MoleculePreparation:
         #     in flexible macrocycles
         # TODO restore legacy AD types for PDBQT
         #self._atom_typer.set_param_legacy(mol)
-        if is_protein_sidechain:
-            calpha_atom_index = self.get_calpha_atom_index() # 1-index
-            new_setup = self._flex_builder(setup,
-                                           root_atom_index=calpha_atom_index,
-                                           break_combo_data=break_combo_data,
-                                           bonds_in_rigid_rings=bonds_in_rigid_rings)
-            new_setup.is_protein_sidechain = True
-        else:
-            new_setup = self._flex_builder(setup,
-                                           root_atom_index=None,
-                                           break_combo_data=break_combo_data,
-                                           bonds_in_rigid_rings=bonds_in_rigid_rings)
+
+        new_setup = self._flex_builder(setup,
+                                       root_atom_index=root_atom_index,
+                                       break_combo_data=break_combo_data,
+                                       bonds_in_rigid_rings=bonds_in_rigid_rings)
+
         self.setup = new_setup
         # TODO re-run typing after breaking bonds
         # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
@@ -156,24 +147,6 @@ class MoleculePreparation:
         self.log = msg
         return is_ok 
 
-
-    def get_calpha_atom_index(self):
-        """ used for preparing flexible sidechains
-            requires exactly 1 atom named "CA"
-            returns 1-index of CA atom
-        """
-
-        ca_atoms = [] # we want exactly 1
-        for atom_idx in self.setup.get_atom_indices(true_atoms_only=True):
-            pdbinfo = self.setup.get_pdbinfo(atom_idx)
-            if pdbinfo.name.strip() == 'CA':
-                ca_atoms.append(atom_idx)
-        if len(ca_atoms) != 1:
-            sys.stderr.write("ERROR: flexible residue: need exactly one 'CA' atom.\n")
-            sys.stderr.write("       found %d 'CA' atoms\n" % len(ca_atoms))
-            sys.stderr.write("       molecule name: %s\n" % self.setup.name)
-            sys.exit(42)
-        return ca_atoms[0]
 
     def show_setup(self):
         if self.setup is not None:
@@ -221,3 +194,30 @@ class MoleculePreparation:
     def write_pdbqt_file(self, pdbqt_filename, add_index_map=None, remove_smiles=None):
         with open(pdbqt_filename,'w') as w:
             w.write(self.write_pdbqt_string(add_index_map, remove_smiles))
+
+    def adapt_pdbqt_for_autodock4_flexres(self, pdbqt_string, res, chain, num):
+        """ adapt pdbqt_string to be compatible with AutoDock4 requirements:
+             - first and second atoms named CA and CB
+             - write BEGIN_RES / END_RES
+             - remove TORSDOF
+            this is for covalent docking (tethered)
+        """
+        new_string = "BEGIN_RES %s %s %s\n" % (res, chain, num)
+        atom_number = 0
+        for line in pdbqt_string.split("\n"):
+            if line == "":
+                continue
+            if line.startswith("TORSDOF"):
+                continue
+            if line.startswith("ATOM"):
+                atom_number+=1
+                if atom_number == 1:
+                    line = line[:13] + 'CA' + line[15:]
+                elif atom_number == 2:
+                    line = line[:13] + 'CB' + line[15:]
+                new_string += line + '\n'
+                continue
+            new_string += line + '\n'
+        new_string += "END_RES %s %s %s\n" % (res, chain, num)
+        return new_string
+
