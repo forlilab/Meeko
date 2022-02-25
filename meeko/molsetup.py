@@ -14,6 +14,7 @@ from rdkit import Chem
 from rdkit.Chem import rdPartialCharges
 
 from .utils import rdkitutils
+from .utils import utils
 
 try:
     from openbabel import openbabel as ob
@@ -657,7 +658,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
                     return False
             return True
 
-        hjk_ring_detection = rdkitutils.HJKRingDetection(self.graph) 
+        hjk_ring_detection = utils.HJKRingDetection(self.graph) 
         rings = hjk_ring_detection.scan() # list of tuples of atom indices
         for ring_atom_idxs in rings:
             if isRingAromatic(ring_atom_idxs):

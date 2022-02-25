@@ -23,13 +23,14 @@ from .molsetup import RDKitMoleculeSetup
 from .utils import rdkitutils
 from .utils import pdbutils
 from .utils import geomutils
+from .utils import utils
 from .atomtyper import AtomTyper
 from .receptor_pdbqt import PDBQTReceptor
 from .molecule_pdbqt import PDBQTMolecule
 from . import analysis
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
-        'pdbutils', 'geomutils', 'rdkitutils',
+        'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis']
 
 if _has_openbabel:
