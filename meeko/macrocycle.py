@@ -44,9 +44,12 @@ class FlexMacrocycle:
             size = len(ring_id)
             if ring_id in setup.rings_aromatic:
                 rigid_rings.append(ring_id)
-            elif (size > self._max_ring_size) or (size < self._min_ring_size):
+            elif size < self._min_ring_size:
                 rigid_rings.append(ring_id)
-            else:
+                # do not add rings > _max_ring_size to rigid_rings
+                # because bonds in rigid rings will not be breakable 
+                # and these bonds may also belong to breakable rings
+            elif size <= self._max_ring_size:
                 breakable_rings.append(ring_id)
 
         bonds_in_rigid_cycles = set()
