@@ -4,7 +4,13 @@ import pathlib
 
 num_cycle_breaks = {
     "tetrahedron1": 3,
-    "tetrahedron2": 3}
+    "tetrahedron2": 3,
+    "vancomycin":   3,
+    "macrocycle2":   1,
+    "macrocycle3":   1,
+    "macrocycle4":   2,
+    "macrocycle5":   1,
+}
 workdir = pathlib.Path(__file__)
 filenames = {name: str(workdir.parents[0] / "macrocycle_data" / ("%s.sdf" % name)) for name in num_cycle_breaks}
 mk_prep = MoleculePreparation()
