@@ -35,7 +35,7 @@ def getNameExt(fname):
     return name, ext[1:] #.lower()
 
 
-class HJKRingDetection(object):
+class HJKRingDetection:
     """Implementation of the Hanser-Jauffret-Kaufmann exhaustive ring detection
     algorithm:
         ref:
@@ -43,18 +43,26 @@ class HJKRingDetection(object):
         J. Chem. Inf. Comput. Sci. 1996, 36, 1146-1152
     """
 
-    def __init__(self, mgraph):
+    def __init__(self, mgraph, max_iterations=8000000):
         self.mgraph = {key: [x for x in values] for (key, values) in mgraph.items()}
         self.rings = []
         self._iterations = 0
+        self._max_iterations = max_iterations
+        self._is_failed = False
 
-    def scan(self):
-        """run the full protocol for exhaustive ring detection"""
+    def scan(self, find_chordless=True, remove_equivalent=True):
+        """run the full protocol for exhaustive ring detection
+        by default, only chordless rings are kept, and equivalent rings removed.
+        (equivalent rings are rings that have the same size and share the same
+        neighbors)
+        """
         self.prune()
         self.build_pgraph()
         self.vertices = self._get_sorted_vertices()
         while self.vertices:
             self._remove_vertex(self.vertices[0])
+        if find_chordless:
+            self.find_chordless_rings(remove_equivalent)
         output_rings = []
         for ring in self.rings:
             output_rings.append(tuple(ring[:-1]))
@@ -67,8 +75,8 @@ class HJKRingDetection(object):
         return [x[0] for x in sorted(vertices, key=itemgetter(1))]
 
     def prune(self):
-        """iteratively prune graph until there are no nodes with only one
-        connection"""
+        """iteratively prune graph until there are no leafs left (nodes with only
+        one connection)"""
         while True:
             prune = []
             for node, neighbors in self.mgraph.items():
@@ -108,6 +116,9 @@ class HJKRingDetection(object):
                 if i == j:
                     continue
                 self._iterations += 1
+                if self._iterations > self._max_iterations:
+                    self._is_failed = True
+                    break
                 pair_id = tuple(set((i, j)))
                 if pair_id in visited:
                     continue
@@ -173,6 +184,97 @@ class HJKRingDetection(object):
             if e == set(p) and len(p) == len(edge):
                 return True
         return False
+
+    def find_chordless_rings(self, remove_equivalent):
+        """find chordless rings: cycles in which two vertices are not connected
+        by an edge that does not itself belong to the cycle (Source:
+        https://en.wikipedia.org/wiki/Cycle_%28graph_theory%29#Chordless_cycle)
+
+        - iterate through rings starting from the smallest ones: A,B,C,D...
+        - for each ring (A), find a candidate (e.g.: B) that is smaller and shares at least an edge
+        - for this pair, calculate the two differences (A-B and B-A) in the list of edges of each
+        - if  ( (A-B) + (B-A) ) a smaller ring (e.g.: C), then the current ring has a chord
+        """
+        # sort rings by the smallest to largest
+        self.rings.sort(key=len, reverse=False)
+        chordless_rings = []
+        ring_edges = []
+        rings_set = [set(x) for x in self.rings]
+        for r in self.rings:
+            edges = []
+            for i in range(len(r) - 1):
+                edges.append(
+                    tuple(
+                        set((r[i], r[(i + 1) % len(r)])),
+                    )
+                )
+            edges = sorted(edges, key=itemgetter(0))
+            ring_edges.append(edges)
+        ring_contacts = {}
+        for i, r1 in enumerate(self.rings):
+            chordless = True
+            r1_edges = ring_edges[i]
+            ring_contacts[i] = []
+            for j, r2 in enumerate(self.rings):
+                if i == j:
+                    continue
+                if len(r2) >= len(r1):
+                    # the candidate ring is larger than or the same size of the candidate
+                    continue
+                # avoid rings that don't share at least an edge
+                shared = set(r1) & set(r2)
+                if len(shared) < 1:
+                    continue
+                ring_contacts[i].append(j)
+                r2_edges = ring_edges[j]
+                # get edges difference (r2_edges - r1_edges)
+                core_edges = [x for x in r2_edges if not x in r1_edges]
+                chord = [x for x in r1_edges if not x in r2_edges]
+                # combined = chord + core_edges
+                ring_new = []
+                for edge in chord + core_edges:
+                    ring_new.append(edge[0])
+                    ring_new.append(edge[1])
+                ring_new = set(ring_new)
+                if (ring_new in rings_set) and (len(ring_new) < len(r1) - 1):
+                    chordless = False
+                    break
+            if chordless:
+                chordless_rings.append((i, tuple(set(ring_contacts[i]))))
+        if remove_equivalent:
+            chordless_rings = self._remove_equivalent_rings(chordless_rings)
+        # clean up the rings
+        rings = []
+        accepted = [x[0] for x in chordless_rings]
+        for idx, ring in enumerate(self.rings):
+            if idx in accepted:
+                rings.append(ring)
+        self.rings = rings
+
+    def _remove_equivalent_rings(self, chordless_rings):
+        """remove equivalent rings by clustering by size, then by ring neighbors.
+        equivalent rings are rings that have the same size and share the same neighbors
+        """
+        size_clusters = {}
+        for ring_id, ring_neigh in chordless_rings:
+            if len(ring_neigh) == 0:
+                continue
+            size = len(self.rings[ring_id]) - 1
+            if not size in size_clusters:
+                size_clusters[size] = {}
+            if not ring_neigh in size_clusters[size]:
+                size_clusters[size][ring_neigh] = [ring_id]
+            else:
+                size_clusters[size][ring_neigh].append(ring_id)
+        remove = []
+        for size, ring_neigh_data in size_clusters.items():
+            for ring_neigh, rings in ring_neigh_data.items():
+                remove += rings[1:]
+        accepted = []
+        for ring_data in chordless_rings:
+            if not ring_data[0] in remove:
+                accepted.append(ring_data)
+        return accepted
 
 
 # def writeList(filename, inlist, mode = 'w', addNewLine = False):

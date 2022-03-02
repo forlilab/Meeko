@@ -192,7 +192,7 @@ class Output:
             if self.output_filename is None:
                 filename = '%s.pdbqt' % name
             else:
-                filename = self.output_filename + '.pdbqt'
+                filename = self.output_filename
             print(pdbqt_string, end='', file=open(filename, 'w'))
             self.num_files_written += 1
 
