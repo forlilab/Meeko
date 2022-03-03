@@ -76,6 +76,10 @@ def cmd_lineparser():
             help='configure MoleculePreparation from JSON file. Overriden by command line args.') # parsed above by conf_parser, here for help msg
     config_group.add_argument("--rigid_macrocycles",dest="rigid_macrocycles",
                         action="store_true", help="keep macrocycles rigid in input conformation")
+    config_group.add_argument("--keep_chorded_rings",dest="keep_chorded_rings",
+                        action="store_true", help="return all rings from exhaustive perception")
+    config_group.add_argument("--keep_equivalent_rings",dest="keep_equivalent_rings",
+                        action="store_true", help="equivalent rings have the same size and neighbors")
     config_group.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
     config_group.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",

@@ -7,6 +7,7 @@
 import os
 import sys
 from collections import OrderedDict
+import warnings
 
 from rdkit import Chem
 
@@ -31,6 +32,7 @@ class MoleculePreparation:
     def __init__(self, keep_nonpolar_hydrogens=False,
             hydrate=False, flexible_amides=False,
             rigid_macrocycles=False, min_ring_size=7, max_ring_size=33,
+            keep_chorded_rings=False, keep_equivalent_rings=False,
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
             double_bond_penalty=50, atom_type_smarts={},
             add_index_map=False,
@@ -42,6 +44,8 @@ class MoleculePreparation:
         self.rigid_macrocycles = rigid_macrocycles
         self.min_ring_size = min_ring_size
         self.max_ring_size = max_ring_size
+        self.keep_chorded_rings = keep_chorded_rings
+        self.keep_equivalent_rings = keep_equivalent_rings
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
         self.rigidify_bonds_indices = rigidify_bonds_indices
         self.double_bond_penalty = double_bond_penalty
@@ -64,6 +68,8 @@ class MoleculePreparation:
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
         if _has_openbabel:
             self._classes_setup[ob.OBMol] = OBMoleculeSetup
+        if keep_chorded_rings and keep_equivalent_rings==False:
+            warnings.warn("keep_equivalent_rings=False ignored because keep_chorded_rings=True", RuntimeWarning)
 
     @classmethod
     def init_just_defaults(cls):
@@ -88,7 +94,9 @@ class MoleculePreparation:
         if not mol_type in self._classes_setup:
             raise TypeError("Molecule is not an instance of supported types: %s" % type(mol))
         setup_class = self._classes_setup[mol_type]
-        setup = setup_class(mol)
+        setup = setup_class(mol,
+            keep_chorded_rings=self.keep_chorded_rings,
+            keep_equivalent_rings=self.keep_equivalent_rings)
         self.setup = setup
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)

@@ -72,7 +72,8 @@ class MoleculeSetup:
         'name',
         ]
 
-    def __init__(self, mol, flexible_amides=False, assign_charges=True, template=None):
+    def __init__(self, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+                flexible_amides=False, assign_charges=True, template=None):
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
@@ -105,17 +106,17 @@ class MoleculeSetup:
         # this could be used to keep track of transformations? (corner flipping)
         self.history = []
         if template is None:
-            self.process_mol(flexible_amides, assign_charges)
+            self.process_mol(flexible_amides, assign_charges, keep_chorded_rings, keep_equivalent_rings)
         else:
             if not isinstance(template, MoleculeSetup):
                 raise TypeError('FATAL: template must be an instance of MoleculeSetup')
             self.copy_attributes_from(template)
 
-    def process_mol(self, flexible_amides, assign_charges):
+    def process_mol(self, flexible_amides, assign_charges, keep_chorded_rings, keep_equivalent_rings):
         self.atom_true_count = self.get_num_mol_atoms()
         self.name = self.get_mol_name()
         self.init_atom(assign_charges)
-        self.perceive_rings()
+        self.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         self.init_bond(flexible_amides)
         return
 
@@ -469,7 +470,7 @@ class MoleculeSetup:
         """ iterate through molecule atoms and build the atoms table """
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
-    def perceive_rings(self):
+    def perceive_rings(self, keep_chorded_rings, keep_equivalent_rings):
         """ populate the rings and aromatic rings tableshe atoms table:
         self.rings_aromatics : list
             contains the list of ring_id items that are aromatic
@@ -486,7 +487,26 @@ class MoleculeSetup:
         self.ring_atom_to_ring_id: dict
             mapping of each atom belonginig to the ring: atom_idx -> ring_id
         """
-        raise NotImplementedError("This method must be overloaded by inheriting class")
+
+        def isRingAromatic(ring_atom_indices):
+            for atom_idx1, atom_idx2 in self.get_bonds_in_ring(ring_atom_indices):
+                bond = self.mol.GetBondBetweenAtoms(atom_idx1, atom_idx2)
+                if not bond.GetIsAromatic():
+                    return False
+            return True
+
+        hjk_ring_detection = utils.HJKRingDetection(self.graph) 
+        rings = hjk_ring_detection.scan(keep_chorded_rings, keep_equivalent_rings) # list of tuples of atom indices
+        for ring_atom_idxs in rings:
+            if isRingAromatic(ring_atom_idxs):
+                self.rings_aromatic.append(ring_atom_idxs)
+            self.rings[ring_atom_idxs] = {'corner_flip':False}
+            graph = {}
+            for atom_idx in ring_atom_idxs:
+                self.atom_to_ring_id[atom_idx].append(ring_atom_idxs)
+                # graph of atoms affected by potential ring movements
+                graph[atom_idx] = self.walk_recursive(atom_idx, collected=[], exclude=list(ring_atom_idxs))
+            self.rings[ring_atom_idxs]['graph'] = graph
 
     def init_bond(self, flexible_amides):
         """ iterate through molecule bonds and build the bond table (id, table)
@@ -647,30 +667,6 @@ class RDKitMoleculeSetup(MoleculeSetup):
             in_rings = list(set.intersection(idx1_rings, idx2_rings))
             self.add_bond(idx1, idx2, order=bond_order, rotatable=rotatable, in_rings=in_rings)
 
-
-    def perceive_rings(self):
-        """ perceive ring information """
-
-        def isRingAromatic(ring_atom_indices):
-            for atom_idx1, atom_idx2 in self.get_bonds_in_ring(ring_atom_indices):
-                bond = self.mol.GetBondBetweenAtoms(atom_idx1, atom_idx2)
-                if not bond.GetIsAromatic():
-                    return False
-            return True
-
-        hjk_ring_detection = utils.HJKRingDetection(self.graph) 
-        rings = hjk_ring_detection.scan() # list of tuples of atom indices
-        for ring_atom_idxs in rings:
-            if isRingAromatic(ring_atom_idxs):
-                self.rings_aromatic.append(ring_atom_idxs)
-            self.rings[ring_atom_idxs] = {'corner_flip':False}
-            graph = {}
-            for atom_idx in ring_atom_idxs:
-                self.atom_to_ring_id[atom_idx].append(ring_atom_idxs)
-                # graph of atoms affected by potential ring movements
-                graph[atom_idx] = self.walk_recursive(atom_idx, collected=[], exclude=list(ring_atom_idxs))
-            self.rings[ring_atom_idxs]['graph'] = graph
-
     def copy(self):
         """ return a copy of the current setup"""
         return RDKitMoleculeSetup(self.mol, template=self)
@@ -711,22 +707,6 @@ class OBMoleculeSetup(MoleculeSetup):
                     neighbors=[x.GetIdx() - 1 for x in ob.OBAtomAtomIter(a)],
                     ignore=False, chiral=a.IsChiral())
             # TODO check consistency for chiral model between OB and RDKit
-
-    def perceive_rings(self):
-        """ collect information about rings"""
-        perceived = self.mol.GetSSSR()
-        for r in perceived:
-            ring_id = tuple(i-1 for i in tuple(r._path))
-            if r.IsAromatic():
-                self.rings_aromatic.append(ring_id)
-            self.rings[ring_id] = {'corner_flip': False}
-            graph = {}
-            for member in ring_id:
-                # atom to ring lookup
-                self.atom_to_ring_id[member].append(ring_id)
-                # graph of atoms affected by potential ring movements
-                graph[member] = self.walk_recursive(member, collected=[], exclude=list(ring_id))
-            self.rings[ring_id]['graph'] = graph
 
     def init_bond(self, flexible_amides):
         """initialize bond data table"""

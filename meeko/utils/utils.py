@@ -6,8 +6,6 @@
 #
 
 import os
-import re
-import sys
 import importlib
 from operator import itemgetter
 
@@ -50,7 +48,7 @@ class HJKRingDetection:
         self._max_iterations = max_iterations
         self._is_failed = False
 
-    def scan(self, find_chordless=True, remove_equivalent=True):
+    def scan(self, keep_chorded_rings=False, keep_equivalent_rings=False):
         """run the full protocol for exhaustive ring detection
         by default, only chordless rings are kept, and equivalent rings removed.
         (equivalent rings are rings that have the same size and share the same
@@ -61,8 +59,8 @@ class HJKRingDetection:
         self.vertices = self._get_sorted_vertices()
         while self.vertices:
             self._remove_vertex(self.vertices[0])
-        if find_chordless:
-            self.find_chordless_rings(remove_equivalent)
+        if not keep_chorded_rings:
+            self.find_chordless_rings(keep_equivalent_rings)
         output_rings = []
         for ring in self.rings:
             output_rings.append(tuple(ring[:-1]))
@@ -185,7 +183,7 @@ class HJKRingDetection:
                 return True
         return False
 
-    def find_chordless_rings(self, remove_equivalent):
+    def find_chordless_rings(self, keep_equivalent_rings):
         """find chordless rings: cycles in which two vertices are not connected
         by an edge that does not itself belong to the cycle (Source:
         https://en.wikipedia.org/wiki/Cycle_%28graph_theory%29#Chordless_cycle)
@@ -241,7 +239,7 @@ class HJKRingDetection:
                     break
             if chordless:
                 chordless_rings.append((i, tuple(set(ring_contacts[i]))))
-        if remove_equivalent:
+        if not keep_equivalent_rings:
             chordless_rings = self._remove_equivalent_rings(chordless_rings)
         # clean up the rings
         rings = []
