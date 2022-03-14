@@ -16,6 +16,10 @@ Meeko is developed by the [Forli lab](https://forlilab.org/) at the
 [Center for Computational Structural Biology (CCSB)](https://ccsb.scripps.edu)
 at [Scripps Research](https://www.scripps.edu/).
 
+## Recent changes
+
+The `--pH` option was removed since `v0.3.0`. See issue https://github.com/forlilab/Meeko/issues/11 for more info.
+
 ## Dependencies
 
 * Python (>=3.5)
