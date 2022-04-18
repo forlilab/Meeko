@@ -147,8 +147,6 @@ class AtomTyper:
                                 else:
                                     pass
             for parent_idx in tmp:
-                print(parent_idx)
-                print(tmp)
                 for offatom_dict in tmp[parent_idx]:
                     #print '1-> ', self.atom_params['q'], len(self.coords)
                     atom_params = offatom_dict['atom_params']
