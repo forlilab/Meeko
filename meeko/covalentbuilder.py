@@ -76,7 +76,7 @@ class CovalentBuilder(object):
             sel_string.append("resnum %s" % res_num)
         sel_string.append("(name %s or name %s)" % (atname1, atname2))
         sel_string = " and ".join(sel_string)
-        #print("CovalentBuilder> searching for residue:",sel_string)
+        print("CovalentBuilder> searching for residue:",sel_string)
         found = self.rec.select( sel_string )
         if found is None:
             print("ERROR: no residue found with the following specification: chain[%s] residue[%s] number[%s] atom names [%s,%s]"% (

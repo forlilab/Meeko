@@ -621,7 +621,7 @@ class PDBQTMolecule:
 
         return [self._bonds[i] for i in atom_idx]
 
-    def write_pdbqt_string(self, as_model=True):
+    def write_pdbqt_string(self, as_model=True, replace_AD_atomtypes=False):
         """Write PDBQT output string of the current pose
         
         Args:
@@ -630,7 +630,10 @@ class PDBQTMolecule:
         """
         if as_model:
             pdbqt_string = 'MODEL    %5d\n' % (self._current_pose + 1)
-            pdbqt_string += self._pose_data['pdbqt_string'][self._current_pose] 
+            if replace_AD_atomtypes:
+                pdbqt_string += self._replace_pdbqt_atomtypes(self._pose_data['pdbqt_string'][self._current_pose], check_atom_line=True)
+            else:
+                pdbqt_string += self._pose_data['pdbqt_string'][self._current_pose]
             pdbqt_string += 'ENDMDL\n'
             return pdbqt_string
         else: 
@@ -914,23 +917,29 @@ class PDBQTMolecule:
         # Add to dict of all flexible residue molecules
         self._flexres_mols[flexres_name] = res_mol
 
-    def _replace_pdbqt_atomtypes(self, pdbqt):
+    def _replace_pdbqt_atomtypes(self, pdbqt, check_atom_line=False):
         """replaces autodock-specific atomtypes with general ones. Reads AD->
         general atomtype mapping from AD_to_STD_ATOMTYPES.json
-
+        
         Args:
             pdbqt (string): String representing pdbqt block with native AD atomtypes
-
+            check_atom_line (bool, optional): flag to check that a line is an atom before trying to modify it
+        
         Returns:
             String: pdbqt_line with atomtype replaced with general
                 atomtypes recognized by RDKit
-
+        
         Raises:
             RuntimeError: Will raise error if atomtype
                 is not in AD_to_STD_ATOMTYPES.json
         """
         new_lines = []
         for pdbqt_line in pdbqt.split("\n"):
+            if check_atom_line and not pdbqt_line.startswith("ATOM") and not pdbqt_line.startswith("HETATM"):
+                # do not modify non-atom lines
+                new_lines.append(pdbqt_line)
+                continue
+
             old_atomtype = pdbqt_line.split()[-1]
 
             # load autodock to standard atomtype dict if not loaded
@@ -948,7 +957,7 @@ class PDBQTMolecule:
                     "ERROR! Unrecognized atomtype {at} in flexible residue pdbqt!".
                     format(at=old_atomtype))
 
-            new_lines.append(pdbqt_line.replace(old_atomtype, new_atomtype))
+            new_lines.append(pdbqt_line.replace(f" {old_atomtype}", f" {new_atomtype}"))  # need space before atomtype to avoid changing other parts of string
 
         return "\n".join([line.lstrip(" ") for line in list(filter(None, new_lines))])  # formating to keep the new pdbqt block clean
 
