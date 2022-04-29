@@ -9,7 +9,8 @@ from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
 import json
-from rdkit.Chem import SDWriter
+import os
+
 
 class RDKitMolCreate:
 
@@ -39,8 +40,10 @@ class RDKitMolCreate:
         "TRP": 'C1=CC=C2C(=C1)C(=CN2)CC'
     }
 
+    ad_to_std_atomtypes = None
+
     @classmethod
-    def from_pdbqt_mol(cls, pdbqt_mol): # TODO flexres
+    def from_pdbqt_mol(cls, pdbqt_mol):  # TODO flexres
         smiles = pdbqt_mol._pose_data['smiles']
         index_map = pdbqt_mol._pose_data['smiles_index_map']
         h_parent = pdbqt_mol._pose_data['smiles_h_parent']
@@ -52,31 +55,106 @@ class RDKitMolCreate:
             cls.add_pose_to_mol(mol, coordinates, index_map)
         mol = cls.add_hydrogens(mol, coordinates_list, h_parent)
         return mol
-     
-    @staticmethod
-    def add_pose_to_mol(mol, ligand_coordinates, index_map, flexres_poses=[], flexres_names=[]):
+
+    @classmethod
+    def replace_pdbqt_atomtypes(cls, pdbqt, check_atom_line=False):
+        """replaces autodock-specific atomtypes with general ones. Reads AD->
+        general atomtype mapping from AD_to_STD_ATOMTYPES.json
+
+        Args:
+            pdbqt (string): String representing pdbqt block with native AD atomtypes
+            check_atom_line (bool, optional): flag to check that a line is an atom before trying to modify it
+
+        Returns:
+            String: pdbqt_line with atomtype replaced with general
+                atomtypes recognized by RDKit
+
+        Raises:
+            RuntimeError: Will raise error if atomtype
+                is not in AD_to_STD_ATOMTYPES.json
+        """
+        new_lines = []
+        for pdbqt_line in pdbqt.split("\n"):
+            if check_atom_line and not pdbqt_line.startswith("ATOM") and not pdbqt_line.startswith("HETATM"):
+                # do not modify non-atom lines
+                new_lines.append(pdbqt_line)
+                continue
+
+            old_atomtype = pdbqt_line.split()[-1]
+
+            # load autodock to standard atomtype dict if not loaded
+            if cls.ad_to_std_atomtypes is None:
+                with open(
+                        os.path.join(os.path.dirname(__file__),
+                                     'AD_to_STD_ATOMTYPES.json'), 'r') as f:
+                    cls.ad_to_std_atomtypes = json.load(f)
+
+            # fetch new atomtype
+            try:
+                new_atomtype = cls.ad_to_std_atomtypes[old_atomtype]
+            except KeyError:
+                raise RuntimeError(
+                    "ERROR! Unrecognized atomtype {at} in flexible residue pdbqt!".
+                    format(at=old_atomtype))
+
+            # need space before atomtype to avoid changing other parts of string
+            new_lines.append(pdbqt_line.replace(f" {old_atomtype}", f" {new_atomtype}"))
+
+        return "\n".join([line.lstrip(" ") for line in list(filter(None, new_lines))])  # formating to keep the new pdbqt block clean
+
+    @classmethod
+    def create_flexres_molecule(cls, flexres_pdbqt, flexres_name):
+        """Creates RDKit molecules for flexible residues,
+            returns list of RDKit Mol objects
+
+        Args:
+            flexres_lines (string): flexres pdbqt lines
+            flexres_names (list): list of strings of flexres names
+
+        Returns:
+            List: list of rdkit mol objects, with one object for each flexres
+        """
+
+        # make flexres rdkit molecule, add to our dict of flexres_mols
+        # get the residue smiles string and pdbqt we need
+        # to make the required rdkit molecules
+        try:
+            # strip out 3-letter residue code
+            res_smile = cls.flex_residue_smiles[flexres_name[:3]]
+        except KeyError:
+            raise KeyError(f"Flexible residue {flexres_name} not recognized.")
+
+        # make rdkit molecules and use template to
+        # ensure correct bond order
+        template = AllChem.MolFromSmiles(res_smile)
+        res_mol = AllChem.MolFromPDBBlock(flexres_pdbqt, removeHs=False)
+        res_mol = AllChem.AssignBondOrdersFromTemplate(template, res_mol)
+
+        return res_mol
+
+    @classmethod
+    def add_pose_to_mol(cls, mol, ligand_coordinates, index_map, flexres_mols={}, flexres_poses=[], flexres_names=[]):
         """add given coordinates to given molecule as new conformer.
         Index_map maps order of coordinates to order in smile string
         used to generate rdkit mol
-        
+
         Args:
             ligand_coordinates (list): Ligand coordinate as list of 3d sets.
             flexres_poses (list): list of strings of PDBQT lines
                 for flexible residues.
             flexres_names (string): List of residue names
                 for flexible residues.
-        
+
         Raises:
             RuntimeError: Will raise error if number of coordinates provided does not
                 match the number of atoms there should be coordinates for.
-        
         """
 
         n_atoms = mol.GetNumAtoms()
         conf = Chem.Conformer(n_atoms)
         if n_atoms != len(index_map) / 2:
             raise RuntimeError(
-                "ERROR! Incorrect number of coordinates! Given {n_coords} "\
+                "ERROR! Incorrect number of coordinates! Given {n_coords} "
                 "atom coordinates for {n_at} atoms!".format(
                     n_coords=n_atoms, n_at=len(index_map) / 2))
         for i in range(n_atoms):
@@ -87,13 +165,14 @@ class RDKitMolCreate:
 
         # generate flexible residue mols if we haven't yet
         for idx, resname in enumerate(flexres_names):
-            flexres_pdbqt = self._replace_pdbqt_atomtypes(flexres_poses[idx])
-            if resname not in self._flexres_mols and resname != '':
-                self._create_flexres_molecule(flexres_pdbqt, resname)
+            flexres_pdbqt = cls.replace_pdbqt_atomtypes(flexres_poses[idx])
+            if resname not in flexres_mols and resname != '':
+                resmol = cls.create_flexres_molecule(flexres_pdbqt, resname)
+                flexres_mols[resname] = resmol
             else:
                 # add new pose to each of the flexible residue molecules
                 # make a new conformer
-                flex_res = self._flexres_mols[resname]
+                flex_res = flexres_mols[resname]
                 n_atoms = flex_res.GetNumAtoms()
                 conf = Chem.Conformer(n_atoms)
 
@@ -110,7 +189,9 @@ class RDKitMolCreate:
                 # add new conformer to flex_res object and add object back
                 # to flex_res_mols
                 flex_res.AddConformer(conf, assignId=True)
-                self._flexres_mols[resname] = flex_res
+                flexres_mols[resname] = flex_res
+
+        return mol, flexres_mols
 
     @staticmethod
     def add_hydrogens(mol, coordinates_list, h_parent):
@@ -129,7 +210,7 @@ class RDKitMolCreate:
                 x, y, z = [
                     float(coord) for coord in atom_coordinates[h_pdbqt_index]
                 ]
-                parent_atom = mol.GetAtomWithIdx(parent_rdkit_index )
+                parent_atom = mol.GetAtomWithIdx(parent_rdkit_index)
                 candidate_hydrogens = [
                     atom.GetIdx() for atom in parent_atom.GetNeighbors()
                     if atom.GetAtomicNum() == 1
@@ -141,96 +222,14 @@ class RDKitMolCreate:
                 conf.SetAtomPosition(h_rdkit_index, Point3D(x, y, z))
         return mol
 
-    def export_combined_rdkit_mol(self):
+    @classmethod
+    def export_combined_rdkit_mol(cls, mol, flexres_mols, coordinates_list, h_parent):
         """Exports combined ligand and flexres rdkit mol
         """
-        self._add_hydrogens_to_pose()  # will only do anything if there were explicit hydrogens included in the source
-        return self._combine_ligand_flexres()
-
-    def write_sdf(self, filename):
-        mol = self.export_combined_rdkit_mol()
-        with SDWriter(filename) as w:
-            for conf in mol.GetConformers():
-                w.write(mol, conf.GetId())
-
-    def _create_flexres_molecule(self, flexres_pdbqt, flexres_name):
-        """Creates RDKit molecules for flexible residues,
-            returns list of RDKit Mol objects
-
-        Args:
-            flexres_lines (string): flexres pdbqt lines
-            flexres_names (list): list of strings of flexres names
-
-        Returns:
-            List: list of rdkit mol objects, with one object for each flexres
-        """
-
-        # make flexres rdkit molecule, add to our dict of flexres_mols
-        # get the residue smiles string and pdbqt we need
-        # to make the required rdkit molecules
-        try:
-            res_smile = self.flex_residue_smiles[flexres_name]
-        except KeyError:
-            raise KeyError(f"Flexible residue {flexres_name} not recognized.")
-
-        # make rdkit molecules and use template to
-        # ensure correct bond order
-        template = AllChem.MolFromSmiles(res_smile)
-        res_mol = AllChem.MolFromPDBBlock(flexres_pdbqt, removeHs=False)
-        res_mol = AllChem.AssignBondOrdersFromTemplate(template, res_mol)
-
-        # Add to dict of all flexible residue molecules
-        self._flexres_mols[flexres_name] = res_mol
-
-    def _replace_pdbqt_atomtypes(self, pdbqt, check_atom_line=False):
-        """replaces autodock-specific atomtypes with general ones. Reads AD->
-        general atomtype mapping from AD_to_STD_ATOMTYPES.json
-        
-        Args:
-            pdbqt (string): String representing pdbqt block with native AD atomtypes
-            check_atom_line (bool, optional): flag to check that a line is an atom before trying to modify it
-        
-        Returns:
-            String: pdbqt_line with atomtype replaced with general
-                atomtypes recognized by RDKit
-        
-        Raises:
-            RuntimeError: Will raise error if atomtype
-                is not in AD_to_STD_ATOMTYPES.json
-        """
-        new_lines = []
-        for pdbqt_line in pdbqt.split("\n"):
-            if check_atom_line and not pdbqt_line.startswith("ATOM") and not pdbqt_line.startswith("HETATM"):
-                # do not modify non-atom lines
-                new_lines.append(pdbqt_line)
-                continue
-
-            old_atomtype = pdbqt_line.split()[-1]
-
-            # load autodock to standard atomtype dict if not loaded
-            if self.ad_to_std_atomtypes is None:
-                with open(
-                        os.path.join(os.path.dirname(__file__),
-                                     'AD_to_STD_ATOMTYPES.json'), 'r') as f:
-                    self.ad_to_std_atomtypes = json.load(f)
-
-            # fetch new atomtype
-            try:
-                new_atomtype = self.ad_to_std_atomtypes[old_atomtype]
-            except KeyError:
-                raise RuntimeError(
-                    "ERROR! Unrecognized atomtype {at} in flexible residue pdbqt!".
-                    format(at=old_atomtype))
-
-            new_lines.append(pdbqt_line.replace(f" {old_atomtype}", f" {new_atomtype}"))  # need space before atomtype to avoid changing other parts of string
-
-        return "\n".join([line.lstrip(" ") for line in list(filter(None, new_lines))])  # formating to keep the new pdbqt block clean
-
-    def _combine_ligand_flexres(self):
-        """Combine RDKit mols for ligand and flexible residues
-        """
-        combined_mol = self.ligand_rdkit_mol
-        for flex_res in self._flexres_mols:
-            combined_mol = Chem.CombineMols(combined_mol, self._flexres_mols[flex_res])
+        # will only do anything if there were explicit hydrogens included in the source
+        mol = cls.add_hydrogens(mol, coordinates_list, h_parent)
+        combined_mol = mol
+        for flex_res in flexres_mols:
+            combined_mol = Chem.CombineMols(combined_mol, flexres_mols[flex_res])
 
         return combined_mol
