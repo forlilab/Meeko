@@ -11,6 +11,7 @@ from rdkit import Chem
 from rdkit.six import StringIO
 
 from meeko import PDBQTMolecule
+from meeko import RDKitMolCreate
 
 
 def cmd_lineparser():
@@ -71,9 +72,9 @@ if __name__ == '__main__':
             raise RuntimeError(msg)
         sio = StringIO()
         f = Chem.SDWriter(sio)
-        for pose in pdbqt_mol:
-            rdmol = pose.export_rdkit_mol()
-            f.write(rdmol)
+        mol = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
+        for conformer in mol.GetConformers():
+            f.write(mol, conformer.GetId())
         f.close()
         output_string += sio.getvalue()
         output_format = 'sdf'
