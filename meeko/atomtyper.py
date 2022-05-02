@@ -11,6 +11,7 @@ from collections import OrderedDict
 import numpy as np
 
 from .utils import utils
+from .utils import pdbutils
 
 
 class AtomTyper:
@@ -114,7 +115,7 @@ class AtomTyper:
                     smarts_idxs = [i - 1 for i in line['IDX']]
                 for smarts_idx in smarts_idxs:
                     for hit in hits:
-                        parent_idx = hit[smarts_idx] - 1
+                        parent_idx = hit[smarts_idx]
                         tmp.setdefault(parent_idx, []) # TODO tmp[parent_idx] = [], yeah?
                         for offatom in line['OFFATOMS']:
                             # set defaults
@@ -133,7 +134,7 @@ class AtomTyper:
                                 # replace SMARTS indexes by the atomic index
                                 elif key in ['z', 'x']:
                                     for i in offatom[key]:
-                                        idx = hit[i - 1] - 1
+                                        idx = hit[i - 1]
                                         tmp[parent_idx][-1]['offatom'][key].append(idx)
                                 # convert degrees to radians
                                 elif key in ['theta', 'phi']:
@@ -169,7 +170,7 @@ class AtomTyper:
             (atom_type, dist, theta, phi) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
             tmp = setup.get_pdbinfo(atomgeom.parent+1)
-            pdbinfo = utils.pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
+            pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
             pseudo_atom = {
                     'coord': offatom_coords,
                     'anchor_list': [atomgeom.parent + 1], # convert to 1-indexing

@@ -13,12 +13,7 @@ from openbabel import openbabel as ob
 from . import geomutils
 from . import utils
 from . import pdbutils
-
-mini_periodic_table = {
-        1: 'H', 2: 'He', 3: 'Li', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 11: 'Na', 12: 'Mg',
-        15: 'P', 16: 'S', 17: 'Cl', 19: 'K', 20: 'Ca', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni',
-        29: 'Cu', 30: 'Zn', 34: 'Se', 35: 'Br', 53: 'I'}
-
+from .utils import mini_periodic_table
 
 # named tuple to contain information about an atom
 # PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
