@@ -131,7 +131,7 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
 
             previous_serial = serial
             i += 1
-        elif line.startswith('REMARK'):
+        elif line.startswith('REMARK') or line.startswith('USER'):
             if line.startswith('REMARK INDEX MAP') and is_first_pose:
                 integers = [int(integer) for integer in line.split()[3:]]
                 if len(integers) % 2 == 1:
