@@ -21,7 +21,7 @@ def find_files(directory):
 
 setup(
     name="meeko",
-    version='0.3.2',
+    version='0.3.3',
     author="Forli Lab",
     author_email="forli@scripps.edu",
     url="https://github.com/ccsb-scripps/meeko",
