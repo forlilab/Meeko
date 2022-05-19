@@ -13,6 +13,14 @@ from rdkit.six import StringIO
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 
+try:
+    from openbabel import openbabel as ob
+    from meeko import obutils # fails if openbabel not available
+except:
+    _has_openbabel = False
+else:
+    _has_openbabel = True
+
 
 def cmd_lineparser():
     parser = argparse.ArgumentParser(description='Copy atom coordinates from PDBQT (or DLG) file \
@@ -20,6 +28,10 @@ def cmd_lineparser():
     parser.add_argument(dest='docking_results_filename',
                         action='store', help='Docking output file to get coordinates. Either a PDBQT \
                         file from Vina or a DLG file from AD-GPU.')
+    parser.add_argument('-i', '--original_input', dest='template_filename',
+                        action='store', help='Template molecule file, i.e. the original file that was \
+                        used to prepare the PDBQT filename (hopefully SDF). If no template is provided, \
+                        the SMILES string in the PDBQT remarks will be used to generate an SDF file.')
     parser.add_argument('-o', '--output_filename', dest='output_filename',
                         action='store', help='Output molecule filename. If not specified, suffix _docked is \
                         added to the filename based on the input molecule file, and using the same \
@@ -37,6 +49,7 @@ def cmd_lineparser():
 if __name__ == '__main__':
     args = cmd_lineparser()
     docking_results_filename = args.docking_results_filename
+    template_filename = args.template_filename
     output_filename = args.output_filename
     suffix_name = args.suffix_name
     redirect_stdout = args.redirect_stdout
@@ -46,20 +59,35 @@ if __name__ == '__main__':
     is_dlg = docking_results_filename.endswith('.dlg')
     pdbqt_mol = PDBQTMolecule.from_file(docking_results_filename, is_dlg=is_dlg, skip_typing=True)
 
-    # RDKit mol from SMILES in docking output PDBQT remarks
-    if pdbqt_mol._pose_data['smiles'] is None:
-        msg = "\n\n    \"REMARK SMILES\" not found in %s.\n" % docking_results_filename
-        msg += "    Consider using -i/--original_input\n"
-        raise RuntimeError(msg)
-    sio = StringIO()
-    f = Chem.SDWriter(sio)
-    mol = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
-    for conformer in mol.GetConformers():
-        f.write(mol, conformer.GetId())
-    f.close()
-    output_string += sio.getvalue()
-    output_format = 'sdf'
-
+    if template_filename is not None: # OBMol from template_filename
+        if not _has_openbabel:
+            raise ImportError('-i/--original_input requires openbabel which is not available')
+        if output_filename is not None:
+            output_format = os.path.splitext(output_filename)[1][1:]
+        else:
+            output_format = os.path.splitext(template_filename)[1][1:]
+        conv = ob.OBConversion()
+        success = conv.SetOutFormat(output_format)
+        if not success:
+            raise RuntimeError('Input molecule file format %s not recognized by OpenBabel.' % output_format)
+        ori_obmol = obutils.load_molecule_from_file(template_filename)
+        for pose in pdbqt_mol:
+            copy_obmol = ob.OBMol(ori_obmol) # connectivity may be corrupted by removing and adding Hs multiple times
+            pose.copy_coordinates_to_obmol(copy_obmol)
+            output_string += conv.WriteString(copy_obmol)
+    else: # RDKit mol from SMILES in docking output PDBQT remarks
+        if pdbqt_mol._pose_data['smiles'] is None:
+            msg = "\n\n    \"REMARK SMILES\" not found in %s.\n" % docking_results_filename
+            msg += "    Consider using -i/--original_input\n"
+            raise RuntimeError(msg)
+        sio = StringIO()
+        f = Chem.SDWriter(sio)
+        mol = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
+        for conformer in mol.GetConformers():
+            f.write(mol, conformer.GetId())
+        f.close()
+        output_string += sio.getvalue()
+        output_format = 'sdf'
 
     if not redirect_stdout:
         if output_filename is None:
