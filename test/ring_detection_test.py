@@ -11,10 +11,12 @@ min_rings_dict = {
     "tricycle-6-5-6": 3,
     "tricycle-6-5-6_B": 3,
     "tricycle-6-7-7": 2,
+    "tricycle-5-6-7": 2,
     "break-equiv": 4,
     "break-equiv-small": 4,
     "break-equiv-b": 4,
     "break-equiv-a": 4,
+    "break-equiv-2": 4,
     "adamantanish-5-5-6": 2,
 }
 workdir = pathlib.Path(__file__)
