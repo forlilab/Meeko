@@ -11,23 +11,101 @@ from operator import itemgetter
 
 
 mini_periodic_table = {
-         1:'H',   2:'He',
-         3:'Li',  4:'Be',  5:'B',   6:'C',   7:'N',   8:'O',   9:'F',  10:'Ne',
-        11:'Na', 12:'Mg', 13:'Al', 14:'Si', 15:'P',  16:'S',  17:'Cl', 18:'Ar',
-        19:'K',  20:'Ca', 21:'Sc', 22:'Ti', 23:'V',  24:'Cr', 25:'Mn', 26:'Fe', 27:'Co', 28:'Ni', 29:'Cu', 30:'Zn',
-        31:'Ga', 32:'Ge', 33:'As', 34:'Se', 35:'Br', 36:'Kr',
-        37:'Rb', 38:'Sr', 39:'Y',  40:'Zr', 41:'Nb', 42:'Mo', 43:'Tc', 44:'Ru', 45:'Rh', 46:'Pd', 47:'Ag', 48:'Cd',
-        49:'In', 50:'Sn', 51:'Sb', 52:'Te', 53:'I',  54:'Xe',
-        55:'Cs', 56:'Ba',
-        57:'La', 58:'Ce', 59:'Pr', 60:'Nd', 61:'Pm', 62:'Sm', 63:'Eu', 64:'Gd', 65:'Tb', 66:'Dy', 67:'Ho', 68:'Er', 69:'Tm', 70:'Yb',
-        71:'Lu', 72:'Hf', 73:'Ta', 74:'W',  75:'Re', 76:'Os', 77:'Ir', 78:'Pt', 79:'Au', 80:'Hg',
-        81:'Tl', 82:'Pb', 83:'Bi', 84:'Po', 85:'At', 86:'Rn',
-        87:'Fr', 88:'Ra'
-        }
+    1: "H",
+    2: "He",
+    3: "Li",
+    4: "Be",
+    5: "B",
+    6: "C",
+    7: "N",
+    8: "O",
+    9: "F",
+    10: "Ne",
+    11: "Na",
+    12: "Mg",
+    13: "Al",
+    14: "Si",
+    15: "P",
+    16: "S",
+    17: "Cl",
+    18: "Ar",
+    19: "K",
+    20: "Ca",
+    21: "Sc",
+    22: "Ti",
+    23: "V",
+    24: "Cr",
+    25: "Mn",
+    26: "Fe",
+    27: "Co",
+    28: "Ni",
+    29: "Cu",
+    30: "Zn",
+    31: "Ga",
+    32: "Ge",
+    33: "As",
+    34: "Se",
+    35: "Br",
+    36: "Kr",
+    37: "Rb",
+    38: "Sr",
+    39: "Y",
+    40: "Zr",
+    41: "Nb",
+    42: "Mo",
+    43: "Tc",
+    44: "Ru",
+    45: "Rh",
+    46: "Pd",
+    47: "Ag",
+    48: "Cd",
+    49: "In",
+    50: "Sn",
+    51: "Sb",
+    52: "Te",
+    53: "I",
+    54: "Xe",
+    55: "Cs",
+    56: "Ba",
+    57: "La",
+    58: "Ce",
+    59: "Pr",
+    60: "Nd",
+    61: "Pm",
+    62: "Sm",
+    63: "Eu",
+    64: "Gd",
+    65: "Tb",
+    66: "Dy",
+    67: "Ho",
+    68: "Er",
+    69: "Tm",
+    70: "Yb",
+    71: "Lu",
+    72: "Hf",
+    73: "Ta",
+    74: "W",
+    75: "Re",
+    76: "Os",
+    77: "Ir",
+    78: "Pt",
+    79: "Au",
+    80: "Hg",
+    81: "Tl",
+    82: "Pb",
+    83: "Bi",
+    84: "Po",
+    85: "At",
+    86: "Rn",
+    87: "Fr",
+    88: "Ra",
+}
+
 
 def path_module(module_name):
     try:
         from importlib import util
+
         specs = util.find_spec(module_name)
         if specs is not None:
             return specs.submodule_search_locations[0]
@@ -40,12 +118,13 @@ def path_module(module_name):
             return None
     return None
 
+
 def getNameExt(fname):
-    """ extract name and extension from the input file, removing the dot
-        filename.ext -> [filename, ext]
+    """extract name and extension from the input file, removing the dot
+    filename.ext -> [filename, ext]
     """
     name, ext = os.path.splitext(fname)
-    return name, ext[1:] #.lower()
+    return name, ext[1:]  # .lower()
 
 
 class HJKRingDetection:
@@ -235,11 +314,12 @@ class HJKRingDetection:
                     # the candidate ring is larger than or the same size of the candidate
                     continue
                 # avoid rings that don't share at least an edge
-                shared = set(r1) & set(r2)
+                # shared = set(r1) & set(r2)
+                r2_edges = ring_edges[j]
+                shared = set(r1_edges) & set(r2_edges)
                 if len(shared) < 1:
                     continue
                 ring_contacts[i].append(j)
-                r2_edges = ring_edges[j]
                 # get edges difference (r2_edges - r1_edges)
                 core_edges = [x for x in r2_edges if not x in r1_edges]
                 chord = [x for x in r1_edges if not x in r2_edges]
@@ -253,41 +333,50 @@ class HJKRingDetection:
                     chordless = False
                     break
             if chordless:
-                chordless_rings.append((i, tuple(set(ring_contacts[i]))))
+                chordless_rings.append(i)
+                ring_contacts[i] = set(ring_contacts[i])
         if not keep_equivalent_rings:
-            chordless_rings = self._remove_equivalent_rings(chordless_rings)
-        # clean up the rings
-        rings = []
-        accepted = [x[0] for x in chordless_rings]
-        for idx, ring in enumerate(self.rings):
-            if idx in accepted:
-                rings.append(ring)
-        self.rings = rings
+            chordless_rings = self._remove_equivalent_rings(
+                chordless_rings, ring_contacts
+            )
+        self.rings = [self.rings[x] for x in chordless_rings]
+        return
 
-    def _remove_equivalent_rings(self, chordless_rings):
+    def _remove_equivalent_rings(self, chordless_rings, ring_contacts):
         """remove equivalent rings by clustering by size, then by ring neighbors.
-        equivalent rings are rings that have the same size and share the same neighbors
+        Two rings A and B are equivalent if satisfy the following conditions:
+            - same size
+            - same neighbor ring(s) [C,D, ...]
+            - (A - C) == (B -C)
         """
         size_clusters = {}
-        for ring_id, ring_neigh in chordless_rings:
-            if len(ring_neigh) == 0:
+        # cluster rings by their size
+        for ring_id in chordless_rings:
+            if len(ring_contacts[ring_id]) == 0:
                 continue
             size = len(self.rings[ring_id]) - 1
             if not size in size_clusters:
-                size_clusters[size] = {}
-            if not ring_neigh in size_clusters[size]:
-                size_clusters[size][ring_neigh] = [ring_id]
-            else:
-                size_clusters[size][ring_neigh].append(ring_id)
+                size_clusters[size] = []
+            size_clusters[size].append(ring_id)
         remove = []
-        for size, ring_neigh_data in size_clusters.items():
-            for ring_neigh, rings in ring_neigh_data.items():
-                remove += rings[1:]
-        accepted = []
-        for ring_data in chordless_rings:
-            if not ring_data[0] in remove:
-                accepted.append(ring_data)
-        return accepted
+        # process rings of the same size
+        for size, ring_pool in size_clusters.items():
+            for ri in ring_pool:
+                if ri in remove:
+                    continue
+                for rj in ring_pool:
+                    if ri == rj:
+                        continue
+                    common_neigh = ring_contacts[ri] & ring_contacts[rj]
+                    for c in common_neigh:
+                        d1 = set(self.rings[ri]) - set(self.rings[c])
+                        d2 = set(self.rings[rj]) - set(self.rings[c])
+                        if d1 == d2:
+                            remove.append(rj)
+        chordless_rings = [i for i in chordless_rings if not i in set(remove)]
+        # for r in set(remove):
+        #    chordless_rings.remove(r)
+        return chordless_rings
 
 
 # def writeList(filename, inlist, mode = 'w', addNewLine = False):
@@ -299,7 +388,7 @@ class HJKRingDetection:
 #     fp.close()
 
 
-#def getResInfo(string):
+# def getResInfo(string):
 #    """ CHAIN:RESnum -> [ "CHAIN", "RES", num ]"""
 #    if ':' in string:
 #        chain, resraw = string.split(':')
@@ -326,4 +415,3 @@ class HJKRingDetection:
 #     module_dir, module_fname = os.path.split(file_handle)
 #     DATAPATH = os.path.join(module_dir, dir_name, data_file)
 #     return DATAPATH
-
