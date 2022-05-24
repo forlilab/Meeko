@@ -63,8 +63,12 @@ class RDKitMolCreate:
             for res in flexres_names:
                 res_lines = []
                 for line in full_pdbqt.split("\n"):
-                    if line.split()[3:6] == res.split(":"):
-                        res_lines.append(line)
+                    if line.startswith("ATOM") or line.startswith("HETATOM"):
+                        resname = line[17:20]
+                        chain = line[21].strip()
+                        resnum = int(line[22:26])
+                        if "%s:%s:%s" % (resname, chain, resnum) == res:
+                            res_lines.append(line)
                 flexres_poses.append("\n".join(res_lines))
             coordinates = pose.positions()
             coordinates_list.append(coordinates)
