@@ -572,19 +572,19 @@ class PDBQTMolecule:
 
         return [self._bonds[i] for i in atom_idx]
 
-    def write_pdbqt_string(self, as_model=True, replace_AD_atomtypes=False):
+    def write_pdbqt_string(self, as_model=True):
         """Write PDBQT output string of the current pose
         
         Args:
             as_model (bool): Qdd MODEL/ENDMDL keywords to the output PDBQT string (default: True)
-
+        
+        Returns:
+            string: Description
+        
         """
         if as_model:
             pdbqt_string = 'MODEL    %5d\n' % (self._current_pose + 1)
-            if replace_AD_atomtypes:
-                pdbqt_string += self._replace_pdbqt_atomtypes(self._pose_data['pdbqt_string'][self._current_pose], check_atom_line=True)
-            else:
-                pdbqt_string += self._pose_data['pdbqt_string'][self._current_pose]
+            pdbqt_string += self._pose_data['pdbqt_string'][self._current_pose]
             pdbqt_string += 'ENDMDL\n'
             return pdbqt_string
         else: 

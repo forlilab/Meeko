@@ -43,21 +43,39 @@ class RDKitMolCreate:
     ad_to_std_atomtypes = None
 
     @classmethod
-    def from_pdbqt_mol(cls, pdbqt_mol):  # TODO flexres
+    def from_pdbqt_mol(cls, pdbqt_mol):  # TODO: add water
         smiles = pdbqt_mol._pose_data['smiles']
         index_map = pdbqt_mol._pose_data['smiles_index_map']
         h_parent = pdbqt_mol._pose_data['smiles_h_parent']
+        # make set of flexible residue names
+        flexres_names = []
+        for atom in pdbqt_mol.atoms_by_properties("flexible_residue"):
+            res_name = ":".join([str(atom[4]), str(atom[5]), str(atom[3])])
+            if res_name not in flexres_names:
+                flexres_names.append(res_name)
+
+        flexres_mols = {}
         mol = Chem.MolFromSmiles(smiles)
         coordinates_list = []
         for pose in pdbqt_mol:
+            full_pdbqt = pdbqt_mol.write_pdbqt_string()
+            flexres_poses = []
+            for res in flexres_names:
+                res_lines = []
+                for line in full_pdbqt.split("\n"):
+                    if line.split()[3:6] == res.split(":"):
+                        res_lines.append(line)
+                flexres_poses.append("\n".join(res_lines))
             coordinates = pose.positions()
             coordinates_list.append(coordinates)
-            cls.add_pose_to_mol(mol, coordinates, index_map)
-        mol = cls.add_hydrogens(mol, coordinates_list, h_parent)
-        return mol
+            mol, flexres_mols = cls.add_pose_to_mol(mol, coordinates, index_map,
+                                                    flexres_mols=flexres_mols,
+                                                    flexres_poses=flexres_poses,
+                                                    flexres_names=flexres_names)
+        return cls.export_combined_rdkit_mol(mol, flexres_mols, coordinates_list, h_parent)
 
     @classmethod
-    def replace_pdbqt_atomtypes(cls, pdbqt, check_atom_line=False):
+    def replace_pdbqt_atomtypes(cls, pdbqt, check_atom_line=True):
         """replaces autodock-specific atomtypes with general ones. Reads AD->
         general atomtype mapping from AD_to_STD_ATOMTYPES.json
 
@@ -109,7 +127,7 @@ class RDKitMolCreate:
 
         Args:
             flexres_lines (string): flexres pdbqt lines
-            flexres_names (list): list of strings of flexres names
+            flexres_name (str): Name for flexible residue. Expects 3-letter code as first 3 characters
 
         Returns:
             List: list of rdkit mol objects, with one object for each flexres
