@@ -8,6 +8,7 @@
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
+from rdkit.Chem.PropertyMol import PropertyMol
 import json
 import os
 
@@ -255,3 +256,16 @@ class RDKitMolCreate:
             combined_mol = Chem.CombineMols(combined_mol, flexres_mols[flex_res])
 
         return combined_mol
+
+    @staticmethod
+    def add_properties_to_mol(mol, information_dictionary):
+        """Takes RDKit mol, and given information as properties
+
+        Args:
+            mol (RDKit mol): input molecule to which properties will be added
+            information_dictionary (dict): Dictionary of info to include as properties. Key will become property name, value will be value
+
+        """
+
+        for k, v in information_dictionary.items():
+            mol.SetProp(k, v)
