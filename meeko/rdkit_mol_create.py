@@ -254,18 +254,14 @@ class RDKitMolCreate:
         return combined_mol
 
     @staticmethod
-    def make_property_mol(mol, information_dictionary):
-        """Takes RDKit mol, makes into propety mol with given information as properties
+    def add_properties_to_mol(mol, information_dictionary):
+        """Takes RDKit mol, and given information as properties
 
         Args:
-            mol (RDKit mol): molecule to convert to property mol
+            mol (RDKit mol): input molecule to which properties will be added
             information_dictionary (dict): Dictionary of info to include as properties. Key will become property name, value will be value
 
         """
 
-        pm = PropertyMol(mol)
-
         for k, v in information_dictionary.items():
-            pm.SetProp(k, v)
-
-        return pm
+            mol.SetProp(k, v)
