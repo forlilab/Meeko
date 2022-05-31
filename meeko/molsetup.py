@@ -68,6 +68,7 @@ class MoleculeSetup:
         "rings_aromatic",
         "atom_to_ring_id",
         "flexibility_model",
+        "ring_closure_info",
         'history',
         'name',
         ]
@@ -97,6 +98,10 @@ class MoleculeSetup:
         self.element = OrderedDict()
         self.interaction_vector = OrderedDict()
         self.flexibility_model = {}
+        self.ring_closure_info = {
+            "bonds_removed": [],
+            "pseudos_by_atom": {},
+        }
         # ring information
         self.rings = {}
         self.rings_aromatic = []

@@ -226,17 +226,17 @@ class FlexibilityBuilder:
     def update_closure_atoms(self, bonds_to_break):
         """ create pseudoatoms required by the flexible model with broken bonds"""
 
+        setup = self._current_setup
         for i, bond in enumerate(bonds_to_break):
-            # TODO this part should simply transfer the closure information in the
-            # mol.setuo.closure list, and when generating the atom types for the closure
-            # the appropriate potentials will be updated (internally)
-            # TODO also, the atom type should not be set here
-            # Add pseudo glue atoms
-            pseudos = self._generate_closure_pseudo(self._current_setup, bond)
+            setup.ring_closure_info["bonds_removed"].append(bond) # bond is pair of atom indices
+            pseudos = self._generate_closure_pseudo(setup, bond)
             for pseudo in pseudos:
                 pseudo['atom_type'] = "%s%d" % (pseudo['atom_type'], i)
-                self._current_setup.add_pseudo(**pseudo)
-            # Change atom type of the closure atoms to CGX
+                pseudo_index = self._current_setup.add_pseudo(**pseudo)
+                atom_index = pseudo['anchor_list'][0]
+                if atom_index in setup.ring_closure_info:
+                    raise RuntimeError("did not expect more than one G per atom")
+                setup.ring_closure_info["pseudos_by_atom"][atom_index] = pseudo_index
             self._current_setup.set_atom_type(bond[0], "CG%d" % i)
             self._current_setup.set_atom_type(bond[1], "CG%d" % i)
 
