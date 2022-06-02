@@ -8,7 +8,6 @@
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
-from rdkit.Chem.PropertyMol import PropertyMol
 import json
 import os
 
@@ -22,7 +21,7 @@ class RDKitMolCreate:
         "CYS": 'CCS',
         "TYR": 'CC(c4c1).c24.c13.c2c3O',
         "SER": 'CCO',
-        "ARG": 'CCCCN=C(N)N',
+        "ARG": 'CCCCNC(=[N+])N',
         "HIP": 'CCC1([N+]=CNC=1)',
         "VAL": 'CC(C)C',
         "ASH": 'CCC(=O)O',
@@ -187,32 +186,35 @@ class RDKitMolCreate:
         mol.AddConformer(conf, assignId=True)
 
         # generate flexible residue mols if we haven't yet
-        for idx, resname in enumerate(flexres_names):
-            flexres_pdbqt = cls.replace_pdbqt_atomtypes(flexres_poses[idx])
-            if resname not in flexres_mols and resname != '':
-                resmol = cls.create_flexres_molecule(flexres_pdbqt, resname)
-                flexres_mols[resname] = resmol
-            else:
-                # add new pose to each of the flexible residue molecules
-                # make a new conformer
-                flex_res = flexres_mols[resname]
-                n_atoms = flex_res.GetNumAtoms()
-                conf = Chem.Conformer(n_atoms)
+        try:
+            for idx, resname in enumerate(flexres_names):
+                flexres_pdbqt = cls.replace_pdbqt_atomtypes(flexres_poses[idx])
+                if resname not in flexres_mols and resname != '':
+                    resmol = cls.create_flexres_molecule(flexres_pdbqt, resname)
+                    flexres_mols[resname] = resmol
+                else:
+                    # add new pose to each of the flexible residue molecules
+                    # make a new conformer
+                    flex_res = flexres_mols[resname]
+                    n_atoms = flex_res.GetNumAtoms()
+                    conf = Chem.Conformer(n_atoms)
 
-                # make an RDKit molecule from the flexres pdbqt to use as a
-                # template for setting the coordinates of the conformer
-                template = AllChem.MolFromPDBBlock(flexres_pdbqt, removeHs=False)
+                    # make an RDKit molecule from the flexres pdbqt to use as a
+                    # template for setting the coordinates of the conformer
+                    template = AllChem.MolFromPDBBlock(flexres_pdbqt, removeHs=False)
 
-                # iterate through atoms in template, set corresponding atom in
-                # new conformer to the position of the template atom
-                for j in range(n_atoms):
-                    position = template.GetConformer().GetAtomPosition(j)
-                    conf.SetAtomPosition(j, position)
+                    # iterate through atoms in template, set corresponding atom in
+                    # new conformer to the position of the template atom
+                    for j in range(n_atoms):
+                        position = template.GetConformer().GetAtomPosition(j)
+                        conf.SetAtomPosition(j, position)
 
-                # add new conformer to flex_res object and add object back
-                # to flex_res_mols
-                flex_res.AddConformer(conf, assignId=True)
-                flexres_mols[resname] = flex_res
+                    # add new conformer to flex_res object and add object back
+                    # to flex_res_mols
+                    flex_res.AddConformer(conf, assignId=True)
+                    flexres_mols[resname] = flex_res
+        except rdkit.Chem.rdchem.AtomValenceException as e:
+            raise RuntimeError(f"RDKit error may be result of improper match between flexible residue {resname} geometry and residue bonding template. Please check input structure") from e
 
         return mol, flexres_mols
 
