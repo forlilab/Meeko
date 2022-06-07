@@ -15,30 +15,30 @@ import os
 
 class RDKitMolCreate:
 
-    # flexible residue smiles with atom indices
-    # corresponding to flexres heteroatoms in pdbqt
-    flex_residue_smiles = {
-        "LYS": 'CCCCCN',
-        "CYS": 'CCS',
-        "TYR": 'CC(c4c1).c24.c13.c2c3O',
-        "SER": 'CCO',
-        "ARG": 'CCCCN=C(N)N',
-        "HIP": 'CCC1([N+]=CNC=1)',
-        "VAL": 'CC(C)C',
-        "ASH": 'CCC(=O)O',
-        "GLH": 'CCCC(=O)O',
-        "HIE": 'CCC1(N=CNC=1)',
-        "GLU": 'CCCC(=O)[O-]',
-        "LEU": 'CCC(C)C',
-        "PHE": 'CC(c4c1).c24.c13.c2c3',
-        "GLN": 'CCCC(N)=O',
-        "ILE": 'CC(C)CC',
-        "MET": 'CCCSC',
-        "ASN": 'CCC(=O)N',
-        "ASP": 'CCC(=O)O',
-        "HID": 'CCC1(NC=NC=1)',
-        "THR": 'CC(C)O',
-        "TRP": 'C1=CC=C2C(=C1)C(=CN2)CC'
+    # flexible residue smarts
+    flex_residue_smarts = {
+        "LYS": '[CH2X4][CH2X4][CH2X4][CH2X4][NX4+,NX3+0,N]',
+        "CYS": '[CH2X4][SX2H,SX1H0-]',
+        "TYR": '[CH2X4][cX3]1[cX3H][cX3H][cX3]([OHX2,OH0X1-])[cX3H][cX3H]1',
+        "SER": '[CH2X4][OX2H]',
+        "ARG": '[CH2X4][CH2X4][CH2X4][NHX3][CH0X3](=[NH2X3+,NHX2+0,N])[NH2X3]',
+        "HIP": '[CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1',
+        "VAL": '[CHX4]([CH3X4])[CH3X4]',
+        "ASH": '[CH2X4][CX3](=[OX1])[OH0-,OH]',
+        "GLH": '[CH2X4][CH2X4][CX3](=[OX1])[OH0-,OH]',
+        "HIE": '[CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1',
+        "GLU": '[CH2X4][CH2X4][CX3](=[OX1])[OH0-,OH]',
+        "LEU": '[CH2X4][CHX4]([CH3X4])[CH3X4]',
+        "PHE": '[CH2X4][cX3](1[cX3H][cX3H][cX3H][cX3H][cX3H]1)',
+        "GLN": '[CH2X4][CH2X4][CX3](=[OX1])[NX3H2]',
+        "ILE": '[CHX4]([CH3X4])[CH2X4][CH3X4]',
+        "MET": '[CH2X4][CH2X4][SX2][CH3X4]',
+        "ASN": '[CH2X4][CX3](=[OX1])[NX3H2]',
+        "ASP": '[CH2X4][CX3](=[OX1])[OH0-,OH]',
+        "HID": '[CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1',
+        "THR": '[CHX4]([CH3X4])[OX2H]',
+        "TRP": '[CH2X4][cX3]1[cX3H][nX3H][cX3]2[cX3H][cX3H][cX3H][cX3H][cX3]12',
+        "HIS": '[CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1'
     }
 
     ad_to_std_atomtypes = None
@@ -136,6 +136,7 @@ class RDKitMolCreate:
 
         Returns:
             List: list of rdkit mol objects, with one object for each flexres
+            Returns None if keyerror while finding flexible residue name
         """
 
         # make flexres rdkit molecule, add to our dict of flexres_mols
@@ -143,13 +144,14 @@ class RDKitMolCreate:
         # to make the required rdkit molecules
         try:
             # strip out 3-letter residue code
-            res_smile = cls.flex_residue_smiles[flexres_name[:3]]
+            res_smart = cls.flex_residue_smarts[flexres_name[:3]]
         except KeyError:
-            raise KeyError(f"Flexible residue {flexres_name} not recognized.")
+            warnings.warn(f"Flexible residue {flexres_name} not recognized. Will not be included in output SDFs")
+            return None
 
         # make rdkit molecules and use template to
         # ensure correct bond order
-        template = AllChem.MolFromSmiles(res_smile)
+        template = AllChem.MolFromSmarts(res_smart)
         res_mol = AllChem.MolFromPDBBlock(flexres_pdbqt, removeHs=False)
         res_mol = AllChem.AssignBondOrdersFromTemplate(template, res_mol)
 
@@ -191,7 +193,9 @@ class RDKitMolCreate:
             flexres_pdbqt = cls.replace_pdbqt_atomtypes(flexres_poses[idx])
             if resname not in flexres_mols and resname != '':
                 resmol = cls.create_flexres_molecule(flexres_pdbqt, resname)
-                flexres_mols[resname] = resmol
+                # Unrecognized residues returned as None
+                if resmol is not None:
+                    flexres_mols[resname] = resmol
             else:
                 # add new pose to each of the flexible residue molecules
                 # make a new conformer
