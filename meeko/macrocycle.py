@@ -29,7 +29,6 @@ class FlexMacrocycle:
         self.setup = None
         self.breakable_rings = None
         self._conj_bond_list = None
-        self.breakable_bonds = None
 
     def collect_rings(self, setup):
         """ get non-aromatic rings of desired size and
@@ -119,7 +118,7 @@ class FlexMacrocycle:
                     breakable[bond] = {'score': score}
         return breakable
 
-    def search_macrocycle(self, setup):
+    def search_macrocycle(self, setup, delete_these_bonds=[]):
         """Search for macrocycle in the molecule
 
         Args:
@@ -130,8 +129,13 @@ class FlexMacrocycle:
 
         self.breakable_rings, bonds_in_rigid_rings = self.collect_rings(setup)
         self._conj_bond_list = self._detect_conj_bonds()
-        self.breakable_bonds = self.get_breakable_bonds(bonds_in_rigid_rings)
-        break_combo_data = self.combinatorial_break_search(self.breakable_bonds)
+        if len(delete_these_bonds) == 0:
+            breakable_bonds = self.get_breakable_bonds(bonds_in_rigid_rings)
+        else:
+            breakable_bonds = {}
+            for bond in delete_these_bonds:
+                breakable_bonds[bond] = {"score": self._score_bond(bond)}
+        break_combo_data = self.combinatorial_break_search(breakable_bonds)
         return break_combo_data, bonds_in_rigid_rings
 
     def combinatorial_break_search(self, breakable_bonds):
