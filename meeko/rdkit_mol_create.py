@@ -153,7 +153,8 @@ class RDKitMolCreate:
                 matches = res_mol.GetSubstructMatches(template)
                 editable_res = Chem.EditableMol(res_mol)
                 for bond in double_bond_list:
-                    editable_res.AddBond(matches[bond[0]], matches[bond[1]], 2)
+                    editable_res.RemoveBond(matches[0][bond[0]], matches[0][bond[1]])
+                    editable_res.AddBond(matches[0][bond[0]], matches[0][bond[1]], order=Chem.rdchem.BondType.DOUBLE)
                 res_mol = editable_res.GetMol()
             # catchn additional keyerror indicating unrecognized residue, give warning
             except KeyError:
