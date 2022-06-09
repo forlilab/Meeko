@@ -8,37 +8,31 @@
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
-from rdkit.Chem.PropertyMol import PropertyMol
 import json
 import os
+import warnings
 
 
 class RDKitMolCreate:
 
     # flexible residue smarts
+    flex_residues_noTemplate = {"LYS", "CYS", "SER", "VAL", "LEU", "ILE", "MET", "THR"}
+    flex_residue_smiles = {
+        "TYR": 'CCc1ccc(O)cc1',
+        "ASH": 'CCC(=O)O',
+        "GLH": 'CCCC(=O)O',
+        "GLU": 'CCCC(=O)[O-]',
+        "PHE": 'CCc1ccccc1',
+        "GLN": 'CCCC(N)=O',
+        "ASN": 'CCC(=O)N',
+        "ASP": 'CCC(=O)O',
+        "TRP": 'CCc1c[nH]c2ccccc12'
+    }
     flex_residue_smarts = {
-        "LYS": '[CH3X4][CH2X4][CH2X4][CH2X4][CH2X4][NX4+,NX3+0,N]',
-        "CYS": '[CH3X4][CH2X4][SX2H,SX1H0-]',
-        "TYR": '[CH3X4][CH2X4][cX3]1[cX3H][cX3H][cX3]([OHX2,OH0X1-])[cX3H][cX3H]1',
-        "SER": '[CH3X4][CH2X4][OX2H]',
-        "ARG": '[CH3X4][CH2X4][CH2X4][CH2X4][NHX3][CH0X3](=[NH2X3+,NHX2+0,N])[NH2X3]',
-        "HIP": '[CH3X4][CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1',
-        "VAL": '[CH3X4][CHX4]([CH3X4])[CH3X4]',
-        "ASH": '[CH3X4][CH2X4][CX3](=[OX1])[OH0-,OH]',
-        "GLH": '[CH3X4][CH2X4][CH2X4][CX3](=[OX1])[OH0-,OH]',
-        "HIE": '[CH3X4][CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1',
-        "GLU": '[CH3X4][CH2X4][CH2X4][CX3](=[OX1])[OH0-,OH]',
-        "LEU": '[CH3X4][CH2X4][CHX4]([CH3X4])[CH3X4]',
-        "PHE": '[CH3X4][CH2X4][cX3](1[cX3H][cX3H][cX3H][cX3H][cX3H]1)',
-        "GLN": '[CH3X4][CH2X4][CH2X4][CX3](=[OX1])[NX3H2]',
-        "ILE": '[CH3X4][CHX4]([CH3X4])[CH2X4][CH3X4]',
-        "MET": '[CH3X4][CH2X4][CH2X4][SX2][CH3X4]',
-        "ASN": '[CH3X4][CH2X4][CX3](=[OX1])[NX3H2]',
-        "ASP": '[CH3X4][CH2X4][CX3](=[OX1])[OH0-,OH]',
-        "HID": '[CH3X4][CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1',
-        "THR": '[CH3X4][CHX4]([CH3X4])[OX2H]',
-        "TRP": '[CH3X4][CH2X4][cX3]1[cX3H][nX3H][cX3]2[cX3H][cX3H][cX3H][cX3H][cX3]12',
-        "HIS": '[CH3X4][CH2X4][#6X3]1:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]:[$([#7X3H+,#7X2H0+0]:[#6X3H]:[#7X3H]),$([#7X3H])]:[#6X3H]1'
+        "HIP": ('[C]~[C]~[C]1~[N+]~[C]~[N]~[C]1', [(4, 5), (6, 2)]),
+        "HIE": ('[C]~[C]~[C]1~[N]~[C]~[N]~[C]1', [(3, 4), (6, 2)]),
+        "HID": ('[C]~[C]~[C]1~[N]~[C]~[N]~[C]1', [(4, 5), (6, 2)]),
+        "ARG": ('[C]~[C]~[C]~[N]~[C](~[N])~[N+]', [(4, 6)])
     }
 
     ad_to_std_atomtypes = None
@@ -142,18 +136,32 @@ class RDKitMolCreate:
         # make flexres rdkit molecule, add to our dict of flexres_mols
         # get the residue smiles string and pdbqt we need
         # to make the required rdkit molecules
+        res_mol = AllChem.MolFromPDBBlock(flexres_pdbqt, removeHs=False)
+        # return mols with only single bonds
+        if flexres_name[:3] in cls.flex_residues_noTemplate:
+            return res_mol
         try:
             # strip out 3-letter residue code
-            res_smart = cls.flex_residue_smarts[flexres_name[:3]]
+            res_smile = cls.flex_residue_smiles[flexres_name[:3]]
+            template = AllChem.MolFromSmiles(res_smile)
+            res_mol = AllChem.AssignBondOrdersFromTemplate(template, res_mol)
+        # catch residues without template smile, try template smarts
         except KeyError:
-            warnings.warn(f"Flexible residue {flexres_name} not recognized. Will not be included in output SDFs")
-            return None
+            try:
+                res_smarts, double_bond_list = cls.flex_residue_smarts[flexres_name[:3]]
+                template = AllChem.MolFromSmarts(res_smarts)
+                matches = res_mol.GetSubstructMatches(template)
+                editable_res = Chem.EditableMol(res_mol)
+                for bond in double_bond_list:
+                    editable_res.AddBond(matches[bond[0]], matches[bond[1]], 2)
+                res_mol = editable_res.GetMol()
+            # catchn additional keyerror indicating unrecognized residue, give warning
+            except KeyError:
+                warnings.warn(f"Flexible residue {flexres_name} not recognized. Will not be included in output SDFs")
+                return None
 
         # make rdkit molecules and use template to
         # ensure correct bond order
-        template = AllChem.MolFromSmarts(res_smart)
-        res_mol = AllChem.MolFromPDBBlock(flexres_pdbqt, removeHs=False)
-        res_mol = AllChem.AssignBondOrdersFromTemplate(template, res_mol)
 
         return res_mol
 
