@@ -74,8 +74,8 @@ class FlexMacrocycle:
 
     def _score_bond(self, bond):
         """ provide a score for the likeness of the bond to be broken"""
-        atom_idx1 = bond[0]
-        atom_idx2 = bond[1]
+        bond = self.setup.get_bond_id(bond[0], bond[1])
+        atom_idx1, atom_idx2 = bond
         score = 100
 
         bond_order = self.setup.bond[bond]['bond_order']
@@ -134,6 +134,7 @@ class FlexMacrocycle:
         else:
             breakable_bonds = {}
             for bond in delete_these_bonds:
+                bond = self.setup.get_bond_id(bond[0], bond[1])
                 breakable_bonds[bond] = {"score": self._score_bond(bond)}
         break_combo_data = self.combinatorial_break_search(breakable_bonds)
         return break_combo_data, bonds_in_rigid_rings
