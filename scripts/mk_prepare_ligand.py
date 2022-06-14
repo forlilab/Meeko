@@ -45,9 +45,7 @@ def cmd_lineparser():
             help='configure MoleculePreparation from JSON file. Overriden by command line args.')
     confargs, remaining_argv = conf_parser.parse_known_args()
 
-    # initalize config dict with defaults from MoleculePreparation object
-    preparator_defaults = MoleculePreparation.init_just_defaults()
-    config = json.loads(json.dumps(preparator_defaults.__dict__)) # using dict -> str -> dict as a safe copy method
+    config = MoleculePreparation.get_defaults_dict()
 
     if confargs.config_file is not None:
         with open(confargs.config_file) as f:

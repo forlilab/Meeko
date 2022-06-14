@@ -4,6 +4,7 @@
 # Meeko preparation
 #
 
+import json
 import os
 import sys
 from collections import OrderedDict
@@ -72,12 +73,14 @@ class MoleculePreparation:
             warnings.warn("keep_equivalent_rings=False ignored because keep_chorded_rings=True", RuntimeWarning)
 
     @classmethod
-    def init_just_defaults(cls):
-        return cls(stop_at_defaults=True)
+    def get_defaults_dict(cls):
+        defaults = cls(stop_at_defaults=True).__dict__
+        defaults = json.loads(json.dumps(defaults)) # using dict -> str -> dict as a safe copy method 
+        return defaults
 
     @ classmethod
     def from_config(cls, config):
-        expected_keys = cls.init_just_defaults().__dict__.keys()
+        expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
         for key in bad_keys:
             print("ERROR: unexpected key \"%s\" in MoleculePreparation.from_config()" % key, file=sys.stderr)
