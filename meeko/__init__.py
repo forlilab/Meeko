@@ -29,11 +29,14 @@ from .receptor_pdbqt import PDBQTReceptor
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
 from . import analysis
+from .writer import oids_block_from_setup
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
-        'RDKitMolCreate']
+        'RDKitMolCreate',
+        'oids_block_from_setup',
+        ]
 
 if _has_openbabel:
     from .molsetup import OBMoleculeSetup

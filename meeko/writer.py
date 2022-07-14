@@ -13,6 +13,52 @@ from .utils import pdbutils
 from .utils.rdkitutils import mini_periodic_table
 
 
+def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
+    output_indices_start_at_one = True
+    index_start = int(output_indices_start_at_one)
+    positions_block = ""
+    charges = []
+    elements = []
+    n_real_atoms = molsetup.atom_true_count
+    n_fake_atoms = len(molsetup.atom_pseudo)
+    indexmap = {}
+    count_oids = 0
+    for index in range(n_real_atoms):
+        if molsetup.atom_ignore[index]:
+            continue
+        oid_id = count_oids + index_start
+        indexmap[index] = count_oids
+        count_oids += 1
+        x, y, z = molsetup.coord[index]
+        positions_block += "position.%d = (%f,%f,%f)\n" % (oid_id, x, y, z)
+        charges.append(molsetup.charge[index])
+        element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
+        elements.append(element)
+    charges_line = "import_charges = {%s}\n" % (",".join(["%f" % c for c in charges]))
+    elements_line = "elements = %s\n" % (",".join(elements))
+
+    bonds = [[] for _ in range(count_oids)]
+    bond_orders = [[] for _ in range(count_oids)]
+    for i, j in molsetup.bond.keys():
+        if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
+            continue
+        oid_i = indexmap[i]
+        oid_j = indexmap[j]
+        bonds[oid_i].append("%d" % (oid_j+index_start))
+        bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
+    bonds = [",".join(j_list) for j_list in bonds]
+    bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
+    bond_orders = [",".join(orders) for orders in bond_orders]
+    bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
+
+    output = ""
+    output += positions_block
+    output += charges_line
+    output += elements_line
+    output += bonds_line
+    output += bondorder_line
+    return output
+
 class PDBQTWriterLegacy():
     def __init__(self):
         """Initialize the PDBQT writer."""
