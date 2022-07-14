@@ -39,6 +39,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
 
     bonds = [[] for _ in range(count_oids)]
     bond_orders = [[] for _ in range(count_oids)]
+    static_links = []
     for i, j in molsetup.bond.keys():
         if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
             continue
@@ -46,10 +47,13 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
         oid_j = indexmap[j]
         bonds[oid_i].append("%d" % (oid_j+index_start))
         bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
+        if not molsetup.bond[(i, j)]["rotatable"]:
+            static_links.append("%d,%d" % (oid_i, oid_j))
     bonds = [",".join(j_list) for j_list in bonds]
     bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
     bond_orders = [",".join(orders) for orders in bond_orders]
     bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
+    staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
 
     output = ""
     output += positions_block
@@ -57,6 +61,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     output += elements_line
     output += bonds_line
     output += bondorder_line
+    output += staticlinks_line
     return output
 
 class PDBQTWriterLegacy():
