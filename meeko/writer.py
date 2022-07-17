@@ -48,7 +48,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
         bonds[oid_i].append("%d" % (oid_j+index_start))
         bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
         if not molsetup.bond[(i, j)]["rotatable"]:
-            static_links.append("%d,%d" % (oid_i, oid_j))
+            static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
     bonds = [",".join(j_list) for j_list in bonds]
     bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
     bond_orders = [",".join(orders) for orders in bond_orders]
@@ -56,6 +56,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
 
     output = ""
+    output += "[Group: %s]\n" % name
     output += positions_block
     output += charges_line
     output += elements_line

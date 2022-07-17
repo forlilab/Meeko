@@ -30,12 +30,14 @@ from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
 from . import analysis
 from .writer import oids_block_from_setup
+from .openff_xml_parser import parse_offxml
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
         'RDKitMolCreate',
         'oids_block_from_setup',
+        'parse_offxml',
         ]
 
 if _has_openbabel:

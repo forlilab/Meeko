@@ -54,8 +54,8 @@ class MoleculeSetup:
         "atom_pseudo",
         "atom_ignore",
         "atom_type",
+        "dihedrals",
         "atom_true_count",
-        "atom_pseudo",
         "element",
         "coord",
         "charge",
@@ -90,6 +90,7 @@ class MoleculeSetup:
         self.charge = OrderedDict()
         self.pdbinfo = OrderedDict()
         self.atom_type = OrderedDict()
+        self.dihedrals = dict()
         self.atom_ignore = OrderedDict()
         self.chiral = OrderedDict()
         self.atom_true_count = 0

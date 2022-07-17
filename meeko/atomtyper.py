@@ -53,6 +53,7 @@ class AtomTyper:
 
     def __call__(self, setup):
         self._type_atoms(setup)
+        self._type_dihedrals(setup)
         if 'OFFATOMS' in self.parameters:
             cached_offatoms = self._cache_offatoms(setup)
             coords = [x for x in setup.coord.values()]
@@ -182,6 +183,38 @@ class AtomTyper:
                     }
             setup.add_pseudo(**pseudo_atom)
         return
+
+    def _type_dihedrals(self, setup):
+
+        if "DIHEDRALS" not in self.parameters:
+            return
+        parsmar = self.parameters['DIHEDRALS']
+        dihedrals = {}
+
+        for line in parsmar:
+            smarts = str(line['smarts'])
+            hits = setup.find_pattern(smarts)
+            idxs = [i - 1 for i in line['IDX']]
+
+            fourier_series = []
+            term_indices = {}
+            for key in line:
+                for keyword in ['phase', 'k', 'periodicity', 'idivf']:
+                    if key.startswith(keyword):
+                        t = int(key.replace(keyword, '')) # e.g. "phase2" -> int(2)
+                        if t not in term_indices:
+                            term_indices[t] = len(fourier_series)
+                            fourier_series.append({})
+                        index = term_indices[t]
+                        fourier_series[index][keyword] = line[key]
+                        break
+
+            for hit in hits:
+                atom_idxs = tuple([hit[j] for j in idxs])
+                dihedrals[atom_idxs] = fourier_series
+                
+        setup.dihedrals = dihedrals
+
 
 class AtomicGeometry():
     """generate reference frames and add extra sites"""
