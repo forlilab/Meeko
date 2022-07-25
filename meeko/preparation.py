@@ -101,6 +101,13 @@ class MoleculePreparation:
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings)
         self.setup = setup
+
+        if setup.has_implicit_hydrogens():
+            self.is_ok = False
+            name = setup.get_mol_name()
+            warnings.warn("Skipping mol (name=%s): has implicit hydrogens" % name, RuntimeWarning)
+            return
+        
         # 1.  assign atom types (including HB types, vectors and stuff)
         # DISABLED TODO self.atom_typer.set_parm(mol)
         self._atom_typer(setup)
@@ -143,10 +150,10 @@ class MoleculePreparation:
         self.setup = new_setup
         # TODO re-run typing after breaking bonds
         # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
-        self.is_ok = self._check()
+        self.is_ok = self._are_all_atoms_typed()
 
 
-    def _check(self):
+    def _are_all_atoms_typed(self):
         # verify that all atoms have been typed
         is_ok = True
         msg = ""

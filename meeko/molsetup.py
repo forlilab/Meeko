@@ -467,6 +467,9 @@ class MoleculeSetup:
                     self.set_charge(a, 0)
                     self.set_ignore(a, True)
 
+    def has_implicit_hydrogens(self):
+        raise NotImplementedError("This method must be overloaded by inheriting class")
+
     def copy(self):
         """ return a copy of the current setup"""
         raise NotImplementedError("This method must be overloaded by inheriting class")
@@ -675,6 +678,12 @@ class RDKitMoleculeSetup(MoleculeSetup):
     def copy(self):
         """ return a copy of the current setup"""
         return RDKitMoleculeSetup(self.mol, template=self)
+
+    def has_implicit_hydrogens(self):
+        implicit_h_count = 0
+        for atom in self.mol.GetAtoms():
+            implicit_h_count += atom.GetNumImplicitHs()
+        return implicit_h_count > 0
 
 
 class OBMoleculeSetup(MoleculeSetup):

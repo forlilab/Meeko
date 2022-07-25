@@ -32,7 +32,7 @@ def get_macrocycle_atom_types(pdbqt_string):
 
 def run(molname):
     filename = filenames[molname]
-    mol = Chem.MolFromMolFile(filename)
+    mol = Chem.MolFromMolFile(filename, removeHs=False)
     mk_prep.prepare(mol)
     pdbqt_string = mk_prep.write_pdbqt_string()
     cg_atoms, g_atoms = get_macrocycle_atom_types(pdbqt_string)
