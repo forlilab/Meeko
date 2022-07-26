@@ -43,6 +43,14 @@ class AtomTyper:
                 {"smarts": "[#7+1]",            "atype": "N",  "comment": "ammonium, pyridinium"},
                 {"smarts": "[SX2]",             "atype": "SA", "comment": "sulfur acceptor"}
             ]
+        },
+        "OFFATOMS": {
+            "example_offsite_charges": [
+                {"smarts": "[#7X2;v3;!+](=,:[*])[*]", "IDX": [1], "OFFATOMS": [
+                    {"z": [2, 3], "phi": 0, "distance": 0.2,
+                    "atype": "OFFCHRG", "pull_charge_fraction": 1.08}
+                ]}
+            ]
         }
     }
     """
@@ -102,6 +110,7 @@ class AtomTyper:
         parsmar = self.parameters['OFFATOMS']
         cached_offatoms = {}
         n_offatoms = 0
+        atoms_with_offchrg = set()
         # each parent atom can only be matched once in each smartsgroup
         for smartsgroup in parsmar:
             if smartsgroup == "comment": continue
@@ -145,6 +154,11 @@ class AtomTyper:
                                     pass
                                 elif key == 'atype':
                                     tmp[parent_idx][-1]['atom_params'][key] = offatom[key]
+                                elif key == 'pull_charge_fraction':
+                                    if parent_idx in atoms_with_offchrg:
+                                        raise RuntimeError("atom %d has charge pulled more than once" % parent_idx)
+                                    atoms_with_offchrg.add(parent_idx)
+                                    tmp[parent_idx][-1]['atom_params'][key] = offatom[key]
                                 else:
                                     pass
             for parent_idx in tmp:
@@ -156,10 +170,15 @@ class AtomTyper:
                                               neigh=offatom['z'],
                                               xneigh=offatom['x'],
                                               x90=offatom['x90'])
+                    if "pull_charge_fraction" in atom_params:
+                        pull_charge_fraction = atom_params["pull_charge_fraction"]
+                    else:
+                        pull_charge_fraction = 0.0
                     args = (atom_params['atype'],
                             offatom['distance'],
                             offatom['theta'],
-                            offatom['phi'])
+                            offatom['phi'],
+                            pull_charge_fraction)
                     # number of coordinates (before adding new offatom)
                     cached_offatoms[n_offatoms] = (atomgeom, args)
                     n_offatoms += 1
@@ -168,19 +187,22 @@ class AtomTyper:
     def _set_offatoms(self, setup, cached_offatoms, coords):
         """add cached offatoms"""
         for k, (atomgeom, args) in cached_offatoms.items():
-            (atom_type, dist, theta, phi) = args
+            (atom_type, dist, theta, phi, pull_charge_fraction) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
             tmp = setup.get_pdbinfo(atomgeom.parent+1)
             pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
+            q_parent = (1 - pull_charge_fraction) * setup.charge[atomgeom.parent] 
+            q_offsite = pull_charge_fraction * setup.charge[atomgeom.parent]
             pseudo_atom = {
                     'coord': offatom_coords,
-                    'anchor_list': [atomgeom.parent + 1], # convert to 1-indexing
-                    'charge': 0.0,
+                    'anchor_list': [atomgeom.parent],
+                    'charge': q_offsite,
                     'pdbinfo': pdbinfo,
                     'atom_type': atom_type,
                     'bond_type': 0,
                     'rotatable': False
                     }
+            setup.charge[atomgeom.parent] = q_parent
             setup.add_pseudo(**pseudo_atom)
         return
 

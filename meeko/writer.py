@@ -14,27 +14,62 @@ from .utils.rdkitutils import mini_periodic_table
 
 
 def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
+    offchrg_type = "OFFCHRG"
+    offchrg_by_parent = {}
+    for i in molsetup.atom_pseudo:
+        if molsetup.atom_type[i] == offchrg_type:
+            neigh = molsetup.get_neigh(i)
+            if len(neigh) != 1:
+                raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
+                    i, json.dumps(neigh)))
+            if neigh[0] in offchrg_by_parent:
+                raise RuntimeError("atom %d has more than one offsite charge" % neigh[0])
+            offchrg_by_parent[neigh[0]] = i
     output_indices_start_at_one = True
     index_start = int(output_indices_start_at_one)
     positions_block = ""
     charges = []
+    offchrg_by_oid_parent = {}
     elements = []
     n_real_atoms = molsetup.atom_true_count
     n_fake_atoms = len(molsetup.atom_pseudo)
-    indexmap = {}
+    indexmap = {} # molsetup: oid
     count_oids = 0
     for index in range(n_real_atoms):
         if molsetup.atom_ignore[index]:
             continue
+        if molsetup.atom_type[index] == offchrg_type:
+            continue # handled by offchrg_by_parent
         oid_id = count_oids + index_start
         indexmap[index] = count_oids
-        count_oids += 1
         x, y, z = molsetup.coord[index]
         positions_block += "position.%d = (%f,%f,%f)\n" % (oid_id, x, y, z)
         charges.append(molsetup.charge[index])
+        if index in offchrg_by_parent:
+            index_pseudo = offchrg_by_parent[index]
+            xq_abs, yq_abs, zq_abs = molsetup.coord[index_pseudo]
+            xq_rel = xq_abs - x
+            yq_rel = yq_abs - y
+            zq_rel = zq_abs - z
+            offchrg_by_oid_parent[count_oids] = {
+                "q": molsetup.charge[index_pseudo],
+                "xyz": (xq_rel, yq_rel, zq_rel),
+            }
+        count_oids += 1
         element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
         elements.append(element)
-    charges_line = "import_charges = {%s}\n" % (",".join(["%f" % c for c in charges]))
+    
+    tmp = []
+    for index in range(len(charges)):
+        if index in offchrg_by_oid_parent:
+            tmplist = ["%f" % charges[index], "0.0", "0.0" ,"0.0"] # xyz relative to current elemtn
+            tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
+            tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
+            tmp.append(",".join(tmplist))
+        else:
+            tmp.append("%f" % charges[index])
+    charges_line = "import_charges = {%s}" % ("|".join(tmp))
+    charges_line += "}\n"
     elements_line = "elements = %s\n" % (",".join(elements))
 
     bonds = [[] for _ in range(count_oids)]
@@ -42,6 +77,8 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     static_links = []
     for i, j in molsetup.bond.keys():
         if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
+            continue
+        if molsetup.atom_type[i] == offchrg_type or molsetup.atom_type[j] == offchrg_type:
             continue
         oid_i = indexmap[i]
         oid_j = indexmap[j]
