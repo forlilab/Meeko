@@ -54,7 +54,9 @@ class MoleculeSetup:
         "atom_pseudo",
         "atom_ignore",
         "atom_type",
-        "dihedrals",
+        "dihedral_interactions",
+        "dihedral_partaking_atoms",
+        "dihedral_labels",
         "atom_true_count",
         "element",
         "coord",
@@ -90,7 +92,9 @@ class MoleculeSetup:
         self.charge = OrderedDict()
         self.pdbinfo = OrderedDict()
         self.atom_type = OrderedDict()
-        self.dihedrals = dict()
+        self.dihedral_interactions = list()
+        self.dihedral_partaking_atoms = dict()
+        self.dihedral_labels = dict()
         self.atom_ignore = OrderedDict()
         self.chiral = OrderedDict()
         self.atom_true_count = 0
@@ -513,6 +517,31 @@ class MoleculeSetup:
                 # graph of atoms affected by potential ring movements
                 graph[atom_idx] = self.walk_recursive(atom_idx, collected=[], exclude=list(ring_atom_idxs))
             self.rings[ring_atom_idxs]['graph'] = graph
+
+    def add_dihedral_interaction(self, fourier_series):
+        """ """
+        index = 0
+        for existing_fs in self.dihedral_interactions:
+            if self.are_fourier_series_identical(existing_fs, fourier_series):
+                return index
+            index += 1
+        safe_copy = json.loads(json.dumps(fourier_series))
+        self.dihedral_interactions.append(safe_copy)
+        return index
+
+    @staticmethod
+    def are_fourier_series_identical(fs1, fs2):
+        index_by_periodicity1 = {fs1[index]["periodicity"]: index for index in range(len(fs1))}
+        index_by_periodicity2 = {fs2[index]["periodicity"]: index for index in range(len(fs2))}
+        if index_by_periodicity1 != index_by_periodicity2:
+            return False
+        for periodicity in index_by_periodicity1:
+            index1 = index_by_periodicity1[periodicity]
+            index2 = index_by_periodicity2[periodicity]
+            for key in ["k", "phase", "periodicity"]:
+                if fs1[index1][key] != fs2[index2][key]:
+                    return False
+        return True
 
     def init_bond(self, flexible_amides):
         """ iterate through molecule bonds and build the bond table (id, table)

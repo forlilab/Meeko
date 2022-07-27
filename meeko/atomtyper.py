@@ -206,7 +206,7 @@ class AtomTyper:
             setup.add_pseudo(**pseudo_atom)
         return
 
-    def _type_dihedrals(self, setup):
+    def _type_dihedrals(self, molsetup):
 
         if "DIHEDRALS" not in self.parameters:
             return
@@ -215,9 +215,10 @@ class AtomTyper:
 
         for line in parsmar:
             smarts = str(line['smarts'])
-            hits = setup.find_pattern(smarts)
+            hits = molsetup.find_pattern(smarts)
             idxs = [i - 1 for i in line['IDX']]
 
+            tid = line["id"] if "id" in line else None
             fourier_series = []
             term_indices = {}
             for key in line:
@@ -231,11 +232,18 @@ class AtomTyper:
                         fourier_series[index][keyword] = line[key]
                         break
 
+            for index in range(len(fourier_series)):
+                if "idivf" in fourier_series[index]:
+                    idivf = fourier_series[index].pop("idivf")
+                    fourier_series[index]["k"] /= idivf
+
+            dihedral_index = molsetup.add_dihedral_interaction(fourier_series)
+
             for hit in hits:
                 atom_idxs = tuple([hit[j] for j in idxs])
-                dihedrals[atom_idxs] = fourier_series
-                
-        setup.dihedrals = dihedrals
+                molsetup.dihedral_partaking_atoms[atom_idxs] = dihedral_index
+                molsetup.dihedral_labels[atom_idxs] = tid
+
 
 
 class AtomicGeometry():

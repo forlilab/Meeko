@@ -92,6 +92,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
     staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
 
+
     output = ""
     output += "[Group: %s]\n" % name
     output += positions_block
@@ -100,7 +101,82 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     output += bonds_line
     output += bondorder_line
     output += staticlinks_line
+    output += get_dihedrals_block(molsetup, indexmap)
+
     return output
+
+def get_dihedrals_block(molsetup, indexmap):
+
+    # molsetup.dihedral_interactions    is a list of unique fourier_series
+    # molsetup.dihedral_partaking_atoms has tuples of atom indices as keys, and the values
+    #                                   are the indices in molsetup.dihedral_interactions 
+    # molsetup.dihedral_labels          also has tuples of atom indices as keys, but the
+    #                                   values are not guaranteed to be unique
+
+    # Let's carefully use dihedral_labels to name the interactions
+    label_by_index = {}
+    atomidx_by_index = {}
+    for atomidx in molsetup.dihedral_partaking_atoms:
+        a, b, c, d = atomidx
+        if (molsetup.atom_ignore[a] or
+            molsetup.atom_ignore[b] or
+            molsetup.atom_ignore[c] or
+            molsetup.atom_ignore[d]):
+            continue
+        bond_id = molsetup.get_bond_id(b, c)
+        if not molsetup.bond[bond_id]["rotatable"]:
+            continue
+        index = molsetup.dihedral_partaking_atoms[atomidx]
+        atomidx_by_index.setdefault(index, set())
+        atomidx_by_index[index].add(atomidx)
+        index = molsetup.dihedral_partaking_atoms[atomidx]
+        label = molsetup.dihedral_labels[atomidx] if atomidx in molsetup.dihedral_labels else None
+        if label is None:
+            label = "from_meeko_%d" % index
+        label_by_index.setdefault(index, set())
+        label_by_index[index].add(label)
+    spent_labels = set()
+    for index in label_by_index:
+        label = "_".join(label_by_index[index])
+        number = 0
+        while label in spent_labels:
+            number += 1
+            label = "_".join(label_by_index[index]) + "_v%d" % number
+        label_by_index[index] = label
+        spent_labels.add(label)
+
+    text = ""
+    for index in label_by_index:
+        text += "[Interaction: Ligand, %s]\n" % (label_by_index[index])
+        text += "type = dihedral\n"
+        atomidx_strings = []
+        for atomidx in atomidx_by_index[index]:
+            string = ",".join(["%d" % indexmap[i] for i in atomidx])
+            atomidx_strings.append(string)
+        text += "elements = {%s}\n" % ("|".join(atomidx_strings))
+        text += "parameters = %s\n" % _aux_fourier_conversion(molsetup.dihedral_interactions[index])
+        text += '\n'
+    return text
+
+def _aux_fourier_conversion(fourier_series):
+    max_periodicity = max([fs['periodicity'] for fs in fourier_series])
+    tmp = [(0, 0)] * max_periodicity
+    for fs in fourier_series:
+        i = fs['periodicity'] - 1
+        k = 2.0 * fs['k']
+        phase = -1 * np.radians(fs['phase']) / fs['periodicity']
+        tmp[i] = (k, phase)
+    strings = []
+    for (k, phase) in tmp:
+        k_str = '0'
+        phase_str = '0'
+        if phase != 0: phase_str = ('%f' % (phase/np.pi)).rstrip('0').rstrip('.') + '*pi'
+        if phase_str == '1*pi': phase_str = 'pi'
+        if k != 0: k_str = '%f*4.184/60.221' % (k)
+        strings.append("%s,%s" % (k_str, phase_str))
+    return "(" + ";".join(strings) + ")"
+
+
 
 class PDBQTWriterLegacy():
     def __init__(self):
