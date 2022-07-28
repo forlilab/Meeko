@@ -28,8 +28,6 @@ def test():
     mol = mol_from_smiles("c1c(OC)ccnc1NC(=O)C")
     mk_prep.prepare(mol)
     molsetup = mk_prep.setup
-    print(len(molsetup.dihedral_interactions))
-    print(len(molsetup.dihedral_partaking_atoms))
     oids = oids_block_from_setup(molsetup)
     print(oids)
 

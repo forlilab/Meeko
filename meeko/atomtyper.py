@@ -216,8 +216,9 @@ class AtomTyper:
         for line in parsmar:
             smarts = str(line['smarts'])
             hits = molsetup.find_pattern(smarts)
+            if len(hits) == 0:
+                continue # non-rotatable bonds get dihedrals
             idxs = [i - 1 for i in line['IDX']]
-
             tid = line["id"] if "id" in line else None
             fourier_series = []
             term_indices = {}

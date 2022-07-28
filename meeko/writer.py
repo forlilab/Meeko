@@ -159,19 +159,31 @@ def get_dihedrals_block(molsetup, indexmap):
     return text
 
 def _aux_fourier_conversion(fourier_series):
+    # convert from:
+    #   k*(1+cos(n*theta-phase))
+    # to:
+    #   (k/2)*(1+cos(n*(theta+phase)))
+    # where n = periodicity
     max_periodicity = max([fs['periodicity'] for fs in fourier_series])
     tmp = [(0, 0)] * max_periodicity
     for fs in fourier_series:
         i = fs['periodicity'] - 1
         k = 2.0 * fs['k']
-        phase = -1 * np.radians(fs['phase']) / fs['periodicity']
+        phase = -1 * np.radians(fs['phase'])
         tmp[i] = (k, phase)
     strings = []
     for (k, phase) in tmp:
         k_str = '0'
-        phase_str = '0'
-        if phase != 0: phase_str = ('%f' % (phase/np.pi)).rstrip('0').rstrip('.') + '*pi'
-        if phase_str == '1*pi': phase_str = 'pi'
+        if phase == 0:
+            phase_str = '0'
+        else:
+            phase_str = ('%f' % (phase/np.pi)).rstrip('0').rstrip('.') + '*pi'
+            if phase_str == '1*pi':
+                phase_str = 'pi'
+            if phase_str == '-1*pi':
+                phase_str = '-pi'
+            if fs["periodicity"] != 1:
+                phase_str += "/%d" % fs['periodicity']
         if k != 0: k_str = '%f*4.184/60.221' % (k)
         strings.append("%s,%s" % (k_str, phase_str))
     return "(" + ";".join(strings) + ")"
