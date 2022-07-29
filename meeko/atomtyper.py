@@ -250,10 +250,10 @@ class AtomTyper:
 class AtomicGeometry():
     """generate reference frames and add extra sites"""
 
-    PLANAR_TOL = 0.1 # angstroms, length of neighbour vecs for Z axis
-
-    def __init__(self, parent, neigh, xneigh=[], x90=False):
+    def __init__(self, parent, neigh, xneigh=[], x90=False, planar_tol=0.1):
         """arguments are indices of atoms"""
+
+        self.planar_tol = planar_tol # angstroms, length of neighbor vecs for z-axis
 
         # real atom hosting extra sites
         if type(parent) != int:
@@ -296,8 +296,8 @@ class AtomicGeometry():
                 x = np.cross(self.z, x)
             y = np.cross(z, x)
             pt = z * distance
-            pt = self._rot3D(pt, y, phi)
-            pt = self._rot3D(pt, z, theta)
+            pt = self.rot3D(pt, y, phi)
+            pt = self.rot3D(pt, z, theta)
             pt += np.array(coords[self.parent])
             return pt
 
@@ -310,7 +310,7 @@ class AtomicGeometry():
             cumsum += v
             z += self.normalized(v)
         z = self.normalized(z)
-        if np.sum(cumsum**2) < self.PLANAR_TOL**2:
+        if np.sum(cumsum**2) < self.planar_tol**2:
             raise RuntimeError('Refusing to place Z axis on planar atom')
         return z
 
@@ -322,7 +322,8 @@ class AtomicGeometry():
         x = self.normalized(x)
         return x
 
-    def _rot3D(self, pt, ax, rad):
+    @staticmethod
+    def rot3D(pt, ax, rad):
         """
             Rotate point:
             pt = (x,y,z) coordinates to be rotated

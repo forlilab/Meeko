@@ -3,6 +3,7 @@ from meeko import MoleculePreparation
 from meeko import oids_block_from_setup
 from meeko import parse_offxml
 from meeko import AtomTyper
+from meeko import Hydrate
 import openforcefields
 import pathlib
 import json
@@ -10,6 +11,7 @@ import json
 p = pathlib.Path(openforcefields.__file__) # find openff-forcefields xml files
 offxml = p.parents[0] / "offxml" / "openff-2.0.0.offxml"
 offxml = offxml.resolve()
+print(offxml)
 vdw_list, dihedral_list, vdw_by_type = parse_offxml(offxml)
 meeko_config = {"keep_nonpolar_hydrogens": True, "flexible_amides": True}
 meeko_config["atom_type_smarts"] = json.loads(AtomTyper.defaults_json)
@@ -24,12 +26,22 @@ def mol_from_smiles(smiles):
     Chem.rdDistGeom.EmbedMolecule(mol, etkdg_param)
     return mol
     
-def test():
+#def test():
+if __name__ == "__main__":
     mol = mol_from_smiles("c1c(OC)ccnc1NC(=O)C")
     mk_prep.prepare(mol)
     molsetup = mk_prep.setup
     oids = oids_block_from_setup(molsetup)
-    print(oids)
+    #print(oids)
+    hydrate = Hydrate()
+    waters = hydrate(molsetup)
+    #print(Chem.MolToMolBlock(mol))
+    print(molsetup.write_xyz_string())
+    for w in waters:
+        print(w.write_xyz_string())
 
-if __name__ == "__main__":
-    test()
+
+
+
+#if __name__ == "__main__":
+#    test()

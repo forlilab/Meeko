@@ -31,6 +31,7 @@ from .rdkit_mol_create import RDKitMolCreate
 from . import analysis
 from .writer import oids_block_from_setup
 from .openff_xml_parser import parse_offxml
+from .hydrate import Hydrate
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
@@ -38,6 +39,7 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'RDKitMolCreate',
         'oids_block_from_setup',
         'parse_offxml',
+        'Hydrate',
         ]
 
 if _has_openbabel:

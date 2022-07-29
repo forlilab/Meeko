@@ -4,10 +4,149 @@
 # Meeko hydrate molecule
 #
 
+import json
 import numpy as np
+from rdkit import Chem
+from rdkit.Geometry import Point3D
+import warnings
 
+from .atomtyper import AtomicGeometry
+from .molsetup import RDKitMoleculeSetup
 from .utils import geomutils
 from .utils import pdbutils
+
+class Waters:
+
+    @staticmethod
+    def make_molsetup_OPC():
+        """build a molsetup for an OPC water"""
+    
+        raise NotImplementedError
+        rdmol = Chem.MolFromSmiles("O")
+        conformer = Chem.Conformer(rdmol.GetNumAtoms())
+        conformer.SetAtomPosition(0, Point3D(0, 0, 0))
+        rdmol.AddConformer(conformer)
+        molsetup = RDKitMoleculeSetup(rdmol)
+        return molsetup
+    
+    @staticmethod
+    def make_molsetup_TIP3P_AA():
+        """build a molsetup for an all atom (AA) TIP3P water, i.e. explicit Hs"""
+    
+        rdmol = Chem.MolFromSmiles("O")
+        rdmol = Chem.AddHs(rdmol)
+        conformer = Chem.Conformer(rdmol.GetNumAtoms())
+        dist_oh = 0.9572
+        ang_hoh = np.radians(104.52)
+        conformer.SetAtomPosition(0, Point3D(0, 0, 0))
+        conformer.SetAtomPosition(1, Point3D(dist_oh, 0, 0))
+        conformer.SetAtomPosition(2, Point3D(np.cos(ang_hoh)*dist_oh, np.sin(ang_hoh)*dist_oh, 0))
+        rdmol.AddConformer(conformer)
+        molsetup = RDKitMoleculeSetup(rdmol)
+        molsetup.bond[(0, 1)]["rotatable"] = False
+        molsetup.bond[(0, 2)]["rotatable"] = False
+        molsetup.atom_type[0] = "n-tip3p-O"
+        molsetup.atom_type[1] = "n-tip3p-H"
+        molsetup.atom_type[2] = "n-tip3p-H"
+        molsetup.charge[0] = -0.834
+        molsetup.charge[1] =  0.417
+        molsetup.charge[2] =  0.417
+        return molsetup
+
+
+class Hydrate:
+    defaults = [
+        {"smarts": "[#7X2;v3;!+](=,:[*])[*]", "IDX": 1, "z": [2, 3], "is_donor": False, "geometries": [
+                {"phi": 0.0, "distance": 3.0},
+            ]},
+        {"smarts": "[#1][#7,#8,#9]", "IDX": 1, "z": [2], "is_donor": True, "geometries": [
+                {"phi": 0.0, "distance": 2.0},
+            ]},
+        {"smarts": "[#8X1]=[X3][*]", "IDX": 1, "z": [2], "x": [3], "is_donor": False, "geometries": [
+                {"phi": 60.0, "theta":   0, "distance": 3.0},
+                {"phi": 60.0, "theta": 180, "distance": 3.0},
+            ]},
+    ]
+
+    def __init__(self):
+        self.rule_list = json.loads(json.dumps(self.defaults))
+
+    def __call__(self, molsetup, planar_tol=0.05, make_water=Waters.make_molsetup_TIP3P_AA):
+        coordinates = [molsetup.coord[i] for i in range(molsetup.atom_true_count)]
+        water_molsetup_list = []
+        for rule in self.rule_list:
+            hits = molsetup.find_pattern(rule["smarts"])
+            if len(hits) == 0:
+                continue
+            matched_idxs = set()
+            smarts_idx = rule.get("IDX", 1) - 1 # default to first atom in SMARTS
+            for hit in hits:
+                parent_index = hit[smarts_idx]
+                parent_center = coordinates[parent_index]
+                if parent_index in matched_idxs: 
+                    warnings.warn("SMARTS <%s> matches same target atom more than once, ignoring" % rule["smarts"])
+                    continue
+                matched_idxs.add(parent_index)
+                # required settings
+                z = [hit[i-1] for i in rule["z"]]
+                is_donor = rule["is_donor"]
+                # optional settings
+                x = rule.get("x", [])
+                x = [hit[i-1] for i in x]
+                x90 = rule.get("x90", False)
+                atomgeom = AtomicGeometry(parent_index, z, x, x90, planar_tol)
+                for geometry in rule["geometries"]:
+                    # required values
+                    distance = geometry["distance"]
+                    phi = np.radians(geometry["phi"])
+                    # optional values
+                    theta = geometry.get("theta", 0)
+                    theta = np.radians(theta)
+                    # place water
+                    water_center = atomgeom.calc_point(distance, theta, phi, coordinates)
+                    watersetup = make_water()
+                    watercoords = [watersetup.coord[i] for i in watersetup.coord]
+                    self.orient_water(watercoords, water_center, parent_center, is_donor)
+                    for i in range(len(watercoords)):
+                        watersetup.coord[i] = watercoords[i]
+                    water_molsetup_list.append(watersetup)
+        return water_molsetup_list
+
+    
+    @staticmethod
+    def orient_water(coords, target_xyz, anchor_xyz, anchor_is_donor):
+        """ coords will be changed in place
+            target_xyz is where the water oxygen will be
+            anchor_xyz is the atom to which this molecule belongs
+            anchor_is_donor is True for H, and False for O, N, S
+    
+            expects starting O to be at (0, 0, 0) and an H along x-axis
+        """
+    
+        if anchor_is_donor:
+            axis = (1, 0, 0)
+        else:
+            ang_hoh = np.radians(104.52)
+            ang_lp = np.radians(109.5) # probably good enough for lone pairs
+            x =  np.cos(ang_hoh/2) * np.cos(ang_lp/2)
+            y = -np.sin(ang_hoh/2) * np.cos(ang_lp/2)
+            z = np.sin(ang_lp/2)
+            axis = (x, y, z)
+        # rotate
+        v = np.array(anchor_xyz - target_xyz)
+        v /= np.sqrt(np.dot(v, v))
+        rotaxis = np.cross(axis, v)
+        magnitude = np.sqrt(np.dot(rotaxis, rotaxis))
+        if magnitude > 1e-6:
+            rotangle = np.arcsin(magnitude)
+            for i in range(len(coords)):
+                coords_tuple = AtomicGeometry.rot3D(coords[i], rotaxis, rotangle) # normalizes rotaxis
+                coords[i] = list(coords_tuple)
+                
+        # translate
+        for i in range(len(coords)):
+            for j in range(3):
+                coords[i][j] = coords[i][j] + target_xyz[j]
 
 
 class HydrateMoleculeLegacy:

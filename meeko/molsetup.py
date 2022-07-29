@@ -80,11 +80,6 @@ class MoleculeSetup:
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
-        stack = inspect.stack()
-        the_class = stack[1][0].f_locals["self"].__class__.__name__
-        the_method = stack[1][0].f_code.co_name
-        #print("I was called by {}.{}()".format(the_class, the_method))
-        #print("Setup initialized with:", mol, "template:", template)
 
         self.mol = mol
         self.atom_pseudo = []
@@ -572,6 +567,18 @@ class MoleculeSetup:
     def get_smiles_and_order(self):
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
+    def write_xyz_string(self):
+        n = len(self.element)
+        string = "%d\n\n" % n
+        for index in range(n):
+            if index < self.atom_true_count:
+                element = utils.mini_periodic_table[self.element[index]]
+            else:
+                element = "Ne"
+            x, y, z = self.coord[index]
+            string += "%3s %12.6f %12.6f %12.6f\n" % (element, x, y, z)
+        return string
+            
 
 class RDKitMoleculeSetup(MoleculeSetup):
 
