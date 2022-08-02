@@ -4,14 +4,28 @@
 # Meeko atom typer
 #
 
-import os
 import json
-from collections import OrderedDict
+import os
+import pathlib
 
 import numpy as np
 
 from .utils import utils
 from .utils import pdbutils
+
+try:
+    import espaloma
+except ImportError:
+    _has_espaloma = False
+else:
+    _has_espaloma = True
+
+try:
+    import torch
+except ImportError:
+    _has_torch = False
+else:
+    _has_torch = True
 
 
 class AtomTyper:
@@ -51,7 +65,8 @@ class AtomTyper:
                     "atype": "OFFCHRG", "pull_charge_fraction": 1.08}
                 ]}
             ]
-        }
+        },
+        "CHARGE_MODEL": "espaloma"
     }
     """
     def __init__(self, parameters={}):
@@ -62,6 +77,12 @@ class AtomTyper:
     def __call__(self, setup):
         self._type_atoms(setup)
         self._type_dihedrals(setup)
+        # CHARGE_MODEL must preceed OFFATOMS because of offsite-charges 
+        if "CHARGE_MODEL" in self.parameters:
+            if self.parameters["CHARGE_MODEL"] == "espaloma":
+                set_espaloma_charges(setup) 
+            else:
+                raise RuntimeError("only espaloma charges accepted, leave blank for gasteiger")
         if 'OFFATOMS' in self.parameters:
             cached_offatoms = self._cache_offatoms(setup)
             coords = [x for x in setup.coord.values()]
@@ -357,3 +378,32 @@ class AtomicGeometry():
         else:
             # should be np.array
             return vec / l
+
+def set_espaloma_charges(molsetup):
+    if not _has_espaloma or not _has_torch:
+        raise ImportError("espaloma and pytorch are required")
+    pretrained_model = pathlib.Path(espaloma.__file__).parents[1] / "espaloma_model.pt"
+    if not pretrained_model.exists():
+        msg = "Could not find %s" % pretrained_model
+        msg += "Consider:"
+        msg += "    $ cd %s" % pretrained_model.parents[0]
+        msg += "    $ wget http://data.wangyq.net/espaloma_model.pt"
+        raise RuntimeError(msg)
+    from .molsetup import RDKitMoleculeSetup
+    if not isinstance(molsetup, RDKitMoleculeSetup):
+        raise NotImplementedError("need rdkit molecule for espaloma charges")
+    from openff.toolkit.topology import Molecule
+    rdmol = molsetup.mol
+    openffmol = Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)
+    molgraph = espaloma.Graph(openffmol)
+    espaloma_model = torch.load(pretrained_model)
+    espaloma_model(molgraph.heterograph)
+    charges = [float(q) for q in molgraph.nodes["n1"].data["q"]]
+    total_charge = 0.0
+    for i in range(len(charges)):
+        print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
+        molsetup.charge[i] = charges[i] 
+        total_charge += charges[i]
+    for j in range(i+1, len(molsetup.charge)):
+        if molsetup.charge[j] != 0.:
+            raise RuntimeError("expected zero charge beyond real atoms, at this point") 
