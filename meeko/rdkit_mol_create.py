@@ -269,3 +269,37 @@ class RDKitMolCreate:
 
         for k, v in information_dictionary.items():
             mol.SetProp(k, v)
+
+    @staticmethod
+    def add_sandbox_coordinates(dlgstring, rdmol, index_map):
+        # this function does not deal with implicit H, at least not yet
+        # pretend that index_map is 1-indexed, like when reading from PDBQT
+        index_map [i + 1 for i in index_map]
+        coordinates = []
+        energy = {"inter": [], "intra": []}
+        is_atom_block = False
+        for line in dlgstring.split('\n'):
+            if line.startswith("Pose:") or line.startswith("Extra Pose:"):
+                pose_id = int(line.split()[-1])
+                coordinates.append([])
+            elif line.startswith("DOCKED: USER    (1) Final Intermolecular Energy     ="):
+                energy["inter"].append(float(line.split()[7]))
+            elif line.startswith("DOCKED: USER    (2) Final Total Internal Energy     ="):
+                energy["intra"].append(float(line.split()[8]))
+            elif line.startswith("DOCKED: @<TRIPOS>ATOM"):
+                is_atom_block = True
+            elif line.startswith("DOCKED: @<TRIPOS>BOND"):
+                is_atom_block = False
+            elif is_atom_block:
+                fields = line.split()
+                x, y, z = float(fields[3]), float(fields[4]), float(fields[5])
+                coordinates[-1].append([x, y, z])
+
+        if not (len(coordinates) == len(energy["inter"]) == len(energy["intra"])):
+            raise RuntimeError("parsed energies differs from number of coordinates")
+
+        scores = [energy["inter"][i] + energy["intra"][i] for i in range(len(coordinates))]
+        idxsort = [pair[0] for pair in sorted(enumerate(scores), key=lambda pair: pair[1])]
+        for index in idxsort:
+            self.add_pose_to_mol(rdmol, coordinates[index], index_map)
+        return scores

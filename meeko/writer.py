@@ -103,7 +103,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     output += staticlinks_line
     output += get_dihedrals_block(molsetup, indexmap)
 
-    return output
+    return output, indexmap
 
 def get_dihedrals_block(molsetup, indexmap):
 
