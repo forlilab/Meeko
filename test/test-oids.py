@@ -28,7 +28,7 @@ def mol_from_smiles(smiles):
     
 #def test():
 if __name__ == "__main__":
-    mol = mol_from_smiles("c1c(OC)ccnc1NC(=O)C")
+    mol = mol_from_smiles("c1c(O)ccnc1NC(=O)C[NH3+]")
     mk_prep.prepare(mol)
     molsetup = mk_prep.setup
     oids = oids_block_from_setup(molsetup)
@@ -36,9 +36,10 @@ if __name__ == "__main__":
     hydrate = Hydrate()
     waters = hydrate(molsetup)
     #print(Chem.MolToMolBlock(mol))
-    print(molsetup.write_xyz_string())
+    s = molsetup.write_xyz_string().split("\n")[2:-1]
     for w in waters:
-        print(w.write_xyz_string())
+        s.extend(w.write_xyz_string().split("\n")[2:-1])
+    print("%d\n\n%s" % (len(s), "\n".join(s)), file=open("hydrated.xyz", "w"))
 
 
 

@@ -124,20 +124,21 @@ class Hydrate:
         """
     
         if anchor_is_donor:
-            axis = (1, 0, 0)
-        else:
             ang_hoh = np.radians(104.52)
             ang_lp = np.radians(109.5) # probably good enough for lone pairs
-            x =  np.cos(ang_hoh/2) * np.cos(ang_lp/2)
-            y = -np.sin(ang_hoh/2) * np.cos(ang_lp/2)
+            x =  np.cos(np.pi-ang_hoh/2) * np.cos(ang_lp/2)
+            y = -np.sin(np.pi-ang_hoh/2) * np.cos(ang_lp/2)
             z = np.sin(ang_lp/2)
             axis = (x, y, z)
+        else:
+            axis = (1, 0, 0)
         # rotate
         v = np.array(anchor_xyz - target_xyz)
         v /= np.sqrt(np.dot(v, v))
         rotaxis = np.cross(axis, v)
         magnitude = np.sqrt(np.dot(rotaxis, rotaxis))
         if magnitude > 1e-6:
+            #rotangle = np.arccos(np.dot(axis, v))
             rotangle = np.arcsin(magnitude)
             for i in range(len(coords)):
                 coords_tuple = AtomicGeometry.rot3D(coords[i], rotaxis, rotangle) # normalizes rotaxis
