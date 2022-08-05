@@ -184,7 +184,8 @@ class RDKitMolCreate:
             pdbqt_index = int(index_map[i * 2 + 1]) - 1
             x, y, z = [float(coord) for coord in ligand_coordinates[pdbqt_index]]
             conf.SetAtomPosition(int(index_map[i * 2]) - 1, Point3D(x, y, z))
-        mol.AddConformer(conf, assignId=True)
+        index = mol.AddConformer(conf, assignId=True)
+        print("added conformer, index=%d" % index)
 
         # generate flexible residue mols if we haven't yet
         for idx, resname in enumerate(flexres_names):
@@ -270,11 +271,11 @@ class RDKitMolCreate:
         for k, v in information_dictionary.items():
             mol.SetProp(k, v)
 
-    @staticmethod
-    def add_sandbox_coordinates(dlgstring, rdmol, index_map):
+    @classmethod
+    def add_sandbox_coordinates(cls, dlgstring, rdmol, index_map):
         # this function does not deal with implicit H, at least not yet
         # pretend that index_map is 1-indexed, like when reading from PDBQT
-        index_map [i + 1 for i in index_map]
+        index_map = [i + 1 for i in index_map]
         coordinates = []
         energy = {"inter": [], "intra": []}
         is_atom_block = False
@@ -301,5 +302,5 @@ class RDKitMolCreate:
         scores = [energy["inter"][i] + energy["intra"][i] for i in range(len(coordinates))]
         idxsort = [pair[0] for pair in sorted(enumerate(scores), key=lambda pair: pair[1])]
         for index in idxsort:
-            self.add_pose_to_mol(rdmol, coordinates[index], index_map)
+            cls.add_pose_to_mol(rdmol, coordinates[index], index_map)
         return scores

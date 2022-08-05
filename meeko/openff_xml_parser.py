@@ -170,7 +170,7 @@ def make_vdw_entry(attrib_dict_from_xml):
             raise ValueError(msg)
     return vdw_entry
 
-def assign_atypes(vdw_list, use_openff_id=True):
+def assign_atypes(vdw_list, use_openff_id=True, force_uppercase=True):
 
     atypes_preserve = ["n-tip3p-O", "n-tip3p-H"]
 
@@ -205,7 +205,10 @@ def assign_atypes(vdw_list, use_openff_id=True):
             n = number_by_element[element]
             atype = "%s%d" % (element, n)
 
-        v["atype"] = atype
+        if force_uppercase:
+            v["atype"] = atype.upper()
+        else:
+            v["atype"] = atype
     return atomic_numbers # needed to get atomic mass aftwerwards
 
 def make_vdw_by_atype(vdw_list, atomic_numbers):

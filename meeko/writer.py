@@ -68,8 +68,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
             tmp.append(",".join(tmplist))
         else:
             tmp.append("%f" % charges[index])
-    charges_line = "import_charges = {%s}" % ("|".join(tmp))
-    charges_line += "}\n"
+    charges_line = "import_charges = {%s}\n" % ("|".join(tmp))
     elements_line = "elements = %s\n" % (",".join(elements))
 
     bonds = [[] for _ in range(count_oids)]
@@ -101,11 +100,16 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     output += bonds_line
     output += bondorder_line
     output += staticlinks_line
-    output += get_dihedrals_block(molsetup, indexmap)
+    output += "number = 1\t\t// can only be 1 for the sandbox currently (but any number for classical MC)\n"
+    output += "group_dipole = 1\t// not relevant for sandbox but classical MC\n"
+    output += "rand_independent=0\t// not relevant for sandbox but classical MC\n"
+    output += "bond_range = 4\t\t// bond range AD default\n"
+    output += "\n"
+    output += get_dihedrals_block(molsetup, indexmap, name)
 
     return output, indexmap
 
-def get_dihedrals_block(molsetup, indexmap):
+def get_dihedrals_block(molsetup, indexmap, name):
 
     # molsetup.dihedral_interactions    is a list of unique fourier_series
     # molsetup.dihedral_partaking_atoms has tuples of atom indices as keys, and the values
@@ -147,11 +151,11 @@ def get_dihedrals_block(molsetup, indexmap):
 
     text = ""
     for index in label_by_index:
-        text += "[Interaction: Ligand, %s]\n" % (label_by_index[index])
+        text += "[Interaction: %s, %s]\n" % (name, label_by_index[index])
         text += "type = dihedral\n"
         atomidx_strings = []
         for atomidx in atomidx_by_index[index]:
-            string = ",".join(["%d" % indexmap[i] for i in atomidx])
+            string = ",".join(["%d" % (indexmap[i]+1) for i in atomidx])
             atomidx_strings.append(string)
         text += "elements = {%s}\n" % ("|".join(atomidx_strings))
         text += "parameters = %s\n" % _aux_fourier_conversion(molsetup.dihedral_interactions[index])

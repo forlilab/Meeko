@@ -401,7 +401,7 @@ def set_espaloma_charges(molsetup):
     charges = [float(q) for q in molgraph.nodes["n1"].data["q"]]
     total_charge = 0.0
     for i in range(len(charges)):
-        print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
+        #print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
         molsetup.charge[i] = charges[i] 
         total_charge += charges[i]
     for j in range(i+1, len(molsetup.charge)):
