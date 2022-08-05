@@ -74,7 +74,7 @@ class MoleculeSetup:
         ]
 
     def __init__(self, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
-                flexible_amides=False, assign_charges=True, template=None):
+                 assign_charges=True, template=None):
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
@@ -111,18 +111,18 @@ class MoleculeSetup:
         # this could be used to keep track of transformations? (corner flipping)
         self.history = []
         if template is None:
-            self.process_mol(flexible_amides, assign_charges, keep_chorded_rings, keep_equivalent_rings)
+            self.process_mol(assign_charges, keep_chorded_rings, keep_equivalent_rings)
         else:
             if not isinstance(template, MoleculeSetup):
                 raise TypeError('FATAL: template must be an instance of MoleculeSetup')
             self.copy_attributes_from(template)
 
-    def process_mol(self, flexible_amides, assign_charges, keep_chorded_rings, keep_equivalent_rings):
+    def process_mol(self, assign_charges, keep_chorded_rings, keep_equivalent_rings):
         self.atom_true_count = self.get_num_mol_atoms()
         self.name = self.get_mol_name()
         self.init_atom(assign_charges)
         self.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
-        self.init_bond(flexible_amides)
+        self.init_bond()
         return
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
@@ -516,12 +516,8 @@ class MoleculeSetup:
                 graph[atom_idx] = self.walk_recursive(atom_idx, collected=[], exclude=list(ring_atom_idxs))
             self.rings[ring_atom_idxs]['graph'] = graph
 
-    def init_bond(self, flexible_amides):
+    def init_bond(self):
         """ iterate through molecule bonds and build the bond table (id, table)
-            INPUT
-                flexible_amides: bool
-                    this flag is used to define if primary and secondary amides
-                    need to be considered flexible or not (bond_order= 999)
             CALCULATE
                 bond_order: int
                     0       : pseudo-bond (for pseudoatoms)
@@ -648,10 +644,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
                     chiral=False,
                     ignore=False)
 
-    def init_bond(self, flexible_amides):
+    def init_bond(self):
         """ initialize bond information """
-        amide_smarts = "[$([NX3][#1])][$([CX3](=[OX1])[#6])]" # does not match tertiary amides
-        amide_bonds = [set(f) for f in self.find_pattern(amide_smarts)]
         for b in self.mol.GetBonds():
             idx1 = b.GetBeginAtomIdx()
             idx2 = b.GetEndAtomIdx()
@@ -661,13 +655,6 @@ class RDKitMoleculeSetup(MoleculeSetup):
                 bond_order = 5
             if bond_order == 1:
                 rotatable = True
-                if flexible_amides:
-                    continue
-                # check if bond is a tertiary amide bond
-                if set((idx1, idx2)) in amide_bonds:
-                    # TODO check what is the best to keep here (rotatable or bond_order)
-                    rotatable=False
-                    bond_order = 999
             else:
                 rotatable = False
             idx1_rings = set(self.get_atom_rings(idx1))
@@ -722,7 +709,7 @@ class OBMoleculeSetup(MoleculeSetup):
                     ignore=False, chiral=a.IsChiral())
             # TODO check consistency for chiral model between OB and RDKit
 
-    def init_bond(self, flexible_amides):
+    def init_bond(self):
         """initialize bond data table"""
         for b in ob.OBMolBondIter(self.mol):
             idx1 = b.GetBeginAtomIdx() - 1
@@ -730,9 +717,6 @@ class OBMoleculeSetup(MoleculeSetup):
             bond_order = b.GetBondOrder()
             if b.IsAromatic():
                 bond_order = 5
-            if b.IsAmide() and not b.IsTertiaryAmide():
-                if not flexible_amides:
-                    bond_order = 999
             # check if bond is a ring bond, i.e., both atoms belongs to the same ring
             idx1_rings = set(self.get_atom_rings(idx1))
             idx2_rings = set(self.get_atom_rings(idx2))
