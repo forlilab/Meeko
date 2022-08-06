@@ -176,7 +176,9 @@ def _aux_fourier_conversion(fourier_series):
         phase = -1 * np.radians(fs['phase'])
         tmp[i] = (k, phase)
     strings = []
+    periodicity = 0
     for (k, phase) in tmp:
+        periodicity += 1
         k_str = '0'
         if phase == 0:
             phase_str = '0'
@@ -186,8 +188,8 @@ def _aux_fourier_conversion(fourier_series):
                 phase_str = 'pi'
             if phase_str == '-1*pi':
                 phase_str = '-pi'
-            if fs["periodicity"] != 1:
-                phase_str += "/%d" % fs['periodicity']
+            if periodicity != 1:
+                phase_str += "/%d" % periodicity
         if k != 0: k_str = '%f*4.184/60.221' % (k)
         strings.append("%s,%s" % (k_str, phase_str))
     return "(" + ";".join(strings) + ")"

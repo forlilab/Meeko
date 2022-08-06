@@ -185,7 +185,6 @@ class RDKitMolCreate:
             x, y, z = [float(coord) for coord in ligand_coordinates[pdbqt_index]]
             conf.SetAtomPosition(int(index_map[i * 2]) - 1, Point3D(x, y, z))
         index = mol.AddConformer(conf, assignId=True)
-        print("added conformer, index=%d" % index)
 
         # generate flexible residue mols if we haven't yet
         for idx, resname in enumerate(flexres_names):
