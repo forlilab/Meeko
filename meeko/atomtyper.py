@@ -81,8 +81,10 @@ class AtomTyper:
         if "CHARGE_MODEL" in self.parameters:
             if self.parameters["CHARGE_MODEL"] == "espaloma":
                 set_espaloma_charges(setup) 
+            elif self.parameters["CHARGE_MODEL"] == "gasteiger":
+                pass # gasteiger automatically set in molsetup
             else:
-                raise RuntimeError("only espaloma charges accepted, leave blank for gasteiger")
+                raise RuntimeError("only espaloma/gasteiger charges accepted")
         if 'OFFATOMS' in self.parameters:
             cached_offatoms = self._cache_offatoms(setup)
             coords = [x for x in setup.coord.values()]

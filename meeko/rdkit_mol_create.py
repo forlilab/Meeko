@@ -276,11 +276,12 @@ class RDKitMolCreate:
         # pretend that index_map is 1-indexed, like when reading from PDBQT
         index_map = [i + 1 for i in index_map]
         coordinates = []
-        energy = {"inter": [], "intra": []}
+        energy = {"inter": [], "intra": [], "dlg_pose_idx": []}
         is_atom_block = False
         for line in dlgstring.split('\n'):
             if line.startswith("Pose:") or line.startswith("Extra Pose:"):
-                pose_id = int(line.split()[-1])
+                pose_idx = int(line.split()[-1])
+                energy["dlg_pose_idx"].append(pose_idx)
                 coordinates.append([])
             elif line.startswith("DOCKED: USER    (1) Final Intermolecular Energy     ="):
                 energy["inter"].append(float(line.split()[7]))
@@ -302,4 +303,7 @@ class RDKitMolCreate:
         idxsort = [pair[0] for pair in sorted(enumerate(scores), key=lambda pair: pair[1])]
         for index in idxsort:
             cls.add_pose_to_mol(rdmol, coordinates[index], index_map)
-        return scores
+
+        for key in energy:
+            energy[key] = [energy[key][i] for i in idxsort]
+        return energy
