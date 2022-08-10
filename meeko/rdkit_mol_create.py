@@ -279,8 +279,12 @@ class RDKitMolCreate:
         energy = {"inter": [], "intra": [], "dlg_pose_idx": []}
         is_atom_block = False
         for line in dlgstring.split('\n'):
-            if line.startswith("Pose:") or line.startswith("Extra Pose:"):
-                pose_idx = int(line.split()[-1])
+            if line.startswith("Pose:"):
+                pose_idx = int(line.split()[1])
+                energy["dlg_pose_idx"].append(pose_idx)
+                coordinates.append([])
+            elif line.startswith("Extra Pose:"):
+                pose_idx = int(line.split()[2])
                 energy["dlg_pose_idx"].append(pose_idx)
                 coordinates.append([])
             elif line.startswith("DOCKED: USER    (1) Final Intermolecular Energy     ="):
