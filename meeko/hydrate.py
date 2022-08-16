@@ -68,10 +68,15 @@ class Hydrate:
             ]},
     ]
 
-    def __init__(self):
+    def __init__(self, water_model="tip3p", planar_tol=0.05):
         self.rule_list = json.loads(json.dumps(self.defaults))
+        self.planar_tol = planar_tol
+        if water_model == "tip3p":
+            self.make_water = Waters.make_molsetup_TIP3P_AA
+        else:
+            raise RuntimeError("unknown water model: %s" % water_model)
 
-    def __call__(self, molsetup, planar_tol=0.05, make_water=Waters.make_molsetup_TIP3P_AA):
+    def __call__(self, molsetup):
         coordinates = [molsetup.coord[i] for i in range(molsetup.atom_true_count)]
         water_molsetup_list = []
         for rule in self.rule_list:
@@ -94,7 +99,7 @@ class Hydrate:
                 x = rule.get("x", [])
                 x = [hit[i-1] for i in x]
                 x90 = rule.get("x90", False)
-                atomgeom = AtomicGeometry(parent_index, z, x, x90, planar_tol)
+                atomgeom = AtomicGeometry(parent_index, z, x, x90, self.planar_tol)
                 for geometry in rule["geometries"]:
                     # required values
                     distance = geometry["distance"]
@@ -104,7 +109,7 @@ class Hydrate:
                     theta = np.radians(theta)
                     # place water
                     water_center = atomgeom.calc_point(distance, theta, phi, coordinates)
-                    watersetup = make_water()
+                    watersetup = self.make_water()
                     watercoords = [watersetup.coord[i] for i in watersetup.coord]
                     self.orient_water(watercoords, water_center, parent_center, is_donor)
                     for i in range(len(watercoords)):
