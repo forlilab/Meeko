@@ -279,12 +279,16 @@ class RDKitMolCreate:
         energy = {"inter": [], "intra": [], "dlg_pose_idx": []}
         is_atom_block = False
         for line in dlgstring.split('\n'):
-            if line.startswith("Pose:"):
-                pose_idx = int(line.split()[1])
-                energy["dlg_pose_idx"].append(pose_idx)
-                coordinates.append([])
-            elif line.startswith("Extra Pose:"):
-                pose_idx = int(line.split()[2])
+            if line.startswith("Pose:") or line.startswith("Extra Pose:"):
+                if line.startswith("Pose:"):
+                    pose_idx = int(line.split()[1])
+                elif line.startswith("Extra Pose:"):
+                    pose_idx = int(line.split()[2])
+                if len(coordinates) > 0:
+                    if len(coordinates[-1]) == 0: 
+                        # if pose info was missing, just delete data
+                        energy["dlg_pose_idx"].pop(-1)
+                        coordinates.pop(-1)
                 energy["dlg_pose_idx"].append(pose_idx)
                 coordinates.append([])
             elif line.startswith("DOCKED: USER    (1) Final Intermolecular Energy     ="):
@@ -301,7 +305,11 @@ class RDKitMolCreate:
                 coordinates[-1].append([x, y, z])
 
         if not (len(coordinates) == len(energy["inter"]) == len(energy["intra"])):
-            raise RuntimeError("parsed energies differs from number of coordinates")
+            msg = "parsed energies differs from number of coordinates\n"
+            msg += "len(coordinates) = %d\n" % len(coordinates)
+            msg += "len(intra) = %d\n" % len(energy["intra"])
+            msg += "len(inter) = %d\n" % len(energy["inter"])
+            raise RuntimeError(msg)
 
         scores = [energy["inter"][i] + energy["intra"][i] for i in range(len(coordinates))]
         idxsort = [pair[0] for pair in sorted(enumerate(scores), key=lambda pair: pair[1])]
