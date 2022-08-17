@@ -271,10 +271,9 @@ class RDKitMolCreate:
             mol.SetProp(k, v)
 
     @classmethod
-    def add_sandbox_coordinates(cls, dlgstring, rdmol, index_map):
+    def add_sandbox_coordinates(cls, dlgstring, rdmol, index_map, groupname=None):
         # this function does not deal with implicit H, at least not yet
-        # pretend that index_map is 1-indexed, like when reading from PDBQT
-        index_map = [i + 1 for i in index_map]
+        index_map = [i + 1 for i in index_map] # 1-indexing like in PDBQT
         coordinates = []
         energy = {"inter": [], "intra": [], "dlg_pose_idx": []}
         is_atom_block = False
@@ -301,8 +300,10 @@ class RDKitMolCreate:
                 is_atom_block = False
             elif is_atom_block:
                 fields = line.split()
-                x, y, z = float(fields[3]), float(fields[4]), float(fields[5])
-                coordinates[-1].append([x, y, z])
+                name = fields[8]
+                if groupname is None or name == groupname:
+                    x, y, z = float(fields[3]), float(fields[4]), float(fields[5])
+                    coordinates[-1].append([x, y, z])
 
         if not (len(coordinates) == len(energy["inter"]) == len(energy["intra"])):
             msg = "parsed energies differs from number of coordinates\n"
