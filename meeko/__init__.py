@@ -31,6 +31,8 @@ from .rdkit_mol_create import RDKitMolCreate
 from . import analysis
 from .writer import oids_block_from_setup
 from .openff_xml_parser import parse_offxml
+from .openff_xml_parser import load_openff
+from .openff_xml_parser import get_openff_epsilon_sigma
 from .hydrate import Hydrate
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',

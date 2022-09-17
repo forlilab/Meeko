@@ -1,8 +1,38 @@
+import pathlib
 import xml.etree.ElementTree as ET
 
 from rdkit import Chem
 
 from .utils.utils import mini_periodic_table
+
+
+def load_openff():
+    import openforcefields
+    p = pathlib.Path(openforcefields.__file__) # find openff-forcefields xml files
+    offxml = p.parents[0] / "offxml" / "openff-2.0.0.offxml"
+    offxml = offxml.resolve()
+    vdw_list, dihedral_list, vdw_by_type = parse_offxml(offxml)
+    return vdw_list, dihedral_list, vdw_by_type
+
+
+def get_openff_epsilon_sigma(rdmol, vdw_list, vdw_by_type, output_index_start=0):
+    from .preparation import MoleculePreparation
+    data = {}
+    meeko_config = {"keep_nonpolar_hydrogens": True}
+    meeko_config["atom_type_smarts"] = {"OFFATOMS": {}}
+    meeko_config["atom_type_smarts"]["ATOM_PARAMS"] = {"openff-2.0.0": vdw_list}
+    meeko_config["atom_type_smarts"]["CHARGE_MODEL"] = 'gasteiger'
+    mk_prep = MoleculePreparation.from_config(meeko_config)
+    mk_prep.prepare(rdmol)
+    molsetup = mk_prep.setup
+    for i, atype in molsetup.atom_type.items():
+        data[i + output_index_start] = {
+            "atom_type": atype,
+            "epsilon": vdw_by_type[atype]["epsilon"],
+            "sigma": vdw_by_type[atype]["rmin_half"] * 2.0 / (4 ** (1.0 / 12)),
+            "gasteiger": molsetup.charge[i],
+        }
+    return data
 
 
 def validate_key(key, keyword, terms):
