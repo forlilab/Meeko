@@ -54,6 +54,7 @@ class MoleculeSetup:
         "atom_pseudo",
         "atom_ignore",
         "atom_type",
+        "atom_params",
         "dihedral_interactions",
         "dihedral_partaking_atoms",
         "dihedral_labels",
@@ -87,6 +88,7 @@ class MoleculeSetup:
         self.charge = OrderedDict()
         self.pdbinfo = OrderedDict()
         self.atom_type = OrderedDict()
+        self.atom_params = {}
         self.dihedral_interactions = list()
         self.dihedral_partaking_atoms = dict()
         self.dihedral_labels = dict()

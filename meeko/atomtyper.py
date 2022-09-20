@@ -56,6 +56,34 @@ class AtomTyper:
                 {"smarts": "[#7X3v3][#6X3v4]",  "atype": "N",  "comment": "amide"},
                 {"smarts": "[#7+1]",            "atype": "N",  "comment": "ammonium, pyridinium"},
                 {"smarts": "[SX2]",             "atype": "SA", "comment": "sulfur acceptor"}
+            ],
+            "ad4_desolv_volume": [
+                {"smarts": "[#1]",               "ad4_sol_vol":  0.0},
+                {"smarts": "[#1][#8,#7,#16,#9]", "ad4_sol_vol":  0.0},
+                {"smarts": "[#6]",               "ad4_sol_vol": 33.5103},
+                {"smarts": "[#7]",               "ad4_sol_vol": 22.4493},
+                {"smarts": "[#8]",               "ad4_sol_vol": 17.1573},
+                {"smarts": "[#9]",               "ad4_sol_vol": 15.448 },
+                {"smarts": "[#12]",              "ad4_sol_vol":  1.56  },
+                {"smarts": "[#15]",              "ad4_sol_vol": 38.7924},
+                {"smarts": "[#16]",              "ad4_sol_vol": 33.5103},
+                {"smarts": "[#17]",              "ad4_sol_vol": 35.8235},
+                {"smarts": "[#20]",              "ad4_sol_vol":  2.77  },
+                {"smarts": "[#25]",              "ad4_sol_vol":  2.14  },
+                {"smarts": "[#26]",              "ad4_sol_vol":  1.84  },
+                {"smarts": "[#30]",              "ad4_sol_vol":  1.7   },
+                {"smarts": "[#35]",              "ad4_sol_vol": 42.5661},
+                {"smarts": "[#53]",              "ad4_sol_vol": 55.0585}
+            ],
+            "ad4_desolv_param": [
+                {"smarts": "[*]",                "ad4_sol_par":  0.00110},
+                {"smarts": "[#1]",               "ad4_sol_par":  0.00000},
+                {"smarts": "[#1][#8,#7,#16,#9]", "ad4_sol_par":  0.00051},
+                {"smarts": "[C]",                "ad4_sol_par": -0.00143},
+                {"smarts": "[c]",                "ad4_sol_par": -0.00052},
+                {"smarts": "[#7]",               "ad4_sol_par": -0.00162},
+                {"smarts": "[#8]",               "ad4_sol_par": -0.00251},
+                {"smarts": "[#16]",              "ad4_sol_par": -0.00214}
             ]
         },
         "OFFATOMS": {
@@ -100,26 +128,30 @@ class AtomTyper:
             if smartsgroup == 'comment': continue
             for line in parsmar[smartsgroup]: # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
                 smarts = str(line['smarts'])
-                if 'atype' not in line: continue
                 # get indices of the atoms in the smarts to which the parameters will be assigned
                 idxs = [0] # by default, the first atom in the smarts gets parameterized
                 if 'IDX' in line:
                     idxs = [i - 1 for i in line['IDX']] # convert from 1- to 0-indexing
                 # match SMARTS
                 hits = setup.find_pattern(smarts)
-                atompar = 'atype' # we care only about 'atype', for now, but may want to extend
-                atom_type = line[atompar]
-                # keep track of every "smartsgroup" that modified "atompar"
-                ensure.setdefault(atompar, [])
-                ensure[atompar].append(smartsgroup)
-                # Each "hit" is a tuple of atom indeces that matched the smarts
-                # The length of each "hit" is the number of atoms in the smarts
-                for hit in hits:
-                    # Multiple atoms may be targeted by a single smarts:
-                    # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
-                    # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
-                    for idx in idxs:
-                        setup.set_atom_type(hit[idx], atom_type) # overrides previous calls
+                for atompar in line:
+                    if atompar in ["smarts", "comment", "IDX"]: continue
+                    if atompar not in setup.atom_params:
+                        setup.atom_params[atompar] = [None] * len(setup.coord) 
+                    value = line[atompar]
+                    # keep track of every "smartsgroup" that modified "atompar"
+                    ensure.setdefault(atompar, [])
+                    ensure[atompar].append(smartsgroup)
+                    # Each "hit" is a tuple of atom indices that matched the smarts
+                    # The length of each "hit" is the number of atoms in the smarts
+                    for hit in hits:
+                        # Multiple atoms may be targeted by a single smarts:
+                        # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
+                        # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
+                        for idx in idxs:
+                            if atompar == "atype":
+                                setup.set_atom_type(hit[idx], value) # overrides previous calls
+                            setup.atom_params[atompar][hit[idx]] = value
         # guarantee that each atompar is exclusive of a single group
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
