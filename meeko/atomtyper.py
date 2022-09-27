@@ -173,7 +173,7 @@ class AtomTyper:
             pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
             pseudo_atom = {
                     'coord': offatom_coords,
-                    'anchor_list': [atomgeom.parent + 1], # convert to 1-indexing
+                    'anchor_list': [atomgeom.parent],
                     'charge': 0.0,
                     'pdbinfo': pdbinfo,
                     'atom_type': atom_type,
