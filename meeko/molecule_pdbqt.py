@@ -52,6 +52,10 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
 
     atoms = None
     positions = []
+
+    # flexible_residue is for atoms between BEGIN_RES and END_RES keywords, ligand otherwise.
+    # flexres assigned "ligand" if BEGIN/END RES keywords are missing
+    # mol_index distinguishes different ligands and flexres because ROOT keyword increments mol_index  
     atom_annotations = {'ligand': [], 'flexible_residue': [], 'water': [],
                         'hb_acc': [], 'hb_don': [],
                         'all': [], 'vdw': [],
