@@ -351,7 +351,7 @@ class PDBQTMolecule:
         return self
 
     def __iter__(self):
-        self._current_pose -= 1
+        self._current_pose = -1
         return self
 
     def __next__(self):

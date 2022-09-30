@@ -43,7 +43,16 @@ class RDKitMolCreate:
         # "LYS": {},
         # "LYN": {},
         # "MET": {},
-        # "ASN": {},
+        "ASN": {
+            "smiles": "CCC(=O)N",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "OD1", "ND2"],
+            "h_to_parent_index": {"1HD2": 4, "2HD2": 4},
+        },
+        "PHE": {
+            "smiles": "CCc1ccccc1",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD1", "CE1", "CZ", "CE2", "CD2"],
+            "h_to_parent_index": {},
+        },
         # "GLN": {},
         # "ARG": {},
         # "SER": {},
@@ -189,11 +198,11 @@ class RDKitMolCreate:
             returns None if input is empty list or all molecules are None
         """
         combined_mol = None
-        for mol in mol_list[1:]:
+        for mol in mol_list:
             if mol is None:
                 continue
             if combined_mol is None: # first iteration
-                combine_mol = mol
+                combined_mol = mol
             else:
                 combined_mol = Chem.CombineMols(combined_mol, mol)
         return combined_mol
