@@ -10,7 +10,6 @@ from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
 import json
 import os
-import warnings
 
 
 class RDKitMolCreate:
@@ -21,45 +20,142 @@ class RDKitMolCreate:
         "GLU": ["GLU", "GLH"],
         "CYS": ["CYS", "CYM"],
         "LYS": ["LYS", "LYN"],
+        "ARG": ["ARG", "ARG_mgltools"],
+        "ASN": ["ASN", "ASN_mgltools"],
+        "GLN": ["GLN", "GLN_mgltools"],
     }
 
     flexres = {
-        # "CYS": {
-        # },
-        # "CYM": {
-        # },
-        # "ASP": {},
-        # "ASH": {},
-        # "GLU": {},
-        # "GLH": {},
-        "HIE" : {
-            "smiles": "CCc1c[nH]cn1",
-            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD2", "NE2", "CE1", "ND1"],
-            "h_to_parent_index": {"HE2": 4},
+        "CYS": {
+            "smiles": "CCS",
+            "atom_names_in_smiles_order": ["CA", "CB", "SG"],
+            "h_to_parent_index": {"HG": 2},
         },
-        # "HID": {},
-        # "HIP": {},
-        # "ILE": {},
-        # "LYS": {},
-        # "LYN": {},
-        # "MET": {},
-        "ASN": {
-            "smiles": "CCC(=O)N",
-            "atom_names_in_smiles_order": ["CA", "CB", "CG", "OD1", "ND2"],
-            "h_to_parent_index": {"1HD2": 4, "2HD2": 4},
+        "CYM": {
+            "smiles": "CC[S-]",
+            "atom_names_in_smiles_order": ["CA", "CB", "SG"],
+            "h_to_parent_index": {},
+        },
+        "ASP": {
+            "smiles": "CCC(=O)[O-]",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "OD1", "OD2"],
+            "h_to_parent_index": {},
+        },
+        "ASH": {
+            "smiles": "CCC(=O)O",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "OD1", "OD2"],
+            "h_to_parent_index": {"HD2": 4},
+        },
+        "GLU": {
+            "smiles": "CCCC(=O)[O-]",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "OE1", "OE2"],
+            "h_to_parent_index": {},
+        },
+        "GLH": {
+            "smiles": "CCCC(=O)O",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "OE1", "OE2"],
+            "h_to_parent_index": {"HE2": 5},
         },
         "PHE": {
             "smiles": "CCc1ccccc1",
             "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD1", "CE1", "CZ", "CE2", "CD2"],
             "h_to_parent_index": {},
         },
-        # "GLN": {},
-        # "ARG": {},
-        # "SER": {},
-        # "THR": {},
-        # "VAL": {},
-        # "TRP": {},
-        # "TYR": {},
+        "HIE" : {
+            "smiles": "CCc1c[nH]cn1",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD2", "NE2", "CE1", "ND1"],
+            "h_to_parent_index": {"HE2": 4},
+        },
+        "HID" : {
+            "smiles": "CCc1cnc[nH]1",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD2", "NE2", "CE1", "ND1"],
+            "h_to_parent_index": {"HD1": 6},
+        },
+        "HIP" : {
+            "smiles": "CCc1c[nH+]c[nH]1",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD2", "NE2", "CE1", "ND1"],
+            "h_to_parent_index": {"HE2": 4, "HD1": 6},
+        },
+        "ILE": {
+            "smiles": "CC(C)CC",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG2", "CG1", "CD1"],
+            "h_to_parent_index": {},
+        },
+        "LYS": {
+            "smiles": "CCCCC[NH3+]",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "CE", "NZ"],
+            "h_to_parent_index": {"HZ1": 5, "HZ2": 5, "HZ3": 5},
+        },
+        "LYN": {
+            "smiles": "CCCCCN",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "CE", "NZ"],
+            "h_to_parent_index": {"HZ2": 5, "HZ3": 5},
+        },
+        "LEU": {
+            "smiles": "CCC(C)C",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD1", "CD2"],
+            "h_to_parent_index": {},
+        },
+        "MET": {
+            "smiles": "CCCSC",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "SD", "CE"],
+            "h_to_parent_index": {},
+        },
+        "ASN": {
+            "smiles": "CCC(=O)N",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "OD1", "ND2"],
+            "h_to_parent_index": {"HD21": 4, "HD22": 4},
+        },
+        "ASN_mgltools": {
+            "smiles": "CCC(=O)N",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "OD1", "ND2"],
+            "h_to_parent_index": {"1HD2": 4, "2HD2": 4},
+        },
+        "GLN": {
+            "smiles": "CCCC(=O)N",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "OE1", "NE2"],
+            "h_to_parent_index": {"HE21": 5, "HE22": 5},
+        },
+        "GLN_mgltools": {
+            "smiles": "CCCC(=O)N",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "OE1", "NE2"],
+            "h_to_parent_index": {"1HE2": 5, "2HE2": 5},
+        },
+        "ARG": {
+            "smiles": "CCCCNC(N)=[NH2+]",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "NE", "CZ", "NH1", "NH2"],
+            "h_to_parent_index": {"HE": 4, "HH11": 6, "HH12": 6, "HH21": 7, "HH22": 7},
+        },
+        "ARG_mgltools": {
+            "smiles": "CCCCNC(N)=[NH2+]",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD", "NE", "CZ", "NH1", "NH2"],
+            "h_to_parent_index": {"HE": 4, "1HH1": 6, "2HH1": 6, "1HH2": 7, "2HH2": 7},
+        },
+        "SER": {
+            "smiles": "CCO",
+            "atom_names_in_smiles_order": ["CA", "CB", "OG"],
+            "h_to_parent_index": {"HG": 2},
+        },
+        "THR": {
+            "smiles": "CC(C)O",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG2", "OG1"],
+            "h_to_parent_index": {"HG1": 3},
+        },
+        "VAL": {
+            "smiles": "CC(C)C",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG1", "CG2"],
+            "h_to_parent_index": {},
+        },
+        "TRP": {
+            "smiles": "CCc1c[nH]c2c1cccc2",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD1", "NE1", "CE2", "CD2", "CE3", "CZ3", "CH2", "CZ2"],
+            "h_to_parent_index": {"HE1": 4},
+        },
+        "TYR": {
+            "smiles": "CCc1ccc(cc1)O",
+            "atom_names_in_smiles_order": ["CA", "CB", "CG", "CD1", "CE1", "CZ", "CE2", "CD2", "OH"],
+            "h_to_parent_index": {"HH": 8},
+        },
     }
 
     @classmethod
@@ -72,15 +168,17 @@ class RDKitMolCreate:
             atom_idx = pdbqt_mol._atom_annotations["mol_index"][mol_index]
 
             if smiles is None: # probably a flexible sidechain, but can be another ligand
-                residue_names = []
+                residue_names = set()
                 atom_names = []
                 for atom in pdbqt_mol.atoms(atom_idx):
-                    residue_names.append(atom[4])
+                    residue_names.add(atom[4])
                     atom_names.append(atom[2])
-                smiles, index_map, h_parent = cls.guess_flexres_smiles(residue_names, atom_names)
-                if smiles is None: # failed guessing smiles for possible flexres
-                    mol_list.append(None)
-                    continue
+                if len(residue_names) == 1:
+                    resname = residue_names.pop()
+                    smiles, index_map, h_parent = cls.guess_flexres_smiles(resname, atom_names)
+                    if smiles is None: # failed guessing smiles for possible flexres
+                        mol_list.append(None)
+                        continue
 
             mol = Chem.MolFromSmiles(smiles)
 
@@ -100,12 +198,27 @@ class RDKitMolCreate:
         return mol_list
 
     @classmethod
-    def guess_flexres_smiles(cls, residue_names, atom_names):
-        if len(set(residue_names)) != 1:
-            return None, None, None
+    def guess_flexres_smiles(cls, resname, atom_names):
+        """ Determine a SMILES string for flexres based on atom names,
+            as well as the equivalent of smile_index_map and smiles_h_parent
+            which are written to PDBQT remarks for regular small molecules.
+
+        Args:
+            resname (str):
+        
+        Returns:
+            smiles: SMILES string starting at C-alpha (excludes most of the backbone)
+            index_map: list of pairs of integers, first in pair is index in the smiles,
+                       second is index of corresponding atom in atom_names         
+            h_parent: list of pairs of integers, first in pair is index of a heavy atom
+                      in the smiles, second is index of a hydrogen in atom_names.
+                      The hydrogen is bonded to the heavy atom. 
+        """
+
+
+
         if len(set(atom_names)) != len(atom_names):
             return None, None, None
-        resname = set(residue_names).pop()
         candidate_resnames = cls.ambiguous_flexres_choices.get(resname, [resname])
         for resname in candidate_resnames:
             is_match = False
@@ -139,7 +252,10 @@ class RDKitMolCreate:
         used to generate rdkit mol
 
         Args:
-            ligand_coordinates (list): Ligand coordinate as list of 3d sets.
+            ligand_coordinates: 2D array of shape (nr_atom, 3).
+            index_map: list of nr_atom pairs of integers, 1-indexed.
+                       In each pair, the first int is the index in mol, and
+                       the second int is the index in ligand_coordinates
 
         Raises:
             RuntimeError: Will raise error if number of coordinates provided does not
