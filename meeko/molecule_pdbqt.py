@@ -45,19 +45,31 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
     energy_best_pose = None
     is_first_pose = True
     is_model = False
+    mol_index = -1 # incremented for each ROOT keyword
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ('xyz', 'f4', (3)),
                    ('partial_charges', 'f4'), ('atom_type', 'U3')]
 
     atoms = None
     positions = []
+
+    # flexible_residue is for atoms between BEGIN_RES and END_RES keywords, ligand otherwise.
+    # flexres assigned "ligand" if BEGIN/END RES keywords are missing
+    # mol_index distinguishes different ligands and flexres because ROOT keyword increments mol_index  
     atom_annotations = {'ligand': [], 'flexible_residue': [], 'water': [],
                         'hb_acc': [], 'hb_don': [],
                         'all': [], 'vdw': [],
-                        'glue': [], 'reactive': [], 'metal': []}
+                        'glue': [], 'reactive': [], 'metal': [],
+                        'mol_index': {},
+                        }
     pose_data = {'n_poses': None, 'active_atoms': [], 'free_energies': [], 
                  'index_map': {}, 'pdbqt_string': [],
-                 'smiles': None, 'smiles_index_map': [], 'smiles_h_parent': []}
+                 'smiles': {}, 'smiles_index_map': {}, 'smiles_h_parent': {}}
+
+    buffer_index_map = {}
+    buffer_smiles = None
+    buffer_smiles_index_map = []
+    buffer_smiles_h_parent = []
 
     lines = pdbqt_string.split('\n')
     if len(lines[-1]) == 0: lines = lines[:-1]
@@ -85,6 +97,7 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             tmp_actives = []
             tmp_pdbqt_string = ''
             is_model = True
+            mol_index = -1 # incremented for each ROOT keyword
         elif line.startswith('ATOM') or line.startswith("HETATM"):
             serial = int(line[6:11].strip())
             name = line[12:16].strip()
@@ -123,6 +136,8 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             if is_first_pose and atom_type != 'W':
                 atom_annotations[location].append(i)
                 atom_annotations['all'].append(i)
+                atom_annotations["mol_index"].setdefault(mol_index, [])
+                atom_annotations["mol_index"][mol_index].append(i)
                 if not skip_typing:
                     atom_annotations[atom_property_definitions[atom_type]].append(i)
 
@@ -131,25 +146,36 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
 
             previous_serial = serial
             i += 1
+        elif line.startswith("ROOT") and is_first_pose:
+            mol_index += 1
+            # buffers needed because REMARKS preceeds ROOT
+            pose_data["index_map"][mol_index] = buffer_index_map
+            pose_data["smiles"][mol_index] = buffer_smiles
+            pose_data["smiles_index_map"][mol_index] = buffer_smiles_index_map
+            pose_data["smiles_h_parent"][mol_index] = buffer_smiles_h_parent
+            buffer_index_map = {}
+            buffer_smiles = None
+            buffer_smiles_index_map = []
+            buffer_smiles_h_parent = []
         elif line.startswith('REMARK') or line.startswith('USER'):
             if line.startswith('REMARK INDEX MAP') and is_first_pose:
                 integers = [int(integer) for integer in line.split()[3:]]
                 if len(integers) % 2 == 1:
                     raise RuntimeError("Number of indices in INDEX MAP is odd")
                 for j in range(int(len(integers) / 2)): 
-                    pose_data['index_map'][integers[j*2]] = integers[j*2 + 1]
+                    buffer_index_map[integers[j*2]] = integers[j*2 + 1]
             elif line.startswith('REMARK SMILES IDX') and is_first_pose:
                 integers = [int(integer) for integer in line.split()[3:]]
                 if len(integers) % 2 == 1:
                     raise RuntimeError("Number of indices in SMILES IDX is odd")
-                pose_data['smiles_index_map'].extend(integers)
+                buffer_smiles_index_map.extend(integers)
             elif line.startswith('REMARK H PARENT') and is_first_pose:
                 integers = [int(integer) for integer in line.split()[3:]]
                 if len(integers) % 2 == 1:
                     raise RuntimeError("Number of indices in H PARENT is odd")
-                pose_data['smiles_h_parent'].extend(integers)
+                buffer_smiles_h_parent.extend(integers)
             elif line.startswith('REMARK SMILES') and is_first_pose: # must check after SMILES IDX
-                pose_data['smiles'] = line.split()[2]
+                buffer_smiles = line.split()[2]
             elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
                 # Read free energy from output PDBQT files
                 try:
@@ -192,10 +218,10 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
                 # Check if the molecule topology is the same for each pose
                 # We ignore water molecules (W) and atom type XX
                 columns = ['idx', 'serial', 'name', 'resid', 'resname', 'chain', 'partial_charges', 'atom_type']
-                top1 = atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
-                top2 = tmp_atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
+                topology1 = atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
+                topology2 = tmp_atoms[np.isin(atoms['atom_type'], ['W', 'XX'], invert=True)][columns]
 
-                if not np.array_equal(top1, top2):
+                if not np.array_equal(topology1, topology2):
                     error_msg = 'molecules have different topologies'
                     raise RuntimeError(error_msg)
 
@@ -325,7 +351,7 @@ class PDBQTMolecule:
         return self
 
     def __iter__(self):
-        self._current_pose = 1
+        self._current_pose = -1
         return self
 
     def __next__(self):

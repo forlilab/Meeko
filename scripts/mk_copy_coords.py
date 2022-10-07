@@ -6,6 +6,7 @@
 import argparse
 import os
 import sys
+import warnings
 
 from rdkit import Chem
 from rdkit.six import StringIO
@@ -23,15 +24,16 @@ else:
 
 
 def cmd_lineparser():
-    parser = argparse.ArgumentParser(description='Copy atom coordinates from PDBQT (or DLG) file \
-                                                  to original molecule file format (SDF or MOL2)')
+    parser = argparse.ArgumentParser(description='Export docking results to SDF format')
     parser.add_argument(dest='docking_results_filename',
-                        action='store', help='Docking output file to get coordinates. Either a PDBQT \
+                        action='store', help='Docking output file, either a PDBQT \
                         file from Vina or a DLG file from AD-GPU.')
     parser.add_argument('-i', '--original_input', dest='template_filename',
-                        action='store', help='Template molecule file, i.e. the original file that was \
-                        used to prepare the PDBQT filename (hopefully SDF). If no template is provided, \
-                        the SMILES string in the PDBQT remarks will be used to generate an SDF file.')
+                        action='store', help='[not recommended] Template molecule file, i.e. the original \
+                        file that was used to prepare the PDBQT filename (hopefully SDF). \
+                        This option requires OpenBabel, and is kept only for backwards compatibility with \
+                        meeko v0.2.* and older, because it is only since v0.3.* that the SMILES string is \
+                        added to a PDBQT remark and used to initialize an RDKit molecule.')
     parser.add_argument('-o', '--output_filename', dest='output_filename',
                         action='store', help='Output molecule filename. If not specified, suffix _docked is \
                         added to the filename based on the input molecule file, and using the same \
@@ -82,9 +84,13 @@ if __name__ == '__main__':
             raise RuntimeError(msg)
         sio = StringIO()
         f = Chem.SDWriter(sio)
-        mol = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
-        for conformer in mol.GetConformers():
-            f.write(mol, conformer.GetId())
+        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
+        for i, mol in enumerate(mol_list):
+            if mol is None:
+                warnings.warn("molecule %d not converted to RDKit/SD File" % i)
+        combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
+        for conformer in combined_mol.GetConformers():
+            f.write(combined_mol, conformer.GetId())
         f.close()
         output_string += sio.getvalue()
         output_format = 'sdf'
