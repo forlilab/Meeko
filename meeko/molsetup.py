@@ -24,6 +24,7 @@ except ImportError:
 else:
     _has_openbabel = True
 
+
 # based on the assumption we are using OpenBabel
 
 # TODO modify so that there are no more dictionaries and only list/arrays (fix me)
@@ -51,6 +52,7 @@ class MoleculeSetup:
     """
     # possibly useless here
     attributes_to_copy = [
+        "mol",
         "atom_pseudo",
         "atom_ignore",
         "atom_type",
@@ -76,13 +78,13 @@ class MoleculeSetup:
         'name',
         ]
 
-    def __init__(self, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+    def __init__(self, keep_chorded_rings=False, keep_equivalent_rings=False,
                  assign_charges=True, template=None):
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
 
-        self.mol = mol
+        self.mol = None
         self.atom_pseudo = []
         self.coord = OrderedDict()  # FIXME all OrderedDict shuold be converted to lists?
         self.charge = OrderedDict()
@@ -112,23 +114,76 @@ class MoleculeSetup:
         self.name = None
         # this could be used to keep track of transformations? (corner flipping)
         self.history = []
-        if template is None:
-            self.process_mol(assign_charges, keep_chorded_rings, keep_equivalent_rings)
-        else:
+        if template is not None:
             if not isinstance(template, MoleculeSetup):
                 raise TypeError('FATAL: template must be an instance of MoleculeSetup')
             self.copy_attributes_from(template)
 
-    def process_mol(self, assign_charges, keep_chorded_rings, keep_equivalent_rings):
-        self.atom_true_count = self.get_num_mol_atoms()
-        self.name = self.get_mol_name()
-        self.init_atom(assign_charges)
-        self.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
-        self.init_bond()
-        return
+    @classmethod
+    def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+                 assign_charges=True):
+        molsetup = cls()
+        molsetup.mol = mol
+        molsetup.atom_true_count = molsetup.get_num_mol_atoms()
+        molsetup.name = molsetup.get_mol_name()
+        molsetup.init_atom(assign_charges)
+        molsetup.init_bond()
+        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
+        return molsetup
+
+    @classmethod
+    def from_prmtop_inpcrd(cls, prmtop, crd_filename):
+        molsetup = cls()
+        x, y, z = prmtop._coords_from_inpcrd(crd_filename)
+        all_atom_indices = prmtop.vmdsel("")
+        if len(all_atom_indices) != len(x):
+            raise RuntimeError("number of prmtop atoms differs from x coordinates")
+        prmtop.upper_atom_types = prmtop._gen_gaff_uppercase()
+        charges = [chrg/18.2223 for chrg in prmtop.read_flag("CHARGE")]
+        atomic_nrs = prmtop.read_flag("ATOMIC_NUMBER")
+        pdbqt_string = ""
+        molsetup.atom_params["vdw_r"] = []
+        molsetup.atom_params["vdw_eps"] = []
+        vdw_by_atype = {}
+        for vdw in prmtop._retrieve_vdw():
+            if vdw.atom in vdw_by_atype:
+                raise RuntimeError("repeated atom type from prmtop._retrieve_vdw()")
+            vdw_by_atype[vdw.atom] = {"rmin_half": vdw.r, "epsilon": vdw.e}
+        for i in prmtop.atom_sel_idx:
+            pdbinfo = rdkitutils.PDBAtomInfo(
+                name=prmtop.pdb_atom_name[i],
+                resName = prmtop.pdb_resname[i],
+                resNum = int(prmtop.pdb_resid[i]),
+                chain = " ",
+            )
+            atype = prmtop.upper_atom_types[i]
+            molsetup.add_atom(
+                i,
+                coord = (x[i], y[i], z[i]),
+                charge = charges[i],
+                atom_type = atype,
+                element = atomic_nrs[i], 
+                pdbinfo = pdbinfo,
+                chiral = False,
+                ignore = False,
+            )
+            molsetup.atom_params["vdw_r"].append(vdw_by_atype[atype]["rmin_half"])
+            molsetup.atom_params["vdw_eps"].append(vdw_by_atype[atype]["epsilon"])
+        bond_order = 1 # the prmtop does not have bond orders, so we set all to 1
+        bonds_inc_h = prmtop.read_flag("BONDS_INC_HYDROGEN")
+        bonds_not_h = prmtop.read_flag("BONDS_WITHOUT_HYDROGEN")
+        bonds = bonds_inc_h + bonds_not_h
+        nr_bonds = int(len(bonds) / 3) 
+        for index_bond in range(nr_bonds):
+            i_atom = int(bonds[index_bond * 3 + 0] / 3)
+            j_atom = int(bonds[index_bond * 3 + 1] / 3)
+            if (i_atom in prmtop.atom_sel_idx) and (j_atom in prmtop.atom_sel_idx):
+                molsetup.add_bond(i_atom, j_atom, order=bond_order, rotatable=False)
+        return molsetup
+
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
-            element=None, charge=0.0, atom_type=None, pdbinfo=None, neighbors=None,
+            element=None, charge=0.0, atom_type=None, pdbinfo=None,
             ignore=False, chiral=False, overwrite=False):
         """ function to add all atom information at once;
             every property is optional
@@ -143,11 +198,9 @@ class MoleculeSetup:
         self.set_element(idx, element)
         self.set_atom_type(idx, atom_type)
         self.set_pdbinfo(idx, pdbinfo)
-        if neighbors is None:
-            neighbors = []
-        self.set_neigh(idx, neighbors)
         self.set_chiral(idx, chiral)
         self.set_ignore(idx, ignore)
+        self.graph.setdefault(idx, [])
         return idx
 
     def del_atom(self, idx):
@@ -166,7 +219,7 @@ class MoleculeSetup:
 
     # pseudo-atoms
     def add_pseudo(self, coord=np.array([0.0,0.0,0.0], dtype='float'), charge=0.0,
-            anchor_list=None, atom_type=None, bond_type=None, rotatable=False,
+            anchor_list=None, atom_type=None, rotatable=False,
             pdbinfo=None, directional_vectors=None, ignore=False, chira0=False, overwrite=False):
         """ add a new pseudoatom
             multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
@@ -184,34 +237,25 @@ class MoleculeSetup:
                 charge=charge,
                 atom_type=atom_type,
                 pdbinfo=pdbinfo,
-                neighbors=[],
                 ignore=ignore,
                 overwrite=overwrite)
         # anchor atoms
         if not anchor_list is None:
             for anchor in anchor_list:
-                self.add_bond(idx, anchor, 0, rotatable, bond_type=bond_type)
+                self.add_bond(idx, anchor, order=0, rotatable=rotatable)
         # directional vectors
         if not directional_vectors is None:
             self.add_interaction_vector(idx, directional_vectors)
         return idx
 
-    # Bonds
-    def add_bond(self, idx1, idx2, order=0, rotatable=False, in_rings=None, bond_type=None):
-        """ bond_type default: 0 (non rotatable) """
-        # NOTE: in_ring is used during bond typing to keep endo-cyclic rotatable bonds (e.g., sp3)
-        #       as non-rotatable. Possibly, this might be handled by the bond typer itself?
-        #       the type would allow it
-        # TODO check if in_rings should be checked by this function?
-        if in_rings is None:
-            in_rings = []
+    def add_bond(self, idx1, idx2, order=0, rotatable=False):
+
         if not idx2 in self.graph[idx1]:
             self.graph[idx1].append(idx2)
         if not idx1 in self.graph[idx2]:
             self.graph[idx2].append(idx1)
-        self.set_bond(idx1, idx2, order, rotatable, in_rings, bond_type)
+        self.set_bond(idx1, idx2, order, rotatable)
 
-    # atom types
     def set_atom_type(self, idx, atom_type):
         """ set the atom type for atom index
         atom_type : int or str?
@@ -258,18 +302,6 @@ class MoleculeSetup:
     def get_neigh(self, idx):
         """ return atoms connected to atom index"""
         return self.graph[idx]
-
-    def set_neigh(self, idx, neigh_list):
-        """ update the molecular graph with the neighbor indices provided """
-        if not idx in self.graph:
-            self.graph[idx] = []
-        for n in neigh_list:
-            if not n in self.graph[idx]:
-                self.graph[idx].append(n)
-            if not n in self.graph:
-                self.graph[n] = []
-            if not idx in self.graph[n]:
-                self.graph[n].append(idx)
 
     def set_chiral(self, idx, chiral):
         """ set chiral flag for atom """
@@ -348,27 +380,19 @@ class MoleculeSetup:
         """ retrieve PDB data (resname/num, atom name, etc.) to the atom """
         return self.pdbinfo[idx]
 
-    def set_bond(self, idx1, idx2, order=None, rotatable=None, in_rings=None, bond_type=None):
+    def set_bond(self, idx1, idx2, order=0, rotatable=False):
         """ populate bond lookup table with properties
             bonds are identified by any tuple of atom indices
             the function generates the canonical bond id
 
             order      : int
             rotatable  : bool
-            in_rings   : list (rings to which the bond belongs)
-            bond_type  : int
         """
         bond_id = self.get_bond_id(idx1, idx2)
-        if order is None:
-            order = 0
-        if rotatable is None:
-            rotatable = False
-        if in_rings is None:
-            in_rings = []
-        self.bond[bond_id] = {'bond_order': order,
-                              'type': bond_type,
-                              'rotatable': rotatable,
-                              'in_rings': in_rings}
+        self.bond[bond_id] = {
+            'bond_order': order,
+            'rotatable': rotatable,
+        }
 
     def del_bond(self, idx1, idx2):
         """ remove a bond from the lookup table """
@@ -555,7 +579,7 @@ class MoleculeSetup:
                 if bond is in ring (both start and end atom indices in the bond are in the same ring)
 
             SETUP OPERATION
-                Setup.add_bond(idx1, idx2, order, in_rings=[])
+                Setup.add_bond(idx1, idx2, order, rotatable)
         """
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
@@ -679,7 +703,6 @@ class RDKitMoleculeSetup(MoleculeSetup):
                     charge=charges[idx],
                     atom_type=None,
                     pdbinfo = rdkitutils.getPdbInfoNoNull(a),
-                    neighbors = [n.GetIdx() for n in a.GetNeighbors()],
                     chiral=False,
                     ignore=False)
 
@@ -696,14 +719,11 @@ class RDKitMoleculeSetup(MoleculeSetup):
                 rotatable = True
             else:
                 rotatable = False
-            idx1_rings = set(self.get_atom_rings(idx1))
-            idx2_rings = set(self.get_atom_rings(idx2))
-            in_rings = list(set.intersection(idx1_rings, idx2_rings))
-            self.add_bond(idx1, idx2, order=bond_order, rotatable=rotatable, in_rings=in_rings)
+            self.add_bond(idx1, idx2, order=bond_order, rotatable=rotatable)
 
     def copy(self):
         """ return a copy of the current setup"""
-        return RDKitMoleculeSetup(self.mol, template=self)
+        return RDKitMoleculeSetup(template=self)
 
     def has_implicit_hydrogens(self):
         implicit_h_count = 0
@@ -736,7 +756,6 @@ class OBMoleculeSetup(MoleculeSetup):
     def init_atom(self, assign_charges):
         """initialize atom data table"""
         for a in ob.OBMolAtomIter(self.mol):
-            # TODO fix this to be zero-based?
             partial_charge = a.GetPartialCharge() * float(assign_charges)
             self.add_atom(a.GetIdx() - 1,
                     coord=np.asarray(obutils.getAtomCoords(a), dtype='float'),
@@ -744,7 +763,6 @@ class OBMoleculeSetup(MoleculeSetup):
                     charge=partial_charge,
                     atom_type=None,
                     pdbinfo = obutils.getPdbInfoNoNull(a),
-                    neighbors=[x.GetIdx() - 1 for x in ob.OBAtomAtomIter(a)],
                     ignore=False, chiral=a.IsChiral())
             # TODO check consistency for chiral model between OB and RDKit
 
@@ -756,12 +774,8 @@ class OBMoleculeSetup(MoleculeSetup):
             bond_order = b.GetBondOrder()
             if b.IsAromatic():
                 bond_order = 5
-            # check if bond is a ring bond, i.e., both atoms belongs to the same ring
-            idx1_rings = set(self.get_atom_rings(idx1))
-            idx2_rings = set(self.get_atom_rings(idx2))
-            in_rings = list(set.intersection(idx1_rings, idx2_rings))
-            self.add_bond(idx1, idx2, order=bond_order, in_rings=in_rings)
+            self.add_bond(idx1, idx2, order=bond_order)
 
     def copy(self):
         """ return a copy of the current setup"""
-        return OBMoleculeSetup(self.mol, template=self)
+        return OBMoleculeSetup(template=self)

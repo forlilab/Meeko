@@ -97,7 +97,8 @@ class MoleculePreparation:
         if not mol_type in self._classes_setup:
             raise TypeError("Molecule is not an instance of supported types: %s" % type(mol))
         setup_class = self._classes_setup[mol_type]
-        setup = setup_class(mol,
+        setup = setup_class.from_mol(
+            mol,
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings)
         self.setup = setup

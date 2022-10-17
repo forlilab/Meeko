@@ -113,10 +113,6 @@ class FlexibilityBuilder:
         # START VALUE HERE SHOULD BE MADE MODIFIABLE FOR FLEX CHAIN
         self._rigid_body_count = 0
         self.walk_rigid_body_graph(start=0)
-        # if only a rigid body is found
-        if len(self._rigid_body_members) == 1:
-            self._rigid_body_connectivity[0] = [0]
-            self._rigid_body_graph[0] = [0]
         model = {'rigid_body_graph' : deepcopy(self._rigid_body_graph),
                 'rigid_body_connectivity' : deepcopy(self._rigid_body_connectivity),
                 'rigid_body_members' : deepcopy(self._rigid_body_members),
@@ -173,7 +169,9 @@ class FlexibilityBuilder:
                             graph[vertex] = edges
                     del graph[l]
 
-            if len(graph) == 1:
+            if len(graph) == 0:
+                root_body_index = 0
+            elif len(graph) == 1:
                 root_body_index = list(graph.keys())[0]
             else:
                 r1, r2 = list(graph.keys())
@@ -218,7 +216,6 @@ class FlexibilityBuilder:
                 'charge': 0.0,
                 'pdbinfo': pdbinfo,
                 'atom_type': 'G',
-                'bond_type': 0,
                 'rotatable': False})
         return closure_pseudo
 

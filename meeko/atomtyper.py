@@ -94,7 +94,7 @@ class AtomTyper:
                 ]}
             ]
         },
-        "CHARGE_MODEL": "espaloma"
+        "CHARGE_MODEL": "gasteiger"
     }
     """
     def __init__(self, parameters={}):
@@ -254,7 +254,6 @@ class AtomTyper:
                     'charge': q_offsite,
                     'pdbinfo': pdbinfo,
                     'atom_type': atom_type,
-                    'bond_type': 0,
                     'rotatable': False
                     }
             setup.charge[atomgeom.parent] = q_parent

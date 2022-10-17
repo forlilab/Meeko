@@ -62,8 +62,10 @@ class BondTyperLegacy:
             # non-rotatable bond
             if bond_info['bond_order'] > 1:
                 rotatable = False
-            # in-ring bond
-            if len(bond_info['in_rings']):
+            rings_atom1 = set(setup.get_atom_rings(bond_id[0]))
+            rings_atom2 = set(setup.get_atom_rings(bond_id[1]))
+            rings_this_bond = rings_atom1.intersection(rings_atom2)
+            if len(rings_this_bond) > 0:
                 rotatable = False
             # it's a terminal atom (methyl, halogen, hydrogen...)
             is_terminal_1 = _is_terminal(bond_id[0]) and (bond_id[0] not in not_terminal_atoms)
