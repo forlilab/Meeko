@@ -32,7 +32,7 @@ class AtomTyper:
 
     defaults_json = """{
         "ATOM_PARAMS": {
-            "alkyl glue": [
+            "atom_types": [
                 {"smarts": "[#1]",                  "atype": "H", "comment": "invisible"},
                 {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"},
                 {"smarts": "[#5]",              "atype": "B"},
@@ -84,6 +84,23 @@ class AtomTyper:
                 {"smarts": "[#7]",               "ad4_sol_par": -0.00162},
                 {"smarts": "[#8]",               "ad4_sol_par": -0.00251},
                 {"smarts": "[#16]",              "ad4_sol_par": -0.00214}
+            ],
+            "ad4_vdw": [
+                {"smarts": "[#1]",   "rmin_half": 1.0,   "epsilon": 0.02},
+                {"smarts": "[#6]",   "rmin_half": 2.0,   "epsilon": 0.15},
+                {"smarts": "[#7]",   "rmin_half": 1.75,  "epsilon": 0.16},
+                {"smarts": "[#8]",   "rmin_half": 1.6,   "epsilon": 0.20},
+                {"smarts": "[#9]",   "rmin_half": 1.545, "epsilon": 0.08},
+                {"smarts": "[#12]",  "rmin_half": 0.65,  "epsilon": 0.875},
+                {"smarts": "[#15]",  "rmin_half": 2.1,   "epsilon": 0.20},
+                {"smarts": "[#16]",  "rmin_half": 2.0,   "epsilon": 0.20},
+                {"smarts": "[#17]",  "rmin_half": 2.045, "epsilon": 0.276},
+                {"smarts": "[#20]",  "rmin_half": 0.99,  "epsilon": 0.55},
+                {"smarts": "[#25]",  "rmin_half": 0.65,  "epsilon": 0.875},
+                {"smarts": "[#26]",  "rmin_half": 0.65,  "epsilon": 0.01},
+                {"smarts": "[#30]",  "rmin_half": 0.74,  "epsilon": 0.55},
+                {"smarts": "[#35]",  "rmin_half": 2.165, "epsilon": 0.389},
+                {"smarts": "[#53]",  "rmin_half": 2.36,  "epsilon": 0.55}
             ]
         },
         "OFFATOMS": {
