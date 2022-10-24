@@ -177,9 +177,9 @@ class RDKitMolCreate:
         conf = Chem.Conformer(n_atoms)
         if n_atoms != len(index_map) / 2:
             raise RuntimeError(
-                "ERROR! Incorrect number of coordinates! Given {n_coords} "
-                "atom coordinates for {n_at} atoms!".format(
-                    n_coords=n_atoms, n_at=len(index_map) / 2))
+                "Number of atom is rdmol {n_atoms} mismatches"
+                "number of pairs in index map {n_at}!".format(
+                    n_atoms=n_atoms, n_at=len(index_map) / 2))
         for i in range(n_atoms):
             pdbqt_index = int(index_map[i * 2 + 1]) - 1
             x, y, z = [float(coord) for coord in ligand_coordinates[pdbqt_index]]
@@ -271,9 +271,10 @@ class RDKitMolCreate:
             mol.SetProp(k, v)
 
     @classmethod
-    def add_sandbox_coordinates(cls, dlgstring, rdmol, index_map, groupname=None):
+    def add_sandbox_coordinates(cls, dlgstring, rdmol, index_map, h_parent, groupname=None):
         # this function does not deal with implicit H, at least not yet
         index_map = [i + 1 for i in index_map] # 1-indexing like in PDBQT
+        h_parent = [i + 1 for i in h_parent] # 1-indexing like in PDBQT
         coordinates = []
         energy = {"inter": [], "intra": [], "dlg_pose_idx": []}
         is_atom_block = False
@@ -314,9 +315,13 @@ class RDKitMolCreate:
 
         scores = [energy["inter"][i] + energy["intra"][i] for i in range(len(coordinates))]
         idxsort = [pair[0] for pair in sorted(enumerate(scores), key=lambda pair: pair[1])]
+        sorted_coordinates = []
         for index in idxsort:
             cls.add_pose_to_mol(rdmol, coordinates[index], index_map)
+            sorted_coordinates.append(coordinates[index])
+
+        rdmol = cls.add_hydrogens(rdmol, sorted_coordinates, h_parent)
 
         for key in energy:
             energy[key] = [energy[key][i] for i in idxsort]
-        return energy
+        return rdmol, energy
