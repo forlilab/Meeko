@@ -30,7 +30,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     scripts=["scripts/mk_prepare_ligand.py",
-             "scripts/mk_copy_coords.py"],
+             "scripts/mk_export.py"],
            #"scripts/dry.py",
            #"scripts/mapwater.py",
            #"scripts/wet.py"],

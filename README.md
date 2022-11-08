@@ -87,6 +87,16 @@ mk_export.py vina_results.pdbqt -o vina_results.sdf
 mk_export.py autodock-gpu_results.dlg -o autodock-gpu_results.sdf
 ```
 
+Making RDKit molecules from SMILES is safer than guessing bond orders
+from the coordinates, specially because the PDBQT lacks hydrogens bonded
+to carbon. As an example, consider the following conversion, in which
+OpenBabel adds an extra double bond, not because it has a bad algorithm,
+but because this is a nearly impossible task.
+```console
+$ obabel -:"C1C=CCO1" -o pdbqt --gen3d | obabel -i pdbqt -o smi
+[C]1=[C][C]=[C]O1
+```
+
 ## Python tutorial
 
 #### 1. making PDBQT strings for Vina or for AutoDock-GPU
