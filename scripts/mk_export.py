@@ -79,6 +79,12 @@ if __name__ == '__main__':
         output_format = 'sdf'
         for i in failures:
             warnings.warn("molecule %d not converted to RDKit/SD File" % i)
+        if len(failures) == len(pdbqt_mol._atom_annotations["mol_index"]):
+            msg = "\nCould not convert to RDKit. Maybe meeko was not used for preparing\n"
+            msg += "the input PDBQT for docking, and the SMILES string is missing?\n"
+            msg += "Except for standard protein sidechains, all ligands and flexible residues\n"
+            msg += "require a REMARK SMILES line in the PDBQT, which is added automatically by meeko."
+            raise RuntimeError(msg)
     if not redirect_stdout:
         if output_filename is None:
             output_filename = '%s%s.%s' % (os.path.splitext(docking_results_filename)[0], suffix_name, output_format)

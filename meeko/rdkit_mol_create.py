@@ -340,6 +340,8 @@ class RDKitMolCreate:
         mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
         failures = [i for i, mol in enumerate(mol_list) if mol is None]
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
+        if combined_mol is None:
+            return "", failures
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
             data = {
