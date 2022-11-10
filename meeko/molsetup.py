@@ -726,10 +726,14 @@ class RDKitMoleculeSetup(MoleculeSetup):
         return RDKitMoleculeSetup(template=self)
 
     def has_implicit_hydrogens(self):
-        implicit_h_count = 0
+        # based on needsHs from RDKit's AddHs.cpp
         for atom in self.mol.GetAtoms():
-            implicit_h_count += atom.GetNumImplicitHs()
-        return implicit_h_count > 0
+            nr_H_neighbors = 0
+            for neighbor in atom.GetNeighbors():
+                nr_H_neighbors += int(neighbor.GetAtomicNum() == 1)
+            if atom.GetTotalNumHs(includeNeighbors=False) > nr_H_neighbors:
+                return True
+        return False
 
 
 class OBMoleculeSetup(MoleculeSetup):

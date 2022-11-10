@@ -65,7 +65,7 @@ class MoleculePreparation:
         self._water_builder = HydrateMoleculeLegacy()
         self._writer = PDBQTWriterLegacy()
         self.is_ok = None
-        self.log = None
+        self.log = ""
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
         if _has_openbabel:
             self._classes_setup[ob.OBMol] = OBMoleculeSetup
@@ -105,6 +105,7 @@ class MoleculePreparation:
 
         if setup.has_implicit_hydrogens():
             self.is_ok = False
+            self.log += "molecule has implicit hydrogens"
             name = setup.get_mol_name()
             warnings.warn("Skipping mol (name=%s): has implicit hydrogens" % name, RuntimeWarning)
             return
