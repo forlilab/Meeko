@@ -62,9 +62,18 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
                         'glue': [], 'reactive': [], 'metal': [],
                         'mol_index': {},
                         }
-    pose_data = {'n_poses': None, 'active_atoms': [], 'free_energies': [], 
-                 'index_map': {}, 'pdbqt_string': [],
-                 'smiles': {}, 'smiles_index_map': {}, 'smiles_h_parent': {}}
+    pose_data = {
+        'n_poses': None,
+        'active_atoms': [],
+        'free_energies': [], 
+        'intermolecular_energies': [],
+        'internal_energies': [],
+        'index_map': {},
+        'pdbqt_string': [],
+        'smiles': {},
+        'smiles_index_map': {},
+        'smiles_h_parent': {},
+    }
 
     buffer_index_map = {}
     buffer_smiles = None
@@ -176,24 +185,33 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
                 buffer_smiles_h_parent.extend(integers)
             elif line.startswith('REMARK SMILES') and is_first_pose: # must check after SMILES IDX
                 buffer_smiles = line.split()[2]
-            elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding'):
+            elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding    ='):
                 # Read free energy from output PDBQT files
                 try:
                     # Vina
                     energy = float(line.split()[3])
                 except:
                     # AD4
-                    energy = float(line.split()[7])
+                    energy = float(line[45:].split()[0]) # no guarantee of space between = and number
 
                 if energy_best_pose is None:
                     energy_best_pose = energy
                 energy_current_pose = energy
 
+                # NOTE this assumes poses are sorted by increasing energy
                 diff_energy = energy_current_pose - energy_best_pose
                 if (energy_range <= diff_energy and energy_range != -1):
                     break
 
                 pose_data['free_energies'].append(energy)
+            elif not is_dlg and line.startswith('REMARK INTER:'):
+                pose_data['intermolecular_energies'].append(float(line.split()[2]))
+            elif not is_dlg and line.startswith('REMARK INTRA:'):
+                pose_data['internal_energies'].append(float(line.split()[2]))
+            elif is_dlg and line.startswith('USER    (1) Final Intermolecular Energy     ='):
+                pose_data['intermolecular_energies'].append(float(line[45:].split()[0]))
+            elif is_dlg and line.startswith('USER    (2) Final Total Internal Energy     ='):
+                pose_data['internal_energies'].append(float(line[45:].split()[0]))
         elif line.startswith('BEGIN_RES'):
             location = 'flexible_residue'
         elif line.startswith('END_RES'):
