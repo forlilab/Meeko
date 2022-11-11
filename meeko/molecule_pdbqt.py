@@ -166,52 +166,51 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             buffer_smiles = None
             buffer_smiles_index_map = []
             buffer_smiles_h_parent = []
-        elif line.startswith('REMARK') or line.startswith('USER'):
-            if line.startswith('REMARK INDEX MAP') and is_first_pose:
-                integers = [int(integer) for integer in line.split()[3:]]
-                if len(integers) % 2 == 1:
-                    raise RuntimeError("Number of indices in INDEX MAP is odd")
-                for j in range(int(len(integers) / 2)): 
-                    buffer_index_map[integers[j*2]] = integers[j*2 + 1]
-            elif line.startswith('REMARK SMILES IDX') and is_first_pose:
-                integers = [int(integer) for integer in line.split()[3:]]
-                if len(integers) % 2 == 1:
-                    raise RuntimeError("Number of indices in SMILES IDX is odd")
-                buffer_smiles_index_map.extend(integers)
-            elif line.startswith('REMARK H PARENT') and is_first_pose:
-                integers = [int(integer) for integer in line.split()[3:]]
-                if len(integers) % 2 == 1:
-                    raise RuntimeError("Number of indices in H PARENT is odd")
-                buffer_smiles_h_parent.extend(integers)
-            elif line.startswith('REMARK SMILES') and is_first_pose: # must check after SMILES IDX
-                buffer_smiles = line.split()[2]
-            elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding    ='):
-                # Read free energy from output PDBQT files
-                try:
-                    # Vina
-                    energy = float(line.split()[3])
-                except:
-                    # AD4
-                    energy = float(line[45:].split()[0]) # no guarantee of space between = and number
+        elif line.startswith('REMARK INDEX MAP') and is_first_pose:
+            integers = [int(integer) for integer in line.split()[3:]]
+            if len(integers) % 2 == 1:
+                raise RuntimeError("Number of indices in INDEX MAP is odd")
+            for j in range(int(len(integers) / 2)): 
+                buffer_index_map[integers[j*2]] = integers[j*2 + 1]
+        elif line.startswith('REMARK SMILES IDX') and is_first_pose:
+            integers = [int(integer) for integer in line.split()[3:]]
+            if len(integers) % 2 == 1:
+                raise RuntimeError("Number of indices in SMILES IDX is odd")
+            buffer_smiles_index_map.extend(integers)
+        elif line.startswith('REMARK H PARENT') and is_first_pose:
+            integers = [int(integer) for integer in line.split()[3:]]
+            if len(integers) % 2 == 1:
+                raise RuntimeError("Number of indices in H PARENT is odd")
+            buffer_smiles_h_parent.extend(integers)
+        elif line.startswith('REMARK SMILES') and is_first_pose: # must check after SMILES IDX
+            buffer_smiles = line.split()[2]
+        elif line.startswith('REMARK VINA RESULT') or line.startswith('USER    Estimated Free Energy of Binding    ='):
+            # Read free energy from output PDBQT files
+            try:
+                # Vina
+                energy = float(line.split()[3])
+            except:
+                # AD4
+                energy = float(line[45:].split()[0]) # no guarantee of space between = and number
 
-                if energy_best_pose is None:
-                    energy_best_pose = energy
-                energy_current_pose = energy
+            if energy_best_pose is None:
+                energy_best_pose = energy
+            energy_current_pose = energy
 
-                # NOTE this assumes poses are sorted by increasing energy
-                diff_energy = energy_current_pose - energy_best_pose
-                if (energy_range <= diff_energy and energy_range != -1):
-                    break
+            # NOTE this assumes poses are sorted by increasing energy
+            diff_energy = energy_current_pose - energy_best_pose
+            if (energy_range <= diff_energy and energy_range != -1):
+                break
 
-                pose_data['free_energies'].append(energy)
-            elif not is_dlg and line.startswith('REMARK INTER:'):
-                pose_data['intermolecular_energies'].append(float(line.split()[2]))
-            elif not is_dlg and line.startswith('REMARK INTRA:'):
-                pose_data['internal_energies'].append(float(line.split()[2]))
-            elif is_dlg and line.startswith('USER    (1) Final Intermolecular Energy     ='):
-                pose_data['intermolecular_energies'].append(float(line[45:].split()[0]))
-            elif is_dlg and line.startswith('USER    (2) Final Total Internal Energy     ='):
-                pose_data['internal_energies'].append(float(line[45:].split()[0]))
+            pose_data['free_energies'].append(energy)
+        elif not is_dlg and line.startswith('REMARK INTER:'):
+            pose_data['intermolecular_energies'].append(float(line.split()[2]))
+        elif not is_dlg and line.startswith('REMARK INTRA:'):
+            pose_data['internal_energies'].append(float(line.split()[2]))
+        elif is_dlg and line.startswith('USER    (1) Final Intermolecular Energy     ='):
+            pose_data['intermolecular_energies'].append(float(line[45:].split()[0]))
+        elif is_dlg and line.startswith('USER    (2) Final Total Internal Energy     ='):
+            pose_data['internal_energies'].append(float(line[45:].split()[0]))
         elif line.startswith('BEGIN_RES'):
             location = 'flexible_residue'
         elif line.startswith('END_RES'):
