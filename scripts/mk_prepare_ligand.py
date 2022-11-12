@@ -289,6 +289,8 @@ if __name__ == '__main__':
             preparator.prepare(mol)
             pdbqt_string = preparator.write_pdbqt_string()
             mol_name = preparator.setup.name # setup.name may be None
+            if args.multimol_prefix is not None:
+                mol_name = '%s-%d' % (args.multimol_prefix, input_mol_counter)
             output(pdbqt_string, mol_name)
             if args.verbose: preparator.show_setup()
 
