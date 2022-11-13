@@ -342,14 +342,20 @@ class RDKitMolCreate:
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
         if combined_mol is None:
             return "", failures
+        nr_conformers = combined_mol.GetNumConformers()
+        property_names = {
+            "free_energy": "free_energies",
+            "intermolecular_energy": "intermolecular_energies",
+            "internal_energy": "internal_energies",
+        }
+        props = {}
+        for prop_sdf, prop_pdbqt in property_names.items():
+            if nr_conformers == len(pdbqt_mol._pose_data[prop_pdbqt]):
+                props[prop_sdf] = prop_pdbqt
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
-            data = {
-                "free_energy": pdbqt_mol._pose_data["free_energies"][i],
-                "intermolecular_energy": pdbqt_mol._pose_data["intermolecular_energies"][i],
-                "internal_energy": pdbqt_mol._pose_data["internal_energies"][i],
-            }
-            combined_mol.SetProp("meeko", json.dumps(data))
+            data = {k: pdbqt_mol._pose_data[v][i] for k, v in props.items()}
+            if len(data): combined_mol.SetProp("meeko", json.dumps(data))
             f.write(combined_mol, i)
         f.close()
         output_string = sio.getvalue()
