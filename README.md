@@ -1,6 +1,5 @@
 # Meeko: preparation of small molecules for AutoDock
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
 [![PyPI version fury.io](https://img.shields.io/badge/version-0.4.0-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
 
