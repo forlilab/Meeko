@@ -21,7 +21,7 @@ def find_files(directory):
 
 setup(
     name="meeko",
-    version='0.3.3',
+    version='0.4.0',
     author="Forli Lab",
     author_email="forli@scripps.edu",
     url="https://github.com/ccsb-scripps/meeko",
@@ -30,7 +30,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     scripts=["scripts/mk_prepare_ligand.py",
-             "scripts/mk_copy_coords.py"],
+             "scripts/mk_export.py"],
            #"scripts/dry.py",
            #"scripts/mapwater.py",
            #"scripts/wet.py"],

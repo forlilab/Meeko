@@ -9,7 +9,6 @@ import sys
 import warnings
 
 from rdkit import Chem
-from rdkit.six import StringIO
 
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
@@ -56,8 +55,6 @@ if __name__ == '__main__':
     suffix_name = args.suffix_name
     redirect_stdout = args.redirect_stdout
 
-    output_string = ''
-
     is_dlg = docking_results_filename.endswith('.dlg')
     pdbqt_mol = PDBQTMolecule.from_file(docking_results_filename, is_dlg=is_dlg, skip_typing=True)
 
@@ -76,25 +73,18 @@ if __name__ == '__main__':
         for pose in pdbqt_mol:
             copy_obmol = ob.OBMol(ori_obmol) # connectivity may be corrupted by removing and adding Hs multiple times
             pose.copy_coordinates_to_obmol(copy_obmol)
-            output_string += conv.WriteString(copy_obmol)
+            output_string = conv.WriteString(copy_obmol)
     else: # RDKit mol from SMILES in docking output PDBQT remarks
-        if pdbqt_mol._pose_data['smiles'] is None:
-            msg = "\n\n    \"REMARK SMILES\" not found in %s.\n" % docking_results_filename
-            msg += "    Consider using -i/--original_input\n"
-            raise RuntimeError(msg)
-        sio = StringIO()
-        f = Chem.SDWriter(sio)
-        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
-        for i, mol in enumerate(mol_list):
-            if mol is None:
-                warnings.warn("molecule %d not converted to RDKit/SD File" % i)
-        combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
-        for conformer in combined_mol.GetConformers():
-            f.write(combined_mol, conformer.GetId())
-        f.close()
-        output_string += sio.getvalue()
+        output_string, failures = RDKitMolCreate.write_sd_string(pdbqt_mol)
         output_format = 'sdf'
-
+        for i in failures:
+            warnings.warn("molecule %d not converted to RDKit/SD File" % i)
+        if len(failures) == len(pdbqt_mol._atom_annotations["mol_index"]):
+            msg = "\nCould not convert to RDKit. Maybe meeko was not used for preparing\n"
+            msg += "the input PDBQT for docking, and the SMILES string is missing?\n"
+            msg += "Except for standard protein sidechains, all ligands and flexible residues\n"
+            msg += "require a REMARK SMILES line in the PDBQT, which is added automatically by meeko."
+            raise RuntimeError(msg)
     if not redirect_stdout:
         if output_filename is None:
             output_filename = '%s%s.%s' % (os.path.splitext(docking_results_filename)[0], suffix_name, output_format)

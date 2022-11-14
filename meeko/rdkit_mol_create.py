@@ -8,6 +8,7 @@
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
+from rdkit.six import StringIO
 import json
 import os
 
@@ -332,4 +333,30 @@ class RDKitMolCreate:
             if len(expected_names) != len(set(expected_names)):
                 raise RuntimeError("repeated atom names in cls.flexres[%s]" % resname)
 
-RDKitMolCreate._verify_flexres()
+    @staticmethod
+    def write_sd_string(pdbqt_mol):
+        sio = StringIO()
+        f = Chem.SDWriter(sio)
+        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
+        failures = [i for i, mol in enumerate(mol_list) if mol is None]
+        combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
+        if combined_mol is None:
+            return "", failures
+        nr_conformers = combined_mol.GetNumConformers()
+        property_names = {
+            "free_energy": "free_energies",
+            "intermolecular_energy": "intermolecular_energies",
+            "internal_energy": "internal_energies",
+        }
+        props = {}
+        for prop_sdf, prop_pdbqt in property_names.items():
+            if nr_conformers == len(pdbqt_mol._pose_data[prop_pdbqt]):
+                props[prop_sdf] = prop_pdbqt
+        for conformer in combined_mol.GetConformers():
+            i = conformer.GetId()
+            data = {k: pdbqt_mol._pose_data[v][i] for k, v in props.items()}
+            if len(data): combined_mol.SetProp("meeko", json.dumps(data))
+            f.write(combined_mol, i)
+        f.close()
+        output_string = sio.getvalue()
+        return output_string, failures

@@ -6,8 +6,8 @@
 
 from copy import deepcopy
 from collections import defaultdict, OrderedDict
-import inspect
 import json
+import warnings
 
 import numpy as np
 from rdkit import Chem
@@ -78,11 +78,6 @@ class MoleculeSetup:
         """initialize a molecule template, either from scratch (template is None)
             or by using an existing setup (template is an instance of MoleculeSetup
         """
-        stack = inspect.stack()
-        the_class = stack[1][0].f_locals["self"].__class__.__name__
-        the_method = stack[1][0].f_code.co_name
-        #print("I was called by {}.{}()".format(the_class, the_method))
-        #print("Setup initialized with:", mol, "template:", template)
 
         self.mol = mol
         self.atom_pseudo = []
@@ -544,6 +539,24 @@ class MoleculeSetup:
 
 class RDKitMoleculeSetup(MoleculeSetup):
 
+    warned_not3D = False
+
+    def __init__(self, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+                 assign_charges=True, template=None):
+        nr_conformers = mol.GetNumConformers()
+        if nr_conformers == 0: 
+            raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
+        elif nr_conformers > 1:
+            msg = "RDKit molecule has multiple conformers. Considering only the first one." 
+            warnings.warn(msg) 
+        super().__init__(
+            mol,
+            keep_chorded_rings,
+            keep_equivalent_rings,
+            assign_charges,
+            template)
+
+
     def get_smiles_and_order(self):
 
         # 3D SDF files written by other toolkits (OEChem, ChemAxon)
@@ -616,6 +629,9 @@ class RDKitMoleculeSetup(MoleculeSetup):
         """ initialize the atom table information """
         # extract the coordinates
         c = self.mol.GetConformers()[0]
+        if not c.Is3D() and not RDKitMoleculeSetup.warned_not3D:
+            warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
+            RDKitMoleculeSetup.warned_not3D = True
         coords = c.GetPositions()
         # extract/generate charges
         if assign_charges:
@@ -667,10 +683,14 @@ class RDKitMoleculeSetup(MoleculeSetup):
         return RDKitMoleculeSetup(self.mol, template=self)
 
     def has_implicit_hydrogens(self):
-        implicit_h_count = 0
+        # based on needsHs from RDKit's AddHs.cpp
         for atom in self.mol.GetAtoms():
-            implicit_h_count += atom.GetNumImplicitHs()
-        return implicit_h_count > 0
+            nr_H_neighbors = 0
+            for neighbor in atom.GetNeighbors():
+                nr_H_neighbors += int(neighbor.GetAtomicNum() == 1)
+            if atom.GetTotalNumHs(includeNeighbors=False) > nr_H_neighbors:
+                return True
+        return False
 
 
 class OBMoleculeSetup(MoleculeSetup):

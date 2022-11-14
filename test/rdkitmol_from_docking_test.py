@@ -16,6 +16,7 @@ bond_S_bonus = 0.2
 def run(fpath, nr_expected_none, is_dlg, skip_typing):
     pdbqtmol = PDBQTMolecule.from_file(fpath, is_dlg=is_dlg, skip_typing=skip_typing)
     mols = RDKitMolCreate.from_pdbqt_mol(pdbqtmol) 
+    print(fpath, len(mols))
     assert(mols.count(None) == nr_expected_none)
     nr_conformers = set()
     for mol in mols:
@@ -50,3 +51,7 @@ def test_22_flexres():
 def test_phe_badphe():
     fpath = datadir / "arg_gln_asn_phe_badphe.pdbqt"
     run(fpath, nr_expected_none=1, is_dlg=False, skip_typing=True)
+
+def test_arg_his():
+    fpath = datadir / "arg_his.pdbqt"
+    run(fpath, nr_expected_none=0, is_dlg=False, skip_typing=True)

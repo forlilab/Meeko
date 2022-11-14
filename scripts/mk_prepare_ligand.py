@@ -164,30 +164,41 @@ class Output:
         if multimol_output_dir is None:
             multimol_output_dir = '.'
         self.multimol_output_dir = multimol_output_dir
+        self.multimol_prefix = multimol_prefix
         self.redirect_stdout = redirect_stdout
         self.output_filename = output_filename
         self.is_multimol = is_multimol
-        self.duplicate_names = []
-        self.visited_names = []
+        self.visited_filenames = set()
+        self.duplicate_filenames = set()
+        self.visited_molnames = set()
+        self.duplicate_molnames = set()
         self.num_files_written = 0
+        self.counter = 0
 
     def __call__(self, pdbqt_string, mol_name, sufix=None):
+        self.counter += 1
+        if mol_name in self.visited_molnames:
+            self.duplicate_molnames.add(mol_name)
+        self.visited_molnames.add(mol_name)
         name = mol_name
+        if self.multimol_prefix is not None:
+            name = '%s-%d' % (args.multimol_prefix, self.counter)
         if sufix is not None:
             name += '_%s' % sufix
         if self.is_multimol:
-            if name in self.visited_names:
-                self.duplicate_names.append(name)
-                is_duplicate = True
-            else:
-                self.visited_names.append(name)
-                is_duplicate = False
-            if is_duplicate:
-                print("Warning: not writing %s because of duplicate filename" % (name), file=sys.stderr)
-            else:
-                fpath = os.path.join(self.multimol_output_dir, name + '.pdbqt')
-                print(pdbqt_string, end='', file=open(fpath, 'w'))
-                self.num_files_written += 1
+            if name in self.visited_filenames:
+                self.duplicate_filenames.add(name)
+                repeat_id = 1
+                newname = name + "-again%d" % repeat_id
+                while newname in self.visited_filenames:
+                    repeat_id += 1
+                    newname = name + "-again%d" % repeat_id
+                print("Renaming %s to %s to disambiguate filename" % (name, newname), file=sys.stderr)
+                name = newname
+            self.visited_filenames.add(name)
+            fpath = os.path.join(self.multimol_output_dir, name + '.pdbqt')
+            print(pdbqt_string, end='', file=open(fpath, 'w'))
+            self.num_files_written += 1
         elif self.redirect_stdout:
             print(pdbqt_string, end='')
         else:
@@ -207,11 +218,16 @@ class Output:
     def get_duplicates_info_string(self):
         if not self.is_multimol:
             return None
-        if len(self.duplicate_names):
-            d = self.duplicate_names
-            string = "Warning: %d output PDBQTs not written due to duplicate filenames, e.g. %s" % (len(d), d[0])
+        if len(self.duplicate_molnames):
+            # with multimol_prefix with can have duplicate molecule names,
+            # but not duplicate filenames. This warning is for such cases.
+            string = "Warning: %d molecules have duplicated names" % len(self.duplicate_molnames)
         else:
-            string = "No duplicate molecule filenames were found"
+            string = "No duplicate molecule molecule names were found"
+        # if we have duplicate_filenames, we also have duplicate molecule names,
+        # but it suffices to return the string below
+        if len(self.duplicate_filenames):
+            string = "Warning: %d molecules with repeated names were suffixed with -again<n>" % len(self.duplicate_filenames)
         return string
 
 
@@ -270,7 +286,6 @@ if __name__ == '__main__':
             is_valid = mol is not None
         elif backend == 'ob':
             is_valid = mol.NumAtoms() > 0
-        input_mol_counter += int(is_valid==True)
         input_mol_skipped += int(is_valid==False)
         if not is_valid: continue
 
@@ -282,8 +297,6 @@ if __name__ == '__main__':
                 res, chain, num = cov_lig.res_id
                 pdbqt_string = preparator.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
                 mol_name = preparator.setup.name
-                if args.multimol_prefix is not None:
-                    mol_name = '%s-%d' % (args.multimol_prefix, input_mol_counter)
                 output(pdbqt_string, mol_name, sufix=cov_lig.label)
         else:
             preparator.prepare(mol)
@@ -293,6 +306,6 @@ if __name__ == '__main__':
             if args.verbose: preparator.show_setup()
 
     if output.is_multimol:
-        print("Input molecules processed: %d, skipped: %d" % (input_mol_counter, input_mol_skipped))
+        print("Input molecules processed: %d, skipped: %d" % (output.counter, input_mol_skipped))
         print("PDBQT files written: %d" % (output.num_files_written))
         print(output.get_duplicates_info_string())
