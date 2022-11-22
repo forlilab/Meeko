@@ -20,6 +20,13 @@ Input molecules must have explicit hydrogens.
 Sampling of macrocycle conformers ([paper](https://doi.org/10.1017/qrd.2022.18))
 is enabled by default.
 
+SDF format strongly preferred over Mol2.
+See
+[this discussion](https://github.com/rdkit/rdkit/discussions/3647)
+and RDKit issues
+[1755](https://github.com/rdkit/rdkit/issues/1755) and
+[917](https://github.com/rdkit/rdkit/issues/917).
+
 ## Recent changes
 
 The Python API for creating RDKit molecules from docking results changed in `v0.4.0`.
@@ -66,7 +73,7 @@ $ pip install --editable .
 
 #### 1. make PDBQT files
 AutoDock-GPU and Vina read molecules in the PDBQT format. These can be prepared
-by Meeko from SD files, or from Mol2 files, but SDF is preferred.
+by Meeko from SD files, or from Mol2 files, but SDF is strongly preferred.
 ```console
 mk_prepare_ligand.py -i molecule.sdf -o molecule.pdbqt
 mk_prepare_ligand.py -i multi_mol.sdf --multimol_outdir folder_for_pdbqt_files
