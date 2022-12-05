@@ -147,15 +147,13 @@ class PDBQTWriterLegacy():
             for key in self._numbering:
                 if key in self.setup.atom_pseudo: continue
                 if key not in order:
-                    element = self.setup.get_element(key)
-                    #atom = self.setup.mol.GetAtomWithIdx(key)
-                    if element != 1:
+                    if self.setup.get_element(key) != 1:
                         raise RuntimeError("non-Hydrogen atom unexpectedely missing from smiles!?")
                     missing_h.append(key)
                     parents = self.setup.get_neigh(key)
                     parents = [i for i in parents if i < self.setup.atom_true_count] # exclude pseudos
                     if len(parents) != 1:
-                        raise RuntimeError("expected hydrogen to have exactly one parent")
+                        raise RuntimeError("expected hydrogen to be bonded to exactly one atom")
                     parent_idx = order[parents[0]] # already 1-indexed
                     string = ' %d %d' % (parent_idx, self._numbering[key]) # key 0-indexed; _numbering[key] 1-indexed
                     strings_h_parent.append(string)

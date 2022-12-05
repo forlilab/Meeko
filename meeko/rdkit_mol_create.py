@@ -264,18 +264,31 @@ class RDKitMolCreate:
         """
 
         n_atoms = mol.GetNumAtoms()
+        n_mappings = int(len(index_map) / 2)
         conf = Chem.Conformer(n_atoms)
-        if n_atoms != len(index_map) / 2:
+        if n_atoms < n_mappings:
             raise RuntimeError(
-                "ERROR! Given {n_coords} atom coordinates"
-                "but index_map is for {n_at} atoms.".format(
-                    n_coords=n_atoms, n_at=len(index_map) / 2))
-        for i in range(n_atoms):
+                "Given {n_coords} atom coordinates "
+                "but index_map is greater at {n_at} atoms.".format(
+                    n_coords=n_atoms, n_at=n_mappings))
+        coord_is_set = [False] * n_atoms
+        for i in range(n_mappings):
             pdbqt_index = int(index_map[i * 2 + 1]) - 1
+            mol_index = int(index_map[i * 2]) - 1
             x, y, z = [float(coord) for coord in ligand_coordinates[pdbqt_index]]
-            conf.SetAtomPosition(int(index_map[i * 2]) - 1, Point3D(x, y, z))
+            conf.SetAtomPosition(mol_index, Point3D(x, y, z))
+            coord_is_set[mol_index] = True
         mol.AddConformer(conf, assignId=True)
-
+        # some hydrogens (isotopes) may have no coordinate set yet
+        for i, is_set in enumerate(coord_is_set):
+            if not is_set:
+                atom = mol.GetAtomWithIdx(i)
+                if atom.GetAtomicNum() != 1:
+                    raise RuntimeError("Only H allowed to be in SMILES but not in PDBQT")
+                neigh = atom.GetNeighbors()
+                if len(neigh) != 1:
+                    raise RuntimeError("Expected H to have one neighbor")
+                AllChem.SetTerminalAtomCoords(mol, i, neigh[0].GetIdx())
         return mol
 
 
