@@ -6,8 +6,8 @@
 
 from copy import deepcopy
 from collections import defaultdict, OrderedDict
-import inspect
 import json
+import warnings
 
 import numpy as np
 from rdkit import Chem
@@ -607,7 +607,29 @@ class MoleculeSetup:
 
 class RDKitMoleculeSetup(MoleculeSetup):
 
+    warned_not3D = False
+
+    def __init__(self, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+                 assign_charges=True, template=None):
+        nr_conformers = mol.GetNumConformers()
+        if nr_conformers == 0: 
+            raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
+        elif nr_conformers > 1:
+            msg = "RDKit molecule has multiple conformers. Considering only the first one." 
+            warnings.warn(msg) 
+        super().__init__(
+            mol,
+            keep_chorded_rings,
+            keep_equivalent_rings,
+            assign_charges,
+            template)
+
+
     def get_smiles_and_order(self):
+        """
+            return the SMILES after Chem.RemoveHs()
+            and the mapping between atom indices in smiles and self.mol
+        """
 
         # 3D SDF files written by other toolkits (OEChem, ChemAxon)
         # seem to not include the chiral flag in the bonds block, only in
@@ -616,40 +638,67 @@ class RDKitMoleculeSetup(MoleculeSetup):
         # we may need to have RDKit assign stereo from coordinates, see:
         # https://sourceforge.net/p/rdkit/mailman/message/34399371/
         mol_noH = Chem.RemoveHs(self.mol) # imines (=NH) may become chiral
+        # stereo imines [H]/N=C keep [H] after RemoveHs()
+        # H isotopes also kept after RemoveHs()
         atomic_num_mol_noH = [atom.GetAtomicNum() for atom in mol_noH.GetAtoms()]
         noH_to_H = []
-        num_H_in_noH = 0 # e.g. stereo imines [H]/N=C keep [H] after RemoveHs()
+        parents_of_hs = {}
         for (index, atom) in enumerate(self.mol.GetAtoms()):
             if atom.GetAtomicNum() == 1: continue
             for i in range(len(noH_to_H), len(atomic_num_mol_noH)):
-                if atomic_num_mol_noH[i] > 1: break
+                if atomic_num_mol_noH[i] > 1:
+                    break
+                h_atom = mol_noH.GetAtomWithIdx(len(noH_to_H))
+                assert(h_atom.GetAtomicNum() == 1)
+                neighbors = h_atom.GetNeighbors()
+                assert(len(neighbors) == 1)
+                parents_of_hs[len(noH_to_H)] = neighbors[0].GetIdx()
                 noH_to_H.append('H')
             noH_to_H.append(index)
         extra_hydrogens = len(atomic_num_mol_noH) - len(noH_to_H)
         if extra_hydrogens > 0:
             assert(set(atomic_num_mol_noH[len(noH_to_H):]) == {1})
-            noH_to_H.extend(['H'] * extra_hydrogens)
-
-        # map indices of explicit hydrogens, e.g. stereo imine [H]/N=C
-        for index in range(len(noH_to_H)):
-            if noH_to_H[index] != 'H': continue
-            h_atom = mol_noH.GetAtomWithIdx(index)
+        for i in range(extra_hydrogens):
+            h_atom = mol_noH.GetAtomWithIdx(len(noH_to_H))
             assert(h_atom.GetAtomicNum() == 1)
-            parents = h_atom.GetNeighbors()
-            assert(len(parents) == 1)
-            num_h_in_parent = len([a for a in parents[0].GetNeighbors() if a.GetAtomicNum() == 1])
-            if num_h_in_parent != 1:
-                msg = "Can't handle %d explicit H for each heavy atomin noH mol.\n" % num_h_in_parent
-                msg += "Was expecting only imines [H]N=\n"
-                raise RuntimeError(msg)
-            parent_index_in_mol_with_H = noH_to_H[parents[0].GetIdx()]
-            parent_in_mol_with_H = self.mol.GetAtomWithIdx(parent_index_in_mol_with_H)
-            h_in_mol_with_H = [a for a in parent_in_mol_with_H.GetNeighbors() if a.GetAtomicNum() == 1]
-            if len(h_in_mol_with_H) != 1:
-                msg = "Can't handle %d explicit H for each heavy atomin noH mol.\n" % len(h_in_mol_with_H)
-                msg += "Was expecting only imines [H]N=\n"
-                raise RuntimeError(msg)
-            noH_to_H[index] = h_in_mol_with_H[0].GetIdx()
+            neighbors = h_atom.GetNeighbors()
+            assert(len(neighbors) == 1)
+            parents_of_hs[len(noH_to_H)] = neighbors[0].GetIdx()
+            noH_to_H.append('H')
+
+        # noH_to_H has the same length as the number of atoms in mol_noH
+        # and each value is:
+        #    - the index of the corresponding atom in mol, if value is integer
+        #    - an hydrogen, if value is "H"
+        # now, we need to replace those "H" with integers
+        # "H" occur with stereo imine (e.g. [H]/N=C) and heavy Hs (e.g. [2H])
+        hs_by_parent = {}
+        for hidx, pidx in parents_of_hs.items():
+            hs_by_parent.setdefault(pidx, [])
+            hs_by_parent[pidx].append(hidx)
+        for pidx, hidxs in hs_by_parent.items():
+            siblings_of_h = [atom for atom in self.mol.GetAtomWithIdx(noH_to_H[pidx]).GetNeighbors() if atom.GetAtomicNum() == 1]
+            sortidx = [i for i, j in sorted(list(enumerate(siblings_of_h)), key=lambda x: x[1].GetIdx())]
+            if len(hidxs) == len(siblings_of_h):  
+                # This is the easy case, just map H to each other in the order they appear
+                for i, hidx in enumerate(hidxs):
+                    noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
+            elif len(hidxs) < len(siblings_of_h):
+                # check hydrogen isotopes
+                sibling_isotopes = [siblings_of_h[sortidx[i]].GetIsotope() for i in range(len(siblings_of_h))]
+                molnoH_isotopes = [mol_noH.GetAtomWithIdx(hidx) for hidx in hidxs]
+                matches = []
+                for i, sibling_isotope in enumerate(sibling_isotopes):
+                    for hidx in hidxs[len(matches):]:
+                        if mol_noH.GetAtomWithIdx(hidx).GetIsotope() == sibling_isotope:
+                            matches.append(i)
+                            break
+                if len(matches) != len(hidxs):
+                    raise RuntimeError("Number of matched isotopes %d differs from query Hs: %d" % (len(matched), len(hidxs)))
+                for hidx, i in zip(hidxs, matches):
+                    noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
+            else:
+                raise RuntimeError("nr of Hs in mol_noH bonded to an atom exceeds nr of Hs in self.mol")
 
         smiles = Chem.MolToSmiles(mol_noH)
         order_string = mol_noH.GetProp("_smilesAtomOutputOrder")
@@ -679,6 +728,9 @@ class RDKitMoleculeSetup(MoleculeSetup):
         """ initialize the atom table information """
         # extract the coordinates
         c = self.mol.GetConformers()[0]
+        if not c.Is3D() and not RDKitMoleculeSetup.warned_not3D:
+            warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
+            RDKitMoleculeSetup.warned_not3D = True
         coords = c.GetPositions()
         # extract/generate charges
         if assign_charges:

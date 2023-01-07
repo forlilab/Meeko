@@ -89,9 +89,23 @@ class MoleculePreparation:
         p = cls(**config)
         return p
 
-    def prepare(self, mol, root_atom_index=None, not_terminal_atoms=[]):
-        """ if protein_sidechain, C H N O will be removed,
-            root will be CA, and BEGIN/END_RES will be added.
+    def prepare(self,
+        mol,
+        root_atom_index=None,
+        not_terminal_atoms=[],
+        delete_ring_bonds=[],
+        glue_pseudo_atoms={}):
+        """ 
+        Create molecule setup from RDKit molecule
+
+        Args:
+            mol (rdkit.Chem.rdchem.Mol): with explicit hydrogens and 3D coordinates
+            root_atom_index (int): to set ROOT of torsion tree instead of searching
+            not_terminal_atoms (list): make bonds with terminal atoms rotatable
+                                       (e.g. C-Alpha carbon in flexres)
+            delete_ring_bonds (list): bonds deleted for macrocycle flexibility
+                                      each bond is a tuple of two ints (atom 0-indices)
+            glue_pseudo_atoms (dict): keys are parent atom indices, values are (x, y, z)
         """
         mol_type = type(mol)
         if not mol_type in self._classes_setup:
@@ -102,6 +116,7 @@ class MoleculePreparation:
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings)
         self.setup = setup
+        self._check_external_ring_break(delete_ring_bonds, glue_pseudo_atoms)
 
         if setup.has_implicit_hydrogens():
             self.is_ok = False
@@ -130,7 +145,7 @@ class MoleculePreparation:
             break_combo_data = None
             bonds_in_rigid_rings = None # not true, but this is only needed when breaking macrocycles
         else:
-            break_combo_data, bonds_in_rigid_rings = self._macrocycle_typer.search_macrocycle(setup)
+            break_combo_data, bonds_in_rigid_rings = self._macrocycle_typer.search_macrocycle(setup, delete_ring_bonds)
 
         # 6.  build flexibility...
         # 6.1 if macrocycles typed:
@@ -147,11 +162,11 @@ class MoleculePreparation:
         new_setup = self._flex_builder(setup,
                                        root_atom_index=root_atom_index,
                                        break_combo_data=break_combo_data,
-                                       bonds_in_rigid_rings=bonds_in_rigid_rings)
+                                       bonds_in_rigid_rings=bonds_in_rigid_rings,
+                                       glue_pseudo_atoms=glue_pseudo_atoms,
+        )
 
         self.setup = new_setup
-        # TODO re-run typing after breaking bonds
-        # self.bond_typer.set_types_legacy(mol, exclude=[macrocycle_bonds])
         self.is_ok = self._are_all_atoms_typed()
 
 
@@ -167,6 +182,19 @@ class MoleculePreparation:
         self.log = msg
         return is_ok 
 
+
+    def _check_external_ring_break(self, break_ring_bonds, glue_pseudo_atoms):
+        for (index1, index2) in break_ring_bonds:
+            has_bond = self.setup.get_bond_id(index1, index2) in self.setup.bond
+            if not has_bond:
+                raise ValueError("bond (%d, %d) not in molsetup" % (index1, index2))
+            for index in (index1, index2):
+                if index not in glue_pseudo_atoms:
+                    raise ValueError("missing glue pseudo for atom %d" % index) 
+                xyz = glue_pseudo_atoms[index]
+                if len(xyz) != 3:
+                    raise ValueError("expected 3 coordinates (got %d) for glue pseudo of atom %d" % (len(xyz), index)) 
+                
 
     def show_setup(self):
         if self.setup is not None:

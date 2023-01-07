@@ -264,18 +264,31 @@ class RDKitMolCreate:
         """
 
         n_atoms = mol.GetNumAtoms()
+        n_mappings = int(len(index_map) / 2)
         conf = Chem.Conformer(n_atoms)
-        if n_atoms != len(index_map) / 2:
+        if n_atoms < n_mappings:
             raise RuntimeError(
                 "Number of atom is rdmol {n_atoms} mismatches"
                 "number of pairs in index map {n_at}!".format(
-                    n_atoms=n_atoms, n_at=len(index_map) / 2))
-        for i in range(n_atoms):
+                    n_coords=n_atoms, n_at=n_mappings))
+        coord_is_set = [False] * n_atoms
+        for i in range(n_mappings):
             pdbqt_index = int(index_map[i * 2 + 1]) - 1
+            mol_index = int(index_map[i * 2]) - 1
             x, y, z = [float(coord) for coord in ligand_coordinates[pdbqt_index]]
-            conf.SetAtomPosition(int(index_map[i * 2]) - 1, Point3D(x, y, z))
+            conf.SetAtomPosition(mol_index, Point3D(x, y, z))
+            coord_is_set[mol_index] = True
         mol.AddConformer(conf, assignId=True)
-
+        # some hydrogens (isotopes) may have no coordinate set yet
+        for i, is_set in enumerate(coord_is_set):
+            if not is_set:
+                atom = mol.GetAtomWithIdx(i)
+                if atom.GetAtomicNum() != 1:
+                    raise RuntimeError("Only H allowed to be in SMILES but not in PDBQT")
+                neigh = atom.GetNeighbors()
+                if len(neigh) != 1:
+                    raise RuntimeError("Expected H to have one neighbor")
+                AllChem.SetTerminalAtomCoords(mol, i, neigh[0].GetIdx())
         return mol
 
 
@@ -396,14 +409,22 @@ class RDKitMolCreate:
         mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
         failures = [i for i, mol in enumerate(mol_list) if mol is None]
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
+        if combined_mol is None:
+            return "", failures
+        nr_conformers = combined_mol.GetNumConformers()
+        property_names = {
+            "free_energy": "free_energies",
+            "intermolecular_energy": "intermolecular_energies",
+            "internal_energy": "internal_energies",
+        }
+        props = {}
+        for prop_sdf, prop_pdbqt in property_names.items():
+            if nr_conformers == len(pdbqt_mol._pose_data[prop_pdbqt]):
+                props[prop_sdf] = prop_pdbqt
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
-            data = {
-                "free_energy": pdbqt_mol._pose_data["free_energies"][i],
-                "intermolecular_energy": pdbqt_mol._pose_data["intermolecular_energies"][i],
-                "internal_energy": pdbqt_mol._pose_data["internal_energies"][i],
-            }
-            combined_mol.SetProp("meeko", json.dumps(data))
+            data = {k: pdbqt_mol._pose_data[v][i] for k, v in props.items()}
+            if len(data): combined_mol.SetProp("meeko", json.dumps(data))
             f.write(combined_mol, i)
         f.close()
         output_string = sio.getvalue()

@@ -4,6 +4,8 @@
 # Meeko
 #
 
+__version__ = "0.4.0"
+
 try:
     import openbabel
 except ImportError:

@@ -1,6 +1,5 @@
 # Meeko: preparation of small molecules for AutoDock
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
 [![PyPI version fury.io](https://img.shields.io/badge/version-0.4.0-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
 
@@ -20,6 +19,13 @@ Input molecules must have explicit hydrogens.
 
 Sampling of macrocycle conformers ([paper](https://doi.org/10.1017/qrd.2022.18))
 is enabled by default.
+
+SDF format strongly preferred over Mol2.
+See
+[this discussion](https://github.com/rdkit/rdkit/discussions/3647)
+and RDKit issues
+[1755](https://github.com/rdkit/rdkit/issues/1755) and
+[917](https://github.com/rdkit/rdkit/issues/917).
 
 ## Recent changes
 
@@ -67,7 +73,7 @@ $ pip install --editable .
 
 #### 1. make PDBQT files
 AutoDock-GPU and Vina read molecules in the PDBQT format. These can be prepared
-by Meeko from SD files, or from Mol2 files, but SDF is preferred.
+by Meeko from SD files, or from Mol2 files, but SDF is strongly preferred.
 ```console
 mk_prepare_ligand.py -i molecule.sdf -o molecule.pdbqt
 mk_prepare_ligand.py -i multi_mol.sdf --multimol_outdir folder_for_pdbqt_files

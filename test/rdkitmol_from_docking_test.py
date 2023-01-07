@@ -1,5 +1,6 @@
 from meeko import RDKitMolCreate
 from meeko import PDBQTMolecule
+from meeko import MoleculePreparation
 from rdkit import Chem
 import pathlib
 
@@ -13,8 +14,11 @@ bond_range_H = [0.85, 1.15]
 bond_range_no_H = [1.16, 1.65]
 bond_S_bonus = 0.2
 
-def run(fpath, nr_expected_none, is_dlg, skip_typing):
+def check_rdkit_bond_lengths(fpath, nr_expected_none, is_dlg, skip_typing):
     pdbqtmol = PDBQTMolecule.from_file(fpath, is_dlg=is_dlg, skip_typing=skip_typing)
+    return run_from_pdbqtmol(pdbqtmol, nr_expected_none)
+
+def run_from_pdbqtmol(pdbqtmol, nr_expected_none=0):
     mols = RDKitMolCreate.from_pdbqt_mol(pdbqtmol) 
     assert(mols.count(None) == nr_expected_none)
     nr_conformers = set()
@@ -29,8 +33,8 @@ def run(fpath, nr_expected_none, is_dlg, skip_typing):
                 has_H = bond.GetBeginAtom().GetAtomicNum() == 1
                 has_H = has_H or (bond.GetEndAtom().GetAtomicNum() == 1)
                 bond_range = bond_range_H if has_H else bond_range_no_H
-                has_S = bond.GetBeginAtom().GetAtomicNum() == 16
-                has_S = has_S or (bond.GetEndAtom().GetAtomicNum() == 16)
+                has_S = bond.GetBeginAtom().GetAtomicNum() in [16, 17, 35]
+                has_S = has_S or (bond.GetEndAtom().GetAtomicNum() in [16, 17, 35])
                 if has_S:
                     bond_range = [value + bond_S_bonus for value in bond_range] 
                 a = positions[bond.GetBeginAtomIdx(), :]
@@ -41,12 +45,52 @@ def run(fpath, nr_expected_none, is_dlg, skip_typing):
 
 def test_asn_phe():
     fpath = datadir / "macrocycle-water-asn-phe.pdbqt"
-    run(fpath, nr_expected_none=0, is_dlg=False, skip_typing=True)
+    check_rdkit_bond_lengths(fpath, nr_expected_none=0, is_dlg=False, skip_typing=True)
 
 def test_22_flexres():
     fpath = datadir / "22-flexres.pdbqt"
-    run(fpath, nr_expected_none=0, is_dlg=False, skip_typing=True)
+    check_rdkit_bond_lengths(fpath, nr_expected_none=0, is_dlg=False, skip_typing=True)
 
 def test_phe_badphe():
     fpath = datadir / "arg_gln_asn_phe_badphe.pdbqt"
-    run(fpath, nr_expected_none=1, is_dlg=False, skip_typing=True)
+    check_rdkit_bond_lengths(fpath, nr_expected_none=1, is_dlg=False, skip_typing=True)
+
+def test_arg_his():
+    fpath = datadir / "arg_his.pdbqt"
+    check_rdkit_bond_lengths(fpath, nr_expected_none=0, is_dlg=False, skip_typing=True)
+
+
+# The following tests  generate the PDBQT and convert it back to RDKit,
+# as opposed to the tests above which start from PDBQT.
+
+mk_prep = MoleculePreparation()
+
+def run(sdfname):
+    fpath = datadir / sdfname
+    for mol in Chem.SDMolSupplier(str(fpath), removeHs=False):
+        mk_prep.prepare(mol)
+        pdbqt = mk_prep.write_pdbqt_string()
+        pmol = PDBQTMolecule(pdbqt)
+        run_from_pdbqtmol(pmol)
+
+def test_small_01_zero_deuterium(): run("small-01_zero-deuterium.sdf")
+def test_small_01_one_deuterium(): run("small-01_one-deuterium.sdf")
+def test_small_01_two_deuterium(): run("small-01_two-deuterium.sdf")
+def test_small_01_three_deuterium(): run("small-01_three-deuterium.sdf")
+def test_small_01_four_deuterium(): run("small-01_four-deuterium.sdf")
+
+def test_small_02_zero_deuterium(): run("small-02_zero-deuterium.sdf")
+def test_small_02_one_deuterium_A(): run("small-02_one-deuterium-A.sdf")
+def test_small_02_one_deuterium_B(): run("small-02_one-deuterium-B.sdf")
+def test_small_02_one_deuterium_C(): run("small-02_one-deuterium-C.sdf")
+def test_small_02_two_deuterium_A(): run("small-02_two-deuterium-A.sdf")
+def test_small_02_two_deuterium_B(): run("small-02_two-deuterium-B.sdf")
+def test_small_02_two_deuterium_C(): run("small-02_two-deuterium-C.sdf")
+def test_small_02_two_deuterium_D(): run("small-02_two-deuterium-D.sdf")
+def test_small_02_five_deuterium(): run("small-02_five-deuterium.sdf")
+
+def test_small_03_zero_deuterium(): run("small-03_zero-deuterium.sdf")
+def test_small_03_one_deuterium_A(): run("small-03_one-deuterium-A.sdf")
+def test_small_03_one_deuterium_B(): run("small-03_one-deuterium-B.sdf")
+def test_small_03_two_deuterium(): run("small-03_two-deuterium.sdf")
+def test_small_03_three_deuterium(): run("small-03_three-deuterium.sdf")
