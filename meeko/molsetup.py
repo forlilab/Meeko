@@ -609,21 +609,24 @@ class RDKitMoleculeSetup(MoleculeSetup):
 
     warned_not3D = False
 
-    def __init__(self, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+    def __init__(self, keep_chorded_rings=False, keep_equivalent_rings=False,
                  assign_charges=True, template=None):
+        super().__init__(
+            keep_chorded_rings,
+            keep_equivalent_rings,
+            assign_charges,
+            template)
+
+    @classmethod
+    def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+                 assign_charges=True):
         nr_conformers = mol.GetNumConformers()
         if nr_conformers == 0: 
             raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
         elif nr_conformers > 1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one." 
             warnings.warn(msg) 
-        super().__init__(
-            mol,
-            keep_chorded_rings,
-            keep_equivalent_rings,
-            assign_charges,
-            template)
-
+        return super().from_mol(mol, keep_chorded_rings, keep_equivalent_rings, assign_charges)
 
     def get_smiles_and_order(self):
         """
