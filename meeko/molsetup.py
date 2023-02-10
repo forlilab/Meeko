@@ -452,8 +452,7 @@ class MoleculeSetup:
             hydrogen_charge = self.get_charge(a)
 
             for n in neigh_list:
-                # look for carbons
-                if self.get_element(n) == 6:
+                if self.get_element(n) not in (7, 8, 9, 15, 16):
                     merged += 1
                     carbon_charge = self.get_charge(n)
                     # carbon adsorbs the final charge
