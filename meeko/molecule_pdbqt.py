@@ -141,14 +141,15 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             tmp_positions.append(xyz)
             tmp_actives.append(i)
 
-            # We store water idx separately from the rest since their number can be variable
-            if is_first_pose and atom_type != 'W':
-                atom_annotations[location].append(i)
-                atom_annotations['all'].append(i)
+            if is_first_pose:
                 atom_annotations["mol_index"].setdefault(mol_index, [])
                 atom_annotations["mol_index"][mol_index].append(i)
-                if not skip_typing:
-                    atom_annotations[atom_property_definitions[atom_type]].append(i)
+                # We store water idx separately from the rest since their number can be variable
+                if atom_type != 'W':
+                    atom_annotations[location].append(i)
+                    atom_annotations['all'].append(i)
+                    if not skip_typing:
+                        atom_annotations[atom_property_definitions[atom_type]].append(i)
 
             if atom_type == 'W':
                 water_indices.update([i])
