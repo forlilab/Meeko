@@ -24,7 +24,7 @@ else:
 
 def cmd_lineparser():
     parser = argparse.ArgumentParser(description='Export docking results to SDF format')
-    parser.add_argument(dest='docking_results_filename',
+    parser.add_argument(dest='docking_results_filename', nargs = "+",
                         action='store', help='Docking output file, either a PDBQT \
                         file from Vina or a DLG file from AD-GPU.')
     parser.add_argument('-i', '--original_input', dest='template_filename',
@@ -46,17 +46,21 @@ def cmd_lineparser():
                         is ignored.')
     return parser.parse_args()
 
+args = cmd_lineparser()
 
-if __name__ == '__main__':
-    args = cmd_lineparser()
-    docking_results_filename = args.docking_results_filename
-    template_filename = args.template_filename
-    output_filename = args.output_filename
-    suffix_name = args.suffix_name
-    redirect_stdout = args.redirect_stdout
+docking_results_filenames = args.docking_results_filename
+template_filename = args.template_filename
+output_filename = args.output_filename
+suffix_name = args.suffix_name
+redirect_stdout = args.redirect_stdout
 
-    is_dlg = docking_results_filename.endswith('.dlg')
-    pdbqt_mol = PDBQTMolecule.from_file(docking_results_filename, is_dlg=is_dlg, skip_typing=True)
+if output_filename is not None and len(docking_results_filenames) > 1:
+    print("Option -o/--output_filename incompatible with multiple input files", file=sys.stderr)
+    sys.exit()
+ 
+for filename in docking_results_filenames:
+    is_dlg = filename.endswith('.dlg')
+    pdbqt_mol = PDBQTMolecule.from_file(filename, is_dlg=is_dlg, skip_typing=True)
 
     if template_filename is not None: # OBMol from template_filename
         if not _has_openbabel:
@@ -87,8 +91,9 @@ if __name__ == '__main__':
             raise RuntimeError(msg)
     if not redirect_stdout:
         if output_filename is None:
-            output_filename = '%s%s.%s' % (os.path.splitext(docking_results_filename)[0], suffix_name, output_format)
-
-        print(output_string, file=open(output_filename, 'w'))
+            fn = '%s%s.%s' % (os.path.splitext(filename)[0], suffix_name, output_format)
+        else:
+            fn = output_filename
+        print(output_string, file=open(fn, 'w'))
     else:
         print(output_string)
