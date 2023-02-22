@@ -8,6 +8,7 @@ from copy import deepcopy
 from collections import defaultdict, OrderedDict
 import json
 import warnings
+import sys
 
 import numpy as np
 from rdkit import Chem
@@ -538,16 +539,17 @@ class MoleculeSetup:
 
 class RDKitMoleculeSetup(MoleculeSetup):
 
-    warned_not3D = False
-
     def __init__(self, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
-                 assign_charges=True, template=None):
-        nr_conformers = mol.GetNumConformers()
-        if nr_conformers == 0: 
+                 assign_charges=True, template=None, conformer_id=-1):
+        if mol.GetNumConformers() == 0: 
             raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
-        elif nr_conformers > 1:
+        self.rdkit_conformer = mol.GetConformer(conformer_id) 
+        if not self.rdkit_conformer.Is3D():
+            warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
+            RDKitMoleculeSetup.warned_not3D = True
+        if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one." 
-            warnings.warn(msg) 
+            print(msg, file=sys.stderr)
         super().__init__(
             mol,
             keep_chorded_rings,
@@ -657,12 +659,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
 
     def init_atom(self, assign_charges):
         """ initialize the atom table information """
-        # extract the coordinates
-        c = self.mol.GetConformers()[0]
-        if not c.Is3D() and not RDKitMoleculeSetup.warned_not3D:
-            warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
-            RDKitMoleculeSetup.warned_not3D = True
-        coords = c.GetPositions()
+        coords = self.rdkit_conformer.GetPositions()
         # extract/generate charges
         if assign_charges:
             rdPartialCharges.ComputeGasteigerCharges(self.mol)

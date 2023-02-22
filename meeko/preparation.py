@@ -90,11 +90,13 @@ class MoleculePreparation:
         return p
 
     def prepare(self,
-        mol,
-        root_atom_index=None,
-        not_terminal_atoms=[],
-        delete_ring_bonds=[],
-        glue_pseudo_atoms={}):
+            mol,
+            root_atom_index=None,
+            not_terminal_atoms=[],
+            delete_ring_bonds=[],
+            glue_pseudo_atoms={},
+            conformer_id=-1,
+        ):
         """ 
         Create molecule setup from RDKit molecule
 
@@ -113,7 +115,9 @@ class MoleculePreparation:
         setup_class = self._classes_setup[mol_type]
         setup = setup_class(mol,
             keep_chorded_rings=self.keep_chorded_rings,
-            keep_equivalent_rings=self.keep_equivalent_rings)
+            keep_equivalent_rings=self.keep_equivalent_rings,
+            conformer_id=conformer_id,
+            )
         self.setup = setup
         self._check_external_ring_break(delete_ring_bonds, glue_pseudo_atoms)
 
