@@ -4,6 +4,7 @@
 #
 
 import argparse
+import gzip
 import os
 import sys
 import warnings
@@ -59,8 +60,14 @@ if output_filename is not None and len(docking_results_filenames) > 1:
     sys.exit()
  
 for filename in docking_results_filenames:
-    is_dlg = filename.endswith('.dlg')
-    pdbqt_mol = PDBQTMolecule.from_file(filename, is_dlg=is_dlg, skip_typing=True)
+    is_dlg = filename.endswith('.dlg') or filename.endswith(".dlg.gz")
+    if filename.endswith(".gz"):
+        with gzip.open(filename) as f:
+            string = f.read().decode()
+    else:
+        with open(filename) as f:
+            string = f.read()
+    pdbqt_mol = PDBQTMolecule(string, is_dlg=is_dlg, skip_typing=True)
 
     if template_filename is not None: # OBMol from template_filename
         if not _has_openbabel:
