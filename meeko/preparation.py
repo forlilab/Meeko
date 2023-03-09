@@ -4,6 +4,7 @@
 # Meeko preparation
 #
 
+from inspect import signature
 import os
 import sys
 from collections import OrderedDict
@@ -71,7 +72,6 @@ class MoleculePreparation:
 
     @classmethod
     def get_defaults_dict(cls):
-        from inspect import signature
         defaults = {}
         sig = signature(cls)
         for key in sig.parameters:
