@@ -4,7 +4,6 @@
 # Meeko preparation
 #
 
-import json
 import os
 import sys
 from collections import OrderedDict
@@ -37,7 +36,7 @@ class MoleculePreparation:
             rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
             double_bond_penalty=50, atom_type_smarts={},
             add_index_map=False,
-            stop_at_defaults=False, remove_smiles=False):
+            remove_smiles=False):
 
         self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
         self.hydrate = hydrate
@@ -53,8 +52,6 @@ class MoleculePreparation:
         self.atom_type_smarts = atom_type_smarts
         self.add_index_map = add_index_map
         self.remove_smiles = remove_smiles
-
-        if stop_at_defaults: return # create an object to show just the defaults (e.g. to argparse)
 
         self.setup = None
         self._atom_typer = AtomTyper(self.atom_type_smarts)
@@ -74,8 +71,11 @@ class MoleculePreparation:
 
     @classmethod
     def get_defaults_dict(cls):
-        defaults = cls(stop_at_defaults=True).__dict__
-        defaults = json.loads(json.dumps(defaults)) # using dict -> str -> dict as a safe copy method 
+        from inspect import signature
+        defaults = {}
+        sig = signature(cls)
+        for key in sig.parameters:
+            defaults[key] = sig.parameters[key].default 
         return defaults
 
     @ classmethod
