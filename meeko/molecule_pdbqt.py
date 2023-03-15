@@ -73,7 +73,13 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
         'smiles': {},
         'smiles_index_map': {},
         'smiles_h_parent': {},
+        'cluster_id': [],
+        'rank_in_cluster': [],
+        'cluster_leads_sorted': [],
+        'cluster_size': [],
     }
+
+    tmp_cluster_data = {}
 
     buffer_index_map = {}
     buffer_smiles = None
@@ -87,6 +93,13 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
         if is_dlg:
             if line.startswith('DOCKED'):
                 line = line[8:]
+            # parse clustering
+            elif line.endswith('RANKING\n'):
+                fields = line.split()
+                cluster_id = int(fields[0])
+                subrank = int(fields[1])
+                run_id = int(fields[2])
+                tmp_cluster_data[run_id] = (cluster_id, subrank)
             else:
                 continue
 
@@ -274,6 +287,22 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
     if water_indices:
         atom_annotations['water'] = list(water_indices)
 
+    # clustering        
+    if len(tmp_cluster_data) > 0:
+        if len(tmp_cluster_data) != n_poses:
+            raise RuntimeError("Nr of poses in cluster data (%d) differs from nr of poses (%d)" % (len(tmp_cluster_data, n_poses)))
+        pose_data["cluster_id"] = [None] * n_poses
+        pose_data["rank_in_cluster"] = [None] * n_poses
+        pose_data["cluster_size"] = [None] * n_poses
+        cluster_ids = [cluster_id for _, (cluster_id, _) in tmp_cluster_data.items()]
+        n_clusters = max(cluster_ids)
+        pose_data["cluster_leads_sorted"] = [None] * n_clusters
+        for pose_index, (cluster_id, rank_in_cluster) in tmp_cluster_data.items():
+            pose_data["cluster_id"][pose_index - 1] = cluster_id
+            pose_data["rank_in_cluster"][pose_index - 1] = rank_in_cluster
+            pose_data["cluster_size"][pose_index - 1] = cluster_ids.count(cluster_id)
+            if rank_in_cluster == 1: # is cluster lead
+                pose_data["cluster_leads_sorted"][cluster_id - 1] = pose_index - 1
     return atoms, positions, atom_annotations, pose_data
 
 

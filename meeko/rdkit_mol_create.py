@@ -160,7 +160,9 @@ class RDKitMolCreate:
     }
 
     @classmethod
-    def from_pdbqt_mol(cls, pdbqt_mol): # TODO add pseudo-water (W atoms, variable nr each pose)
+    def from_pdbqt_mol(cls, pdbqt_mol, only_cluster_leads=False): # TODO add pseudo-water (W atoms, variable nr each pose)
+        if only_cluster_leads and len(pdbqt_mol._pose_data["cluster_leads_sorted"]) == 0:
+            raise RuntimeError("no cluster_leads in pdbqt_mol but only_cluster_leads=True")
         mol_list = []
         for mol_index in pdbqt_mol._atom_annotations["mol_index"]:
             smiles = pdbqt_mol._pose_data['smiles'][mol_index]
@@ -181,13 +183,16 @@ class RDKitMolCreate:
                         mol_list.append(None)
                         continue
 
-            mol = Chem.MolFromSmiles(smiles)
+            if only_cluster_leads:
+                pose_ids = pdbqt_mol._pose_data["cluster_leads_sorted"]
+            else:
+                pose_ids = range(pdbqt_mol._pose_data["n_poses"])
 
+            mol = Chem.MolFromSmiles(smiles)
             coordinates_all_poses = []
-            i = 0
-            for pose in pdbqt_mol:
-                i += 1
-                coordinates = pose.positions(atom_idx)
+            for i in pose_ids:
+                pdbqt_mol._current_pose = i
+                coordinates = pdbqt_mol.positions(atom_idx)
                 mol = cls.add_pose_to_mol(mol, coordinates, index_map) 
                 coordinates_all_poses.append(coordinates) 
 
@@ -347,10 +352,10 @@ class RDKitMolCreate:
                 raise RuntimeError("repeated atom names in cls.flexres[%s]" % resname)
 
     @staticmethod
-    def write_sd_string(pdbqt_mol):
+    def write_sd_string(pdbqt_mol, only_cluster_leads=False):
         sio = StringIO()
         f = Chem.SDWriter(sio)
-        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
+        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads)
         failures = [i for i, mol in enumerate(mol_list) if mol is None]
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
         if combined_mol is None:
@@ -360,14 +365,24 @@ class RDKitMolCreate:
             "free_energy": "free_energies",
             "intermolecular_energy": "intermolecular_energies",
             "internal_energy": "internal_energies",
+            "cluster_size": "cluster_size",
+            "cluster_id": "cluster_id",
+            "rank_in_cluster": "rank_in_cluster",
         }
         props = {}
+        if only_cluster_leads:
+            nr_poses = len(pdbqt_mol._pose_data["cluster_leads_sorted"])
+            pose_idxs = pdbqt_mol._pose_data["cluster_leads_sorted"]
+        else:
+            nr_poses = pdbqt_mol._pose_data["n_poses"]
+            pose_idxs = list(range(nr_poses))
         for prop_sdf, prop_pdbqt in property_names.items():
-            if nr_conformers == len(pdbqt_mol._pose_data[prop_pdbqt]):
+            if nr_conformers == nr_poses:
                 props[prop_sdf] = prop_pdbqt
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
-            data = {k: pdbqt_mol._pose_data[v][i] for k, v in props.items()}
+            j = pose_idxs[i]
+            data = {k: pdbqt_mol._pose_data[v][j] for k, v in props.items()}
             if len(data): combined_mol.SetProp("meeko", json.dumps(data))
             f.write(combined_mol, i)
         f.close()
