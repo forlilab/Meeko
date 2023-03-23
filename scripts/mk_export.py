@@ -42,6 +42,9 @@ def cmd_lineparser():
                         action='store', help='Add suffix to output filename if -o/--output_filename \
                         not specified. WARNING: If specified as empty string (\'\'), this will overwrite \
                         the original molecule input file (default: _docked).')
+    parser.add_argument('-c', '--only_cluster_leads', action='store_true',
+                        help='Keep top pose from each AutoDock-GPU cluster, sorted by \
+                        predicted free energy of cluster lead.')
     parser.add_argument('-', '--',  dest='redirect_stdout', action='store_true',
                         help='do not write file, redirect output to STDOUT. Arguments -o/--output_filename \
                         is ignored.')
@@ -53,6 +56,7 @@ docking_results_filenames = args.docking_results_filename
 template_filename = args.template_filename
 output_filename = args.output_filename
 suffix_name = args.suffix_name
+only_cluster_leads = args.only_cluster_leads
 redirect_stdout = args.redirect_stdout
 
 if output_filename is not None and len(docking_results_filenames) > 1:
@@ -86,7 +90,8 @@ for filename in docking_results_filenames:
             pose.copy_coordinates_to_obmol(copy_obmol)
             output_string = conv.WriteString(copy_obmol)
     else: # RDKit mol from SMILES in docking output PDBQT remarks
-        output_string, failures = RDKitMolCreate.write_sd_string(pdbqt_mol)
+        output_string, failures = RDKitMolCreate.write_sd_string(
+                pdbqt_mol, only_cluster_leads=only_cluster_leads)
         output_format = 'sdf'
         for i in failures:
             warnings.warn("molecule %d not converted to RDKit/SD File" % i)
