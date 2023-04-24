@@ -30,7 +30,8 @@ else:
 
 
 class MoleculePreparation:
-    def __init__(self, keep_nonpolar_hydrogens=False,
+    def __init__(self,
+            merge_these_atom_types=("H",),
             hydrate=False, flexible_amides=False,
             rigid_macrocycles=False, min_ring_size=7, max_ring_size=33,
             keep_chorded_rings=False, keep_equivalent_rings=False,
@@ -39,7 +40,7 @@ class MoleculePreparation:
             add_index_map=False,
             remove_smiles=False):
 
-        self.keep_nonpolar_hydrogens = keep_nonpolar_hydrogens
+        self.merge_these_atom_types = merge_these_atom_types
         self.hydrate = hydrate
         self.flexible_amides = flexible_amides
         self.rigid_macrocycles = rigid_macrocycles
@@ -133,9 +134,15 @@ class MoleculePreparation:
         self._atom_typer(setup)
         # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
         # disabled
-        # 2b. merge_h_classic
-        if not self.keep_nonpolar_hydrogens:
-            setup.merge_hydrogen()
+
+        # merge hydrogens (or any terminal atoms)
+        indices = set()
+        for atype_to_merge in self.merge_these_atom_types:
+            for index, atype in self.setup.atom_type.items():
+                if atype == atype_to_merge:
+                    indices.add(index)
+        setup.merge_terminal_atoms(indices)
+
         # 3.  assign bond types by using SMARTS...
         #     - bonds should be typed even in rings (but set as non-rotatable)
         #     - if macrocycle is selected, they will be enabled (so they must be typed already!)

@@ -80,8 +80,8 @@ def cmd_lineparser():
                         action="store_true", help="equivalent rings have the same size and neighbors")
     config_group.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
-    config_group.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",
-                        action="store_true", help="keep non-polar hydrogens (default: merge onto heavy atom)")
+    config_group.add_argument("--merge_these_atom_types", dest="merge_these_atom_types", nargs="*",
+                        help="list of atom types to merge, default is \"H\"", default=["H"])
     config_group.add_argument("-r", "--rigidify_bonds_smarts", dest="rigidify_bonds_smarts",
                         action="append", help="SMARTS patterns to rigidify bonds",
                         metavar='SMARTS')
@@ -118,6 +118,8 @@ def cmd_lineparser():
     for key in config:
         if key in args.__dict__:
             config[key] = args.__dict__[key]
+
+    print(config)
 
     if args.atom_type_smarts_json is not None:
         with open(args.atom_type_smarts_json) as f:

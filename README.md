@@ -29,6 +29,17 @@ and RDKit issues
 
 ## Recent changes
 
+Argument `keep_nonpolar_hydrogens` is replaced by `merge_these_atom_types`, both in the Python
+interface and for script `mk_prepare_ligand.py`. This change is not in a release yet but the
+code is up on the develop branch. The default is `merge_these_atom_types=("H",)`, which
+merges hydrogens typed `"H"`, keeping the current default behavior.
+To keep all hydrogens, set `merge_these_atom_types` to an empty
+list when initializing `MoleculePreparation`, or pass no atom types
+to `--merge_these_atom_types` from the command line:
+```sh
+mk_prepare_ligand.py -i molecule.sdf --merge_these_atom_types
+``` 
+
 The Python API for creating RDKit molecules from docking results changed in `v0.4.0`.
 See [example below](#2.-rdkit-molecule-from-docking-results).
 

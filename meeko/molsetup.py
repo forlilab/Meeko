@@ -441,6 +441,21 @@ class MoleculeSetup:
         #      if one of them alters the molecule, properties will not be the same
         self.mol = template.mol
 
+    def merge_terminal_atoms(self, indices):
+        """for merging hydrogens, but will merge any atom or pseudo atom
+            that is bonded to only one other atom"""
+
+        for index in indices:
+            if len(self.graph[index]) != 1:
+                msg = "Atempted to merge atom %d with %d neighbors. "
+                msg += "Only atoms with one neighbor can be merged."
+                msg = msg % (index + 1, len(self.graph[index]))
+                raise RuntimeError(msg)
+            neighbor_index = self.graph[index][0]
+            self.charge[neighbor_index] += self.get_charge(index)
+            self.charge[index] = 0.0
+            self.set_ignore(index, True)
+            
     def merge_hydrogen(self):
         """ standard method to merge hydrogens bound to carbons"""
         merged = 0
