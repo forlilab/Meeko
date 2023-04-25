@@ -456,27 +456,6 @@ class MoleculeSetup:
             self.charge[index] = 0.0
             self.set_ignore(index, True)
             
-    def merge_hydrogen(self):
-        """ standard method to merge hydrogens bound to carbons"""
-        merged = 0
-
-        for a, neigh_list in list(self.graph.items()):
-            # look for hydrogens
-            if not self.get_element(a) == 1:
-                continue
-
-            hydrogen_charge = self.get_charge(a)
-
-            for n in neigh_list:
-                if self.get_element(n) not in (7, 8, 9, 15, 16):
-                    merged += 1
-                    carbon_charge = self.get_charge(n)
-                    # carbon adsorbs the final charge
-                    self.set_charge(n, carbon_charge + hydrogen_charge)
-                    # flag hydrogen to be ignored and set its charge to 0
-                    self.set_charge(a, 0)
-                    self.set_ignore(a, True)
-
     def has_implicit_hydrogens(self):
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
