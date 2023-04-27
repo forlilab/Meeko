@@ -16,6 +16,8 @@ from rdkit.Chem import rdPartialCharges
 from .utils import rdkitutils
 from .utils import utils
 
+from prmtop2pdbqt import assign_residue_params
+
 try:
     from openbabel import openbabel as ob
     from .utils import obutils
@@ -180,6 +182,65 @@ class MoleculeSetup:
             if (i_atom in prmtop.atom_sel_idx) and (j_atom in prmtop.atom_sel_idx):
                 molsetup.add_bond(i_atom, j_atom, order=bond_order, rotatable=False)
         return molsetup
+
+    @classmethod
+    def from_pdb_and_residue_params(cls, pdb_fname, residue_params_fname=None):
+        if residue_params_fname is not None:
+            with open(residue_params_fname) as f:
+                residue_params = json.load(f)
+        with open(pdb_fname) as f:
+            lines = f.readlines()
+        x = []
+        y = []
+        z = []
+        res_list = []
+        atom_names_list = []
+        last_res = None
+        pdbinfos = []
+        for line in lines:
+            if not (line.startswith("ATOM") or line.startswith("HETATM")):
+                continue
+            resn = line[17:20]
+            resi = int(line[22:26])
+            chain = line[21:22]
+            res = (resn, resi, chain)
+            if res != last_res:
+                res_list.append(resn)
+                atom_names_list.append([])
+            last_res = res
+            atom_name = line[12:16].strip() 
+            atom_names_list[-1].append(atom_name)
+            x.append(float(line[30:38]))
+            y.append(float(line[38:46]))
+            z.append(float(line[46:54]))
+            pdbinfo = rdkitutils.PDBAtomInfo(
+                name=atom_name,
+                resName=resn,
+                resNum=resi,
+                chain=chain
+            )
+            pdbinfos.append(pdbinfo)
+
+        atom_params = assign_residue_params(res_list, atom_names_list)
+        
+        molsetup = cls()
+        charges = atom_params.pop("gasteiger")
+        atypes = atom_params.pop("atom_types")
+        for i in range(len(x)):
+            molsetup.add_atom(
+                i,
+                coord = (x[i], y[i], z[i]),
+                charge = charges[i],
+                atom_type = atypes[i],
+                element = None,
+                pdbinfo = pdbinfo,
+                chiral = False,
+                ignore = False,
+            )
+
+        molsetup.atom_params = atom_params
+
+        return molsetup 
 
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),

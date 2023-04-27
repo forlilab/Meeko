@@ -85,7 +85,7 @@ class MoleculePreparation:
         for key in bad_keys:
             print("ERROR: unexpected key \"%s\" in MoleculePreparation.from_config()" % key, file=sys.stderr)
         if len(bad_keys) > 0:
-            raise ValueError
+            raise ValueError("expected keys: %s" % expected_keys)
         p = cls(**config)
         return p
 
