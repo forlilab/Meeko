@@ -97,6 +97,8 @@ def cmd_lineparser():
                         action="store_true", help="write map of atom indices from input to pdbqt")
     config_group.add_argument("--remove_smiles", dest="remove_smiles",
                         action="store_true", help="do not write smiles as remark to pdbqt")
+    config_group.add_argument('--reactive_smarts',  help="SMARTS pattern for reactive group")
+    config_group.add_argument('--reactive_smarts_idx', help='index (1-based) of the reactive atom in --reactive_smarts', type=int)
 
     need_prody_msg = ''
     if not _has_prody: need_prody_msg = ". Needs Prody which is unavailable"
@@ -114,12 +116,17 @@ def cmd_lineparser():
 
     args = parser.parse_args(remaining_argv)
 
+    # check reactive arguments
+    if (args.reactive_smarts is None) != (args.reactive_smarts_idx is None):
+        print("Arguments --reactive_smarts and --reactive_smarts_idx require each other", file=sys.stderr)
+        sys.exit(2)
+    elif args.reactive_smarts_idx is not None:
+        args.reactive_smarts_idx -= 1 # convert from 1- to 0-index
+
     # command line arguments override config
     for key in config:
         if key in args.__dict__:
             config[key] = args.__dict__[key]
-
-    print(config)
 
     if args.atom_type_smarts_json is not None:
         with open(args.atom_type_smarts_json) as f:

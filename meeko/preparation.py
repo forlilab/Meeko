@@ -20,6 +20,7 @@ from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
 from .flexibility import FlexibilityBuilder
 from .writer import PDBQTWriterLegacy
+from .reactive import assign_reactive_types
 
 try:
     from openbabel import openbabel as ob
@@ -32,13 +33,22 @@ else:
 class MoleculePreparation:
     def __init__(self,
             merge_these_atom_types=("H",),
-            hydrate=False, flexible_amides=False,
-            rigid_macrocycles=False, min_ring_size=7, max_ring_size=33,
-            keep_chorded_rings=False, keep_equivalent_rings=False,
-            rigidify_bonds_smarts=[], rigidify_bonds_indices=[],
-            double_bond_penalty=50, atom_type_smarts={},
+            hydrate=False,
+            flexible_amides=False,
+            rigid_macrocycles=False,
+            min_ring_size=7,
+            max_ring_size=33,
+            keep_chorded_rings=False,
+            keep_equivalent_rings=False,
+            double_bond_penalty=50,
+            rigidify_bonds_smarts=[],
+            rigidify_bonds_indices=[],
+            atom_type_smarts={},
+            reactive_smarts=None,
+            reactive_smarts_idx=None,
             add_index_map=False,
-            remove_smiles=False):
+            remove_smiles=False,
+        ):
 
         self.merge_these_atom_types = merge_these_atom_types
         self.hydrate = hydrate
@@ -48,10 +58,12 @@ class MoleculePreparation:
         self.max_ring_size = max_ring_size
         self.keep_chorded_rings = keep_chorded_rings
         self.keep_equivalent_rings = keep_equivalent_rings
+        self.double_bond_penalty = double_bond_penalty
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
         self.rigidify_bonds_indices = rigidify_bonds_indices
-        self.double_bond_penalty = double_bond_penalty
         self.atom_type_smarts = atom_type_smarts
+        self.reactive_smarts = reactive_smarts
+        self.reactive_smarts_idx = reactive_smarts_idx
         self.add_index_map = add_index_map
         self.remove_smiles = remove_smiles
 
@@ -70,6 +82,8 @@ class MoleculePreparation:
             self._classes_setup[ob.OBMol] = OBMoleculeSetup
         if keep_chorded_rings and keep_equivalent_rings==False:
             warnings.warn("keep_equivalent_rings=False ignored because keep_chorded_rings=True", RuntimeWarning)
+        if (reactive_smarts is None) != (reactive_smarts_idx is None):
+            raise ValueError("reactive_smarts and reactive_smarts_idx require each other")
 
     @classmethod
     def get_defaults_dict(cls):
@@ -176,7 +190,18 @@ class MoleculePreparation:
                                        glue_pseudo_atoms=glue_pseudo_atoms,
         )
 
+        if self.reactive_smarts is not None:
+            reactive_types_dicts = assign_reactive_types(new_setup,
+                                                         self.reactive_smarts,
+                                                         self.reactive_smarts_idx)
+            print("reactive atom types:")
+            for r in reactive_types_dicts:
+                print(r)
+            raise NotImplementedError("not doing anything with reactive_types_dicts, molsetup is unchanged")
+
         self.setup = new_setup
+
+        
         self.is_ok = self._are_all_atoms_typed()
 
 
