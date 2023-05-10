@@ -1,4 +1,5 @@
 from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 import warnings
@@ -12,10 +13,11 @@ def test():
     Chem.rdDistGeom.EmbedMolecule(mol, etkdg_params)
     mk_prep = MoleculePreparation()
     with warnings.catch_warnings(record=True) as cought:
-        mk_prep.prepare(mol)
+        setups = mk_prep.prepare(mol)
         for w in cought:
             print(w)
-    assert(mk_prep.is_ok == False)
+    pdbqt, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
+    assert(is_ok == False)
 
 mk_prep = MoleculePreparation()
 

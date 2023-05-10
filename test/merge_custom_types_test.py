@@ -1,4 +1,5 @@
 from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 import warnings
@@ -24,8 +25,8 @@ def test1():
     mol = Chem.MolFromSmiles("c1ncco1") # oxazole
     mol = Chem.AddHs(mol)
     rdDistGeom.EmbedMolecule(mol)
-    preparator.prepare(mol)
-    pdbqt_string = preparator.write_pdbqt_string()
+    setups = preparator.prepare(mol)
+    pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
     
     count_HD = 0
     for line in pdbqt_string.split("\n"):
@@ -57,8 +58,8 @@ def test2():
     mol = Chem.MolFromSmiles("c1nc(CO)co1") # oxazole with an -OH
     mol = Chem.AddHs(mol)
     rdDistGeom.EmbedMolecule(mol)
-    preparator.prepare(mol)
-    pdbqt_string = preparator.write_pdbqt_string()
+    setups = preparator.prepare(mol)
+    pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
     
     count_atoms = 0
     count_HD = 0
