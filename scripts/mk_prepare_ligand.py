@@ -13,6 +13,7 @@ from rdkit import Chem
 
 from meeko import MoleculePreparation
 from meeko import rdkitutils
+from meeko import PDBQTWriterLegacy
 
 try:
     import prody
@@ -179,21 +180,21 @@ class Output:
         self.is_multimol = is_multimol
         self.visited_filenames = set()
         self.duplicate_filenames = set()
-        self.visited_molnames = set()
-        self.duplicate_molnames = set()
+        self.visited_names = set()
+        self.duplicate_names = set()
         self.num_files_written = 0
         self.counter = 0
 
-    def __call__(self, pdbqt_string, mol_name, sufix=None):
+    def __call__(self, pdbqt_string, name, suffixes=()):
         self.counter += 1
-        if mol_name in self.visited_molnames:
-            self.duplicate_molnames.add(mol_name)
-        self.visited_molnames.add(mol_name)
-        name = mol_name
+        if name in self.visited_names:
+            self.duplicate_names.add(name)
+        self.visited_names.add(name)
         if self.multimol_prefix is not None:
             name = '%s-%d' % (args.multimol_prefix, self.counter)
-        if sufix is not None:
-            name += '_%s' % sufix
+        for suffix in suffixes:
+            if suffix is not None and len(suffix) > 0:
+                name += "_" + suffix
         if self.is_multimol:
             if name in self.visited_filenames:
                 self.duplicate_filenames.add(name)
@@ -227,10 +228,10 @@ class Output:
     def get_duplicates_info_string(self):
         if not self.is_multimol:
             return None
-        if len(self.duplicate_molnames):
+        if len(self.duplicate_names):
             # with multimol_prefix with can have duplicate molecule names,
             # but not duplicate filenames. This warning is for such cases.
-            string = "Warning: %d molecules have duplicated names" % len(self.duplicate_molnames)
+            string = "Warning: %d molecules have duplicated names" % len(self.duplicate_names)
         else:
             string = "No duplicate molecule molecule names were found"
         # if we have duplicate_filenames, we also have duplicate molecule names,
@@ -238,6 +239,13 @@ class Output:
         if len(self.duplicate_filenames):
             string = "Warning: %d molecules with repeated names were suffixed with -again<n>" % len(self.duplicate_filenames)
         return string
+
+    @staticmethod
+    def get_suffixes(molsetups):
+        if len(molsetups) == 1:
+            return ("",) # no suffix needed
+        else:
+            return tuple("mk%d" % (i + 1) for i in range(len(molsetups)))
 
 
 if __name__ == '__main__':
@@ -267,19 +275,22 @@ if __name__ == '__main__':
             args.multimol_output_dir,
             args.multimol_prefix,
             args.redirect_stdout,
-            output_filename)
+            output_filename,
+            )
 
     # initialize covalent object for receptor
     if is_covalent:
         rec_filename = args.receptor
         _, rec_extension = os.path.splitext(rec_filename)
         rec_extension = rec_extension[1:].lower()
-        parser = _prody_parsers[rec_extension]
-        rec_mol = parser(rec_filename) # rec_mol is a prody molecule
-        covalent_builder = CovalentBuilder(rec_mol, args.rec_residue)
+        prody_parser = _prody_parsers[rec_extension]
+        rec_prody_mol = prody_parser(rec_filename)
+        covalent_builder = CovalentBuilder(rec_prody_mol, args.rec_residue)
 
     input_mol_counter = 0
     input_mol_skipped = 0
+    input_mol_with_failure = 0 # if reactive or covalent, each mol can yield multiple PDBQT
+    nr_failures = 0
     is_after_first = False
     preparator = MoleculePreparation.from_config(config)
     for mol in mol_supplier:
@@ -298,23 +309,45 @@ if __name__ == '__main__':
         input_mol_skipped += int(is_valid==False)
         if not is_valid: continue
 
+        this_mol_had_failure = False
+
         if is_covalent:
             for cov_lig in covalent_builder.process(mol, args.tether_smarts, args.tether_smarts_indices):
                 root_atom_index = cov_lig.indices[0]
-                preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
-                pdbqt_string = preparator.write_pdbqt_string()
+                molsetups = preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
                 res, chain, num = cov_lig.res_id
-                pdbqt_string = preparator.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
-                mol_name = preparator.setup.name
-                output(pdbqt_string, mol_name, sufix=cov_lig.label)
+                suffixes = output.get_suffixes(molsetups)
+                for molsetup, suffix in zip(molsetups, suffixes):
+                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup)
+                    if success:
+                        pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
+                        name = molsetup.name
+                        output(pdbqt_string, name, (cov_lig.label, suffix))
+                    else:
+                        nr_failures += 1
+                        this_mol_had_failure = True
+                        print(error_msg, file=sys.stderr)
+                        
         else:
-            preparator.prepare(mol)
-            pdbqt_string = preparator.write_pdbqt_string()
-            mol_name = preparator.setup.name # setup.name may be None
-            output(pdbqt_string, mol_name)
+            molsetups = preparator.prepare(mol)
+            suffixes = output.get_suffixes(molsetups) 
+            for molsetup, suffix in zip(molsetups, suffixes):
+                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup)
+                if success:
+                    name = molsetup.name
+                    output(pdbqt_string, name, (suffix,))
+                else:
+                    nr_failures += 1
+                    this_mol_had_failure = True
+                    print(error_msg, file=sys.stderr)
+                    
             if args.verbose: preparator.show_setup()
+
+        input_mol_with_failure += int(this_mol_had_failure)
 
     if output.is_multimol:
         print("Input molecules processed: %d, skipped: %d" % (output.counter, input_mol_skipped))
         print("PDBQT files written: %d" % (output.num_files_written))
+        print("PDBQT files not written due to error: %d" % (nr_failures))
+        print("Input molecules with errors: %d" % (input_mol_with_failure))
         print(output.get_duplicates_info_string())

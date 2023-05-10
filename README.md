@@ -13,7 +13,9 @@ Meeko is developed by the [Forli lab](https://forlilab.org/) at the
 [Center for Computational Structural Biology (CCSB)](https://ccsb.scripps.edu)
 at [Scripps Research](https://www.scripps.edu/).
 
+
 ## Usage notes
+
 Meeko does not calculate 3D coordinates or assign protonation states.
 Input molecules must have explicit hydrogens.
 
@@ -27,11 +29,27 @@ and RDKit issues
 [1755](https://github.com/rdkit/rdkit/issues/1755) and
 [917](https://github.com/rdkit/rdkit/issues/917).
 
+
 ## Recent changes
 
+Class `MoleculePreparation` no longer has method `write_pdbqt_string()`.
+Instead, `MoleculePreparation.prepare()` returns a list of `MoleculeSetup` objects
+that must be passed, individually, to `PDBQTWriterLegacy.write_string()`.
+```python
+from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
+
+preparator = MoleculePreparation()
+mol_setups = preparator.prepare(rdkit_molecule_3D_with_Hs)
+for setup in mol_setups:
+    pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setup)
+    if is_ok:
+        print(pdbqt_string, end="")
+```
+
 Argument `keep_nonpolar_hydrogens` is replaced by `merge_these_atom_types`, both in the Python
-interface and for script `mk_prepare_ligand.py`. This change is not in a release yet but the
-code is up on the develop branch. The default is `merge_these_atom_types=("H",)`, which
+interface and for script `mk_prepare_ligand.py`.
+The default is `merge_these_atom_types=("H",)`, which
 merges hydrogens typed `"H"`, keeping the current default behavior.
 To keep all hydrogens, set `merge_these_atom_types` to an empty
 list when initializing `MoleculePreparation`, or pass no atom types
@@ -39,11 +57,6 @@ to `--merge_these_atom_types` from the command line:
 ```sh
 mk_prepare_ligand.py -i molecule.sdf --merge_these_atom_types
 ``` 
-
-The Python API for creating RDKit molecules from docking results changed in `v0.4.0`.
-See [example below](#2.-rdkit-molecule-from-docking-results).
-
-The `--pH` option was removed since `v0.3.0`. See issue https://github.com/forlilab/Meeko/issues/11 for more info.
 
 ## Dependencies
 
@@ -120,6 +133,7 @@ $ obabel -:"C1C=CCO1" -o pdbqt --gen3d | obabel -i pdbqt -o smi
 
 ```python
 from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 
 input_molecule_file = "example/BACE_macrocycle/BACE_4.sdf"
@@ -127,9 +141,10 @@ input_molecule_file = "example/BACE_macrocycle/BACE_4.sdf"
 # there is one molecule in this SD file, this loop iterates just once
 for mol in Chem.SDMolSupplier(input_molecule_file, removeHs=False):
     preparator = MoleculePreparation()
-    preparator.prepare(mol)
-    preparator.show_setup() # optional
-    pdbqt_string = preparator.write_pdbqt_string()
+    mol_setups = preparator.prepare(mol)
+    for setup in mol_setups:
+        setup.show() # optional
+        pdbqt_string = PDBQTWriterLegacy.write_string(setup)
 ```
 At this point, `pdbqt_string` can be written to a file for
 docking with AutoDock-GPU or Vina, or passed directly to Vina within Python

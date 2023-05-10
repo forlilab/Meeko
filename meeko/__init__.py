@@ -30,12 +30,15 @@ from .atomtyper import AtomTyper
 from .receptor_pdbqt import PDBQTReceptor
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
+from .writer import PDBQTWriterLegacy
 from . import analysis
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
-        'RDKitMolCreate']
+        'RDKitMolCreate',
+        'PDBQTWriterLegacy',
+]
 
 if _has_openbabel:
     from .molsetup import OBMoleculeSetup
