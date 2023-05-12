@@ -40,7 +40,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=['numpy>=1.18'],
-    python_requires='>=3.5.*',
+    python_requires='>=3.5',
     license="LGPL-2.1",
     keywords=["molecular modeling", "drug design",
             "docking", "autodock"],
