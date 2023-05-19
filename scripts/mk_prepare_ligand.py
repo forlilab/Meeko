@@ -98,8 +98,9 @@ def cmd_lineparser():
                         action="store_true", help="write map of atom indices from input to pdbqt")
     config_group.add_argument("--remove_smiles", dest="remove_smiles",
                         action="store_true", help="do not write smiles as remark to pdbqt")
-    config_group.add_argument('--reactive_smarts',  help="SMARTS pattern for reactive group")
-    config_group.add_argument('--reactive_smarts_idx', help='index (1-based) of the reactive atom in --reactive_smarts', type=int)
+    reactive_group = parser.add_argument_group("Reactive docking")
+    reactive_group.add_argument('--reactive_smarts',  help="SMARTS pattern for reactive group")
+    reactive_group.add_argument('--reactive_smarts_idx', help='index (1-based) of the reactive atom in --reactive_smarts', type=int)
 
     need_prody_msg = ''
     if not _has_prody: need_prody_msg = ". Needs Prody which is unavailable"
