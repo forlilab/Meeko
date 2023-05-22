@@ -4,6 +4,8 @@ from os import linesep as os_linesep
 import json
 import pathlib
 
+from .reactive import get_reactive_atype
+
 pkg_dir = pathlib.Path(__file__).parents[0]
 with open(pkg_dir / "data" / "residue_params.json") as f:
     residue_params = json.load(f)
@@ -89,7 +91,7 @@ class Receptor:
             for atom_name in atom_names:
                 name_index = residue_params[r_id]["atom_names"].index(atom_name)
                 for param in residue_params[r_id].keys():
-                    if param == "atom_names":
+                    if param in ["atom_names", "bond_cut_atoms", "bonds"]:
                         continue
                     if param not in atom_params:
                         atom_params[param] = [None] * atom_counter 
@@ -117,11 +119,11 @@ class Receptor:
         success = True
         error_msg = ""
         line_count = 0
-        for line in pdb_string.split("\n"):
+        for line in pdb_string.split(os_linesep):
             line_count += 1
             if line.startswith("HETATM"):
                 success = False
-                error_msg += "found HETATM record on line %d\n" % line_count
+                error_msg += "found HETATM record on line %d" % line_count + os_linesep
             elif line.startswith("ATOM"):
                 resname = line[17:20] 
                 resnum = int(line[22:26])
@@ -167,11 +169,15 @@ class Receptor:
         return pdbqt_string
 
 
-    def prepare_flexres_from_template(self, res_id):
+    def prepare_flexres_from_template(self, res_id, atom_index=0):
         success = True
         error_msg = ""
-        output = {"pdbqt": "", "flex_lines": []}
+        output = {"pdbqt": "", "flex_lines": [], "atom_index": atom_index}
         resname = res_id[1]
+        if resname not in self.flexres_templates:
+            success = False
+            error_msg = "no flexible residue template for resname %s, sorry" % resname
+            return output, success, error_msg
         template = self.flexres_templates[resname]
         if res_id not in self.line_idx_by_res:
             success = False
@@ -206,35 +212,77 @@ class Receptor:
 
         # create output string
         n_lines = len(template['is_atom'])
-        atom_index = 0
         for i in range(n_lines):
             if template['is_atom'][i]:
                 atom_index += 1
                 name = template['atom_name'][i]
-                output["pdbqt"] += atom_lines_by_name[name] % atom_index + "\n"
+                output["pdbqt"] += atom_lines_by_name[name] % atom_index + os_linesep
             else:
-                output["pdbqt"] += template['original_line'][i] + "\n" # e.g. BRANCH keywords
+                output["pdbqt"] += template['original_line'][i] + os_linesep # e.g. BRANCH keywords
 
+        output["atom_index"] = atom_index
         return output, success, error_msg
 
+    @staticmethod
+    def make_flexres_reactive(pdbqtstr, reactive_name, resname, prefix_atype="", residue_params=residue_params):
+        atom_names = residue_params[resname]["atom_names"]
+        bonds = residue_params[resname]["bonds"]
+        def get_neigh(idx, bonds):
+            neigh = set()
+            for (i, j) in bonds:
+                if i == idx:
+                    neigh.add(j)
+                elif j == idx:
+                    neigh.add(i)
+            return neigh
+        react_idx = atom_names.index(reactive_name)
+        one_bond_away = get_neigh(react_idx, bonds)
+        two_bond_away = set()
+        for i in one_bond_away:
+            for j in get_neigh(i, bonds):
+                if (j != react_idx) and (j not in one_bond_away):
+                    two_bond_away.add(j)
+        names_1bond = [atom_names[i] for i in one_bond_away]
+        names_2bond = [atom_names[i] for i in two_bond_away]
+        new_pdbqt_str = "" 
+        for i, line in enumerate(pdbqtstr.split(os_linesep)[:-1]):
+            if line.startswith("ATOM") or line.startswith("HETATM"):
+                name = line[12:16].strip()
+                atype = line[77:].strip()
+                if name == reactive_name:
+                    new_type = prefix_atype + get_reactive_atype(atype, 1)
+                elif name in names_1bond:
+                    new_type = prefix_atype + get_reactive_atype(atype, 2)
+                elif name in names_2bond:
+                    new_type = prefix_atype + get_reactive_atype(atype, 3)
+                else:
+                    new_type = atype
+                new_pdbqt_str += line[:77] + new_type + os_linesep
+            else:
+                new_pdbqt_str += line + os_linesep
+        return new_pdbqt_str
+         
 
     def write_pdbqt_string(self, flex_res=()):
         success = True
         error_msg = ""
         
         pdbqt = {"rigid": "",
-                 "flex":  ""}
+                 "flex":  {}}
         flex_line_idxs = []
-        for res_id in flex_res:
-            output, success_, error_msg_ = self.prepare_flexres_from_template(res_id)
+        atom_index = 0
+        for res_id in set(flex_res):
+            output, success_, error_msg_ = self.prepare_flexres_from_template(res_id, atom_index)
+            atom_index = output["atom_index"] # next residue starts here
             success &= success_
             error_msg += error_msg_
             flex_line_idxs.extend(output["flex_lines"])
-            pdbqt["flex"] += "BEGIN_RES %3s %1s%4d" % (res_id) + os_linesep
-            pdbqt["flex"] += output["pdbqt"]
-            pdbqt["flex"] += "END_RES %3s %1s%4d" % (res_id) + os_linesep
+            pdbqt["flex"][res_id] = ""
+            pdbqt["flex"][res_id] += "BEGIN_RES %3s %1s%4d" % (res_id) + os_linesep
+            pdbqt["flex"][res_id] += output["pdbqt"]
+            pdbqt["flex"][res_id] += "END_RES %3s %1s%4d" % (res_id) + os_linesep
 
-        # rigid
+        # use non-flex lines for rigid part
         for i, line in enumerate(self.lines):
             if i not in flex_line_idxs: 
                 pdbqt["rigid"] += line + os_linesep

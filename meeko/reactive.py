@@ -102,9 +102,9 @@ class ReactiveAtomTyper:
 
 
 reactive_typer = ReactiveAtomTyper()
+get_reactive_atype = reactive_typer.get_reactive_atype
 
-
-def assign_reactive_types(molsetup, smarts, smarts_idx, get_reactive_atype=reactive_typer.get_reactive_atype):
+def assign_reactive_types(molsetup, smarts, smarts_idx, get_reactive_atype=get_reactive_atype):
 
     atype_dicts = []
     for atom_indices in molsetup.find_pattern(smarts):
