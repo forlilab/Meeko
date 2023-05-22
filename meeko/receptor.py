@@ -169,9 +169,10 @@ class Receptor:
         return pdbqt_string
 
 
-    def prepare_flexres_from_template(self, res_id, atom_index=0):
+    def write_flexres_from_template(self, res_id, atom_index=0):
         success = True
         error_msg = ""
+        branch_offset = atom_index # templates assume first atom is 1
         output = {"pdbqt": "", "flex_lines": [], "atom_index": atom_index}
         resname = res_id[1]
         if resname not in self.flexres_templates:
@@ -218,7 +219,13 @@ class Receptor:
                 name = template['atom_name'][i]
                 output["pdbqt"] += atom_lines_by_name[name] % atom_index + os_linesep
             else:
-                output["pdbqt"] += template['original_line'][i] + os_linesep # e.g. BRANCH keywords
+                line = template['original_line'][i]
+                if branch_offset > 0 and (line.startswith("BRANCH") or line.startswith("ENDBRANCH")):
+                    keyword, i, j = line.split()
+                    i = int(i) + branch_offset
+                    j = int(j) + branch_offset
+                    line = "%s %3d %3d" % (keyword, i, j)
+                output["pdbqt"] += line + os_linesep # e.g. BRANCH keywords
 
         output["atom_index"] = atom_index
         return output, success, error_msg
@@ -272,7 +279,7 @@ class Receptor:
         flex_line_idxs = []
         atom_index = 0
         for res_id in set(flex_res):
-            output, success_, error_msg_ = self.prepare_flexres_from_template(res_id, atom_index)
+            output, success_, error_msg_ = self.write_flexres_from_template(res_id, atom_index)
             atom_index = output["atom_index"] # next residue starts here
             success &= success_
             error_msg += error_msg_
