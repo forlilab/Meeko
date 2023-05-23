@@ -7,6 +7,8 @@ import pathlib
 import sys
 
 from meeko import Receptor
+from meeko import reactive_typer
+from meeko import get_reactive_config
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
@@ -91,6 +93,8 @@ def parse_resname_and_name(string):
     return (resname, name), ok, err
 
 
+
+
 class TalkativeParser(argparse.ArgumentParser):
     def error(self, message):
         """overload to print_help for every error"""
@@ -112,6 +116,10 @@ def get_args():
                         help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific")
     parser.add_argument('-s', '--reactive_name_specific', action="append", default=[],
                         help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.")
+    parser.add_argument('--r_eq_12', default=2.5, type=float, help="r_eq for reactive atoms (1-2 interaction)")
+    parser.add_argument('--eps_12', default=1.8, type=float, help="epsilon for reactive atoms (1-2 interaction)")
+    parser.add_argument('--r_eq_13_scaling', default=0.5, type=float, help="r_eq scaling for 1-3 interaction across reactive atoms")
+    parser.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
     args = parser.parse_args()
 
     if (args.pdb is None) == (args.pdbqt is None):
@@ -193,6 +201,7 @@ else:
     sys.exit(2)
 
 if len(all_flexres) > 0:
+    print()
     print("Flexible residues:")
     print("chain resname resnum is_reactive reactive_atom")
     string = "%5s%8s%7d%12s%14s"
@@ -247,3 +256,74 @@ else:
         f.write(pdbqt["rigid"]) 
     with open(flex_fn, "w") as f:
         f.write(all_flex_pdbqt)
+
+    # configuration info for AutoDock-GPU reactive docking
+    if len(reactive_flexres) > 0:
+        any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
+                              "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]
+        any_lig_reac_types = []
+        for order in (1, 2, 3):
+            for t in any_lig_base_types:
+                any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
+
+        rec_reac_types = []
+        for line in all_flex_pdbqt.split(os_linesep):
+            if line.startswith("ATOM") or line.startswith("HETATM"):
+                atype = line[77:].strip()
+                basetype, _ = reactive_typer.get_basetype_and_order(atype) 
+                if basetype is not None: # is None if not reactive
+                    rec_reac_types.append(line[77:].strip())
+
+        derivtypes, modpairs, collisions = get_reactive_config(
+                                        any_lig_reac_types,
+                                        rec_reac_types,
+                                        args.r_eq_12,
+                                        args.eps_12,
+                                        args.r_eq_13_scaling,
+                                        args.r_eq_14_scaling)
+
+        if len(collisions) > 0:
+            collision_fn = str(outpath.with_suffix(".atype_collisions"))
+            collision_str = ""
+            for t1, t2 in collisions:
+                collision_str += "%3s %3s" % (t1, t2) + os_linesep
+            with open(collision_fn, "w") as f:
+                f.write(collision_str)
+            print()
+            print("%d type pairs may lead to intra-molecular reactions. These were written to '%s'" % (
+                len(collisions), collision_fn))
+            print()
+
+        # in modpairs (dict): types are keys, parameters are values
+        # now we will write a configuration file with nbp keywords
+        # that AD-GPU reads using the --import_dpf flag
+        # nbp stands for "non-bonded potential" or "non-bonded pairwise"
+        line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
+        config = ""
+        nbp_count = 0
+        for (t1, t2), param in modpairs.items():
+            config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
+            nbp_count += 1
+        config_fn = str(outpath.with_suffix(".reactive_nbp"))
+        with open(config_fn, "w") as f:
+            f.write(config_fn)
+        print()
+        print("Wrote %d non-bonded reactive pairs to file '%s'." % (nbp_count, config_fn))
+        print("Use the following option with AutoDock-GPU:")
+        print("    --import_dpf %s" % (config_fn))
+        print()
+
+        derivtype_list = []
+        new_type_count = 0
+        for basetype, reactypes in derivtypes.items():
+            s = ",".join(reactypes) + "=" + basetype
+            derivtype_list.append(s)
+            new_type_count += len(reactypes)
+        if len(derivtype_list) > 0:
+            derivtype_fn = str(outpath.with_suffix(".derivtype"))
+            config_str = "--derivtype " + "/".join(derivtype_list)
+            with open(derivtype_fn, "w") as f:
+                f.write(config_str + os_linesep)
+            print("AutoDock-GPU will need to derive %d reactive types from standard atom types." % new_type_count)
+            print("The required --derivtype command has been written to '%s'. " % derivtype_fn)
+            print()

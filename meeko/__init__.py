@@ -31,6 +31,8 @@ from .receptor_pdbqt import PDBQTReceptor
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
 from .receptor import Receptor
+from .reactive import reactive_typer
+from .reactive import get_reactive_config
 from .writer import PDBQTWriterLegacy
 from . import analysis
 
@@ -40,6 +42,8 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'RDKitMolCreate',
         'PDBQTWriterLegacy',
         'Receptor',
+        'reactive_typer',
+        'get_reactive_config',
 ]
 
 if _has_openbabel:

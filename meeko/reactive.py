@@ -5,13 +5,13 @@
 #
 
 from math import sqrt
+from os import linesep as os_linesep
 
 
 class ReactiveAtomTyper:
 
     def __init__(self):
 
-        self.FE_coeff_vdW = 0.1662
         self.ff = {
             "HD": {"rii": 2.00, "epsii": 0.020},
             "C":  {"rii": 4.00, "epsii": 0.150},
@@ -34,14 +34,16 @@ class ReactiveAtomTyper:
             "W":  {"rii": 0.00, "epsii": 0.000},
         }
         std_atypes = list(self.ff.keys())
-        rt, r2s = self.enumerate_reactive_types(std_atypes)
+        rt, r2s, r2o = self.enumerate_reactive_types(std_atypes)
         self.reactive_type = rt
         self.reactive_to_std_atype_mapping = r2s
+        self.reactive_to_order = r2o
 
     @staticmethod
     def enumerate_reactive_types(atypes):
         reactive_type = {1:{}, 2:{}, 3:{}}
         reactive_to_std_atype_mapping = {}
+        reactive_to_order = {}
         for order in (1,2,3):
             for atype in atypes:
                 if len(atype) == 1:
@@ -50,17 +52,20 @@ class ReactiveAtomTyper:
                     new_atype = "%s%d" % (atype[0], order+3)
                     if new_atype in reactive_to_std_atype_mapping:
                         new_atype = "%s%d" % (atype[0], order+6)
+                        if new_atype in reactive_to_std_atype_mapping:
+                            raise RuntimeError("ran out of numbers for reactive types :(")
                 reactive_to_std_atype_mapping[new_atype] = atype
+                reactive_to_order[new_atype] = order
                 reactive_type[order][atype] = new_atype
                 ### # avoid atom type clashes with multiple reactive residues by
                 ### # prefixing with the index of the residue, e.g. C3 -> 1C3.
                 ### for i in range(8): # hopefully 8 reactive residues is sufficient
                 ###     prefixed_new_atype = '%d%s' % ((i+1), new_atype)
                 ###     reactive_to_std_atype_mapping[prefixed_new_atype] = atype
-        return reactive_type, reactive_to_std_atype_mapping
+        return reactive_type, reactive_to_std_atype_mapping, reactive_to_order
 
 
-    def get_scaled_parm(self, atype1, atype2, r_scaling=1.0, ignore=['HD', 'F'], apply_vdw_coeff=True):
+    def get_scaled_parm(self, atype1, atype2):
         """ generate scaled parameters for a pairwise interaction between two atoms involved in a
             reactive interaction
 
@@ -73,24 +78,17 @@ class ReactiveAtomTyper:
                 #        geometric mean of the epsii values for the two atom types.
                 #        epsij = sqrt( epsii * epsjj )
         """
-        if apply_vdw_coeff is True:
-            vdw_coeff = self.FE_coeff_vdW
-        else:
-            vdw_coeff = 1.0
-        atype1_org = self.reactive_to_std_atype_mapping[atype1]
-        atype2_org = self.reactive_to_std_atype_mapping[atype2]
-        if (atype1_org in ignore) or (atype2_org in ignore):
-            rij = 0.01
-            epsij = 0.001
-        else:
-            atype1_rii = self.ff[atype1_org]['rii']
-            atype1_epsii = self.ff[atype1_org]['epsii']
-            atype2_rii = self.ff[atype2_org]['rii']
-            atype2_epsii = self.ff[atype2_org]['epsii']
-            atype1_rii = atype1_rii
-            atype2_rii = atype2_rii
-            rij = r_scaling * ( atype1_rii + atype2_rii) / 2
-            epsij = sqrt( atype1_epsii * atype2_epsii) * vdw_coeff
+
+        atype1_org, _ = self.get_basetype_and_order(atype1)
+        atype2_org, _ = self.get_basetype_and_order(atype2)
+        atype1_rii = self.ff[atype1_org]['rii']
+        atype1_epsii = self.ff[atype1_org]['epsii']
+        atype2_rii = self.ff[atype2_org]['rii']
+        atype2_epsii = self.ff[atype2_org]['epsii']
+        atype1_rii = atype1_rii
+        atype2_rii = atype2_rii
+        rij = (atype1_rii + atype2_rii) / 2
+        epsij = sqrt(atype1_epsii * atype2_epsii)
         return rij, epsij
 
 
@@ -99,6 +97,17 @@ class ReactiveAtomTyper:
         if atype in ['CG0', 'CG1', 'CG2', 'CG3', "CG4", "CG5", "CG6", "CG7", "CG8"]:
             return None
         return self.reactive_type[reactive_order][atype]
+
+
+    def get_basetype_and_order(self, atype):
+        if len(atype) > 1:
+            if atype[0].isdecimal():
+                atype = atype[1:] # reactive residues are prefixed with a digit
+        if atype not in self.reactive_to_std_atype_mapping:
+            return None, None
+        basetype = self.reactive_to_std_atype_mapping[atype]
+        order = self.reactive_to_order[atype]
+        return basetype, order
 
 
 reactive_typer = ReactiveAtomTyper()
@@ -133,4 +142,67 @@ def assign_reactive_types(molsetup, smarts, smarts_idx, get_reactive_atype=get_r
         atype_dicts.append(atypes)
 
     return atype_dicts
-    
+
+
+# enumerate atom type pair combinations for reactive docking configuration file
+
+def get_reactive_config(types_1, types_2, eps12, r12, r13_scaling, r14_scaling, ignore=['HD', 'F'], coeff_vdw=.1662):
+    """
+    Args:
+        types_1 (list): 1st set of atom types
+        types_2 (list): 2nd set of atom types
+
+    Returns:
+        derivtypes (dict):
+        modpairs (list):
+    """
+
+    # for reactive pair (1-2 interaction) use 13-7 potential
+    n12 = 13
+    m12 = 7
+
+    # for 1-3 and 1-4 interactions stick to 12-6 potential
+    n = 12
+    m = 6
+
+    derivtypes = {}
+    for reactype in set(types_1).union(set(types_2)):
+        basetype, order = reactive_typer.get_basetype_and_order(reactype)
+        derivtypes.setdefault(basetype, [])
+        derivtypes[basetype].append(reactype)
+
+    scaling = {3: r13_scaling, 4: r14_scaling}
+
+    modpairs = {}
+    for t1 in set(types_1):
+        basetype_1, order_1 = reactive_typer.get_basetype_and_order(t1)
+        for t2 in set(types_2):
+            basetype_2, order_2 = reactive_typer.get_basetype_and_order(t2)
+            order = order_1 + order_2
+            pair_id = tuple(sorted([t1, t2]))
+            if order == 2: # 1-2 interaction: these are the reactive atoms.
+                modpairs[pair_id] = {"eps": eps12, "r_eq": r12, "n": n12, "m": m12}
+            elif order == 3 or order == 4:
+                if basetype_1 in ignore or basetype_2 in ignore:
+                    rij = 0.01
+                    epsij = 0.001
+                else:
+                    rij, epsij = reactive_typer.get_scaled_parm(t1, t2)
+                    rij *= scaling[order]
+                    epsij *= coeff_vdw
+                modpairs[pair_id] = {"eps": epsij, "r_eq": rij, "n": n, "m": m}
+
+    # pairs of types across sets that also happen within each set
+    def enum_pairs(types):
+        pairs = set()
+        for i in range(len(types_1)):
+            for j in range(i, len(types_1)):
+                pair_id = tuple(sorted([types_1[i], types_1[j]]))
+                pairs.add(pair_id)
+        return pairs
+    collisions = []
+    collisions.extend([p for p in enum_pairs(types_1) if p in modpairs])
+    collisions.extend([p for p in enum_pairs(types_2) if p in modpairs])
+    collisions = set(collisions)
+
+    return derivtypes, modpairs, collisions
