@@ -540,8 +540,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
         molsetup.init_atom(assign_charges, coords)
-        molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
+        molsetup.init_bond()
         return molsetup
 
 
