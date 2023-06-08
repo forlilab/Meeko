@@ -15,7 +15,7 @@ with open(pkg_dir / "data" / "flexres_templates.json") as f:
 # https://stackoverflow.com/questions/6028000/how-to-read-a-static-file-from-inside-a-python-package
 
 
-def write_pdbqt_line(atomidx, x, y, z, charge, atom_name, res_name, res_num, atom_type, chain=""):
+def write_pdbqt_line(atomidx, x, y, z, charge, atom_name, res_name, res_num, atom_type, chain):
     record_type = "ATOM"
     alt_id = " "
     in_code = ""
@@ -164,6 +164,7 @@ class Receptor:
                         resname,
                         resnum,
                         atom_types[atom_index],
+                        chain,
                     )
                 atom_index += 1
         return pdbqt_string
