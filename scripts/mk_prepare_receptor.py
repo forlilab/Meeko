@@ -306,7 +306,7 @@ else:
             nbp_count += 1
         config_fn = str(outpath.with_suffix(".reactive_nbp"))
         with open(config_fn, "w") as f:
-            f.write(config_fn)
+            f.write(config)
         print()
         print("Wrote %d non-bonded reactive pairs to file '%s'." % (nbp_count, config_fn))
         print("Use the following option with AutoDock-GPU:")
