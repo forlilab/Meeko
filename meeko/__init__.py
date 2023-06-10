@@ -28,9 +28,10 @@ from .utils import geomutils
 from .utils import utils
 from .atomtyper import AtomTyper
 from .receptor_pdbqt import PDBQTReceptor
+from .receptor_pdbqt import get_gpf_string
+from .receptor_pdbqt import box_to_pdb_string
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
-from .receptor import Receptor
 from .reactive import reactive_typer
 from .reactive import get_reactive_config
 from .writer import PDBQTWriterLegacy
@@ -41,9 +42,10 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
         'RDKitMolCreate',
         'PDBQTWriterLegacy',
-        'Receptor',
         'reactive_typer',
         'get_reactive_config',
+        'get_gpf_string',
+        'box_to_pdb_string',
 ]
 
 if _has_openbabel:

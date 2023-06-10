@@ -4,14 +4,36 @@
 # Meeko
 #
 
-import os
 from collections import defaultdict
+import json
+from os import linesep as os_linesep
+import pathlib
 
 import numpy as np
 from scipy import spatial
 
 from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
+from .reactive import get_reactive_atype
+
+pkg_dir = pathlib.Path(__file__).parents[0]
+with open(pkg_dir / "data" / "residue_params.json") as f:
+    residue_params = json.load(f)
+with open(pkg_dir / "data" / "flexres_templates.json") as f:
+    flexres_templates = json.load(f)
+# the above is controversial, see
+# https://stackoverflow.com/questions/6028000/how-to-read-a-static-file-from-inside-a-python-package
+
+def _write_pdbqt_line(atomidx, x, y, z, charge, atom_name, res_name, res_num, atom_type, chain,
+                      alt_id=" ", in_code="", occupancy=1.0, temp_factor=0.0, record_type="ATOM"):
+    if len(atom_name) > 4:
+        raise ValueError("max length of atom_name is 4 but atom name is %s" % atom_name)
+    atom_name = "%-3s" % atom_name
+    line = "{:6s}{:5d} {:4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
+    line += os_linesep
+    return line.format(record_type, atomidx, atom_name, alt_id, res_name, chain,
+                   res_num, in_code, x, y, z,
+                   occupancy, temp_factor, charge, atom_type)
 
 
 atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
@@ -25,39 +47,57 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
                              'CG0': 'glue', 'CG1': 'glue', 'CG2': 'glue', 'CG3': 'glue'}
 
 
-def _read_receptor_pdbqt_file(pdbqt_filename):
-    i = 0
+def _read_receptor_pdbqt_string(pdbqt_string, skip_typing=False):
     atoms = []
     atoms_dtype = [('idx', 'i4'), ('serial', 'i4'), ('name', 'U4'), ('resid', 'i4'),
                    ('resname', 'U3'), ('chain', 'U1'), ("xyz", "f4", (3)),
-                   ('partial_charges', 'f4'), ('atom_type', 'U2')]
+                   ('partial_charges', 'f4'), ('atom_type', 'U2'),
+                   ('alt_id', 'U1'), ('in_code', 'U1'),
+                   ('occupancy', 'f4'), ('temp_factor', 'f4'), ('record_type', 'U6')
+                  ]
     atom_annotations = {'hb_acc': [], 'hb_don': [],
                         'all': [], 'vdw': [],
                         'metal': []}
     # TZ is a pseudo atom for AutoDock4Zn FF
     pseudo_atom_types = ['TZ']
 
-    with open(pdbqt_filename) as f:
-        lines = f.readlines()
-
-        for line in lines:
-            if line.startswith('ATOM') or line.startswith("HETATM"):
-                idx = i
-                serial = int(line[6:11].strip())
-                name = line[12:16].strip()
-                resname = line[17:20].strip()
-                chainid = line[21].strip()
-                resid = int(line[22:26].strip())
-                xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=np.float32)
+    idx = 0
+    for line in pdbqt_string.split(os_linesep):
+        if line.startswith('ATOM') or line.startswith("HETATM"):
+            serial = int(line[6:11].strip())
+            name = line[12:16].strip()
+            resname = line[17:20].strip()
+            chainid = line[21].strip()
+            resid = int(line[22:26].strip())
+            xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=np.float32)
+            try:
                 partial_charges = float(line[71:77].strip())
-                atom_type = line[77:79].strip()
+            except:
+                partial_charges = None # probably reading a PDB, not PDBQT
+            atom_type = line[77:79].strip()
+            alt_id = line[16:17].strip()
+            in_code = line[26:27].strip()
+            try:
+                occupancy = float(line[54:60])
+            except:
+                occupancy = None
+            try:
+                temp_factor = float(line[60:68])
+            except:
+                temp_factor = None
+            record_type = line[0:6].strip()
+                
+            if skip_typing:
+                atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type,
+                              alt_id, in_code, occupancy, temp_factor, record_type))
+                continue
+            if not atom_type in pseudo_atom_types:
+                atom_annotations['all'].append(idx)
+                atom_annotations[atom_property_definitions[atom_type]].append(idx)
+                atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type,
+                              alt_id, in_code, occupancy, temp_factor, record_type))
 
-                if not atom_type in pseudo_atom_types:
-                    atom_annotations['all'].append(i)
-                    atom_annotations[atom_property_definitions[atom_type]].append(i)
-                    atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type))
-
-                i += 1
+            idx += 1
 
     atoms = np.array(atoms, dtype=atoms_dtype)
 
@@ -85,19 +125,232 @@ def _identify_bonds(atom_idx, positions, atom_types):
 
 class PDBQTReceptor:
 
-    def __init__(self, pdbqt_filename):
+    flexres_templates = flexres_templates
+
+    def __init__(self, pdbqt_filename, skip_typing=False):
         self._pdbqt_filename = pdbqt_filename
         self._atoms = None
         self._atom_annotations = None
         self._KDTree = None
 
-        self._atoms, self._atom_annotations = _read_receptor_pdbqt_file(self._pdbqt_filename)
+        with open(pdbqt_filename) as f:
+            pdbqt_string = f.read() 
+
+        self._atoms, self._atom_annotations = _read_receptor_pdbqt_string(pdbqt_string, skip_typing)
         # We add to the KDTree only the rigid part of the receptor
         self._KDTree = spatial.cKDTree(self._atoms['xyz'])
         self._bonds = _identify_bonds(self._atom_annotations['all'], self._atoms['xyz'], self._atoms['atom_type'])
+        self.atom_idxs_by_res = self.get_atom_indices_by_residue(self._atoms)
 
     def __repr__(self):
         return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))
+
+    @staticmethod
+    def get_atom_indices_by_residue(atoms):
+        """ return a dictionary where residues are keys and
+             values are lists of atom indices
+                
+            >>> atom_idx_by_res = {("A", "LYS", 417): [0, 1, 2, 3, ..., 8]}
+        """
+
+        atom_idx_by_res = {}
+        for atom_index, atom in enumerate(atoms):
+            res_id = (atom["chain"], atom["resname"], atom["resid"])
+            atom_idx_by_res.setdefault(res_id, [])
+            atom_idx_by_res[res_id].append(atom_index)
+        return atom_idx_by_res
+
+    @staticmethod
+    def get_params_for_residue(resname, atom_names, residue_params=residue_params):
+        excluded_params = ("atom_names", "bond_cut_atoms", "bonds")
+        atom_params = {}
+        atom_counter = 0
+        err = ""
+        ok = True
+        is_matched = False
+        for terminus in ["", "N", "C"]: # e.g. "CTYR" for C-term TYR, hard-coded in residue_params
+            r_id = "%s%s" % (terminus, resname)
+            ref_names = set(residue_params[r_id]["atom_names"])
+            query_names = set(atom_names)
+            if ref_names == query_names:
+                is_matched = True
+                break
+
+        if not is_matched:
+            err = "did not match residue or atom names with template"
+            ok = False
+            return atom_params, ok, err
+    
+        for atom_name in atom_names:
+            name_index = residue_params[r_id]["atom_names"].index(atom_name)
+            for param in residue_params[r_id].keys():
+                if param in excluded_params:
+                    continue
+                if param not in atom_params:
+                    atom_params[param] = [None] * atom_counter 
+                value = residue_params[r_id][param][name_index]
+                atom_params[param].append(value)
+            atom_counter += 1
+    
+        return atom_params, ok, err
+
+    def assign_types_charges(self, residue_params=residue_params):
+        wanted_params = ("atom_types", "gasteiger")
+        atom_params = {key: [] for key in wanted_params}
+        ok = True
+        err = ""
+        for r_id, atom_indices in self.atom_idxs_by_res.items():
+            atom_names = tuple(self.atoms(atom_indices)["name"])
+            resname = r_id[1]
+            params_this_res, ok_, err_ = self.get_params_for_residue(resname, atom_names, residue_params)
+            ok &= ok_
+            err += err_
+            for key in wanted_params:
+                atom_params[key].extend(params_this_res[key])
+        if ok:
+            self._atoms["partial_charges"] = atom_params["gasteiger"] 
+            self._atoms["atom_type"] = atom_params["atom_types"] 
+        return ok, err
+
+    def write_flexres_from_template(self, res_id, atom_index=0):
+        success = True
+        error_msg = ""
+        branch_offset = atom_index # templates assume first atom is 1
+        output = {"pdbqt": "", "flex_indices": [], "atom_index": atom_index}
+        resname = res_id[1]
+        if resname not in self.flexres_templates:
+            success = False
+            error_msg = "no flexible residue template for resname %s, sorry" % resname
+            return output, success, error_msg
+        if res_id not in self.atom_idxs_by_res:
+            success = False
+            chains = set(self._atoms["chain"])
+            error_msg += "could not find residue with chain='%s', resname=%s, resnum=%d" % res_id + os_linesep
+            error_msg += "chains in this receptor: %s" % ", ".join("'%s'" % c for c in chains) + os_linesep
+            if " " in chains: # should not happen because we use strip() when parsing the chain
+                error_msg += "use ' ' (a space character) for empty chain" + os_linesep
+            if "" in chains:
+                error_msg += "use '' (empty string) for empty chain" + os_linesep
+            return output, success, error_msg
+            
+        # collect lines of res_id
+        atoms_by_name = {}
+        for i in self.atom_idxs_by_res[res_id]:
+            name = self._atoms[i]["name"]
+            if name in ['C', 'N', 'O', 'H', 'H1', 'H2', 'H3', 'OXT']: # skip backbone atoms
+                continue
+            output["flex_indices"].append(i)
+            atoms_by_name[name] = self.atoms(i)
+
+        # check it was a full match
+        template = self.flexres_templates[resname]
+        got_atoms = set(atoms_by_name)
+        ref_atoms = set()
+        for i in range(len(template["is_atom"])):
+            if template["is_atom"][i]:
+                ref_atoms.add(template["atom_name"][i])
+        if got_atoms != ref_atoms: 
+            success = False
+            error_msg += "mismatch in atom names for residue %s" % str(res_id) + os_linesep
+            error_msg += "names found but not in template: %s" % str(got_atoms.difference(ref_atoms)) + os_linesep
+            error_msg += "missing names: %s" % str(ref_atoms.difference(got_atoms)) + os_linesep
+            return output, success, error_msg
+
+        # create output string
+        n_lines = len(template['is_atom'])
+        for i in range(n_lines):
+            if template['is_atom'][i]:
+                atom_index += 1
+                name = template['atom_name'][i]
+                atom = atoms_by_name[name]
+                atom["serial"] = atom_index
+                output["pdbqt"] += self.write_pdbqt_line(atom)
+            else:
+                line = template['original_line'][i]
+                if branch_offset > 0 and (line.startswith("BRANCH") or line.startswith("ENDBRANCH")):
+                    keyword, i, j = line.split()
+                    i = int(i) + branch_offset
+                    j = int(j) + branch_offset
+                    line = "%s %3d %3d" % (keyword, i, j)
+                output["pdbqt"] += line + os_linesep # e.g. BRANCH keywords
+
+        output["atom_index"] = atom_index
+        return output, success, error_msg
+
+    @staticmethod
+    def write_pdbqt_line(atom):
+        return _write_pdbqt_line(atom["serial"], atom["xyz"][0], atom["xyz"][1], atom["xyz"][2],
+                                 atom["partial_charges"], atom["name"], atom["resname"],
+                                 atom["resid"], atom["atom_type"], atom["chain"],
+                                 atom["alt_id"], atom["in_code"], atom["occupancy"],
+                                 atom["temp_factor"], atom["record_type"])
+
+
+    def write_pdbqt_string(self, flexres=()):
+        ok = True
+        err = ""
+        pdbqt = {"rigid": "",
+                 "flex":  {},
+                 "flex_indices": []}
+        atom_index = 0
+        for res_id in set(flexres):
+            output, ok_, err_ = self.write_flexres_from_template(res_id, atom_index)
+            atom_index = output["atom_index"] # next residue starts here
+            ok &= ok_
+            err += err_
+            pdbqt["flex_indices"].extend(output["flex_indices"])
+            pdbqt["flex"][res_id] = ""
+            pdbqt["flex"][res_id] += "BEGIN_RES %3s %1s%4d" % (res_id) + os_linesep
+            pdbqt["flex"][res_id] += output["pdbqt"]
+            pdbqt["flex"][res_id] += "END_RES %3s %1s%4d" % (res_id) + os_linesep
+
+        # use non-flex lines for rigid part
+        skip_types=("H",)
+        for i, atom in enumerate(self._atoms):
+            if i not in pdbqt["flex_indices"] and atom["atom_type"] not in skip_types:
+                pdbqt["rigid"] += self.write_pdbqt_line(atom)
+        
+        return pdbqt, ok, err
+
+    @staticmethod
+    def make_flexres_reactive(pdbqtstr, reactive_name, resname, prefix_atype="", residue_params=residue_params):
+        atom_names = residue_params[resname]["atom_names"]
+        bonds = residue_params[resname]["bonds"]
+        def get_neigh(idx, bonds):
+            neigh = set()
+            for (i, j) in bonds:
+                if i == idx:
+                    neigh.add(j)
+                elif j == idx:
+                    neigh.add(i)
+            return neigh
+        react_idx = atom_names.index(reactive_name)
+        one_bond_away = get_neigh(react_idx, bonds)
+        two_bond_away = set()
+        for i in one_bond_away:
+            for j in get_neigh(i, bonds):
+                if (j != react_idx) and (j not in one_bond_away):
+                    two_bond_away.add(j)
+        names_1bond = [atom_names[i] for i in one_bond_away]
+        names_2bond = [atom_names[i] for i in two_bond_away]
+        new_pdbqt_str = "" 
+        for i, line in enumerate(pdbqtstr.split(os_linesep)[:-1]):
+            if line.startswith("ATOM") or line.startswith("HETATM"):
+                name = line[12:16].strip()
+                atype = line[77:].strip()
+                if name == reactive_name:
+                    new_type = prefix_atype + get_reactive_atype(atype, 1)
+                elif name in names_1bond:
+                    new_type = prefix_atype + get_reactive_atype(atype, 2)
+                elif name in names_2bond:
+                    new_type = prefix_atype + get_reactive_atype(atype, 3)
+                else:
+                    new_type = atype
+                new_pdbqt_str += line[:77] + new_type + os_linesep
+            else:
+                new_pdbqt_str += line + os_linesep
+        return new_pdbqt_str
+
 
     def atoms(self, atom_idx=None):
         """Return the atom i
@@ -208,3 +461,110 @@ class PDBQTReceptor:
             atom_idx = [atom_idx]
 
         return [self._bonds[i] for i in atom_idx]
+
+def get_gpf_string(center, size_angstrom, rec_fname, rec_types, lig_types, map_prefix=None, dielectric=-42, smooth=0.5, spacing=0.375):
+
+    size_x, size_y, size_z = size_angstrom
+    # the following guarantees an EVEN number of grid points
+    npts_x = 2 * int(size_x / (2 * spacing))
+    npts_y = 2 * int(size_y / (2 * spacing))
+    npts_z = 2 * int(size_z / (2 * spacing))
+
+    if map_prefix is None:
+        map_prefix = pathlib.Path(rec_fname).with_suffix("").name
+
+    gpf = ( "npts {gpf_npts_x:d} {gpf_npts_y:d} {gpf_npts_z:d}\n"
+            "gridfld {map_prefix:s}.maps.fld\n"
+            "spacing {gpf_spacing:1.3f}\n"
+            "receptor_types {rec_types:s}\n"
+            "ligand_types {lig_types_std:s}\n"
+            "receptor {rec_fname:s}\n"
+            "gridcenter {gpf_gridcenter_x:3.3f} {gpf_gridcenter_y:3.3f} {gpf_gridcenter_z:3.3f}\n"
+            "smooth {gpf_smooth:3.3f}\n"
+            "{mapfiles_std:s}"
+            "elecmap {map_prefix:s}.e.map\n"
+            "dsolvmap {map_prefix:s}.d.map\n"
+            "dielectric {gpf_dielectric:3.3f}\n")
+
+    #if ff_param_fname is not None:
+    #    gpf = "parameter_file %s\n" % ff_param_fname + gpf
+
+    info = {}
+    info["gpf_spacing"] = spacing
+    info["gpf_smooth"] = smooth
+    info["gpf_dielectric"] = dielectric
+    info['map_prefix'] = map_prefix
+    #info['ff_param_fname'] = ff_param_fname
+    info['rec_types'] = ' '.join(rec_types)
+    info['rec_fname'] = rec_fname
+    info['gpf_npts_x'] = npts_x
+    info['gpf_npts_y'] = npts_y
+    info['gpf_npts_z'] = npts_z
+    info['gpf_gridcenter_x'] = center[0]
+    info['gpf_gridcenter_y'] = center[1]
+    info['gpf_gridcenter_z'] = center[2]
+
+    mapfiles = ""
+    for lt in lig_types:
+        mapfiles+= "map receptor.%s.map\n" % (lt )
+
+    info['lig_types_std'] = " ".join(lig_types)
+    info['mapfiles_std'] = mapfiles
+    return gpf.format(**info)
+
+
+def box_to_pdb_string(box_center, box_size):
+    """
+        8 ______ 7
+         /.    /|
+      4 /_.___/3|
+        | . X | |  <-- 9
+        |5....|./6
+        |.____|/
+       1      2
+    
+    """
+
+    step_x = box_size[0] / 2.0
+    step_y = box_size[1] / 2.0
+    step_z = box_size[2] / 2.0
+    center_x, center_y, center_z = box_center
+    corners = []
+    corners.append([center_x - step_x, center_y - step_y, center_z - step_z] ) # 1
+    corners.append([center_x + step_x, center_y - step_y, center_z - step_z] ) # 2
+    corners.append([center_x + step_x, center_y + step_y, center_z - step_z] ) # 3
+    corners.append([center_x - step_x, center_y + step_y, center_z - step_z] ) # 4
+    corners.append([center_x - step_x, center_y - step_y, center_z + step_z] ) # 5
+    corners.append([center_x + step_x, center_y - step_y, center_z + step_z] ) # 6
+    corners.append([center_x + step_x, center_y + step_y, center_z + step_z] ) # 7
+    corners.append([center_x - step_x, center_y + step_y, center_z + step_z] ) # 8
+    
+    count = 1
+    res = "BOX"
+    chain = "X"
+    pdb_out = ""
+    line = "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f  1.00 10.00          %1s" + os_linesep
+    for idx in range(len(corners)):
+    	x = corners[idx][0]
+    	y = corners[idx][1]
+    	z = corners[idx][2]
+    	pdb_out += line % (count, "Ne", res, chain, idx+1, x, y, z, "Ne")
+    	count += 1
+    
+    # center
+    pdb_out += line % (count+1, "Xe", res, chain, idx+1, center_x, center_y, center_z, "Xe")
+    
+    pdb_out += "CONECT    1    2" + os_linesep
+    pdb_out += "CONECT    1    4" + os_linesep
+    pdb_out += "CONECT    1    5" + os_linesep
+    pdb_out += "CONECT    2    3" + os_linesep
+    pdb_out += "CONECT    2    6" + os_linesep
+    pdb_out += "CONECT    3    4" + os_linesep
+    pdb_out += "CONECT    3    7" + os_linesep
+    pdb_out += "CONECT    4    8" + os_linesep
+    pdb_out += "CONECT    5    6" + os_linesep
+    pdb_out += "CONECT    5    8" + os_linesep
+    pdb_out += "CONECT    6    7" + os_linesep
+    pdb_out += "CONECT    7    8" + os_linesep
+    return pdb_out
+

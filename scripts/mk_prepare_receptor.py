@@ -2,13 +2,16 @@
 
 import argparse
 import json
+import math
 from os import linesep as os_linesep
 import pathlib
 import sys
 
-from meeko import Receptor
+from meeko import PDBQTReceptor
 from meeko import reactive_typer
 from meeko import get_reactive_config
+from meeko import get_gpf_string
+from meeko import box_to_pdb_string
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
@@ -36,9 +39,9 @@ def parse_residue_string(string):
         err += "Example: 'A:HIE:42'" + os_linesep
         return res_id, ok, err
     chain, resname, resnum = string.split(":")
-    if len(chain) != 1:
+    if len(chain) not in (0, 1):
         ok = False
-        err += "chain must be 1 char but it is '%s' (%d chars) in '%s'" % (chain, len(chain), string) + os_linesep
+        err += "chain must be 0 or 1 char but it is '%s' (%d chars) in '%s'" % (chain, len(chain), string) + os_linesep
     if len(resname) > 3:
         ok = False
         err += "resname must be max 3 characters long, but is '%s' in '%s'" % (resname, string) + os_linesep
@@ -103,6 +106,11 @@ class TalkativeParser(argparse.ArgumentParser):
         print('\n%s: error: %s' % (this_script, message), file=sys.stderr)
         sys.exit(2)
 
+def check(success, error_msg):
+    if not success:
+        print("Error: " + error_msg, file=sys.stderr)
+        sys.exit(2)
+
 def get_args():
     parser = TalkativeParser()
     parser.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
@@ -116,6 +124,11 @@ def get_args():
                         help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific")
     parser.add_argument('-s', '--reactive_name_specific', action="append", default=[],
                         help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.")
+    #parser.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
+    parser.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
+    parser.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
+    parser.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
+    parser.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
     parser.add_argument('--r_eq_12', default=2.5, type=float, help="r_eq for reactive atoms (1-2 interaction)")
     parser.add_argument('--eps_12', default=1.8, type=float, help="epsilon for reactive atoms (1-2 interaction)")
     parser.add_argument('--r_eq_13_scaling', default=0.5, type=float, help="r_eq scaling for 1-3 interaction across reactive atoms")
@@ -126,10 +139,24 @@ def get_args():
         msg = "need either --pdb or --pdbqt"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    if (args.pdbqt is not None) and (len(args.flexres) == 0):
-        msg = "nothing to do when reading --pdbqt and no --flexres."
+    if (args.box_center is not None) and (args.box_center_on_reactive_res is not None):
+        msg = "can't use both --box_center and --box_center_on_reactive_res"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
+    got_center = (args.box_center is not None) or (args.box_center_on_reactive_res is not None)
+    if (args.box_size is None) == got_center:
+        msg  = "missing center or size of grid box to write .gpf file for autogrid4"
+        msg += "use --box_size and either --box_center or --box_center_on_reactive_res" + os_linesep
+        msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
+        print("Command line error: " + msg, file=sys.stderr)
+        sys.exit(2)
+    if (args.box_size is None) and not args.skip_gpf:
+        msg  = "grid box information is needed to dock with the AD4 scoring function." + os_linesep
+        msg += "The grid box center and size will be used to write a GPF file for autogrid" + os_linesep
+        msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
+        print("Command line error: " + msg, file=sys.stderr)
+        sys.exit(2)
+    
     return args
 
 args = get_args()
@@ -213,31 +240,33 @@ if len(all_flexres) > 0:
         else:
             react_atom = ""
         print(string % (chain, resname, resnum, is_react, react_atom))
+
+if len(reactive_flexres) != 1 and args.box_center_on_reactive_res:
+    msg = "--box_center_on-reactive_res can be used only with one reactive" + os_linesep
+    msg += "residue, but %d reactive residues are set" % len(reactive_flexres)
+    print("Command line error:" + msg, file=sys.stderr)
+    sys.exit(2)
     
 if args.pdb is not None:
-    with open(args.pdb) as f:
-        pdb_string = f.read()
-    data, success, error_msg = Receptor.parse_residue_data_from_pdb(pdb_string)
-    if not success:
-        print("Error: " + error_msg, file=sys.stderr, end="")
-        sys.exit(2)
-    atom_params = Receptor.assign_residue_params(data["resnames"], data["atom_names"])
-    atom_types = atom_params["atom_types"]
-    charges    = atom_params["gasteiger"]
-    pdbqtstring = Receptor.write_pdbqt_from_residue_data(data, charges, atom_types)
+    receptor = PDBQTReceptor(args.pdb, skip_typing=True)
+    ok, err = receptor.assign_types_charges()
+    check(ok, err)
 else:
-    with open(args.pdbqt) as f:
-        pdbqtstring = f.read()
+    receptor = PDBQTReceptor(args.pdbqt)
+
+any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
+                      "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]
+ 
+pdbqt, ok, err = receptor.write_pdbqt_string(flexres=all_flexres)
+check(ok, err)
+
+outpath = pathlib.Path(args.output_filename)
 
 if len(all_flexres) == 0:
-    with open(args.output_filename, "w") as f:
-        f.write(pdbqtstring)
+    box_center = args.box_center
+    rigid_fn = str(outpath)
+    flex_fn = None
 else:
-    receptor = Receptor(pdbqtstring)
-    pdbqt, success, error_msg = receptor.write_pdbqt_string(flex_res=all_flexres)
-    if not success:
-        print("Error: " + error_msg, file=sys.stderr)
-        sys.exit(2)
     all_flex_pdbqt = ""
     reactive_flexres_count = 0
     for res_id, flexres_pdbqt in pdbqt["flex"].items():
@@ -246,84 +275,120 @@ else:
             prefix_atype = "%d" % reactive_flexres_count
             resname = res_id[1]
             reactive_atom = reactive_flexres[res_id]
-            flexres_pdbqt = Receptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
+            flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
         all_flex_pdbqt += flexres_pdbqt
 
-    outpath = pathlib.Path(args.output_filename)
     rigid_fn = str(outpath.with_suffix("")) + "_rigid" + outpath.suffix
     flex_fn = str(outpath.with_suffix("")) + "_flex" + outpath.suffix
-    with open(rigid_fn, "w") as f:
-        f.write(pdbqt["rigid"]) 
+
+    # GPF for autogrid4
+    if not args.skip_gpf:
+        if args.box_center is not None:
+            box_center = args.box_center
+        else:
+            # we have only one reactive residue and will set the box center
+            # to be 5 Angstromg away from CB along the CA->CB vector
+            idxs = receptor.atom_idxs_by_res[list(reactive_flexres.keys())[0]] 
+            ca = None
+            cb = None
+            for atom in receptor.atoms(idxs):
+                if atom["name"] == "CA":
+                    ca = atom["xyz"]
+                if atom["name"] == "CB":
+                    cb = atom["xyz"]
+            if ca is None or cb is None:
+                check(success=False, error_msg="could not find CA or CB in %s" % reactive_flexres[0])
+            v = (cb - ca)
+            v /= math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) + 1e-8
+            box_center = ca + 5 * v
+
+    print("Writing flexible receptor input file: %s" % rigid_fn)
     with open(flex_fn, "w") as f:
         f.write(all_flex_pdbqt)
 
-    # configuration info for AutoDock-GPU reactive docking
-    if len(reactive_flexres) > 0:
-        any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
-                              "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]
-        any_lig_reac_types = []
-        for order in (1, 2, 3):
-            for t in any_lig_base_types:
-                any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
+print("Writing static (i.e., rigid) receptor input file: %s" % rigid_fn)
+with open(rigid_fn, "w") as f:
+    f.write(pdbqt["rigid"]) 
 
-        rec_reac_types = []
-        for line in all_flex_pdbqt.split(os_linesep):
-            if line.startswith("ATOM") or line.startswith("HETATM"):
-                atype = line[77:].strip()
-                basetype, _ = reactive_typer.get_basetype_and_order(atype) 
-                if basetype is not None: # is None if not reactive
-                    rec_reac_types.append(line[77:].strip())
+if not args.skip_gpf:
+    rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
+    gpf_string = get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types)
+    gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
+    print("Writing autogrid input file: %s" % gpf_fn)
+    with open(gpf_fn, "w") as f:
+        f.write(gpf_string)
+    box_fn = str(gpf_fn) + ".pdb"
+    print("Writing autogrid input file: %s" % box_fn)
+    with open(box_fn, "w") as f:
+        f.write(box_to_pdb_string(box_center, args.box_size))
 
-        derivtypes, modpairs, collisions = get_reactive_config(
-                                        any_lig_reac_types,
-                                        rec_reac_types,
-                                        args.r_eq_12,
-                                        args.eps_12,
-                                        args.r_eq_13_scaling,
-                                        args.r_eq_14_scaling)
+    # TODO check that all movable atoms are within grid box
+            
+# configuration info for AutoDock-GPU reactive docking
+if len(reactive_flexres) > 0:
+    any_lig_reac_types = []
+    for order in (1, 2, 3):
+        for t in any_lig_base_types:
+            any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
 
-        if len(collisions) > 0:
-            collision_fn = str(outpath.with_suffix(".atype_collisions"))
-            collision_str = ""
-            for t1, t2 in collisions:
-                collision_str += "%3s %3s" % (t1, t2) + os_linesep
-            with open(collision_fn, "w") as f:
-                f.write(collision_str)
-            print()
-            print("%d type pairs may lead to intra-molecular reactions. These were written to '%s'" % (
-                len(collisions), collision_fn))
-            print()
+    rec_reac_types = []
+    for line in all_flex_pdbqt.split(os_linesep):
+        if line.startswith("ATOM") or line.startswith("HETATM"):
+            atype = line[77:].strip()
+            basetype, _ = reactive_typer.get_basetype_and_order(atype) 
+            if basetype is not None: # is None if not reactive
+                rec_reac_types.append(line[77:].strip())
 
-        # in modpairs (dict): types are keys, parameters are values
-        # now we will write a configuration file with nbp keywords
-        # that AD-GPU reads using the --import_dpf flag
-        # nbp stands for "non-bonded potential" or "non-bonded pairwise"
-        line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
-        config = ""
-        nbp_count = 0
-        for (t1, t2), param in modpairs.items():
-            config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
-            nbp_count += 1
-        config_fn = str(outpath.with_suffix(".reactive_nbp"))
-        with open(config_fn, "w") as f:
-            f.write(config)
+    derivtypes, modpairs, collisions = get_reactive_config(
+                                    any_lig_reac_types,
+                                    rec_reac_types,
+                                    args.r_eq_12,
+                                    args.eps_12,
+                                    args.r_eq_13_scaling,
+                                    args.r_eq_14_scaling)
+
+    if len(collisions) > 0:
+        collision_fn = str(outpath.with_suffix(".atype_collisions"))
+        collision_str = ""
+        for t1, t2 in collisions:
+            collision_str += "%3s %3s" % (t1, t2) + os_linesep
+        with open(collision_fn, "w") as f:
+            f.write(collision_str)
         print()
-        print("Wrote %d non-bonded reactive pairs to file '%s'." % (nbp_count, config_fn))
-        print("Use the following option with AutoDock-GPU:")
-        print("    --import_dpf %s" % (config_fn))
+        print("%d type pairs may lead to intra-molecular reactions. These were written to '%s'" % (
+            len(collisions), collision_fn))
         print()
 
-        derivtype_list = []
-        new_type_count = 0
-        for basetype, reactypes in derivtypes.items():
-            s = ",".join(reactypes) + "=" + basetype
-            derivtype_list.append(s)
-            new_type_count += len(reactypes)
-        if len(derivtype_list) > 0:
-            derivtype_fn = str(outpath.with_suffix(".derivtype"))
-            config_str = "--derivtype " + "/".join(derivtype_list)
-            with open(derivtype_fn, "w") as f:
-                f.write(config_str + os_linesep)
-            print("AutoDock-GPU will need to derive %d reactive types from standard atom types." % new_type_count)
-            print("The required --derivtype command has been written to '%s'. " % derivtype_fn)
-            print()
+    # in modpairs (dict): types are keys, parameters are values
+    # now we will write a configuration file with nbp keywords
+    # that AD-GPU reads using the --import_dpf flag
+    # nbp stands for "non-bonded potential" or "non-bonded pairwise"
+    line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
+    config = ""
+    nbp_count = 0
+    for (t1, t2), param in modpairs.items():
+        config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
+        nbp_count += 1
+    config_fn = str(outpath.with_suffix(".reactive_nbp"))
+    with open(config_fn, "w") as f:
+        f.write(config)
+    print()
+    print("Wrote %d non-bonded reactive pairs to file '%s'." % (nbp_count, config_fn))
+    print("Use the following option with AutoDock-GPU:")
+    print("    --import_dpf %s" % (config_fn))
+    print()
+
+    derivtype_list = []
+    new_type_count = 0
+    for basetype, reactypes in derivtypes.items():
+        s = ",".join(reactypes) + "=" + basetype
+        derivtype_list.append(s)
+        new_type_count += len(reactypes)
+    if len(derivtype_list) > 0:
+        derivtype_fn = str(outpath.with_suffix(".derivtype"))
+        config_str = "--derivtype " + "/".join(derivtype_list)
+        with open(derivtype_fn, "w") as f:
+            f.write(config_str + os_linesep)
+        print("AutoDock-GPU will need to derive %d reactive types from standard atom types." % new_type_count)
+        print("The required --derivtype command has been written to '%s'. " % derivtype_fn)
+        print()
