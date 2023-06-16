@@ -143,7 +143,7 @@ def get_args():
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
     got_center = (args.box_center is not None) or (args.box_center_on_reactive_res is not None)
-    if (args.box_size is None) == got_center:
+    if not args.skip_gpf and (args.box_size is None) == got_center:
         msg  = "missing center or size of grid box to write .gpf file for autogrid4" + os_linesep
         msg += "use --box_size and either --box_center or --box_center_on_reactive_res" + os_linesep
         msg += "Exactly one reactive residue required for --box_center_on_reactive_res" + os_linesep
@@ -263,6 +263,8 @@ check(ok, err)
 
 outpath = pathlib.Path(args.output_filename)
 
+written_files_log = {"filename": [], "description": []}
+
 if len(all_flexres) == 0:
     box_center = args.box_center
     rigid_fn = str(outpath)
@@ -282,52 +284,64 @@ else:
     rigid_fn = str(outpath.with_suffix("")) + "_rigid" + outpath.suffix
     flex_fn = str(outpath.with_suffix("")) + "_flex" + outpath.suffix
 
-    # GPF for autogrid4
-    if not args.skip_gpf:
-        if args.box_center is not None:
-            box_center = args.box_center
-        else:
-            # we have only one reactive residue and will set the box center
-            # to be 5 Angstromg away from CB along the CA->CB vector
-            idxs = receptor.atom_idxs_by_res[list(reactive_flexres.keys())[0]] 
-            ca = None
-            cb = None
-            for atom in receptor.atoms(idxs):
-                if atom["name"] == "CA":
-                    ca = atom["xyz"]
-                if atom["name"] == "CB":
-                    cb = atom["xyz"]
-            if ca is None or cb is None:
-                check(success=False, error_msg="could not find CA or CB in %s" % reactive_flexres[0])
-            v = (cb - ca)
-            v /= math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) + 1e-8
-            box_center = ca + 5 * v
-
-    print("Writing flexible receptor input file: %s" % rigid_fn)
+    written_files_log["filename"].append(flex_fn)
+    written_files_log["description"].append("flexible receptor input file")
     with open(flex_fn, "w") as f:
         f.write(all_flex_pdbqt)
 
-print("Writing static (i.e., rigid) receptor input file: %s" % rigid_fn)
+written_files_log["filename"].append(rigid_fn)
+written_files_log["description"].append("static (i.e., rigid) receptor input file")
 with open(rigid_fn, "w") as f:
     f.write(pdbqt["rigid"]) 
 
+# GPF for autogrid4
 if not args.skip_gpf:
+    if args.box_center is not None:
+        box_center = args.box_center
+    elif args.box_center_on_reactive_res:
+        # we have only one reactive residue and will set the box center
+        # to be 5 Angstromg away from CB along the CA->CB vector
+        idxs = receptor.atom_idxs_by_res[list(reactive_flexres.keys())[0]] 
+        ca = None
+        cb = None
+        for atom in receptor.atoms(idxs):
+            if atom["name"] == "CA":
+                ca = atom["xyz"]
+            if atom["name"] == "CB":
+                cb = atom["xyz"]
+        if ca is None or cb is None:
+            check(success=False, error_msg="could not find CA or CB in %s" % reactive_flexres[0])
+        v = (cb - ca)
+        v /= math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) + 1e-8
+        box_center = ca + 5 * v
+    else:
+        print("Error: No box center specified.", file=sys.stderr)
+        sys.exit(2)
+
     # write .dat parameter file for B and Si
     ff_fn = pathlib.Path(rigid_fn).parents[0] / pathlib.Path("boron-silicon-atom_par.dat")
+    written_files_log["filename"].append(str(ff_fn))
+    written_files_log["description"].append("atomic parameters for B and Si (for autogrid)")
     with open(ff_fn, "w") as f:
         f.write(GridStuff.get_boron_silicon_atompar())
     rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
     gpf_string, npts = GridStuff.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types, 
                                                 ff_param_fname=ff_fn.name)
+    # write GPF
     gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
-    print("Writing autogrid input file: %s" % gpf_fn)
+    written_files_log["filename"].append(str(gpf_fn))
+    written_files_log["description"].append("autogrid input file")
     with open(gpf_fn, "w") as f:
         f.write(gpf_string)
-    box_fn = str(gpf_fn) + ".pdb"
-    print("Writing a PDB file to visualize the box: %s" % box_fn)
-    with open(box_fn, "w") as f:
-        f.write(GridStuff.box_to_pdb_string(box_center, args.box_size))
 
+    # write a PDB for the box
+    box_fn = str(gpf_fn) + ".pdb"
+    written_files_log["filename"].append(box_fn)
+    written_files_log["description"].append("PDB file to visualize the grid box")
+    with open(box_fn, "w") as f:
+        f.write(GridStuff.box_to_pdb_string(box_center, npts))
+
+    # check all flexres are inside the box
     any_outside = False
     for atom in receptor.atoms(pdbqt["flex_indices"]):
         if GridStuff.is_point_outside_box(atom["xyz"], box_center, npts):
@@ -359,17 +373,18 @@ if len(reactive_flexres) > 0:
                                     args.r_eq_14_scaling)
 
     if len(collisions) > 0:
-        collision_fn = str(outpath.with_suffix(".atype_collisions"))
         collision_str = ""
         for t1, t2 in collisions:
             collision_str += "%3s %3s" % (t1, t2) + os_linesep
+        collision_fn = str(outpath.with_suffix(".atype_collisions"))
+        written_files_log["filename"].append(collision_fn)
+        written_files_log["description"].append("type pairs (n=%d) that may lead to intra-molecular reactions" % len(collisions))
         with open(collision_fn, "w") as f:
             f.write(collision_str)
-        print()
-        print("%d type pairs may lead to intra-molecular reactions. These were written to '%s'" % (
-            len(collisions), collision_fn))
-        print()
 
+    # The maps block is to tell AutoDock-GPU the base types for the reactive types.
+    # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
+    # lines in a single configuration file simplifies the command line call.
     map_block = ""
     map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
     all_types = []
@@ -393,10 +408,18 @@ if len(reactive_flexres) > 0:
         config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
         nbp_count += 1
     config_fn = str(outpath.with_suffix(".reactive_config"))
+    written_files_log["filename"].append(config_fn)
+    written_files_log["description"].append("reactive parameters for AutoDock-GPU")
     with open(config_fn, "w") as f:
         f.write(config)
     print()
-    print("Wrote %d non-bonded reactive pairs to file '%s'." % (nbp_count, config_fn))
-    print("Use the following option with AutoDock-GPU:")
-    print("    --import_dpf %s" % (config_fn))
+    print("For reactive docking, pass the configuration file to AutoDock-GPU:")
+    print("    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>" % (config_fn, flex_fn))
     print()
+
+print()
+print("Files written:")
+longest_fn = max([len(fn) for fn in written_files_log["filename"]])
+line = "%%%ds <-- " % longest_fn + "%s"
+for fn, desc in zip(written_files_log["filename"], written_files_log["description"]):
+    print(line % (fn, desc))

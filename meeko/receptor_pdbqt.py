@@ -520,7 +520,7 @@ class GridStuff:
         return gpf.format(**info), (npts_x, npts_y, npts_z)
     
     @staticmethod 
-    def box_to_pdb_string(box_center, box_size):
+    def box_to_pdb_string(box_center, npts, spacing=0.375):
         """
             8 ______ 7
              /.    /|
@@ -532,9 +532,9 @@ class GridStuff:
         
         """
     
-        step_x = box_size[0] / 2.0
-        step_y = box_size[1] / 2.0
-        step_z = box_size[2] / 2.0
+        step_x = int(npts[0] / 2.0) * spacing
+        step_y = int(npts[1] / 2.0) * spacing
+        step_z = int(npts[2] / 2.0) * spacing
         center_x, center_y, center_z = box_center
         corners = []
         corners.append([center_x - step_x, center_y - step_y, center_z - step_z] ) # 1
