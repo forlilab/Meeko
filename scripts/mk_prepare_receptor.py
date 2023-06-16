@@ -10,8 +10,7 @@ import sys
 from meeko import PDBQTReceptor
 from meeko import reactive_typer
 from meeko import get_reactive_config
-from meeko import get_gpf_string
-from meeko import box_to_pdb_string
+from meeko import GridStuff
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
@@ -145,8 +144,9 @@ def get_args():
         sys.exit(2)
     got_center = (args.box_center is not None) or (args.box_center_on_reactive_res is not None)
     if (args.box_size is None) == got_center:
-        msg  = "missing center or size of grid box to write .gpf file for autogrid4"
+        msg  = "missing center or size of grid box to write .gpf file for autogrid4" + os_linesep
         msg += "use --box_size and either --box_center or --box_center_on_reactive_res" + os_linesep
+        msg += "Exactly one reactive residue required for --box_center_on_reactive_res" + os_linesep
         msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
@@ -240,6 +240,7 @@ if len(all_flexres) > 0:
         else:
             react_atom = ""
         print(string % (chain, resname, resnum, is_react, react_atom))
+    print()
 
 if len(reactive_flexres) != 1 and args.box_center_on_reactive_res:
     msg = "--box_center_on-reactive_res can be used only with one reactive" + os_linesep
@@ -312,17 +313,22 @@ with open(rigid_fn, "w") as f:
 
 if not args.skip_gpf:
     rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
-    gpf_string = get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types)
+    gpf_string = GridStuff.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types)
     gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
     print("Writing autogrid input file: %s" % gpf_fn)
     with open(gpf_fn, "w") as f:
         f.write(gpf_string)
     box_fn = str(gpf_fn) + ".pdb"
-    print("Writing autogrid input file: %s" % box_fn)
+    print("Writing a PDB file to visualize the box: %s" % box_fn)
     with open(box_fn, "w") as f:
-        f.write(box_to_pdb_string(box_center, args.box_size))
+        f.write(GridStuff.box_to_pdb_string(box_center, args.box_size))
 
-    # TODO check that all movable atoms are within grid box
+    any_outside = False
+    for atom in receptor.atoms(pdbqt["flex_indices"]):
+        if GridStuff.is_point_outside_box(atom.xyz):
+            print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
+            print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
+            break # only need to warn once
             
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:
@@ -369,6 +375,7 @@ if len(reactive_flexres) > 0:
             all_types.append(reactype)
             map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
     config = "ligand_types " + " ".join(all_types) + os_linesep
+    config += "fld %s.maps.fld" % map_prefix + os_linesep
     config += map_block
 
     # in modpairs (dict): types are keys, parameters are values
@@ -388,18 +395,3 @@ if len(reactive_flexres) > 0:
     print("Use the following option with AutoDock-GPU:")
     print("    --import_dpf %s" % (config_fn))
     print()
-
-    #derivtype_list = []
-    #new_type_count = 0
-    #for basetype, reactypes in derivtypes.items():
-    #    s = ",".join(reactypes) + "=" + basetype
-    #    derivtype_list.append(s)
-    #    new_type_count += len(reactypes)
-    #if len(derivtype_list) > 0:
-    #    derivtype_fn = str(outpath.with_suffix(".derivtype"))
-    #    config_str = "--derivtype " + "/".join(derivtype_list)
-    #    with open(derivtype_fn, "w") as f:
-    #        f.write(config_str + os_linesep)
-    #    print("AutoDock-GPU will need to derive %d reactive types from standard atom types." % new_type_count)
-    #    print("The required --derivtype command has been written to '%s'. " % derivtype_fn)
-    #    print()
