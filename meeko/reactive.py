@@ -127,17 +127,19 @@ def assign_reactive_types(molsetup, smarts, smarts_idx, get_reactive_atype=get_r
 
         # type atoms 1 bond away from reactive atom
         for index1 in molsetup.graph[reactive_atom_index]:
-            original_type = atypes[index1]
-            reactive_type = get_reactive_atype(original_type, reactive_order=2)
-            atypes[index1] = reactive_type
+            if not molsetup.atom_ignore[index1]:
+                original_type = atypes[index1]
+                reactive_type = get_reactive_atype(original_type, reactive_order=2)
+                atypes[index1] = reactive_type
 
             # type atoms 2 bonds away from reactive
             for index2 in molsetup.graph[index1]:
                 if index2 == reactive_atom_index:
                     continue
-                original_type = atypes[index2]
-                reactive_type = get_reactive_atype(original_type, reactive_order=3)
-                atypes[index2] = reactive_type
+                if not molsetup.atom_ignore[index2]:
+                    original_type = atypes[index2]
+                    reactive_type = get_reactive_atype(original_type, reactive_order=3)
+                    atypes[index2] = reactive_type
 
         atype_dicts.append(atypes)
 

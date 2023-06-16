@@ -123,6 +123,9 @@ def cmd_lineparser():
         print("Arguments --reactive_smarts and --reactive_smarts_idx require each other", file=sys.stderr)
         sys.exit(2)
     elif args.reactive_smarts_idx is not None:
+        if args.reactive_smarts_idx < 1:
+            print("--reactive_smarts_idx is 1-indexed, but got %d" % args.reactive_smarts_idx, file=sys.stderr)
+            sys.exit(2)
         args.reactive_smarts_idx -= 1 # convert from 1- to 0-index
 
     # command line arguments override config
@@ -151,6 +154,9 @@ def cmd_lineparser():
     is_covalent = num_required_covalent_args == 3
     if is_covalent and not _has_prody:
         raise ImportError("Covalent docking requires Prody which is not available")
+    if min(args.tether_smarts_indices) < 1:
+        print("--tether_smarts_indices is 1-indexed, all values must be greater than zero", file=sys.stderr) 
+        sys.exit(2)
     args.tether_smarts_indices = [i-1 for i in args.tether_smarts_indices] # convert to 0-index
 
     # verify sanity of SMARTS patterns to make bonds rigid and convert to 0-based indices

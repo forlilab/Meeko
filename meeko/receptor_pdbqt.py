@@ -126,6 +126,7 @@ def _identify_bonds(atom_idx, positions, atom_types):
 class PDBQTReceptor:
 
     flexres_templates = flexres_templates
+    skip_types=("H",)
 
     def __init__(self, pdbqt_filename, skip_typing=False):
         self._pdbqt_filename = pdbqt_filename
@@ -232,12 +233,15 @@ class PDBQTReceptor:
             if "" in chains:
                 error_msg += "use '' (empty string) for empty chain" + os_linesep
             return output, success, error_msg
-            
+
         # collect lines of res_id
         atoms_by_name = {}
         for i in self.atom_idxs_by_res[res_id]:
             name = self._atoms[i]["name"]
             if name in ['C', 'N', 'O', 'H', 'H1', 'H2', 'H3', 'OXT']: # skip backbone atoms
+                continue
+            atype = self._atoms[i]["atom_type"]
+            if atype in self.skip_types:
                 continue
             output["flex_indices"].append(i)
             atoms_by_name[name] = self.atoms(i)
@@ -263,8 +267,9 @@ class PDBQTReceptor:
                 atom_index += 1
                 name = template['atom_name'][i]
                 atom = atoms_by_name[name]
-                atom["serial"] = atom_index
-                output["pdbqt"] += self.write_pdbqt_line(atom)
+                if atom["atom_type"] not in self.skip_types: 
+                    atom["serial"] = atom_index
+                    output["pdbqt"] += self.write_pdbqt_line(atom)
             else:
                 line = template['original_line'][i]
                 if branch_offset > 0 and (line.startswith("BRANCH") or line.startswith("ENDBRANCH")):
@@ -305,9 +310,8 @@ class PDBQTReceptor:
             pdbqt["flex"][res_id] += "END_RES %3s %1s%4d" % (res_id) + os_linesep
 
         # use non-flex lines for rigid part
-        skip_types=("H",)
         for i, atom in enumerate(self._atoms):
-            if i not in pdbqt["flex_indices"] and atom["atom_type"] not in skip_types:
+            if i not in pdbqt["flex_indices"] and atom["atom_type"] not in self.skip_types:
                 pdbqt["rigid"] += self.write_pdbqt_line(atom)
         
         return pdbqt, ok, err

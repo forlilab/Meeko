@@ -359,17 +359,28 @@ if len(reactive_flexres) > 0:
             len(collisions), collision_fn))
         print()
 
+    map_block = ""
+    map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
+    all_types = []
+    for basetype, reactypes in derivtypes.items():
+        all_types.append(basetype)
+        map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
+        for reactype in reactypes:
+            all_types.append(reactype)
+            map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
+    config = "ligand_types " + " ".join(all_types) + os_linesep
+    config += map_block
+
     # in modpairs (dict): types are keys, parameters are values
     # now we will write a configuration file with nbp keywords
     # that AD-GPU reads using the --import_dpf flag
     # nbp stands for "non-bonded potential" or "non-bonded pairwise"
     line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
-    config = ""
     nbp_count = 0
     for (t1, t2), param in modpairs.items():
         config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
         nbp_count += 1
-    config_fn = str(outpath.with_suffix(".reactive_nbp"))
+    config_fn = str(outpath.with_suffix(".reactive_config"))
     with open(config_fn, "w") as f:
         f.write(config)
     print()
@@ -378,17 +389,17 @@ if len(reactive_flexres) > 0:
     print("    --import_dpf %s" % (config_fn))
     print()
 
-    derivtype_list = []
-    new_type_count = 0
-    for basetype, reactypes in derivtypes.items():
-        s = ",".join(reactypes) + "=" + basetype
-        derivtype_list.append(s)
-        new_type_count += len(reactypes)
-    if len(derivtype_list) > 0:
-        derivtype_fn = str(outpath.with_suffix(".derivtype"))
-        config_str = "--derivtype " + "/".join(derivtype_list)
-        with open(derivtype_fn, "w") as f:
-            f.write(config_str + os_linesep)
-        print("AutoDock-GPU will need to derive %d reactive types from standard atom types." % new_type_count)
-        print("The required --derivtype command has been written to '%s'. " % derivtype_fn)
-        print()
+    #derivtype_list = []
+    #new_type_count = 0
+    #for basetype, reactypes in derivtypes.items():
+    #    s = ",".join(reactypes) + "=" + basetype
+    #    derivtype_list.append(s)
+    #    new_type_count += len(reactypes)
+    #if len(derivtype_list) > 0:
+    #    derivtype_fn = str(outpath.with_suffix(".derivtype"))
+    #    config_str = "--derivtype " + "/".join(derivtype_list)
+    #    with open(derivtype_fn, "w") as f:
+    #        f.write(config_str + os_linesep)
+    #    print("AutoDock-GPU will need to derive %d reactive types from standard atom types." % new_type_count)
+    #    print("The required --derivtype command has been written to '%s'. " % derivtype_fn)
+    #    print()
