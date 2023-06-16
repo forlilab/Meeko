@@ -312,8 +312,13 @@ with open(rigid_fn, "w") as f:
     f.write(pdbqt["rigid"]) 
 
 if not args.skip_gpf:
+    # write .dat parameter file for B and Si
+    ff_fn = pathlib.Path(rigid_fn).parents[0] / pathlib.Path("boron-silicon-atom_par.dat")
+    with open(ff_fn, "w") as f:
+        f.write(GridStuff.get_boron_silicon_atompar())
     rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
-    gpf_string = GridStuff.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types)
+    gpf_string, npts = GridStuff.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types, 
+                                                ff_param_fname=ff_fn.name)
     gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
     print("Writing autogrid input file: %s" % gpf_fn)
     with open(gpf_fn, "w") as f:
@@ -325,7 +330,7 @@ if not args.skip_gpf:
 
     any_outside = False
     for atom in receptor.atoms(pdbqt["flex_indices"]):
-        if GridStuff.is_point_outside_box(atom.xyz):
+        if GridStuff.is_point_outside_box(atom["xyz"], box_center, npts):
             print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
             print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
             break # only need to warn once

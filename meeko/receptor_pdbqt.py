@@ -469,7 +469,7 @@ class PDBQTReceptor:
 class GridStuff:
 
     @staticmethod
-    def get_gpf_string(center, size_angstrom, rec_fname, rec_types, lig_types, map_prefix=None, dielectric=-42, smooth=0.5, spacing=0.375):
+    def get_gpf_string(center, size_angstrom, rec_fname, rec_types, lig_types, map_prefix=None, dielectric=-42, smooth=0.5, spacing=0.375, ff_param_fname=None):
     
         size_x, size_y, size_z = size_angstrom
         # the following guarantees an EVEN number of grid points
@@ -493,15 +493,15 @@ class GridStuff:
                 "dsolvmap {map_prefix:s}.d.map\n"
                 "dielectric {gpf_dielectric:3.3f}\n")
     
-        #if ff_param_fname is not None:
-        #    gpf = "parameter_file %s\n" % ff_param_fname + gpf
+        if ff_param_fname is not None:
+            gpf = "parameter_file %s\n" % ff_param_fname + gpf
     
         info = {}
         info["gpf_spacing"] = spacing
         info["gpf_smooth"] = smooth
         info["gpf_dielectric"] = dielectric
         info['map_prefix'] = map_prefix
-        #info['ff_param_fname'] = ff_param_fname
+        info['ff_param_fname'] = ff_param_fname
         info['rec_types'] = ' '.join(rec_types)
         info['rec_fname'] = rec_fname
         info['gpf_npts_x'] = npts_x
@@ -517,7 +517,7 @@ class GridStuff:
     
         info['lig_types_std'] = " ".join(lig_types)
         info['mapfiles_std'] = mapfiles
-        return gpf.format(**info)
+        return gpf.format(**info), (npts_x, npts_y, npts_z)
     
     @staticmethod 
     def box_to_pdb_string(box_center, box_size):
@@ -580,13 +580,19 @@ class GridStuff:
     
         # Autogrid always outputs an odd number of grid points, roundup if even.
         # An odd number of grid poins is an even number of voxels.
-        halfvoxels = npts / 2
+        halfvoxels = np.array(npts) / 2
         step = spacing * halfvoxels.astype(int)
         mincorner = center - step
         maxcorner = center + step
         x, y, z = point
         is_outside = False
-        is_outsied |= x >= maxcorner[0] or x <= mincorner[0]
-        is_outsied |= y >= maxcorner[1] or y <= mincorner[1]
-        is_outsied |= z >= maxcorner[2] or z <= mincorner[2]
+        is_outside |= x >= maxcorner[0] or x <= mincorner[0]
+        is_outside |= y >= maxcorner[1] or y <= mincorner[1]
+        is_outside |= z >= maxcorner[2] or z <= mincorner[2]
         return is_outside
+
+    @staticmethod
+    def get_boron_silicon_atompar():
+        si = "atom_par Si     4.10  0.200  35.8235  -0.00143  0.0  0.0  0  -1  -1  6" + os_linesep
+        b  = "atom_par B      3.84  0.155  29.6478  -0.00152  0.0  0.0  0  -1  -1  0" + os_linesep
+        return si + b
