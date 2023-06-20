@@ -10,7 +10,7 @@ import sys
 from meeko import PDBQTReceptor
 from meeko import reactive_typer
 from meeko import get_reactive_config
-from meeko import GridStuff
+from meeko import gridbox
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
@@ -323,9 +323,9 @@ if not args.skip_gpf:
     written_files_log["filename"].append(str(ff_fn))
     written_files_log["description"].append("atomic parameters for B and Si (for autogrid)")
     with open(ff_fn, "w") as f:
-        f.write(GridStuff.get_boron_silicon_atompar())
+        f.write(gridbox.get_boron_silicon_atompar())
     rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
-    gpf_string, npts = GridStuff.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types, 
+    gpf_string, npts = gridbox.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types, 
                                                 ff_param_fname=ff_fn.name)
     # write GPF
     gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
@@ -339,12 +339,12 @@ if not args.skip_gpf:
     written_files_log["filename"].append(box_fn)
     written_files_log["description"].append("PDB file to visualize the grid box")
     with open(box_fn, "w") as f:
-        f.write(GridStuff.box_to_pdb_string(box_center, npts))
+        f.write(gridbox.box_to_pdb_string(box_center, npts))
 
     # check all flexres are inside the box
     any_outside = False
     for atom in receptor.atoms(pdbqt["flex_indices"]):
-        if GridStuff.is_point_outside_box(atom["xyz"], box_center, npts):
+        if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
             print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
             print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
             break # only need to warn once
