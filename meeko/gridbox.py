@@ -122,6 +122,5 @@ def is_point_outside_box(point, center, npts, spacing=0.375):
     is_outside |= z >= maxcorner[2] or z <= mincorner[2]
     return is_outside
 
-boron_silicon_atompar = ""
-boron_silicon_atompar = "atom_par Si     4.10  0.200  35.8235  -0.00143  0.0  0.0  0  -1  -1  6" + os_linesep
-boron_silicon_atompar = "atom_par B      3.84  0.155  29.6478  -0.00152  0.0  0.0  0  -1  -1  0" + os_linesep
+boron_silicon_atompar  = "atom_par Si     4.10  0.200  35.8235  -0.00143  0.0  0.0  0  -1  -1  6" + os_linesep
+boron_silicon_atompar += "atom_par B      3.84  0.155  29.6478  -0.00152  0.0  0.0  0  -1  -1  0" + os_linesep
