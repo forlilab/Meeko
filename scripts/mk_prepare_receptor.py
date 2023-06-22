@@ -114,7 +114,7 @@ def get_args():
     parser = TalkativeParser()
     parser.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
     parser.add_argument('--pdbqt', help="keeps existing charges and types")
-    parser.add_argument('-o', '--output_filename', required=True, help="will suffix _rigid/_flex with flexible or reactive residues")
+    parser.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
     parser.add_argument('-f', '--flexres', action="append", default=[],
                         help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
     parser.add_argument('-r', '--reactive_flexres', action="append", default=[],
@@ -138,11 +138,11 @@ def get_args():
         msg = "need either --pdb or --pdbqt"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    if (args.box_center is not None) and (args.box_center_on_reactive_res is not None):
+    if (args.box_center is not None) and args.box_center_on_reactive_res:
         msg = "can't use both --box_center and --box_center_on_reactive_res"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    got_center = (args.box_center is not None) or (args.box_center_on_reactive_res is not None)
+    got_center = (args.box_center is not None) or args.box_center_on_reactive_res
     if not args.skip_gpf and (args.box_size is None) == got_center:
         msg  = "missing center or size of grid box to write .gpf file for autogrid4" + os_linesep
         msg += "use --box_size and either --box_center or --box_center_on_reactive_res" + os_linesep
@@ -267,7 +267,7 @@ written_files_log = {"filename": [], "description": []}
 
 if len(all_flexres) == 0:
     box_center = args.box_center
-    rigid_fn = str(outpath)
+    rigid_fn = str(outpath.with_suffix(".pdbqt"))
     flex_fn = None
 else:
     all_flex_pdbqt = ""
@@ -281,8 +281,11 @@ else:
             flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
         all_flex_pdbqt += flexres_pdbqt
 
-    rigid_fn = str(outpath.with_suffix("")) + "_rigid" + outpath.suffix
-    flex_fn = str(outpath.with_suffix("")) + "_flex" + outpath.suffix
+    suffix = outpath.suffix
+    if outpath.suffix == "":
+        suffix = ".pdbqt"        
+    rigid_fn = str(outpath.with_suffix("")) + "_rigid" + suffix
+    flex_fn = str(outpath.with_suffix("")) + "_flex" + suffix
 
     written_files_log["filename"].append(flex_fn)
     written_files_log["description"].append("flexible receptor input file")
