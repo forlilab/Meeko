@@ -374,7 +374,7 @@ class PDBQTReceptor:
         """
         if atom_idx is not None and self._atoms.size > 1:
             if not isinstance(atom_idx, (list, tuple, np.ndarray)):
-                atom_idx = np.array(atom_idx, dtype=np.int)
+                atom_idx = np.array(atom_idx, dtype=int)
             atoms = self._atoms[atom_idx]
         else:
             atoms = self._atoms
