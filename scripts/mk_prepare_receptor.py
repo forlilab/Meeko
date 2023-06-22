@@ -370,8 +370,8 @@ if len(reactive_flexres) > 0:
     derivtypes, modpairs, collisions = get_reactive_config(
                                     any_lig_reac_types,
                                     rec_reac_types,
-                                    args.r_eq_12,
                                     args.eps_12,
+                                    args.r_eq_12,
                                     args.r_eq_13_scaling,
                                     args.r_eq_14_scaling)
 
