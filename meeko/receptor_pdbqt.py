@@ -171,6 +171,10 @@ class PDBQTReceptor:
         is_matched = False
         for terminus in ["", "N", "C"]: # e.g. "CTYR" for C-term TYR, hard-coded in residue_params
             r_id = "%s%s" % (terminus, resname)
+            if r_id not in residue_params:
+                err = "residue %s not in residue_params" % r_id + os_linesep
+                ok = False
+                return atom_params, ok, err
             ref_names = set(residue_params[r_id]["atom_names"])
             query_names = set(atom_names)
             if ref_names == query_names:
@@ -178,7 +182,6 @@ class PDBQTReceptor:
                 break
 
         if not is_matched:
-            err = "did not match residue or atom names with template"
             ok = False
             return atom_params, ok, err
     
@@ -206,6 +209,9 @@ class PDBQTReceptor:
             params_this_res, ok_, err_ = self.get_params_for_residue(resname, atom_names, residue_params)
             ok &= ok_
             err += err_
+            if not ok_:
+                print("did not match %s with template" % str(r_id), file=sys.stderr)
+                continue
             for key in wanted_params:
                 atom_params[key].extend(params_this_res[key])
         if ok:

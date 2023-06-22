@@ -323,7 +323,7 @@ if not args.skip_gpf:
     written_files_log["filename"].append(str(ff_fn))
     written_files_log["description"].append("atomic parameters for B and Si (for autogrid)")
     with open(ff_fn, "w") as f:
-        f.write(gridbox.get_boron_silicon_atompar())
+        f.write(gridbox.boron_silicon_atompar)
     rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
     gpf_string, npts = gridbox.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types, 
                                                 ff_param_fname=ff_fn.name)
