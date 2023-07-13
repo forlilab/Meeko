@@ -51,7 +51,7 @@ def parse_residue_string(string):
         err += "resnum could not be converted to integer, it was '%s' in '%s'" % (resnum, string) + os_linesep
     if ok:
         res_id = (chain, resname, resnum)
-    return res_id, ok, err 
+    return res_id, ok, err
 
 def parse_residue_string_and_name(string):
     """
@@ -127,6 +127,8 @@ def get_args():
     parser.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
+    parser.add_argument('--ligand', help="PDBQT of reference ligand")
+    parser.add_argument('--padding', help="padding around reference ligand [A]", type=float)
     parser.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
     parser.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
     parser.add_argument('--eps_12', default=2.5, type=float, help="epsilon for reactive atoms (1-2 interaction)")
@@ -142,21 +144,28 @@ def get_args():
         msg = "can't use both --box_center and --box_center_on_reactive_res"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    got_center = (args.box_center is not None) or args.box_center_on_reactive_res
-    if not args.skip_gpf and (args.box_size is None) == got_center:
-        msg  = "missing center or size of grid box to write .gpf file for autogrid4" + os_linesep
-        msg += "use --box_size and either --box_center or --box_center_on_reactive_res" + os_linesep
-        msg += "Exactly one reactive residue required for --box_center_on_reactive_res" + os_linesep
-        msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
+    got_center = (args.box_center is not None) or args.box_center_on_reactive_res or (args.ligand is not None)
+    if not args.skip_gpf:
+        if not got_center:
+            msg  = "missing center or size of grid box to write .gpf file for autogrid4" + os_linesep
+            msg += "use --box_size and either --box_center or --box_center_on_reactive_res" + os_linesep
+            msg += "or --ligand and --padding" + os_linesep
+            msg += "Exactly one reactive residue required for --box_center_on_reactive_res" + os_linesep
+            msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
+            print("Command line error: " + msg, file=sys.stderr)
+            sys.exit(2)
+        if (args.box_size is None) and (args.padding is None):
+            msg  = "grid box information is needed to dock with the AD4 scoring function." + os_linesep
+            msg += "The grid box center and size will be used to write a GPF file for autogrid" + os_linesep
+            msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
+            print("Command line error: " + msg, file=sys.stderr)
+            sys.exit(2)
+
+    if (args.box_center is not None) + (args.ligand is not None) + args.box_center_on_reactive_res > 1:
+        msg = "--box_center, --box_center_on_reactive_res, and --ligand are mutually exclusive options"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    if (args.box_size is None) and not args.skip_gpf:
-        msg  = "grid box information is needed to dock with the AD4 scoring function." + os_linesep
-        msg += "The grid box center and size will be used to write a GPF file for autogrid" + os_linesep
-        msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
-        print("Command line error: " + msg, file=sys.stderr)
-        sys.exit(2)
-    
+
     return args
 
 args = get_args()
@@ -183,34 +192,34 @@ reactive_flexres = {}
 all_ok = True
 all_err = ""
 for resid_string in args.reactive_flexres:
-    res_id, ok, err = parse_residue_string(resid_string) 
+    res_id, ok, err = parse_residue_string(resid_string)
     if ok:
         resname = res_id[1]
         if resname in reactive_atom:
             reactive_flexres[res_id] = reactive_atom[resname]
         else:
             all_ok = False
-            all_err += "no default reactive name for %s, " % resname 
+            all_err += "no default reactive name for %s, " % resname
             all_err += "use --reactive_name or --reactive_name_specific" + os_linesep
     all_ok &= ok
     all_err += err
 
 for string in args.reactive_name_specific:
-    out, ok, err = parse_residue_string_and_name(string) 
+    out, ok, err = parse_residue_string_and_name(string)
     if ok:
         # override name if res_id was also passed to --reactive_flexres
         reactive_flexres[out["res_id"]] = out["name"]
     all_ok &= ok
     all_err += err
 
-if len(reactive_flexres) > 8: 
+if len(reactive_flexres) > 8:
     msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
     print("Command line error: " + msg, file=sys.stderr)
     sys.exit(2)
 
 all_flexres = set()
 for resid_string in args.flexres:
-    res_id, ok, err = parse_residue_string(resid_string) 
+    res_id, ok, err = parse_residue_string(resid_string)
     all_ok &= ok
     all_err += err
     if ok:
@@ -247,7 +256,7 @@ if len(reactive_flexres) != 1 and args.box_center_on_reactive_res:
     msg += "residue, but %d reactive residues are set" % len(reactive_flexres)
     print("Command line error:" + msg, file=sys.stderr)
     sys.exit(2)
-    
+
 if args.pdb is not None:
     receptor = PDBQTReceptor(args.pdb, skip_typing=True)
     ok, err = receptor.assign_types_charges()
@@ -257,7 +266,7 @@ else:
 
 any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
                       "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]
- 
+
 pdbqt, ok, err = receptor.write_pdbqt_string(flexres=all_flexres)
 check(ok, err)
 
@@ -283,7 +292,7 @@ else:
 
     suffix = outpath.suffix
     if outpath.suffix == "":
-        suffix = ".pdbqt"        
+        suffix = ".pdbqt"
     rigid_fn = str(outpath.with_suffix("")) + "_rigid" + suffix
     flex_fn = str(outpath.with_suffix("")) + "_flex" + suffix
 
@@ -295,16 +304,17 @@ else:
 written_files_log["filename"].append(rigid_fn)
 written_files_log["description"].append("static (i.e., rigid) receptor input file")
 with open(rigid_fn, "w") as f:
-    f.write(pdbqt["rigid"]) 
+    f.write(pdbqt["rigid"])
 
 # GPF for autogrid4
 if not args.skip_gpf:
     if args.box_center is not None:
         box_center = args.box_center
+        box_size = args.box_size
     elif args.box_center_on_reactive_res:
         # we have only one reactive residue and will set the box center
         # to be 5 Angstromg away from CB along the CA->CB vector
-        idxs = receptor.atom_idxs_by_res[list(reactive_flexres.keys())[0]] 
+        idxs = receptor.atom_idxs_by_res[list(reactive_flexres.keys())[0]]
         ca = None
         cb = None
         for atom in receptor.atoms(idxs):
@@ -317,6 +327,9 @@ if not args.skip_gpf:
         v = (cb - ca)
         v /= math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) + 1e-8
         box_center = ca + 5 * v
+        box_size = args.box_size
+    elif args.ligand is not None:
+        box_center, box_size = gridbox.calc_box(args.ligand, args.padding)
     else:
         print("Error: No box center specified.", file=sys.stderr)
         sys.exit(2)
@@ -328,7 +341,7 @@ if not args.skip_gpf:
     with open(ff_fn, "w") as f:
         f.write(gridbox.boron_silicon_atompar)
     rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
-    gpf_string, npts = gridbox.get_gpf_string(box_center, args.box_size, rigid_fn, rec_types, any_lig_base_types, 
+    gpf_string, npts = gridbox.get_gpf_string(box_center, box_size, rigid_fn, rec_types, any_lig_base_types,
                                                 ff_param_fname=ff_fn.name)
     # write GPF
     gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
@@ -351,7 +364,7 @@ if not args.skip_gpf:
             print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
             print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
             break # only need to warn once
-            
+
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:
     any_lig_reac_types = []
@@ -363,7 +376,7 @@ if len(reactive_flexres) > 0:
     for line in all_flex_pdbqt.split(os_linesep):
         if line.startswith("ATOM") or line.startswith("HETATM"):
             atype = line[77:].strip()
-            basetype, _ = reactive_typer.get_basetype_and_order(atype) 
+            basetype, _ = reactive_typer.get_basetype_and_order(atype)
             if basetype is not None: # is None if not reactive
                 rec_reac_types.append(line[77:].strip())
 
