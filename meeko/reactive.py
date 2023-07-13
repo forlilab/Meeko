@@ -94,7 +94,9 @@ class ReactiveAtomTyper:
 
     def get_reactive_atype(self, atype, reactive_order):
         """ create or retrive new reactive atom type label name"""
-        if atype in ['CG0', 'CG1', 'CG2', 'CG3', "CG4", "CG5", "CG6", "CG7", "CG8"]:
+        macrocycle_glue_types = ["CG%d" % i for i in range(9)]
+        macrocycle_glue_types += ["G%d" % i for i in range(9)]
+        if atype in macrocycle_glue_types:
             return None
         return self.reactive_type[reactive_order][atype]
 
@@ -121,14 +123,14 @@ def assign_reactive_types(molsetup, smarts, smarts_idx, get_reactive_atype=get_r
         reactive_atom_index = atom_indices[smarts_idx]
 
         # type reactive atom
-        original_type = atypes[reactive_atom_index]
+        original_type = molsetup.atom_type[reactive_atom_index]
         reactive_type = get_reactive_atype(original_type, reactive_order=1) 
         atypes[reactive_atom_index] = reactive_type
 
         # type atoms 1 bond away from reactive atom
         for index1 in molsetup.graph[reactive_atom_index]:
             if not molsetup.atom_ignore[index1]:
-                original_type = atypes[index1]
+                original_type = molsetup.atom_type[index1]
                 reactive_type = get_reactive_atype(original_type, reactive_order=2)
                 atypes[index1] = reactive_type
 
@@ -137,7 +139,7 @@ def assign_reactive_types(molsetup, smarts, smarts_idx, get_reactive_atype=get_r
                 if index2 == reactive_atom_index:
                     continue
                 if not molsetup.atom_ignore[index2]:
-                    original_type = atypes[index2]
+                    original_type = molsetup.atom_type[index2]
                     reactive_type = get_reactive_atype(original_type, reactive_order=3)
                     atypes[index2] = reactive_type
 
