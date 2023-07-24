@@ -44,6 +44,7 @@ class MoleculePreparation:
             rigidify_bonds_smarts=[],
             rigidify_bonds_indices=[],
             atom_type_smarts={},
+            add_atom_types=[],
             reactive_smarts=None,
             reactive_smarts_idx=None,
             add_index_map=False,
@@ -62,12 +63,13 @@ class MoleculePreparation:
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
         self.rigidify_bonds_indices = rigidify_bonds_indices
         self.atom_type_smarts = atom_type_smarts
+        self.add_atom_types = add_atom_types
         self.reactive_smarts = reactive_smarts
         self.reactive_smarts_idx = reactive_smarts_idx
         self.add_index_map = add_index_map
         self.remove_smiles = remove_smiles
 
-        self._atom_typer = AtomTyper(self.atom_type_smarts)
+        self._atom_typer = AtomTyper(self.atom_type_smarts, self.add_atom_types)
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(
                 self.min_ring_size, self.max_ring_size, self.double_bond_penalty)

@@ -45,10 +45,12 @@ class AtomTyper:
         }
     }
     """
-    def __init__(self, parameters={}):
+    def __init__(self, parameters={}, add_parameters=[]):
         self.parameters = json.loads(self.defaults_json)
         for key in parameters:
             self.parameters[key] = json.loads(json.dumps(parameters[key])) # a safe copy
+        # add additional parameters
+        self.parameters['ATOM_PARAMS']['alkyl glue'].extend(add_parameters)
 
     def __call__(self, setup):
         self._type_atoms(setup)
