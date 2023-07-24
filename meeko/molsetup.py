@@ -648,8 +648,12 @@ class RDKitMoleculeSetup(MoleculeSetup):
         """ initialize the atom table information """
         # extract/generate charges
         if assign_charges:
-            rdPartialCharges.ComputeGasteigerCharges(self.mol)
-            charges = [a.GetDoubleProp('_GasteigerCharge') for a in self.mol.GetAtoms()]
+            copy_mol = Chem.Mol(self.mol)
+            for atom in copy_mol.GetAtoms():
+                if atom.GetAtomicNum() == 34:
+                    atom.SetAtomicNum(16)
+            rdPartialCharges.ComputeGasteigerCharges(copy_mol)
+            charges = [a.GetDoubleProp('_GasteigerCharge') for a in copy_mol.GetAtoms()]
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
         # perceive chirality
