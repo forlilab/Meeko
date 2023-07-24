@@ -93,7 +93,7 @@ def cmd_lineparser():
                         action="store_true", help="allow amide bonds to rotate and be non-planar, which is bad")
     config_group.add_argument("-p", "--atom_type_smarts", dest="atom_type_smarts_json",
                         action="store", help="SMARTS based atom typing (JSON format)")
-    config_group.add_argument("-aa", "--add_atom_types", dest="add_atom_types_str",
+    config_group.add_argument("-aa", "--add_atom_types", dest="add_atom_types_json",
                         action="store", help="Additional atom types to assign (JSON formated)", metavar="{'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}", nargs='+')
     config_group.add_argument("--double_bond_penalty", help="penalty > 100 prevents breaking double bonds", type=int)
     config_group.add_argument("--add_index_map", dest="add_index_map",
@@ -139,9 +139,9 @@ def cmd_lineparser():
         with open(args.atom_type_smarts_json) as f:
             config['atom_type_smarts'] = json.load(f)
     
-    if args.add_atom_type_json is not None:
+    if args.add_atom_types_json is not None:
         additional_ats = []
-        for at in args.add_atom_types_str:
+        for at in args.add_atom_types_json:
             additional_ats.append(json.loads(at))
         config['add_atom_types'] = additional_ats
 
