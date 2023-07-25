@@ -93,8 +93,8 @@ def cmd_lineparser():
                         action="store_true", help="allow amide bonds to rotate and be non-planar, which is bad")
     config_group.add_argument("-p", "--atom_type_smarts", dest="atom_type_smarts_json",
                         action="store", help="SMARTS based atom typing (JSON format)")
-    config_group.add_argument("-aa", "--add_atom_types", dest="add_atom_types_str",
-                        action="store", help="Additional atom types to assign (JSON formated)", metavar="{'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}", nargs='+')
+    config_group.add_argument("-aa", "--add_atom_types", dest="add_atom_types_json",
+                        action="store", help="Additional atom types to assign (JSON formated)", metavar="[{'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}, {'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}]")
     config_group.add_argument("--double_bond_penalty", help="penalty > 100 prevents breaking double bonds", type=int)
     config_group.add_argument("--add_index_map", dest="add_index_map",
                         action="store_true", help="write map of atom indices from input to pdbqt")
@@ -140,10 +140,7 @@ def cmd_lineparser():
             config['atom_type_smarts'] = json.load(f)
     
     if args.add_atom_type_json is not None:
-        additional_ats = []
-        for at in args.add_atom_types_str:
-            additional_ats.append(json.loads(at))
-        config['add_atom_types'] = additional_ats
+        config['add_atom_types'] = json.load(args.add_atom_type_json)
 
     if args.multimol_output_dir is not None or args.multimol_prefix is not None:
         if args.output_pdbqt_filename is not None:
