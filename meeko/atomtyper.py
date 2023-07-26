@@ -50,7 +50,14 @@ class AtomTyper:
         for key in parameters:
             self.parameters[key] = json.loads(json.dumps(parameters[key])) # a safe copy
         # add additional parameters
-        self.parameters['ATOM_PARAMS']['alkyl glue'].extend(add_parameters)
+        if len(add_parameters) > 0:
+            keys = list(self.parameters["ATOM_PARAMS"].keys())
+            if len(keys) != 1:
+                msg = "add_parameters is usable only when there is one group of parameters"
+                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
+                raise RuntimeError(msg)
+            key = keys[0]
+            self.parameters['ATOM_PARAMS'][key].extend(add_parameters)
 
     def __call__(self, setup):
         self._type_atoms(setup)
