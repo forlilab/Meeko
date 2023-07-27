@@ -265,7 +265,7 @@ mk_prepare_ligand.py\
     -o prepared.pdbqt
 ```
 
-## REACTIVE DOCKING
+## Reactive Docking
 
 ### 1. Prepare protein with waterkit
 Follow `wk_prepare_receptor.py` instructions and run with `--pdb`.
