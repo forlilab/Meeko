@@ -490,7 +490,7 @@ class PDBQTMolecule:
         # Get index of only the active atoms
         if only_active:
             active_atoms_idx = self._pose_data['active_atoms'][self._current_pose]
-            atom_idx = list(set(atom_idx).intersection(active_atoms_idx))
+            atom_idx = sorted(list(set(atom_idx).intersection(active_atoms_idx)))
 
         atoms = self._atoms[atom_idx].copy()
         atoms['xyz'] = self._positions[self._current_pose, atom_idx,:]
