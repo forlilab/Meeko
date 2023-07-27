@@ -300,7 +300,7 @@ Reactive parameters can also be modified:
 ```
 
 We can't handle heteroatoms for the moment. Nor nucleic acids.
-@@ -26,7 +38,7 @@ phosphorilation, and a mechanism to support heteroatoms.
+phosphorilation, and a mechanism to support heteroatoms.
 
 ### 3. Run autogrid
 
@@ -308,7 +308,7 @@ Make affinity maps for the `_rigid.pdbqt` part of the receptor.
 Make affinity maps for the `_rigid.pdbqt` part of the receptor. `mk_prepare_receptor.py` will prepare the GPF for you.
 
 ### 4. Write ligand PDBQT
-@@ -40,13 +52,13 @@ mk_prepare_ligand.py -i sufex1.sdf --reactive_smarts "S(=O)(=O)F" --reactive_smarts_idx 1 -o sufex1.pdbqt\
+mk_prepare_ligand.py -i sufex1.sdf --reactive_smarts "S(=O)(=O)F" --reactive_smarts_idx 1 -o sufex1.pdbqt\
 
 ### 5. Configure AD-GPU for reactive docking
 
