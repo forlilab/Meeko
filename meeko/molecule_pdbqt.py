@@ -315,6 +315,10 @@ def _identify_bonds(atom_idx, positions, atom_types):
     k = 5 if len(atom_idx) > 5 else len(atom_idx)
     atom_idx = np.array(atom_idx)
 
+    # If there is only one atom, we know there won't be a single bond..
+    if len(atom_idx) == 1:
+        return bonds
+
     for atom_i, position, atom_type in zip(atom_idx, positions, atom_types):
         distances, indices = KDTree.query(position, k=k)
         r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
