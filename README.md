@@ -267,14 +267,14 @@ mk_prepare_ligand.py\
 
 ## REACTIVE DOCKING
 
-# 1. Prepare protein with waterkit
+### 1. Prepare protein with waterkit
 Follow `wk_prepare_receptor.py` instructions and run with `--pdb`.
 The goal of this step is to perform essential fixes to the protein
 (such as missing atoms), to add hydrogens, and to follow the Amber
 naming scheme for atoms and residues, e.g., `HIE` or `HID`
 instead of `HIS`.
 
-# 2. Prepare protein pdbqt
+### 2. Prepare protein pdbqt
 Here, `wk.pdb` was written by waterkit.
 Here, `wk.pdb` was written by waterkit. The example below will center a gridbox of specified size on the given reactive residue.
 
@@ -302,15 +302,15 @@ Reactive parameters can also be modified:
 We can't handle heteroatoms for the moment. Nor nucleic acids.
 @@ -26,7 +38,7 @@ phosphorilation, and a mechanism to support heteroatoms.
 
-# 3. Run autogrid
+### 3. Run autogrid
 
 Make affinity maps for the `_rigid.pdbqt` part of the receptor.
 Make affinity maps for the `_rigid.pdbqt` part of the receptor. `mk_prepare_receptor.py` will prepare the GPF for you.
 
-# 4. Write ligand PDBQT
+### 4. Write ligand PDBQT
 @@ -40,13 +52,13 @@ mk_prepare_ligand.py -i sufex1.sdf --reactive_smarts "S(=O)(=O)F" --reactive_smarts_idx 1 -o sufex1.pdbqt\
 
-# 5. Configure AD-GPU for reactive docking
+### 5. Configure AD-GPU for reactive docking
 
 For reactive docking there are two options that need to be passed to AutoDock-GPU:
 For reactive docking there are an additional option that needs to be passed to AutoDock-GPU:
