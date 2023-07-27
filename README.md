@@ -302,7 +302,7 @@ Reactive parameters can also be modified:
 We can't handle heteroatoms for the moment. Nor nucleic acids.
 @@ -26,7 +38,7 @@ phosphorilation, and a mechanism to support heteroatoms.
 
-# 3 Run autogrid
+# 3. Run autogrid
 
 Make affinity maps for the `_rigid.pdbqt` part of the receptor.
 Make affinity maps for the `_rigid.pdbqt` part of the receptor. `mk_prepare_receptor.py` will prepare the GPF for you.
