@@ -1,17 +1,9 @@
 name: Build/upload sdist and wheel Package to PyPI
 
 on:
-  push:
-    branches:
-      - main
-      - dev
-    paths-ignore:
-      - 'example/**'
-      - 'docs/**'
   pull_request:
     branches:
-      - main
-      - dev
+      - develop
     paths-ignore:
       - 'example/**'
       - 'docs/**'
