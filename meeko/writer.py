@@ -6,6 +6,7 @@
 
 import sys
 import json
+import math
 
 import numpy as np
 from rdkit import Chem
@@ -102,7 +103,7 @@ class PDBQTWriterLegacy():
         return data
 
     @classmethod
-    def write_string(cls, setup, add_index_map=False, remove_smiles=False):
+    def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
         """Output a PDBQT file as a string.
 
         Args:
@@ -122,8 +123,14 @@ class PDBQTWriterLegacy():
             success = False
 
         for idx, atom_type in setup.atom_type.items():
+            if setup.atom_ignore[idx]:
+                continue
             if atom_type is None:
                 error_msg += 'atom number %d has None type, mol name: %s\n' % (idx, setup.get_mol_name())
+                success = False
+            c = setup.charge[idx]
+            if not bad_charge_ok and (type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)):
+                error_msg += 'atom number %d has non finite charge, mol name: %s, charge: %s\n' % (idx, setup.get_mol_name(), str(c))
                 success = False
 
         if not success:

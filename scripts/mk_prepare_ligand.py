@@ -96,6 +96,7 @@ def cmd_lineparser():
     config_group.add_argument("-aa", "--add_atom_types", dest="add_atom_types_json",
                         action="append", help="Additional atom types to assign (JSON formated)", metavar="[{'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}, {'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}]")
     config_group.add_argument("--double_bond_penalty", help="penalty > 100 prevents breaking double bonds", type=int)
+    config_group.add_argument("--bad_charge_ok", help="NaN and Inf charges allowed in PDBQT", action="store_true")
     config_group.add_argument("--add_index_map", dest="add_index_map",
                         action="store_true", help="write map of atom indices from input to pdbqt")
     config_group.add_argument("--remove_smiles", dest="remove_smiles",
@@ -337,7 +338,7 @@ if __name__ == '__main__':
                 res, chain, num = cov_lig.res_id
                 suffixes = output.get_suffixes(molsetups)
                 for molsetup, suffix in zip(molsetups, suffixes):
-                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup)
+                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
                     if success:
                         pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
                         name = molsetup.name
@@ -351,7 +352,7 @@ if __name__ == '__main__':
             molsetups = preparator.prepare(mol)
             suffixes = output.get_suffixes(molsetups) 
             for molsetup, suffix in zip(molsetups, suffixes):
-                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup)
+                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
                 if success:
                     name = molsetup.name
                     output(pdbqt_string, name, (suffix,))
