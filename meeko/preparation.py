@@ -29,6 +29,8 @@ except ImportError:
 else:
     _has_openbabel = True
 
+# DeprecationWarning is not displayed by default
+warnings.filterwarnings("default", category=DeprecationWarning)
 
 class MoleculePreparation:
     def __init__(self,
@@ -51,6 +53,7 @@ class MoleculePreparation:
             remove_smiles=False,
         ):
 
+        self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
         self.hydrate = hydrate
         self.flexible_amides = flexible_amides
@@ -75,7 +78,6 @@ class MoleculePreparation:
                 self.min_ring_size, self.max_ring_size, self.double_bond_penalty)
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
-        self._writer = PDBQTWriterLegacy()
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
         if _has_openbabel:
             self._classes_setup[ob.OBMol] = OBMoleculeSetup
@@ -83,6 +85,13 @@ class MoleculePreparation:
             warnings.warn("keep_equivalent_rings=False ignored because keep_chorded_rings=True", RuntimeWarning)
         if (reactive_smarts is None) != (reactive_smarts_idx is None):
             raise ValueError("reactive_smarts and reactive_smarts_idx require each other")
+
+    @property
+    def setup(self):
+        msg = "MoleculePreparation.setup is deprecated in Meeko v0.5."
+        msg += " MoleculePreparation.prepare() returns a list of MoleculeSetup instances."
+        warnings.warn(msg, DeprecationWarning)
+        return self.deprecated_setup_access
 
     @classmethod
     def get_defaults_dict(cls):
@@ -196,6 +205,7 @@ class MoleculePreparation:
                 new_setup.atom_type = r
                 setups.append(new_setup)
 
+        self.deprecated_setup_access = setups[0] # for a gentle introduction of the new API
         return setups
 
 
@@ -211,3 +221,23 @@ class MoleculePreparation:
                 xyz = glue_pseudo_atoms[index]
                 if len(xyz) != 3:
                     raise ValueError("expected 3 coordinates (got %d) for glue pseudo of atom %d" % (len(xyz), index)) 
+
+
+    def write_pdbqt_string(self, add_index_map=None, remove_smiles=None):
+        msg = "MoleculePreparation.write_pdbqt_string() is deprecated in Meeko v0.5."
+        msg += " Pass the MoleculeSetup instance to PDBQTWriterLegacy.write_string()."
+        msg += " MoleculePreparation.prepare() returns a list of MoleculeSetup instances."
+        warnings.warn(msg, DeprecationWarning)
+        pdbqt_string, is_ok, err_msg = PDBQTWriterLegacy.write_string(self.setup)
+        if not is_ok:
+            msg = 'Cannot generate PDBQT, error from PDBQTWriterLegacy:' + os.linesep
+            msg += err_msg
+            raise RuntimeError(msg)
+        return pdbqt_string
+
+
+    def write_pdbqt_file(self, pdbqt_filename, add_index_map=None, remove_smiles=None):
+        warnings.warn("MoleculePreparation.write_pdbqt_file() is deprecated since Meeko v0.5", DeprecationWarning)
+        with open(pdbqt_filename,'w') as w:
+            w.write(self.write_pdbqt_string(add_index_map, remove_smiles))
+
