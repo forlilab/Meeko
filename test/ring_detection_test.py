@@ -26,8 +26,9 @@ mk_prep = MoleculePreparation() #keep_equivalent_rings=True)
 def run(molname, min_rings):
     filename = filenames[molname]
     mol = Chem.MolFromMolFile(filename, removeHs=False)
-    mk_prep.prepare(mol)
-    setup = mk_prep.setup
+    setups = mk_prep.prepare(mol)
+    assert(len(setups) == 1)
+    setup = setups[0]
     print("\n%s" % molname)
     found_rings = 0
     for ring in setup.rings:

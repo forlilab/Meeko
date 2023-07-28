@@ -1,6 +1,7 @@
 from meeko import RDKitMolCreate
 from meeko import PDBQTMolecule
 from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 import pathlib
 
@@ -70,11 +71,11 @@ def run(sdfname, wet=False):
     fpath = datadir / sdfname
     for mol in Chem.SDMolSupplier(str(fpath), removeHs=False):
         if wet:
-            mk_prep_wet.prepare(mol)
-            pdbqt = mk_prep_wet.write_pdbqt_string()
+            setups = mk_prep_wet.prepare(mol)
+            pdbqt, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
         else:
-            mk_prep.prepare(mol)
-            pdbqt = mk_prep.write_pdbqt_string()
+            setups = mk_prep.prepare(mol)
+            pdbqt, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
         pmol = PDBQTMolecule(pdbqt)
         run_from_pdbqtmol(pmol)
 

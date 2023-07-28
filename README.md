@@ -13,7 +13,9 @@ Meeko is developed by the [Forli lab](https://forlilab.org/) at the
 [Center for Computational Structural Biology (CCSB)](https://ccsb.scripps.edu)
 at [Scripps Research](https://www.scripps.edu/).
 
+
 ## Usage notes
+
 Meeko does not calculate 3D coordinates or assign protonation states.
 Input molecules must have explicit hydrogens.
 
@@ -27,11 +29,27 @@ and RDKit issues
 [1755](https://github.com/rdkit/rdkit/issues/1755) and
 [917](https://github.com/rdkit/rdkit/issues/917).
 
+
 ## Recent changes
 
+Class `MoleculePreparation` no longer has method `write_pdbqt_string()`.
+Instead, `MoleculePreparation.prepare()` returns a list of `MoleculeSetup` objects
+that must be passed, individually, to `PDBQTWriterLegacy.write_string()`.
+```python
+from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
+
+preparator = MoleculePreparation()
+mol_setups = preparator.prepare(rdkit_molecule_3D_with_Hs)
+for setup in mol_setups:
+    pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setup)
+    if is_ok:
+        print(pdbqt_string, end="")
+```
+
 Argument `keep_nonpolar_hydrogens` is replaced by `merge_these_atom_types`, both in the Python
-interface and for script `mk_prepare_ligand.py`. This change is not in a release yet but the
-code is up on the develop branch. The default is `merge_these_atom_types=("H",)`, which
+interface and for script `mk_prepare_ligand.py`.
+The default is `merge_these_atom_types=("H",)`, which
 merges hydrogens typed `"H"`, keeping the current default behavior.
 To keep all hydrogens, set `merge_these_atom_types` to an empty
 list when initializing `MoleculePreparation`, or pass no atom types
@@ -39,11 +57,6 @@ to `--merge_these_atom_types` from the command line:
 ```sh
 mk_prepare_ligand.py -i molecule.sdf --merge_these_atom_types
 ``` 
-
-The Python API for creating RDKit molecules from docking results changed in `v0.4.0`.
-See [example below](#2.-rdkit-molecule-from-docking-results).
-
-The `--pH` option was removed since `v0.3.0`. See issue https://github.com/forlilab/Meeko/issues/11 for more info.
 
 ## Dependencies
 
@@ -120,6 +133,7 @@ $ obabel -:"C1C=CCO1" -o pdbqt --gen3d | obabel -i pdbqt -o smi
 
 ```python
 from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 
 input_molecule_file = "example/BACE_macrocycle/BACE_4.sdf"
@@ -127,9 +141,10 @@ input_molecule_file = "example/BACE_macrocycle/BACE_4.sdf"
 # there is one molecule in this SD file, this loop iterates just once
 for mol in Chem.SDMolSupplier(input_molecule_file, removeHs=False):
     preparator = MoleculePreparation()
-    preparator.prepare(mol)
-    preparator.show_setup() # optional
-    pdbqt_string = preparator.write_pdbqt_string()
+    mol_setups = preparator.prepare(mol)
+    for setup in mol_setups:
+        setup.show() # optional
+        pdbqt_string = PDBQTWriterLegacy.write_string(setup)
 ```
 At this point, `pdbqt_string` can be written to a file for
 docking with AutoDock-GPU or Vina, or passed directly to Vina within Python
@@ -249,3 +264,63 @@ mk_prepare_ligand.py\
     --tether_smarts_indices 9 8\
     -o prepared.pdbqt
 ```
+
+## Reactive Docking
+
+### 1. Prepare protein with waterkit
+Follow `wk_prepare_receptor.py` instructions and run with `--pdb`.
+The goal of this step is to perform essential fixes to the protein
+(such as missing atoms), to add hydrogens, and to follow the Amber
+naming scheme for atoms and residues, e.g., `HIE` or `HID`
+instead of `HIS`.
+
+### 2. Prepare protein pdbqt
+Here, `wk.pdb` was written by waterkit.
+Here, `wk.pdb` was written by waterkit. The example below will center a gridbox of specified size on the given reactive residue.
+
+```console
+   $ mk_prepare_receptor.py\
+    --pdb wk.pdb\
+    -o receptor.pdbqt\
+    --flexres " :ARG:348"\
+    --reactive_flexres " :SER:308"
+    --reactive_flexres " :SER:308"\
+    --box_center_on_reactive_res\
+    --box_size 40 40 40  # x y z (angstroms)
+```
+A manual box center can be specified with `--box_center`.
+Reactive parameters can also be modified:
+```sh
+  --r_eq_12 R_EQ_12     r_eq for reactive atoms (1-2 interaction)
+  --eps_12 EPS_12       epsilon for reactive atoms (1-2 interaction)
+  --r_eq_13_scaling R_EQ_13_SCALING
+                        r_eq scaling for 1-3 interaction across reactive atoms
+  --r_eq_14_scaling R_EQ_14_SCALING
+                        r_eq scaling for 1-4 interaction across reactive atoms
+```
+
+We can't handle heteroatoms for the moment. Nor nucleic acids.
+phosphorilation, and a mechanism to support heteroatoms.
+
+### 3. Run autogrid
+
+Make affinity maps for the `_rigid.pdbqt` part of the receptor.
+Make affinity maps for the `_rigid.pdbqt` part of the receptor. `mk_prepare_receptor.py` will prepare the GPF for you.
+
+### 4. Write ligand PDBQT
+mk_prepare_ligand.py -i sufex1.sdf --reactive_smarts "S(=O)(=O)F" --reactive_smarts_idx 1 -o sufex1.pdbqt\
+
+### 5. Configure AD-GPU for reactive docking
+
+For reactive docking there are two options that need to be passed to AutoDock-GPU:
+For reactive docking there are an additional option that needs to be passed to AutoDock-GPU:
+    ```console
+    --import_dpf
+    ```
+
+The `--derivtype` option, if needed, was written by `mk_prepare_receptor.py` to a file suffixed with `.derivtype`.
+
+The filename to be passed to `--import_dpf` was written by `mk_prepare_receptor.py`
+and it is suffixed with `reactive_config`.
+```sh
+ADGPU -I *.reactive_config -L sufex1.pdbqt -N sufex1_docked_ -F *_flex.pdbqt -C 1
