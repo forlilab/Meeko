@@ -1,7 +1,7 @@
 # Meeko: preparation of small molecules for AutoDock
 
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
-[![PyPI version fury.io](https://img.shields.io/badge/version-0.4.0-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
+[![PyPI version fury.io](https://img.shields.io/badge/version-0.5.0-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
 
 Meeko reads an RDKit molecule object and writes a PDBQT string (or file)
 for [AutoDock-Vina](https://github.com/ccsb-scripps/AutoDock-Vina)
@@ -30,7 +30,7 @@ and RDKit issues
 [917](https://github.com/rdkit/rdkit/issues/917).
 
 
-## Recent changes
+## API changes in v0.5
 
 Class `MoleculePreparation` no longer has method `write_pdbqt_string()`.
 Instead, `MoleculePreparation.prepare()` returns a list of `MoleculeSetup` objects
@@ -299,8 +299,11 @@ Reactive parameters can also be modified:
                         r_eq scaling for 1-4 interaction across reactive atoms
 ```
 
-We can't handle heteroatoms for the moment. Nor nucleic acids.
-phosphorilation, and a mechanism to support heteroatoms.
+Receptor preparation can't handle heteroatoms for the moment.
+Also nucleic acids, ions, and post-translational modifications (e.g.
+phosphorilation) are not supported. Only the 20 standard amino acids
+can be parsed, and it is required to have Amber atom names and
+hydrogens. No atoms can be missing.
 
 ### 3. Run autogrid
 
