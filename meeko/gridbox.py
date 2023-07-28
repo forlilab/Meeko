@@ -61,7 +61,7 @@ def box_to_pdb_string(box_center, npts, spacing=0.375):
         |5....|./6
         |.____|/
        1      2
-    
+
     """
 
     step_x = int(npts[0] / 2.0) * spacing
@@ -77,7 +77,7 @@ def box_to_pdb_string(box_center, npts, spacing=0.375):
     corners.append([center_x + step_x, center_y - step_y, center_z + step_z] ) # 6
     corners.append([center_x + step_x, center_y + step_y, center_z + step_z] ) # 7
     corners.append([center_x - step_x, center_y + step_y, center_z + step_z] ) # 8
-    
+
     count = 1
     res = "BOX"
     chain = "X"
@@ -89,10 +89,10 @@ def box_to_pdb_string(box_center, npts, spacing=0.375):
     	z = corners[idx][2]
     	pdb_out += line % (count, "Ne", res, chain, idx+1, x, y, z, "Ne")
     	count += 1
-    
+
     # center
     pdb_out += line % (count+1, "Xe", res, chain, idx+1, center_x, center_y, center_z, "Xe")
-    
+
     pdb_out += "CONECT    1    2" + os_linesep
     pdb_out += "CONECT    1    4" + os_linesep
     pdb_out += "CONECT    1    5" + os_linesep
@@ -121,6 +121,36 @@ def is_point_outside_box(point, center, npts, spacing=0.375):
     is_outside |= y >= maxcorner[1] or y <= mincorner[1]
     is_outside |= z >= maxcorner[2] or z <= mincorner[2]
     return is_outside
+
+def calc_box(fname, padding):
+    """Crude PDBQT parsing is used here because it allows input of autosite pdbqts"""
+    padding = float(padding)
+    x_min = float('inf')
+    x_min = float('inf')
+    y_min = float('inf')
+    z_min = float('inf')
+    x_max = float('-inf')
+    y_max = float('-inf')
+    z_max = float('-inf')
+    with open(fname) as f:
+        for line in f:
+            if line.startswith('ATOM') or line.startswith('HETATM'):
+                x = float(line[30:38])
+                y = float(line[38:46])
+                z = float(line[46:54])
+                x_max = max(x, x_max)
+                y_max = max(y, y_max)
+                z_max = max(z, z_max)
+                x_min = min(x, x_min)
+                y_min = min(y, y_min)
+                z_min = min(z, z_min)
+    center_x = (x_min + x_max) / 2.0
+    center_y = (y_min + y_max) / 2.0
+    center_z = (z_min + z_max) / 2.0
+    size_x = x_max - x_min + 2 * padding
+    size_y = y_max - y_min + 2 * padding
+    size_z = z_max - z_min + 2 * padding
+    return (center_x, center_y, center_z), (size_x, size_y, size_z)
 
 boron_silicon_atompar  = "atom_par Si     4.10  0.200  35.8235  -0.00143  0.0  0.0  0  -1  -1  6" + os_linesep
 boron_silicon_atompar += "atom_par B      3.84  0.155  29.6478  -0.00152  0.0  0.0  0  -1  -1  0" + os_linesep

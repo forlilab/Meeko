@@ -8,6 +8,7 @@ from collections import defaultdict
 import json
 from os import linesep as os_linesep
 import pathlib
+import sys
 
 import numpy as np
 from scipy import spatial
@@ -86,7 +87,7 @@ def _read_receptor_pdbqt_string(pdbqt_string, skip_typing=False):
             except:
                 temp_factor = None
             record_type = line[0:6].strip()
-                
+
             if skip_typing:
                 atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type,
                               alt_id, in_code, occupancy, temp_factor, record_type))
@@ -135,7 +136,7 @@ class PDBQTReceptor:
         self._KDTree = None
 
         with open(pdbqt_filename) as f:
-            pdbqt_string = f.read() 
+            pdbqt_string = f.read()
 
         self._atoms, self._atom_annotations = _read_receptor_pdbqt_string(pdbqt_string, skip_typing)
         # We add to the KDTree only the rigid part of the receptor
@@ -150,7 +151,7 @@ class PDBQTReceptor:
     def get_atom_indices_by_residue(atoms):
         """ return a dictionary where residues are keys and
              values are lists of atom indices
-                
+
             >>> atom_idx_by_res = {("A", "LYS", 417): [0, 1, 2, 3, ..., 8]}
         """
 
@@ -184,18 +185,18 @@ class PDBQTReceptor:
         if not is_matched:
             ok = False
             return atom_params, ok, err
-    
+
         for atom_name in atom_names:
             name_index = residue_params[r_id]["atom_names"].index(atom_name)
             for param in residue_params[r_id].keys():
                 if param in excluded_params:
                     continue
                 if param not in atom_params:
-                    atom_params[param] = [None] * atom_counter 
+                    atom_params[param] = [None] * atom_counter
                 value = residue_params[r_id][param][name_index]
                 atom_params[param].append(value)
             atom_counter += 1
-    
+
         return atom_params, ok, err
 
     def assign_types_charges(self, residue_params=residue_params):
@@ -215,8 +216,8 @@ class PDBQTReceptor:
             for key in wanted_params:
                 atom_params[key].extend(params_this_res[key])
         if ok:
-            self._atoms["partial_charges"] = atom_params["gasteiger"] 
-            self._atoms["atom_type"] = atom_params["atom_types"] 
+            self._atoms["partial_charges"] = atom_params["gasteiger"]
+            self._atoms["atom_type"] = atom_params["atom_types"]
         return ok, err
 
     def write_flexres_from_template(self, res_id, atom_index=0):
@@ -259,7 +260,7 @@ class PDBQTReceptor:
         for i in range(len(template["is_atom"])):
             if template["is_atom"][i]:
                 ref_atoms.add(template["atom_name"][i])
-        if got_atoms != ref_atoms: 
+        if got_atoms != ref_atoms:
             success = False
             error_msg += "mismatch in atom names for residue %s" % str(res_id) + os_linesep
             error_msg += "names found but not in template: %s" % str(got_atoms.difference(ref_atoms)) + os_linesep
@@ -273,7 +274,7 @@ class PDBQTReceptor:
                 atom_index += 1
                 name = template['atom_name'][i]
                 atom = atoms_by_name[name]
-                if atom["atom_type"] not in self.skip_types: 
+                if atom["atom_type"] not in self.skip_types:
                     atom["serial"] = atom_index
                     output["pdbqt"] += self.write_pdbqt_line(atom)
             else:
@@ -319,7 +320,7 @@ class PDBQTReceptor:
         for i, atom in enumerate(self._atoms):
             if i not in pdbqt["flex_indices"] and atom["atom_type"] not in self.skip_types:
                 pdbqt["rigid"] += self.write_pdbqt_line(atom)
-        
+
         return pdbqt, ok, err
 
     @staticmethod
@@ -343,7 +344,7 @@ class PDBQTReceptor:
                     two_bond_away.add(j)
         names_1bond = [atom_names[i] for i in one_bond_away]
         names_2bond = [atom_names[i] for i in two_bond_away]
-        new_pdbqt_str = "" 
+        new_pdbqt_str = ""
         for i, line in enumerate(pdbqtstr.split(os_linesep)[:-1]):
             if line.startswith("ATOM") or line.startswith("HETATM"):
                 name = line[12:16].strip()
@@ -394,13 +395,13 @@ class PDBQTReceptor:
         return np.atleast_2d(self.atoms(atom_idx)['xyz'])
 
     def closest_atoms_from_positions(self, xyz, radius, atom_properties=None, ignore=None):
-        """Retrieve indices of the closest atoms around a positions/coordinates 
+        """Retrieve indices of the closest atoms around a positions/coordinates
         at a certain radius.
 
         Args:
             xyz (np.ndarray): array of 3D coordinates
             raidus (float): radius
-            atom_properties (str): property of the atoms to retrieve 
+            atom_properties (str): property of the atoms to retrieve
                 (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
             ignore (int or list): ignore atom for the search using atom id (0-based)
 
@@ -442,13 +443,13 @@ class PDBQTReceptor:
         return atoms
 
     def closest_atoms(self, atom_idx, radius, atom_properties=None):
-        """Retrieve indices of the closest atoms around a positions/coordinates 
+        """Retrieve indices of the closest atoms around a positions/coordinates
         at a certain radius.
 
         Args:
             atom_idx (int, list): index of one or multiple atoms (0-based)
             raidus (float): radius
-            atom_properties (str or list): property of the atoms to retrieve 
+            atom_properties (str or list): property of the atoms to retrieve
                 (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
 
         Returns:
