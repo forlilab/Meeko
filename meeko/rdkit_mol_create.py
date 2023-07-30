@@ -228,7 +228,7 @@ class RDKitMolCreate:
         candidate_resnames = cls.ambiguous_flexres_choices.get(resname, [resname])
         for resname in candidate_resnames:
             is_match = False
-            if resname not in cls.flexres[resname]["atom_names_in_smiles_order"]:
+            if resname not in cls.flexres:
                 continue
             atom_names_in_smiles_order = cls.flexres[resname]["atom_names_in_smiles_order"]
             h_to_parent_index = cls.flexres[resname]["h_to_parent_index"]
