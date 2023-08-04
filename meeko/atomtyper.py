@@ -5,7 +5,6 @@
 #
 
 import os
-import json
 
 import numpy as np
 
@@ -15,66 +14,23 @@ from .utils import pdbutils
 
 class AtomTyper:
 
-    defaults_json = """{
-        "ATOM_PARAMS": {
-            "alkyl glue": [
-                {"smarts": "[#1]",                  "atype": "H", "comment": "invisible"},
-                {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"},
-                {"smarts": "[#5]",              "atype": "B"},
-                {"smarts": "[C]",               "atype": "C"},
-                {"smarts": "[c]",               "atype": "A"},
-                {"smarts": "[#7]",              "atype": "NA"},
-                {"smarts": "[#8]",              "atype": "OA"},
-                {"smarts": "[#9]",              "atype": "F"},
-                {"smarts": "[#12]",             "atype": "Mg"},
-                {"smarts": "[#14]",             "atype": "Si"},
-                {"smarts": "[#15]",             "atype": "P"},
-                {"smarts": "[#16]",             "atype": "S"},
-                {"smarts": "[#17]",             "atype": "Cl"},
-                {"smarts": "[#20]",             "atype": "Ca"},
-                {"smarts": "[#25]",             "atype": "Mn"},
-                {"smarts": "[#26]",             "atype": "Fe"},
-                {"smarts": "[#30]",             "atype": "Zn"},
-                {"smarts": "[#35]",             "atype": "Br"},
-                {"smarts": "[#53]",             "atype": "I"},
-                {"smarts": "[#7X3v3][a]",       "atype": "N",  "comment": "pyrrole, aniline"},
-                {"smarts": "[#7X3v3][#6X3v4]",  "atype": "N",  "comment": "amide"},
-                {"smarts": "[#7+1]",            "atype": "N",  "comment": "ammonium, pyridinium"},
-                {"smarts": "[SX2]",             "atype": "SA", "comment": "sulfur acceptor"}
-            ]
-        }
-    }
-    """
-    def __init__(self, parameters={}, add_parameters=[]):
-        self.parameters = json.loads(self.defaults_json)
-        for key in parameters:
-            self.parameters[key] = json.loads(json.dumps(parameters[key])) # a safe copy
-        # add additional parameters
-        if len(add_parameters) > 0:
-            keys = list(self.parameters["ATOM_PARAMS"].keys())
-            if len(keys) != 1:
-                msg = "add_parameters is usable only when there is one group of parameters"
-                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
-                raise RuntimeError(msg)
-            key = keys[0]
-            self.parameters['ATOM_PARAMS'][key].extend(add_parameters)
-
-    def __call__(self, setup):
-        self._type_atoms(setup)
-        if 'OFFATOMS' in self.parameters:
-            cached_offatoms = self._cache_offatoms(setup)
+    @classmethod
+    def type_everything(cls, molsetup, atom_params, offatom_params=None):
+        cls._type_atoms(molsetup, atom_params)
+        if offatom_params is not None:
+            cached_offatoms = cls._cache_offatoms(molsetup, offatom_params)
             coords = [x for x in setup.coord.values()]
-            self._set_offatoms(setup, cached_offatoms, coords)
+            cls._set_offatoms(setup, cached_offatoms, coords)
         return
 
-    def _type_atoms(self, setup):
-        parsmar = self.parameters['ATOM_PARAMS']
+    @staticmethod
+    def _type_atoms(molsetup, atom_params):
         # ensure every "atompar" is defined in a single "smartsgroup"
         ensure = {}
         # go over all "smartsgroup"s
-        for smartsgroup in parsmar:
+        for smartsgroup in atom_params:
             if smartsgroup == 'comment': continue
-            for line in parsmar[smartsgroup]: # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
+            for line in atom_params[smartsgroup]: # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
                 smarts = str(line['smarts'])
                 if 'atype' not in line: continue
                 # get indices of the atoms in the smarts to which the parameters will be assigned
@@ -82,7 +38,7 @@ class AtomTyper:
                 if 'IDX' in line:
                     idxs = [i - 1 for i in line['IDX']] # convert from 1- to 0-indexing
                 # match SMARTS
-                hits = setup.find_pattern(smarts)
+                hits = molsetup.find_pattern(smarts)
                 atompar = 'atype' # we care only about 'atype', for now, but may want to extend
                 atom_type = line[atompar]
                 # keep track of every "smartsgroup" that modified "atompar"
@@ -95,7 +51,7 @@ class AtomTyper:
                     # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
                     # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
                     for idx in idxs:
-                        setup.set_atom_type(hit[idx], atom_type) # overrides previous calls
+                        molsetup.set_atom_type(hit[idx], atom_type) # overrides previous calls
         # guarantee that each atompar is exclusive of a single group
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
@@ -104,19 +60,19 @@ class AtomTyper:
         return
 
 
-    def _cache_offatoms(self, setup):
+    @staticmethod
+    def _cache_offatoms(molsetup, offatom_params):
         """ precalculate off-site atoms """
-        parsmar = self.parameters['OFFATOMS']
         cached_offatoms = {}
         n_offatoms = 0
         # each parent atom can only be matched once in each smartsgroup
-        for smartsgroup in parsmar:
+        for smartsgroup in offatom_params:
             if smartsgroup == "comment": continue
             tmp = {}
-            for line in parsmar[smartsgroup]:
+            for line in offatom_params[smartsgroup]:
                 # SMARTS
                 smarts = str(line['smarts'])
-                hits = setup.find_pattern(smarts)
+                hits = molsetup.find_pattern(smarts)
                 # atom indexes in smarts string
                 smarts_idxs = [0]
                 if 'IDX' in line:
@@ -156,7 +112,6 @@ class AtomTyper:
                                     pass
             for parent_idx in tmp:
                 for offatom_dict in tmp[parent_idx]:
-                    #print '1-> ', self.atom_params['q'], len(self.coords)
                     atom_params = offatom_dict['atom_params']
                     offatom = offatom_dict['offatom']
                     atomgeom = AtomicGeometry(parent_idx,
@@ -172,12 +127,13 @@ class AtomTyper:
                     n_offatoms += 1
         return cached_offatoms
 
-    def _set_offatoms(self, setup, cached_offatoms, coords):
+    @staticmethod
+    def _set_offatoms(molsetup, cached_offatoms, coords):
         """add cached offatoms"""
         for k, (atomgeom, args) in cached_offatoms.items():
             (atom_type, dist, theta, phi) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
-            tmp = setup.get_pdbinfo(atomgeom.parent+1)
+            tmp = molsetup.get_pdbinfo(atomgeom.parent+1)
             pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
             pseudo_atom = {
                     'coord': offatom_coords,
@@ -188,7 +144,7 @@ class AtomTyper:
                     'bond_type': 0,
                     'rotatable': False
                     }
-            setup.add_pseudo(**pseudo_atom)
+            molsetup.add_pseudo(**pseudo_atom)
         return
 
 class AtomicGeometry():
