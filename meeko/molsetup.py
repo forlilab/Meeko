@@ -8,6 +8,7 @@ from copy import deepcopy
 from collections import defaultdict, OrderedDict
 import json
 import warnings
+import sys
 
 import numpy as np
 from rdkit import Chem
@@ -25,9 +26,6 @@ except ImportError:
     _has_openbabel = False
 else:
     _has_openbabel = True
-
-
-# based on the assumption we are using OpenBabel
 
 # TODO modify so that there are no more dictionaries and only list/arrays (fix me)
 # methods like add_x,del_x,get_x will deal with indexing (fix me)
@@ -52,41 +50,9 @@ class MoleculeSetup:
             - data storage
             - SMARTS matcher for all atom typers
     """
-    # possibly useless here
-    attributes_to_copy = [
-        "mol",
-        "atom_pseudo",
-        "atom_ignore",
-        "atom_type",
-        "atom_params",
-        "dihedral_interactions",
-        "dihedral_partaking_atoms",
-        "dihedral_labels",
-        "atom_true_count",
-        "element",
-        "coord",
-        "charge",
-        "pdbinfo",
-        "chiral",
-        "graph",
-        "bond",
-        "interaction_vector",
-        "rings",
-        "rings_aromatic",
-        "atom_to_ring_id",
-        "flexibility_model",
-        "ring_closure_info",
-        'history',
-        'name',
-        ]
 
-    def __init__(self, keep_chorded_rings=False, keep_equivalent_rings=False,
-                 assign_charges=True, template=None):
-        """initialize a molecule template, either from scratch (template is None)
-            or by using an existing setup (template is an instance of MoleculeSetup
-        """
+    def __init__(self):
 
-        self.mol = None
         self.atom_pseudo = []
         self.coord = OrderedDict()  # FIXME all OrderedDict shuold be converted to lists?
         self.charge = OrderedDict()
@@ -114,12 +80,11 @@ class MoleculeSetup:
         self.atom_to_ring_id = defaultdict(list)
         self.ring_corners = {}  # used to store corner flexibility
         self.name = None
-        # this could be used to keep track of transformations? (corner flipping)
-        self.history = []
-        if template is not None:
-            if not isinstance(template, MoleculeSetup):
-                raise TypeError('FATAL: template must be an instance of MoleculeSetup')
-            self.copy_attributes_from(template)
+
+    def copy(self):
+        newsetup = MoleculeSetup()
+        newsetup.__dict__ = deepcopy(self.__dict__)
+        return newsetup
 
     @classmethod
     def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
@@ -241,7 +206,6 @@ class MoleculeSetup:
         molsetup.atom_params = atom_params
 
         return molsetup 
-
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
             element=None, charge=0.0, atom_type=None, pdbinfo=None,
@@ -532,33 +496,22 @@ class MoleculeSetup:
         #      if one of them alters the molecule, properties will not be the same
         self.mol = template.mol
 
-    def merge_hydrogen(self):
-        """ standard method to merge hydrogens bound to carbons"""
-        merged = 0
+    def merge_terminal_atoms(self, indices):
+        """for merging hydrogens, but will merge any atom or pseudo atom
+            that is bonded to only one other atom"""
 
-        for a, neigh_list in list(self.graph.items()):
-            # look for hydrogens
-            if not self.get_element(a) == 1:
-                continue
-
-            hydrogen_charge = self.get_charge(a)
-
-            for n in neigh_list:
-                # look for carbons
-                if self.get_element(n) == 6:
-                    merged += 1
-                    carbon_charge = self.get_charge(n)
-                    # carbon adsorbs the final charge
-                    self.set_charge(n, carbon_charge + hydrogen_charge)
-                    # flag hydrogen to be ignored and set its charge to 0
-                    self.set_charge(a, 0)
-                    self.set_ignore(a, True)
-
+        for index in indices:
+            if len(self.graph[index]) != 1:
+                msg = "Atempted to merge atom %d with %d neighbors. "
+                msg += "Only atoms with one neighbor can be merged."
+                msg = msg % (index + 1, len(self.graph[index]))
+                raise RuntimeError(msg)
+            neighbor_index = self.graph[index][0]
+            self.charge[neighbor_index] += self.get_charge(index)
+            self.charge[index] = 0.0
+            self.set_ignore(index, True)
+            
     def has_implicit_hydrogens(self):
-        raise NotImplementedError("This method must be overloaded by inheriting class")
-
-    def copy(self):
-        """ return a copy of the current setup"""
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
     def init_atom(self):
@@ -665,29 +618,62 @@ class MoleculeSetup:
             string += "%3s %12.6f %12.6f %12.6f\n" % (element, x, y, z)
         return string
             
+    def show(self):
+        tot_charge = 0
+
+        print("Molecule setup\n")
+        print("==============[ ATOMS ]===================================================")
+        print("idx  |          coords            | charge |ign| atype    | connections")
+        print("-----+----------------------------+--------+---+----------+--------------- . . . ")
+        for k, v in list(self.coord.items()):
+            print("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
+                  self.charge[k], self.atom_ignore[k]),
+                  "| % -8s |" % self.atom_type[k],
+                  self.graph[k])
+            tot_charge += self.charge[k]
+        print("-----+----------------------------+--------+---+----------+--------------- . . . ")
+        print("  TOT CHARGE: %3.3f" % tot_charge)
+
+        print("\n======[ DIRECTIONAL VECTORS ]==========")
+        for k, v in list(self.coord.items()):
+            if k in self.interaction_vector:
+                print("% 4d " % k, self.atom_type[k], end=' ')
+
+        print("\n==============[ BONDS ]================")
+        # For sanity users, we won't show those keys for now
+        keys_to_not_show = ['bond_order', 'type']
+        for k, v in list(self.bond.items()):
+            t = ', '.join('%s: %s' % (i, j) for i, j in v.items() if not i in keys_to_not_show)
+            print("% 8s - " % str(k), t)
+
+        # _macrocycle_typer.show_macrocycle_scores(self)
+
+        print('')
 
 class RDKitMoleculeSetup(MoleculeSetup):
 
-    warned_not3D = False
-
-    def __init__(self, keep_chorded_rings=False, keep_equivalent_rings=False,
-                 assign_charges=True, template=None):
-        super().__init__(
-            keep_chorded_rings,
-            keep_equivalent_rings,
-            assign_charges,
-            template)
-
     @classmethod
     def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
-                 assign_charges=True):
-        nr_conformers = mol.GetNumConformers()
-        if nr_conformers == 0: 
+                 assign_charges=True, conformer_id=-1):
+        if mol.GetNumConformers() == 0: 
             raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
-        elif nr_conformers > 1:
+        rdkit_conformer = mol.GetConformer(conformer_id) 
+        if not rdkit_conformer.Is3D():
+            warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
+            RDKitMoleculeSetup.warned_not3D = True
+        if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one." 
-            warnings.warn(msg) 
-        return super().from_mol(mol, keep_chorded_rings, keep_equivalent_rings, assign_charges)
+            print(msg, file=sys.stderr)
+        molsetup = cls()
+        molsetup.mol = mol
+        molsetup.atom_true_count = molsetup.get_num_mol_atoms()
+        molsetup.name = molsetup.get_mol_name()
+        coords = rdkit_conformer.GetPositions()
+        molsetup.init_atom(assign_charges, coords)
+        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
+        molsetup.init_bond()
+        return molsetup
+
 
     def get_smiles_and_order(self):
         """
@@ -788,18 +774,16 @@ class RDKitMoleculeSetup(MoleculeSetup):
     def get_equivalent_atoms(self):
        return list(Chem.CanonicalRankAtoms(self.mol, breakTies=False))
 
-    def init_atom(self, assign_charges):
+    def init_atom(self, assign_charges, coords):
         """ initialize the atom table information """
-        # extract the coordinates
-        c = self.mol.GetConformers()[0]
-        if not c.Is3D() and not RDKitMoleculeSetup.warned_not3D:
-            warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
-            RDKitMoleculeSetup.warned_not3D = True
-        coords = c.GetPositions()
         # extract/generate charges
         if assign_charges:
-            rdPartialCharges.ComputeGasteigerCharges(self.mol)
-            charges = [a.GetDoubleProp('_GasteigerCharge') for a in self.mol.GetAtoms()]
+            copy_mol = Chem.Mol(self.mol)
+            for atom in copy_mol.GetAtoms():
+                if atom.GetAtomicNum() == 34:
+                    atom.SetAtomicNum(16)
+            rdPartialCharges.ComputeGasteigerCharges(copy_mol)
+            charges = [a.GetDoubleProp('_GasteigerCharge') for a in copy_mol.GetAtoms()]
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
         # perceive chirality
@@ -839,7 +823,12 @@ class RDKitMoleculeSetup(MoleculeSetup):
 
     def copy(self):
         """ return a copy of the current setup"""
-        return RDKitMoleculeSetup(template=self)
+        newsetup = RDKitMoleculeSetup()
+        for key, value in self.__dict__.items():
+            if key != "mol":
+                newsetup.__dict__[key] = deepcopy(value)
+        newsetup.mol = Chem.Mol(self.mol) # not sure how deep of a copy this is
+        return newsetup
 
     def has_implicit_hydrogens(self):
         # based on needsHs from RDKit's AddHs.cpp

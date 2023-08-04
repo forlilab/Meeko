@@ -4,7 +4,7 @@
 # Meeko
 #
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 try:
     import openbabel
@@ -31,6 +31,9 @@ from .atomtyper import AtomTyper
 from .receptor_pdbqt import PDBQTReceptor
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
+from .reactive import reactive_typer
+from .reactive import get_reactive_config
+from .writer import PDBQTWriterLegacy
 from . import analysis
 from .writer import oids_block_from_setup
 from .openff_xml_parser import parse_offxml
@@ -42,10 +45,14 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
         'RDKitMolCreate',
+        'PDBQTWriterLegacy',
+        'reactive_typer',
+        'get_reactive_config',
+        'gridbox',
         'oids_block_from_setup',
         'parse_offxml',
         'Hydrate',
-        ]
+]
 
 if _has_openbabel:
     from .molsetup import OBMoleculeSetup

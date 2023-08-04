@@ -1,5 +1,6 @@
 from meeko import MoleculePreparation
 from meeko import PDBQTMolecule
+from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 import pathlib
 
@@ -36,40 +37,36 @@ def test_external_ring_closure():
     mol = Chem.MolFromMolFile(str(mol_fn), removeHs=False)
     delete_bonds = [(2, 3)]
     glue_pseudos = {2: (-999.9, 0, 0), 3: (42.0, 0, 0.)}
-    mk_prep.prepare(
-            mol,
-            delete_ring_bonds=delete_bonds,
-            glue_pseudo_atoms=glue_pseudos)
-    pdbqt_string = mk_prep.write_pdbqt_string()
-    assert(mk_prep.setup.ring_closure_info["bonds_removed"] == [(2, 3)])
-    assert(2 in mk_prep.setup.ring_closure_info["pseudos_by_atom"])
-    assert(3 in mk_prep.setup.ring_closure_info["pseudos_by_atom"])
+    setups = mk_prep.prepare(
+                    mol,
+                    delete_ring_bonds=delete_bonds,
+                    glue_pseudo_atoms=glue_pseudos)
+    assert(len(setups) == 1)
+    pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
+    assert(setups[0].ring_closure_info["bonds_removed"] == [(2, 3)])
+    assert(2 in setups[0].ring_closure_info["pseudos_by_atom"])
+    assert(3 in setups[0].ring_closure_info["pseudos_by_atom"])
     cg_atoms, g_atoms = get_macrocycle_atom_types(pdbqt_string)
     assert(len(cg_atoms) == len(g_atoms))
     assert(len(cg_atoms) == 2 * len(set(cg_atoms)))
     assert(len(g_atoms) == 2 * len(set(g_atoms)))
     assert(len(set(g_atoms)) == 1)
-        
     p = PDBQTMolecule(pdbqt_string)
-    imap_ = p._pose_data['smiles_index_map']
-    n = int(len(imap_) / 2)
-    imap = {}
-    for i in range(n):
-        imap[imap_[2*i] - 1] = imap_[2*i+1] - 1
-    pseudo_by_atom = {}
-    for idx in mk_prep.setup.atom_pseudo:
-        pseudo_by_atom[mk_prep.setup.get_neigh(idx)[0]] = idx
+    glue_x_coords = []
+    for atom in p.atoms():
+        if atom["atom_type"].startswith("G"):
+            glue_x_coords.append(atom["xyz"][0])
     for atom_index, (x, y, z) in glue_pseudos.items():
-        pseudo_index = pseudo_by_atom[atom_index]
-        pseudo_index_pdbqt = mk_prep._writer._numbering[pseudo_index] - 1
-        xcoord = p._positions[0][pseudo_index_pdbqt, 0]
-        assert(abs(xcoord - x) < 1e-3)
+        mindist = 99999.9
+        for xcoord in glue_x_coords:
+            mindist = min(mindist, abs(x - xcoord))
+        assert(mindist < 1e-3) # loose matching
 
 def run(molname):
     filename = filenames[molname]
     mol = Chem.MolFromMolFile(filename, removeHs=False)
-    mk_prep.prepare(mol)
-    pdbqt_string = mk_prep.write_pdbqt_string()
+    setups = mk_prep.prepare(mol)
+    pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
     cg_atoms, g_atoms = get_macrocycle_atom_types(pdbqt_string)
     assert(len(cg_atoms) == len(g_atoms))
     assert(len(cg_atoms) == 2 * len(set(cg_atoms)))

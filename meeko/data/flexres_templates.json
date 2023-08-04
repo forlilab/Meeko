@@ -1,0 +1,64 @@
+{
+"LYS":
+    {"is_atom": [false, true, false, false, true, false, true, false, true, false, true, false, true, true, true, true, false, false, false, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", null, "CD", null, "CE", null, "NZ", "HZ3", "HZ2", "HZ1", null, null, null, null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, "BRANCH   3   4", null, "BRANCH   4   5", null, "BRANCH   5   6", null, null, null, null, "ENDBRANCH   5   6", "ENDBRANCH   4   5", "ENDBRANCH   3   4", "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"ARG":
+    {"is_atom": [false, true, false, false, true, false, true, false, true, false, true, true, true, true, true, true, true, true, true, false, false, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", null, "CD", null, "NE", "CZ", "NH2", "NH1", "HH22", "HH21", "HH12", "HH11", "HE", null, null, null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, "BRANCH   3   4", null, "BRANCH   4   5", null, null, null, null, null, null, null, null, null, "ENDBRANCH   4   5", "ENDBRANCH   3   4", "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"GLH":
+    {"is_atom": [false, true, false, false, true, true, true, false, true, true, true, false, true, true, true, true, false, false, false], "atom_name": [null, "CA", null, null, "CB", "HB2", "HB3", null, "CG", "HG3", "HG2", null, "CD", "OE1", "OE2", "HE2", null, null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, null, null, "BRANCH   2   5", null, null, null, "BRANCH   5   8", null, null, null, null, "ENDBRANCH   5   8", "ENDBRANCH   2   5", "ENDBRANCH   1   2"]},
+
+"HIP":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "ND1", "HD1", "CE1", "NE2", "CD2", "HE2", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"VAL":
+    {"is_atom": [false, true, false, false, true, true, true, false], "atom_name": [null, "CA", null, null, "CB", "CG1", "CG2", null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, null, null, "ENDBRANCH   1   2"]},
+
+"TYR":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, true, true, false, true, true, false, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "CD1", "CE1", "CZ", "CE2", "CD2", null, "OH", "HH", null, null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, null, null, "BRANCH   6   9", null, null, "ENDBRANCH   6   9", "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"ASH":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "OD1", "OD2", "HD2", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"HIE":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "ND1", "CE1", "NE2", "HE2", "CD2", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"GLU":
+    {"is_atom": [false, true, false, false, true, false, true, false, true, true, true, false, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", null, "CD", "OE1", "OE2", null, null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, "BRANCH   3   4", null, null, null, "ENDBRANCH   3   4", "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"LEU":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "CD2", "CD1", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"PHE":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "CD1", "CE1", "CZ", "CE2", "CD2", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"GLN":
+    {"is_atom": [false, true, false, false, true, false, true, false, true, true, true, true, true, false, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", null, "CD", "NE2", "HE22", "HE21", "OE1", null, null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, "BRANCH   3   4", null, null, null, null, null, "ENDBRANCH   3   4", "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"ILE":
+    {"is_atom": [false, true, false, false, true, true, false, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", "CG2", null, "CG1", "CD1", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, null, "BRANCH   2   4", null, null, "ENDBRANCH   2   4", "ENDBRANCH   1   2"]},
+
+"MET":
+    {"is_atom": [false, true, false, false, true, false, true, false, true, true, false, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", null, "SD", "CE", null, null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, "BRANCH   3   4", null, null, "ENDBRANCH   3   4", "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"ASN":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "OD1", "ND2", "HD21", "HD22", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"THR":
+    {"is_atom": [false, true, false, false, true, true, false, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", "CG2", null, "OG1", "HG1", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, null, "BRANCH   2   4", null, null, "ENDBRANCH   2   4", "ENDBRANCH   1   2"]},
+
+"TRP":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, true, true, true, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "CD2", "CE2", "CE3", "CZ2", "NE1", "CH2", "CZ3", "HE1", "CD1", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, null, null, null, null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"CYS":
+    {"is_atom": [false, true, false, false, true, false, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "SG", "HG", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"SER":
+    {"is_atom": [false, true, false, false, true, false, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "OG", "HG", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"ASP":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "OD1", "OD2", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]},
+
+"HID":
+    {"is_atom": [false, true, false, false, true, false, true, true, true, true, true, true, false, false], "atom_name": [null, "CA", null, null, "CB", null, "CG", "ND1", "HD1", "CE1", "NE2", "CD2", null, null], "original_line": ["ROOT", null, "ENDROOT", "BRANCH   1   2", null, "BRANCH   2   3", null, null, null, null, null, null, "ENDBRANCH   2   3", "ENDBRANCH   1   2"]}
+}

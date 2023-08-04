@@ -1,6 +1,7 @@
 from meeko import RDKitMolCreate
 from meeko import PDBQTMolecule
 from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 import pathlib
 
@@ -64,12 +65,17 @@ def test_arg_his():
 # as opposed to the tests above which start from PDBQT.
 
 mk_prep = MoleculePreparation()
+mk_prep_wet = MoleculePreparation(hydrate=True)
 
-def run(sdfname):
+def run(sdfname, wet=False):
     fpath = datadir / sdfname
     for mol in Chem.SDMolSupplier(str(fpath), removeHs=False):
-        mk_prep.prepare(mol)
-        pdbqt = mk_prep.write_pdbqt_string()
+        if wet:
+            setups = mk_prep_wet.prepare(mol)
+            pdbqt, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
+        else:
+            setups = mk_prep.prepare(mol)
+            pdbqt, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
         pmol = PDBQTMolecule(pdbqt)
         run_from_pdbqtmol(pmol)
 
@@ -85,12 +91,14 @@ def test_small_02_one_deuterium_B(): run("small-02_one-deuterium-B.sdf")
 def test_small_02_one_deuterium_C(): run("small-02_one-deuterium-C.sdf")
 def test_small_02_two_deuterium_A(): run("small-02_two-deuterium-A.sdf")
 def test_small_02_two_deuterium_B(): run("small-02_two-deuterium-B.sdf")
-def test_small_02_two_deuterium_C(): run("small-02_two-deuterium-C.sdf")
-def test_small_02_two_deuterium_D(): run("small-02_two-deuterium-D.sdf")
-def test_small_02_five_deuterium(): run("small-02_five-deuterium.sdf")
+def test_small_02_two_deuterium_C(): run("small-02_two-deuterium-C.sdf", wet=True)
+def test_small_02_two_deuterium_D(): run("small-02_two-deuterium-D.sdf", wet=True)
+def test_small_02_five_deuterium(): run("small-02_five-deuterium.sdf", wet=True)
 
-def test_small_03_zero_deuterium(): run("small-03_zero-deuterium.sdf")
-def test_small_03_one_deuterium_A(): run("small-03_one-deuterium-A.sdf")
-def test_small_03_one_deuterium_B(): run("small-03_one-deuterium-B.sdf")
+def test_small_03_zero_deuterium(): run("small-03_zero-deuterium.sdf", wet=True)
+def test_small_03_one_deuterium_A(): run("small-03_one-deuterium-A.sdf", wet=True)
+def test_small_03_one_deuterium_B(): run("small-03_one-deuterium-B.sdf", wet=True)
 def test_small_03_two_deuterium(): run("small-03_two-deuterium.sdf")
 def test_small_03_three_deuterium(): run("small-03_three-deuterium.sdf")
+
+def test_small_04(): run("small-04.sdf", wet=True)

@@ -13,6 +13,7 @@ from rdkit import Chem
 
 from meeko import MoleculePreparation
 from meeko import rdkitutils
+from meeko import PDBQTWriterLegacy
 
 try:
     import prody
@@ -78,10 +79,12 @@ def cmd_lineparser():
                         action="store_true", help="return all rings from exhaustive perception")
     config_group.add_argument("--keep_equivalent_rings",dest="keep_equivalent_rings",
                         action="store_true", help="equivalent rings have the same size and neighbors")
+    config_group.add_argument("--min_ring_size", dest="min_ring_size",
+                        type=int, help="min nr of atoms in ring for opening")
     config_group.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
-    config_group.add_argument("--keep_nonpolar_hydrogens", dest="keep_nonpolar_hydrogens",
-                        action="store_true", help="keep non-polar hydrogens (default: merge onto heavy atom)")
+    config_group.add_argument("--merge_these_atom_types", dest="merge_these_atom_types", nargs="*",
+                        help="list of atom types to merge, default is \"H\"", default=["H"])
     config_group.add_argument("-r", "--rigidify_bonds_smarts", dest="rigidify_bonds_smarts",
                         action="append", help="SMARTS patterns to rigidify bonds",
                         metavar='SMARTS')
@@ -92,11 +95,17 @@ def cmd_lineparser():
                         action="store_true", help="allow amide bonds to rotate and be non-planar, which is bad")
     config_group.add_argument("-p", "--atom_type_smarts", dest="atom_type_smarts_json",
                         action="store", help="SMARTS based atom typing (JSON format)")
+    config_group.add_argument("-aa", "--add_atom_types", dest="add_atom_types_json",
+                        action="append", help="Additional atom types to assign (JSON formated)", metavar="[{'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}, {'smarts': '<smarts pattern>', 'atype': ',atomtype name>'}]")
     config_group.add_argument("--double_bond_penalty", help="penalty > 100 prevents breaking double bonds", type=int)
+    config_group.add_argument("--bad_charge_ok", help="NaN and Inf charges allowed in PDBQT", action="store_true")
     config_group.add_argument("--add_index_map", dest="add_index_map",
                         action="store_true", help="write map of atom indices from input to pdbqt")
     config_group.add_argument("--remove_smiles", dest="remove_smiles",
                         action="store_true", help="do not write smiles as remark to pdbqt")
+    reactive_group = parser.add_argument_group("Reactive docking")
+    reactive_group.add_argument('--reactive_smarts',  help="SMARTS pattern for reactive group")
+    reactive_group.add_argument('--reactive_smarts_idx', help='index (1-based) of the reactive atom in --reactive_smarts', type=int)
 
     need_prody_msg = ''
     if not _has_prody: need_prody_msg = ". Needs Prody which is unavailable"
@@ -114,6 +123,16 @@ def cmd_lineparser():
 
     args = parser.parse_args(remaining_argv)
 
+    # check reactive arguments
+    if (args.reactive_smarts is None) != (args.reactive_smarts_idx is None):
+        print("Arguments --reactive_smarts and --reactive_smarts_idx require each other", file=sys.stderr)
+        sys.exit(2)
+    elif args.reactive_smarts_idx is not None:
+        if args.reactive_smarts_idx < 1:
+            print("--reactive_smarts_idx is 1-indexed, but got %d" % args.reactive_smarts_idx, file=sys.stderr)
+            sys.exit(2)
+        args.reactive_smarts_idx -= 1 # convert from 1- to 0-index
+
     # command line arguments override config
     for key in config:
         if key in args.__dict__:
@@ -122,6 +141,16 @@ def cmd_lineparser():
     if args.atom_type_smarts_json is not None:
         with open(args.atom_type_smarts_json) as f:
             config['atom_type_smarts'] = json.load(f)
+    
+    if args.add_atom_types_json is not None:
+        additional_ats = []
+        for at in args.add_atom_types_json:
+            at = json.loads(at)
+            if type(at) == dict:
+                additional_ats.append(at)
+            elif type(at) == list:
+                additional_ats.extend(at)
+        config['add_atom_types'] = additional_ats
 
     if args.multimol_output_dir is not None or args.multimol_prefix is not None:
         if args.output_pdbqt_filename is not None:
@@ -140,6 +169,9 @@ def cmd_lineparser():
     is_covalent = num_required_covalent_args == 3
     if is_covalent and not _has_prody:
         raise ImportError("Covalent docking requires Prody which is not available")
+    if min(args.tether_smarts_indices) < 1:
+        print("--tether_smarts_indices is 1-indexed, all values must be greater than zero", file=sys.stderr) 
+        sys.exit(2)
     args.tether_smarts_indices = [i-1 for i in args.tether_smarts_indices] # convert to 0-index
 
     # verify sanity of SMARTS patterns to make bonds rigid and convert to 0-based indices
@@ -170,21 +202,21 @@ class Output:
         self.is_multimol = is_multimol
         self.visited_filenames = set()
         self.duplicate_filenames = set()
-        self.visited_molnames = set()
-        self.duplicate_molnames = set()
+        self.visited_names = set()
+        self.duplicate_names = set()
         self.num_files_written = 0
         self.counter = 0
 
-    def __call__(self, pdbqt_string, mol_name, sufix=None):
+    def __call__(self, pdbqt_string, name, suffixes=()):
         self.counter += 1
-        if mol_name in self.visited_molnames:
-            self.duplicate_molnames.add(mol_name)
-        self.visited_molnames.add(mol_name)
-        name = mol_name
+        if name in self.visited_names:
+            self.duplicate_names.add(name)
+        self.visited_names.add(name)
         if self.multimol_prefix is not None:
             name = '%s-%d' % (args.multimol_prefix, self.counter)
-        if sufix is not None:
-            name += '_%s' % sufix
+        for suffix in suffixes:
+            if suffix is not None and len(suffix) > 0:
+                name += "_" + suffix
         if self.is_multimol:
             if name in self.visited_filenames:
                 self.duplicate_filenames.add(name)
@@ -218,10 +250,10 @@ class Output:
     def get_duplicates_info_string(self):
         if not self.is_multimol:
             return None
-        if len(self.duplicate_molnames):
+        if len(self.duplicate_names):
             # with multimol_prefix with can have duplicate molecule names,
             # but not duplicate filenames. This warning is for such cases.
-            string = "Warning: %d molecules have duplicated names" % len(self.duplicate_molnames)
+            string = "Warning: %d molecules have duplicated names" % len(self.duplicate_names)
         else:
             string = "No duplicate molecule molecule names were found"
         # if we have duplicate_filenames, we also have duplicate molecule names,
@@ -229,6 +261,13 @@ class Output:
         if len(self.duplicate_filenames):
             string = "Warning: %d molecules with repeated names were suffixed with -again<n>" % len(self.duplicate_filenames)
         return string
+
+    @staticmethod
+    def get_suffixes(molsetups):
+        if len(molsetups) == 1:
+            return ("",) # no suffix needed
+        else:
+            return tuple("mk%d" % (i + 1) for i in range(len(molsetups)))
 
 
 if __name__ == '__main__':
@@ -258,19 +297,22 @@ if __name__ == '__main__':
             args.multimol_output_dir,
             args.multimol_prefix,
             args.redirect_stdout,
-            output_filename)
+            output_filename,
+            )
 
     # initialize covalent object for receptor
     if is_covalent:
         rec_filename = args.receptor
         _, rec_extension = os.path.splitext(rec_filename)
         rec_extension = rec_extension[1:].lower()
-        parser = _prody_parsers[rec_extension]
-        rec_mol = parser(rec_filename) # rec_mol is a prody molecule
-        covalent_builder = CovalentBuilder(rec_mol, args.rec_residue)
+        prody_parser = _prody_parsers[rec_extension]
+        rec_prody_mol = prody_parser(rec_filename)
+        covalent_builder = CovalentBuilder(rec_prody_mol, args.rec_residue)
 
     input_mol_counter = 0
     input_mol_skipped = 0
+    input_mol_with_failure = 0 # if reactive or covalent, each mol can yield multiple PDBQT
+    nr_failures = 0
     is_after_first = False
     preparator = MoleculePreparation.from_config(config)
     for mol in mol_supplier:
@@ -289,23 +331,45 @@ if __name__ == '__main__':
         input_mol_skipped += int(is_valid==False)
         if not is_valid: continue
 
+        this_mol_had_failure = False
+
         if is_covalent:
             for cov_lig in covalent_builder.process(mol, args.tether_smarts, args.tether_smarts_indices):
                 root_atom_index = cov_lig.indices[0]
-                preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
-                pdbqt_string = preparator.write_pdbqt_string()
+                molsetups = preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
                 res, chain, num = cov_lig.res_id
-                pdbqt_string = preparator.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
-                mol_name = preparator.setup.name
-                output(pdbqt_string, mol_name, sufix=cov_lig.label)
+                suffixes = output.get_suffixes(molsetups)
+                for molsetup, suffix in zip(molsetups, suffixes):
+                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+                    if success:
+                        pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
+                        name = molsetup.name
+                        output(pdbqt_string, name, (cov_lig.label, suffix))
+                    else:
+                        nr_failures += 1
+                        this_mol_had_failure = True
+                        print(error_msg, file=sys.stderr)
+                        
         else:
-            preparator.prepare(mol)
-            pdbqt_string = preparator.write_pdbqt_string()
-            mol_name = preparator.setup.name # setup.name may be None
-            output(pdbqt_string, mol_name)
+            molsetups = preparator.prepare(mol)
+            suffixes = output.get_suffixes(molsetups) 
+            for molsetup, suffix in zip(molsetups, suffixes):
+                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+                if success:
+                    name = molsetup.name
+                    output(pdbqt_string, name, (suffix,))
+                else:
+                    nr_failures += 1
+                    this_mol_had_failure = True
+                    print(error_msg, file=sys.stderr)
+                    
             if args.verbose: preparator.show_setup()
+
+        input_mol_with_failure += int(this_mol_had_failure)
 
     if output.is_multimol:
         print("Input molecules processed: %d, skipped: %d" % (output.counter, input_mol_skipped))
         print("PDBQT files written: %d" % (output.num_files_written))
+        print("PDBQT files not written due to error: %d" % (nr_failures))
+        print("Input molecules with errors: %d" % (input_mol_with_failure))
         print(output.get_duplicates_info_string())
