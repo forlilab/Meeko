@@ -105,10 +105,11 @@ class MoleculePreparation:
     def from_config(cls, config):
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
-        for key in bad_keys:
-            print("ERROR: unexpected key \"%s\" in MoleculePreparation.from_config()" % key, file=sys.stderr)
         if len(bad_keys) > 0:
-            raise ValueError
+            err_msg = "unexpected keys in MoleculePreparation.from_config():" + os.linesep
+            for key in bad_keys:
+                err_msg += "  - %s" % key + os.linesep
+            raise ValueError(err_msg)
         p = cls(**config)
         return p
 
