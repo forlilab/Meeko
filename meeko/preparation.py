@@ -5,7 +5,9 @@
 #
 
 from inspect import signature
+import json
 import os
+import pathlib
 import sys
 from collections import OrderedDict
 import warnings
@@ -21,6 +23,12 @@ from .macrocycle import FlexMacrocycle
 from .flexibility import FlexibilityBuilder
 from .writer import PDBQTWriterLegacy
 from .reactive import assign_reactive_types
+
+pkg_dir = pathlib.Path(__file__).parents[0]
+with open(pkg_dir / "data" / "ad4_types.json") as f:
+    default_ad4_types = json.load(f)
+# the above is controversial, see
+# https://stackoverflow.com/questions/6028000/how-to-read-a-static-file-from-inside-a-python-package
 
 try:
     from openbabel import openbabel as ob
@@ -45,8 +53,11 @@ class MoleculePreparation:
             double_bond_penalty=50,
             rigidify_bonds_smarts=[],
             rigidify_bonds_indices=[],
-            atom_type_smarts={},
-            add_atom_types=[],
+            atom_params=None,
+            add_atom_types=(),
+            offatom_params=None, 
+            charge_model="gasteiger",
+            dihedral_params=None,
             reactive_smarts=None,
             reactive_smarts_idx=None,
             add_index_map=False,
@@ -65,14 +76,28 @@ class MoleculePreparation:
         self.double_bond_penalty = double_bond_penalty
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
         self.rigidify_bonds_indices = rigidify_bonds_indices
-        self.atom_type_smarts = atom_type_smarts
+        if atom_params is None:
+            self.atom_params = json.loads(json.dumps(default_ad4_types))
+        else:
+            self.atom_params = json.loads(json.dumps(atom_params))
         self.add_atom_types = add_atom_types
+        if len(add_atom_types) > 0:
+            group_keys = list(self.atom_params.keys())
+            if len(group_keys) != 1:
+                msg = "add_atom_types is usable only when there is one group of parameters"
+                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
+                raise RuntimeError(msg)
+            key = group_keys[0]
+            self.atom_params[key].extend(add_atom_types)
+
+        self.offatom_params = offatom_params
+        self.charge_model = charge_model
+        self.dihedral_params = dihedral_params
         self.reactive_smarts = reactive_smarts
         self.reactive_smarts_idx = reactive_smarts_idx
         self.add_index_map = add_index_map
         self.remove_smiles = remove_smiles
 
-        self._atom_typer = AtomTyper(self.atom_type_smarts, self.add_atom_types)
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(
                 self.min_ring_size, self.max_ring_size, self.double_bond_penalty)
@@ -105,10 +130,11 @@ class MoleculePreparation:
     def from_config(cls, config):
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
-        for key in bad_keys:
-            print("ERROR: unexpected key \"%s\" in MoleculePreparation.from_config()" % key, file=sys.stderr)
         if len(bad_keys) > 0:
-            raise ValueError("expected keys: %s" % expected_keys)
+            err_msg = "unexpected keys in MoleculePreparation.from_config():" + os.linesep
+            for key in bad_keys:
+                err_msg += "  - %s" % key + os.linesep
+            raise ValueError(err_msg)
         p = cls(**config)
         return p
 
@@ -144,11 +170,14 @@ class MoleculePreparation:
 
         self.check_external_ring_break(setup, delete_ring_bonds, glue_pseudo_atoms)
 
-        # 1.  assign atom types (including HB types, vectors and stuff)
-        # DISABLED TODO self.atom_typer.set_parm(mol)
-        self._atom_typer(setup)
-        # 2a. add pi-model + merge_h_pi (THIS CHANGE SOME ATOM TYPES)
-        # disabled
+        # 1.  assign atom params
+        AtomTyper.type_everything(
+            setup,
+            self.atom_params,
+            self.charge_model,
+            self.offatom_params,
+            self.dihedral_params,
+        )
 
         # merge hydrogens (or any terminal atoms)
         indices = set()

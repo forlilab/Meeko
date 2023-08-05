@@ -8,7 +8,6 @@ import pytest
 
 def test1():
     typer = {
-        "ATOM_PARAMS": {
             "reduced set": [
                 {"smarts": "[#1]", "atype": "H",},
                 {"smarts": "[#1][#6]([#7,#8])[#7,#8]", "atype": "HD"}, # one H in oxazole
@@ -17,10 +16,9 @@ def test1():
                 {"smarts": "[#7]", "atype": "NA"},
                 {"smarts": "[#8]", "atype": "OA"},
             ]
-        }
     }
     
-    preparator = MoleculePreparation(atom_type_smarts=typer)
+    preparator = MoleculePreparation(atom_types=typer)
     
     mol = Chem.MolFromSmiles("c1ncco1") # oxazole
     mol = Chem.AddHs(mol)
@@ -37,7 +35,6 @@ def test1():
 
 def test2():
     typer = {
-        "ATOM_PARAMS": {
             "reduced set": [
                 {"smarts": "[#1]", "atype": "H_MERGE",},
                 {"smarts": "[#1][#6]([#7,#8])[#7,#8]", "atype": "HC"}, # one H in oxazole
@@ -47,11 +44,10 @@ def test2():
                 {"smarts": "[#7]", "atype": "NA"},
                 {"smarts": "[#8]", "atype": "OA"},
             ]
-        }
     }
     
     preparator = MoleculePreparation(
-        atom_type_smarts=typer,
+        atom_types=typer,
         merge_these_atom_types=("H", "H_MERGE"),
     )
     

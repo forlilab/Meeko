@@ -30,140 +30,53 @@ else:
 
 class AtomTyper:
 
-    defaults_json = """{
-        "ATOM_PARAMS": {
-            "atom_types": [
-                {"smarts": "[#1]",                  "atype": "H", "comment": "invisible"},
-                {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"},
-                {"smarts": "[#5]",              "atype": "B"},
-                {"smarts": "[C]",               "atype": "C"},
-                {"smarts": "[c]",               "atype": "A"},
-                {"smarts": "[#7]",              "atype": "NA"},
-                {"smarts": "[#8]",              "atype": "OA"},
-                {"smarts": "[#9]",              "atype": "F"},
-                {"smarts": "[#12]",             "atype": "Mg"},
-                {"smarts": "[#14]",             "atype": "Si"},
-                {"smarts": "[#15]",             "atype": "P"},
-                {"smarts": "[#16]",             "atype": "S"},
-                {"smarts": "[#17]",             "atype": "Cl"},
-                {"smarts": "[#20]",             "atype": "Ca"},
-                {"smarts": "[#25]",             "atype": "Mn"},
-                {"smarts": "[#26]",             "atype": "Fe"},
-                {"smarts": "[#30]",             "atype": "Zn"},
-                {"smarts": "[#35]",             "atype": "Br"},
-                {"smarts": "[#53]",             "atype": "I"},
-                {"smarts": "[#7X3v3][a]",       "atype": "N",  "comment": "pyrrole, aniline"},
-                {"smarts": "[#7X3v3][#6X3v4]",  "atype": "N",  "comment": "amide"},
-                {"smarts": "[#7+1]",            "atype": "N",  "comment": "ammonium, pyridinium"},
-                {"smarts": "[SX2]",             "atype": "SA", "comment": "sulfur acceptor"}
-            ],
-            "ad4_desolv_volume": [
-                {"smarts": "[#1]",               "ad4_sol_vol":  0.0},
-                {"smarts": "[#1][#8,#7,#16,#9]", "ad4_sol_vol":  0.0},
-                {"smarts": "[#6]",               "ad4_sol_vol": 33.5103},
-                {"smarts": "[#7]",               "ad4_sol_vol": 22.4493},
-                {"smarts": "[#8]",               "ad4_sol_vol": 17.1573},
-                {"smarts": "[#9]",               "ad4_sol_vol": 15.448 },
-                {"smarts": "[#12]",              "ad4_sol_vol":  1.56  },
-                {"smarts": "[#15]",              "ad4_sol_vol": 38.7924},
-                {"smarts": "[#16]",              "ad4_sol_vol": 33.5103},
-                {"smarts": "[#17]",              "ad4_sol_vol": 35.8235},
-                {"smarts": "[#20]",              "ad4_sol_vol":  2.77  },
-                {"smarts": "[#25]",              "ad4_sol_vol":  2.14  },
-                {"smarts": "[#26]",              "ad4_sol_vol":  1.84  },
-                {"smarts": "[#30]",              "ad4_sol_vol":  1.7   },
-                {"smarts": "[#35]",              "ad4_sol_vol": 42.5661},
-                {"smarts": "[#53]",              "ad4_sol_vol": 55.0585}
-            ],
-            "ad4_desolv_param": [
-                {"smarts": "[*]",                "ad4_sol_par":  0.00110},
-                {"smarts": "[#1]",               "ad4_sol_par":  0.00000},
-                {"smarts": "[#1][#8,#7,#16,#9]", "ad4_sol_par":  0.00051},
-                {"smarts": "[C]",                "ad4_sol_par": -0.00143},
-                {"smarts": "[c]",                "ad4_sol_par": -0.00052},
-                {"smarts": "[#7]",               "ad4_sol_par": -0.00162},
-                {"smarts": "[#8]",               "ad4_sol_par": -0.00251},
-                {"smarts": "[#16]",              "ad4_sol_par": -0.00214}
-            ],
-            "ad4_vdw": [
-                {"smarts": "[#1]",   "rmin_half": 1.0,   "epsilon": 0.02},
-                {"smarts": "[#6]",   "rmin_half": 2.0,   "epsilon": 0.15},
-                {"smarts": "[#7]",   "rmin_half": 1.75,  "epsilon": 0.16},
-                {"smarts": "[#8]",   "rmin_half": 1.6,   "epsilon": 0.20},
-                {"smarts": "[#9]",   "rmin_half": 1.545, "epsilon": 0.08},
-                {"smarts": "[#12]",  "rmin_half": 0.65,  "epsilon": 0.875},
-                {"smarts": "[#15]",  "rmin_half": 2.1,   "epsilon": 0.20},
-                {"smarts": "[#16]",  "rmin_half": 2.0,   "epsilon": 0.20},
-                {"smarts": "[#17]",  "rmin_half": 2.045, "epsilon": 0.276},
-                {"smarts": "[#20]",  "rmin_half": 0.99,  "epsilon": 0.55},
-                {"smarts": "[#25]",  "rmin_half": 0.65,  "epsilon": 0.875},
-                {"smarts": "[#26]",  "rmin_half": 0.65,  "epsilon": 0.01},
-                {"smarts": "[#30]",  "rmin_half": 0.74,  "epsilon": 0.55},
-                {"smarts": "[#35]",  "rmin_half": 2.165, "epsilon": 0.389},
-                {"smarts": "[#53]",  "rmin_half": 2.36,  "epsilon": 0.55}
-            ]
-        },
-        "OFFATOMS": {
-            "example_offsite_charges": [
-                {"smarts": "[#7X2;v3;!+](=,:[*])[*]", "IDX": [1], "OFFATOMS": [
-                    {"z": [2, 3], "phi": 0, "distance": 0.2,
-                    "atype": "OFFCHRG", "pull_charge_fraction": 1.08}
-                ]}
-            ]
-        },
-        "CHARGE_MODEL": "gasteiger"
-    }
-    """
-    def __init__(self, parameters={}, add_parameters=[]):
-        self.parameters = json.loads(self.defaults_json)
-        for key in parameters:
-            self.parameters[key] = json.loads(json.dumps(parameters[key])) # a safe copy
-        # add additional parameters
-        if len(add_parameters) > 0:
-            keys = list(self.parameters["ATOM_PARAMS"].keys())
-            if len(keys) != 1:
-                msg = "add_parameters is usable only when there is one group of parameters"
-                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
-                raise RuntimeError(msg)
-            key = keys[0]
-            self.parameters['ATOM_PARAMS'][key].extend(add_parameters)
+    @classmethod
+    def type_everything(cls, molsetup,
+                        atom_params,
+                        charge_model,
+                        offatom_params=None,
+                        dihedral_params=None,
+                        ):
 
-    def __call__(self, setup):
-        self._type_atoms(setup)
-        self._type_dihedrals(setup)
-        # CHARGE_MODEL must preceed OFFATOMS because of offsite-charges 
-        if "CHARGE_MODEL" in self.parameters:
-            if self.parameters["CHARGE_MODEL"] == "espaloma":
-                set_espaloma_charges(setup) 
-            elif self.parameters["CHARGE_MODEL"] == "gasteiger":
-                pass # gasteiger automatically set in molsetup
-            else:
-                raise RuntimeError("only espaloma/gasteiger charges accepted")
-        if 'OFFATOMS' in self.parameters:
-            cached_offatoms = self._cache_offatoms(setup)
-            coords = [x for x in setup.coord.values()]
-            self._set_offatoms(setup, cached_offatoms, coords)
+        cls._type_atoms(molsetup, atom_params)
+        
+        if charge_model == "espaloma":
+            AtomTyper.set_espaloma_charges(molsetup) 
+        elif charge_model == "gasteiger":
+            pass # gasteiger automatically set in molsetup
+        else:
+            raise RuntimeError("only espaloma/gasteiger charges accepted")
+
+        # offatoms must be typed after charges, because offsites pull charge
+        if offatom_params is not None:
+            cached_offatoms = cls._cache_offatoms(molsetup, offatom_params)
+            coords = [x for x in molsetup.coord.values()]
+            cls._set_offatoms(molsetup, cached_offatoms, coords)
+
+        if dihedral_params is not None:
+            cls._type_dihedrals(molsetup, dihedral_params)
+
         return
 
-    def _type_atoms(self, setup):
-        parsmar = self.parameters['ATOM_PARAMS']
+    @staticmethod
+    def _type_atoms(molsetup, atom_params):
         # ensure every "atompar" is defined in a single "smartsgroup"
         ensure = {}
         # go over all "smartsgroup"s
-        for smartsgroup in parsmar:
+        for smartsgroup in atom_params:
             if smartsgroup == 'comment': continue
-            for line in parsmar[smartsgroup]: # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
+            for line in atom_params[smartsgroup]: # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
                 smarts = str(line['smarts'])
                 # get indices of the atoms in the smarts to which the parameters will be assigned
                 idxs = [0] # by default, the first atom in the smarts gets parameterized
                 if 'IDX' in line:
                     idxs = [i - 1 for i in line['IDX']] # convert from 1- to 0-indexing
                 # match SMARTS
-                hits = setup.find_pattern(smarts)
+                hits = molsetup.find_pattern(smarts)
                 for atompar in line:
                     if atompar in ["smarts", "comment", "IDX"]: continue
-                    if atompar not in setup.atom_params:
-                        setup.atom_params[atompar] = [None] * len(setup.coord) 
+                    if atompar not in molsetup.atom_params:
+                        molsetup.atom_params[atompar] = [None] * len(molsetup.coord) 
                     value = line[atompar]
                     # keep track of every "smartsgroup" that modified "atompar"
                     ensure.setdefault(atompar, [])
@@ -176,8 +89,9 @@ class AtomTyper:
                         # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
                         for idx in idxs:
                             if atompar == "atype":
-                                setup.set_atom_type(hit[idx], value) # overrides previous calls
-                            setup.atom_params[atompar][hit[idx]] = value
+                                molsetup.set_atom_type(hit[idx], value) # overrides previous calls
+                            molsetup.atom_params[atompar][hit[idx]] = value
+
         # guarantee that each atompar is exclusive of a single group
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
@@ -186,20 +100,20 @@ class AtomTyper:
         return
 
 
-    def _cache_offatoms(self, setup):
+    @staticmethod
+    def _cache_offatoms(molsetup, offatom_params):
         """ precalculate off-site atoms """
-        parsmar = self.parameters['OFFATOMS']
         cached_offatoms = {}
         n_offatoms = 0
         atoms_with_offchrg = set()
         # each parent atom can only be matched once in each smartsgroup
-        for smartsgroup in parsmar:
+        for smartsgroup in offatom_params:
             if smartsgroup == "comment": continue
             tmp = {}
-            for line in parsmar[smartsgroup]:
+            for line in offatom_params[smartsgroup]:
                 # SMARTS
                 smarts = str(line['smarts'])
-                hits = setup.find_pattern(smarts)
+                hits = molsetup.find_pattern(smarts)
                 # atom indexes in smarts string
                 smarts_idxs = [0]
                 if 'IDX' in line:
@@ -244,7 +158,6 @@ class AtomTyper:
                                     pass
             for parent_idx in tmp:
                 for offatom_dict in tmp[parent_idx]:
-                    #print '1-> ', self.atom_params['q'], len(self.coords)
                     atom_params = offatom_dict['atom_params']
                     offatom = offatom_dict['offatom']
                     atomgeom = AtomicGeometry(parent_idx,
@@ -265,15 +178,16 @@ class AtomTyper:
                     n_offatoms += 1
         return cached_offatoms
 
-    def _set_offatoms(self, setup, cached_offatoms, coords):
+    @staticmethod
+    def _set_offatoms(molsetup, cached_offatoms, coords):
         """add cached offatoms"""
         for k, (atomgeom, args) in cached_offatoms.items():
             (atom_type, dist, theta, phi, pull_charge_fraction) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
-            tmp = setup.get_pdbinfo(atomgeom.parent+1)
+            tmp = molsetup.get_pdbinfo(atomgeom.parent+1)
             pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
-            q_parent = (1 - pull_charge_fraction) * setup.charge[atomgeom.parent] 
-            q_offsite = pull_charge_fraction * setup.charge[atomgeom.parent]
+            q_parent = (1 - pull_charge_fraction) * molsetup.charge[atomgeom.parent] 
+            q_offsite = pull_charge_fraction * molsetup.charge[atomgeom.parent]
             pseudo_atom = {
                     'coord': offatom_coords,
                     'anchor_list': [atomgeom.parent],
@@ -282,18 +196,16 @@ class AtomTyper:
                     'atom_type': atom_type,
                     'rotatable': False
                     }
-            setup.charge[atomgeom.parent] = q_parent
-            setup.add_pseudo(**pseudo_atom)
+            molsetup.charge[atomgeom.parent] = q_parent
+            molsetup.add_pseudo(**pseudo_atom)
         return
 
-    def _type_dihedrals(self, molsetup):
+    @staticmethod
+    def _type_dihedrals(molsetup, dihedral_params):
 
-        if "DIHEDRALS" not in self.parameters:
-            return
-        parsmar = self.parameters['DIHEDRALS']
         dihedrals = {}
 
-        for line in parsmar:
+        for line in dihedral_params:
             smarts = str(line['smarts'])
             hits = molsetup.find_pattern(smarts)
             if len(hits) == 0:
@@ -325,6 +237,35 @@ class AtomTyper:
                 molsetup.dihedral_partaking_atoms[atom_idxs] = dihedral_index
                 molsetup.dihedral_labels[atom_idxs] = tid
 
+    @staticmethod
+    def set_espaloma_charges(molsetup):
+        if not _has_espaloma or not _has_torch:
+            raise ImportError("espaloma and pytorch are required")
+        pretrained_model = pathlib.Path(espaloma.__file__).parents[1] / "espaloma_model.pt"
+        if not pretrained_model.exists():
+            msg = "Could not find %s" % pretrained_model
+            msg += "Consider:"
+            msg += "    $ cd %s" % pretrained_model.parents[0]
+            msg += "    $ wget http://data.wangyq.net/espaloma_model.pt"
+            raise RuntimeError(msg)
+        from .molsetup import RDKitMoleculeSetup
+        if not isinstance(molsetup, RDKitMoleculeSetup):
+            raise NotImplementedError("need rdkit molecule for espaloma charges")
+        from openff.toolkit.topology import Molecule
+        rdmol = molsetup.mol
+        openffmol = Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)
+        molgraph = espaloma.Graph(openffmol)
+        espaloma_model = torch.load(pretrained_model)
+        espaloma_model(molgraph.heterograph)
+        charges = [float(q) for q in molgraph.nodes["n1"].data["q"]]
+        total_charge = 0.0
+        for i in range(len(charges)):
+            #print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
+            molsetup.charge[i] = charges[i] 
+            total_charge += charges[i]
+        for j in range(i+1, len(molsetup.charge)):
+            if molsetup.charge[j] != 0.:
+                raise RuntimeError("expected zero charge beyond real atoms, at this point") 
 
 
 class AtomicGeometry():
@@ -437,32 +378,3 @@ class AtomicGeometry():
         else:
             # should be np.array
             return vec / l
-
-def set_espaloma_charges(molsetup):
-    if not _has_espaloma or not _has_torch:
-        raise ImportError("espaloma and pytorch are required")
-    pretrained_model = pathlib.Path(espaloma.__file__).parents[1] / "espaloma_model.pt"
-    if not pretrained_model.exists():
-        msg = "Could not find %s" % pretrained_model
-        msg += "Consider:"
-        msg += "    $ cd %s" % pretrained_model.parents[0]
-        msg += "    $ wget http://data.wangyq.net/espaloma_model.pt"
-        raise RuntimeError(msg)
-    from .molsetup import RDKitMoleculeSetup
-    if not isinstance(molsetup, RDKitMoleculeSetup):
-        raise NotImplementedError("need rdkit molecule for espaloma charges")
-    from openff.toolkit.topology import Molecule
-    rdmol = molsetup.mol
-    openffmol = Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)
-    molgraph = espaloma.Graph(openffmol)
-    espaloma_model = torch.load(pretrained_model)
-    espaloma_model(molgraph.heterograph)
-    charges = [float(q) for q in molgraph.nodes["n1"].data["q"]]
-    total_charge = 0.0
-    for i in range(len(charges)):
-        #print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
-        molsetup.charge[i] = charges[i] 
-        total_charge += charges[i]
-    for j in range(i+1, len(molsetup.charge)):
-        if molsetup.charge[j] != 0.:
-            raise RuntimeError("expected zero charge beyond real atoms, at this point") 

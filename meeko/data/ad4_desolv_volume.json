@@ -1,0 +1,19 @@
+{"ad4_desolv_volume": [
+    {"smarts": "[#1]",               "ad4_sol_vol":  0.0},
+    {"smarts": "[#1][#8,#7,#16,#9]", "ad4_sol_vol":  0.0},
+    {"smarts": "[#6]",               "ad4_sol_vol": 33.5103},
+    {"smarts": "[#7]",               "ad4_sol_vol": 22.4493},
+    {"smarts": "[#8]",               "ad4_sol_vol": 17.1573},
+    {"smarts": "[#9]",               "ad4_sol_vol": 15.448 },
+    {"smarts": "[#12]",              "ad4_sol_vol":  1.56  },
+    {"smarts": "[#15]",              "ad4_sol_vol": 38.7924},
+    {"smarts": "[#16]",              "ad4_sol_vol": 33.5103},
+    {"smarts": "[#17]",              "ad4_sol_vol": 35.8235},
+    {"smarts": "[#20]",              "ad4_sol_vol":  2.77  },
+    {"smarts": "[#25]",              "ad4_sol_vol":  2.14  },
+    {"smarts": "[#26]",              "ad4_sol_vol":  1.84  },
+    {"smarts": "[#30]",              "ad4_sol_vol":  1.7   },
+    {"smarts": "[#35]",              "ad4_sol_vol": 42.5661},
+    {"smarts": "[#53]",              "ad4_sol_vol": 55.0585}
+    ]
+}

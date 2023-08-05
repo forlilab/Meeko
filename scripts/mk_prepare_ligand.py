@@ -358,12 +358,12 @@ if __name__ == '__main__':
                 if success:
                     name = molsetup.name
                     output(pdbqt_string, name, (suffix,))
+                    if args.verbose: 
+                        molsetup.show()
                 else:
                     nr_failures += 1
                     this_mol_had_failure = True
                     print(error_msg, file=sys.stderr)
-                    
-            if args.verbose: preparator.show_setup()
 
         input_mol_with_failure += int(this_mol_had_failure)
 
