@@ -396,22 +396,18 @@ if __name__ == '__main__':
         "covalent_builder": covalent_builder,
     }
 
-    mp_input = []
-    for mol in mol_supplier:
-        if args.parallelize is not None:
-            mp_input.append((mol, prep_inputs))
-            continue
-        is_valid, this_mol_had_failure, nr_f = prep_single_mol(mol, prep_inputs)
-
-        input_mol_skipped += int(is_valid==False)
-        input_mol_with_failure += int(this_mol_had_failure)
-        nr_failures += nr_f
     if args.parallelize is not None:
         with Pool(args.parallelize) as pool:
-            for is_valid, this_mol_had_failure, nr_f in pool.imap(_mp_wrapper, mp_input):
+            for is_valid, this_mol_had_failure, nr_f in pool.starmap(_mp_wrapper, [(mol, prep_inputs) for mol in mol_supplier]):
                 input_mol_skipped += int(is_valid==False)
                 input_mol_with_failure += int(this_mol_had_failure)
                 nr_failures += nr_f
+    else:
+        for mol in mol_supplier:
+            is_valid, this_mol_had_failure, nr_f = prep_single_mol(mol, prep_inputs)
+            input_mol_skipped += int(is_valid==False)
+            input_mol_with_failure += int(this_mol_had_failure)
+            nr_failures += nr_f
 
     if output.is_multimol:
         print("Input molecules processed: %d, skipped: %d" % (output.counter, input_mol_skipped))
