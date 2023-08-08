@@ -336,7 +336,8 @@ def prep_single_mol(mol, input_dict):
     return is_valid, this_mol_had_failure, nr_failures
 
 def _mp_wrapper(mp_tuple):
-
+    mol, input_dict = mp_tuple
+    return prep_single_mol(mol, input_dict)
 
 if __name__ == '__main__':
 
