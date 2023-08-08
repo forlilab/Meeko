@@ -15,11 +15,7 @@ from rdkit import Chem
 from meeko import MoleculePreparation
 from meeko import rdkitutils
 from meeko import PDBQTWriterLegacy
-
-if platform.system() == "Darwin":  # mac
-    from multiprocess.pool import Pool
-else:
-    from multiprocessing.pool import Pool
+from meeko import Parallelizer
 
 try:
     import prody
@@ -328,7 +324,6 @@ if __name__ == '__main__':
         "output": output,
         "backend": backend,
         "is_covalent": is_covalent,
-        "is_after_first": is_after_first,
         "preparator": preparator,
         "covalent_builder": covalent_builder,
     }
@@ -339,15 +334,11 @@ if __name__ == '__main__':
             sys.exit(1)
 
     if args.parallelize is not None:
-        with Pool(args.parallelize) as pool:
-            for is_valid, this_mol_had_failure, nr_f in pool.imap(_mp_wrapper, [(mol, prep_inputs) for mol in mol_supplier]):
-                input_mol_skipped += int(is_valid==False)
-                input_mol_with_failure += int(this_mol_had_failure)
-                nr_failures += nr_f
-                print("done one")
+        pool = Parallelizer(args.parallelize, mol_supplier, args, output, backend, is_covalent, preparator, covalent_builder)
+        input_mol_skipped, input_mol_with_failure, nr_failures = pool.process_mols()
     else:
         for mol in mol_supplier:
-            is_valid, this_mol_had_failure, nr_f = MoleculePreparation.prep_single_mol(mol, prep_inputs)
+            is_valid, this_mol_had_failure, nr_f, _ = MoleculePreparation.prep_single_mol(mol, args, output, backend, is_covalent, preparator, covalent_builder)
             input_mol_skipped += int(is_valid==False)
             input_mol_with_failure += int(this_mol_had_failure)
             nr_failures += nr_f
