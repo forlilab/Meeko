@@ -398,10 +398,11 @@ if __name__ == '__main__':
 
     if args.parallelize is not None:
         with Pool(args.parallelize) as pool:
-            for is_valid, this_mol_had_failure, nr_f in pool.starmap(_mp_wrapper, [(mol, prep_inputs) for mol in mol_supplier]):
+            for is_valid, this_mol_had_failure, nr_f in pool.imap(_mp_wrapper, [(mol, prep_inputs) for mol in mol_supplier]):
                 input_mol_skipped += int(is_valid==False)
                 input_mol_with_failure += int(this_mol_had_failure)
                 nr_failures += nr_f
+                print("done one")
     else:
         for mol in mol_supplier:
             is_valid, this_mol_had_failure, nr_f = prep_single_mol(mol, prep_inputs)
