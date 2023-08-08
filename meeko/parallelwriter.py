@@ -15,7 +15,7 @@ else:
     import multiprocessing
 
 
-class ParallelWorker(multiprocessing.Process):
+class ParallelWriter(multiprocessing.Process):
     # this class is a listener that retrieves data from the queue and writes to files
     def __init__(
         self, output, queue, n_workers, pipe
