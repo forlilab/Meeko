@@ -55,7 +55,7 @@ class Parallelizer:
                 self._add_to_queue(mol)
         except Exception as e:
             tb = traceback.format_exc()
-            self._kill_all_workers("file sources", tb)
+            self._kill_all_workers(e, tb)
         # put as many poison pills in the queue as there are workers
         for i in range(self.num_readers):
             self.queueIn.put(None)
@@ -97,4 +97,5 @@ class Parallelizer:
         for s in self.workers:
             s.kill()
         logging.debug(tb)
+        print(tb)
         raise error
