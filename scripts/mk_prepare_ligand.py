@@ -275,69 +275,6 @@ class Output:
             return ("",) # no suffix needed
         else:
             return tuple("mk%d" % (i + 1) for i in range(len(molsetups)))
-        
-def prep_single_mol(mol, input_dict):
-    is_after_first = input_dict["is_after_first"]
-    output = input_dict["output"]
-    args = input_dict["args"]
-    backend = input_dict["backend"]
-    covalent_builder = input_dict["covalent_builder"]
-    preparator = input_dict["preparator"]
-    nr_failures = 0
-    
-    if is_after_first and output.is_multimol == False:
-        print("Processed only the first molecule of multiple molecule input.")
-        print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
-            args.input_molecule_filename))
-        return None, None, None
-    is_after_first = True
-
-    # check that molecule was successfully loaded
-    if backend == 'rdkit':
-        is_valid = mol is not None
-    elif backend == 'ob':
-        is_valid = mol.NumAtoms() > 0
-    if not is_valid: return False, None, None
-
-    this_mol_had_failure = False
-
-    if is_covalent:
-        for cov_lig in covalent_builder.process(mol, args.tether_smarts, args.tether_smarts_indices):
-            root_atom_index = cov_lig.indices[0]
-            molsetups = preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
-            res, chain, num = cov_lig.res_id
-            suffixes = output.get_suffixes(molsetups)
-            for molsetup, suffix in zip(molsetups, suffixes):
-                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
-                if success:
-                    pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
-                    name = molsetup.name
-                    output(pdbqt_string, name, (cov_lig.label, suffix))
-                else:
-                    nr_failures += 1
-                    this_mol_had_failure = True
-                    print(error_msg, file=sys.stderr)
-                    
-    else:
-        molsetups = preparator.prepare(mol)
-        suffixes = output.get_suffixes(molsetups) 
-        for molsetup, suffix in zip(molsetups, suffixes):
-            pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
-            if success:
-                name = molsetup.name
-                output(pdbqt_string, name, (suffix,))
-                if args.verbose: 
-                    molsetup.show()
-            else:
-                nr_failures += 1
-                this_mol_had_failure = True
-                print(error_msg, file=sys.stderr)
-
-    return is_valid, this_mol_had_failure, nr_failures
-
-def _mp_wrapper(mp_tuple):
-    mol, input_dict = mp_tuple
-    return prep_single_mol(mol, input_dict)
 
 if __name__ == '__main__':
 
@@ -395,6 +332,11 @@ if __name__ == '__main__':
         "preparator": preparator,
         "covalent_builder": covalent_builder,
     }
+    if len(mol_supplier) > 1 and not output.is_multimol:
+            print("Given multiple molecule input but no output options.")
+            print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
+                args.input_molecule_filename))
+            sys.exit(1)
 
     if args.parallelize is not None:
         with Pool(args.parallelize) as pool:
@@ -405,7 +347,7 @@ if __name__ == '__main__':
                 print("done one")
     else:
         for mol in mol_supplier:
-            is_valid, this_mol_had_failure, nr_f = prep_single_mol(mol, prep_inputs)
+            is_valid, this_mol_had_failure, nr_f = MoleculePreparation.prep_single_mol(mol, prep_inputs)
             input_mol_skipped += int(is_valid==False)
             input_mol_with_failure += int(this_mol_had_failure)
             nr_failures += nr_f
