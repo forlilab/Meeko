@@ -319,14 +319,6 @@ if __name__ == '__main__':
     is_after_first = False
     preparator = MoleculePreparation.from_config(config)
 
-    prep_inputs ={
-        "args": args,
-        "output": output,
-        "backend": backend,
-        "is_covalent": is_covalent,
-        "preparator": preparator,
-        "covalent_builder": covalent_builder,
-    }
     if len(mol_supplier) > 1 and not output.is_multimol:
             print("Given multiple molecule input but no output options.")
             print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (

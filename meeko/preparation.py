@@ -304,7 +304,7 @@ class MoleculePreparation:
                     if write_output:
                         output(pdbqt_string, name, (suffix,))
                     else:
-                        output_pdbqts_info.append((pdbqt_string, name, (cov_lig.label, suffix)))
+                        output_pdbqts_info.append((pdbqt_string, name, (suffix,)))
                     if args.verbose: 
                         molsetup.show()
                 else:

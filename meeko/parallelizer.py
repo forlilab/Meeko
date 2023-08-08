@@ -25,8 +25,8 @@ class Parallelizer:
         self.num_mols = 0
         self.n_workers = max_proc - 1  # reserve one core for pdbqt writing
         self.mol_supplier = mol_supplier
-        self.queueIn = multiprocessing.Queue(maxsize=2 * max_proc)
-        self.queueOut = multiprocessing.Queue(maxsize=2 * max_proc)
+        self.queueIn = multiprocessing.Queue(maxsize=10 * max_proc)
+        self.queueOut = multiprocessing.Queue(maxsize=10 * max_proc)
 
         self.args = args
         self.output = output
