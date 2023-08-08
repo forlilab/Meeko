@@ -8,12 +8,18 @@ import os
 import sys
 import json
 import warnings
+import platform
 
 from rdkit import Chem
 
 from meeko import MoleculePreparation
 from meeko import rdkitutils
 from meeko import PDBQTWriterLegacy
+
+if platform.system() == "Darwin":  # mac
+    from multiprocess.pool import Pool
+else:
+    from multiprocessing.pool import Pool
 
 try:
     import prody
@@ -103,6 +109,7 @@ def cmd_lineparser():
                         action="store_true", help="write map of atom indices from input to pdbqt")
     config_group.add_argument("--remove_smiles", dest="remove_smiles",
                         action="store_true", help="do not write smiles as remark to pdbqt")
+    config_group.add_argument("--parallelize", help="Number of CPU cores to use for parallel processing. Will use all cores by default.", nargs="?", const=os.cpu_count())
     reactive_group = parser.add_argument_group("Reactive docking")
     reactive_group.add_argument('--reactive_smarts',  help="SMARTS pattern for reactive group")
     reactive_group.add_argument('--reactive_smarts_idx', help='index (1-based) of the reactive atom in --reactive_smarts', type=int)
@@ -268,6 +275,67 @@ class Output:
             return ("",) # no suffix needed
         else:
             return tuple("mk%d" % (i + 1) for i in range(len(molsetups)))
+        
+def prep_single_mol(mol, input_dict):
+    is_after_first = input_dict["is_after_first"]
+    output = input_dict["output"]
+    args = input_dict["args"]
+    backend = input_dict["backend"]
+    covalent_builder = input_dict["covalent_builder"]
+    preparator = input_dict["preparator"]
+    nr_failures = 0
+    
+    if is_after_first and output.is_multimol == False:
+        print("Processed only the first molecule of multiple molecule input.")
+        print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
+            args.input_molecule_filename))
+        return None, None, None
+    is_after_first = True
+
+    # check that molecule was successfully loaded
+    if backend == 'rdkit':
+        is_valid = mol is not None
+    elif backend == 'ob':
+        is_valid = mol.NumAtoms() > 0
+    if not is_valid: return False, None, None
+
+    this_mol_had_failure = False
+
+    if is_covalent:
+        for cov_lig in covalent_builder.process(mol, args.tether_smarts, args.tether_smarts_indices):
+            root_atom_index = cov_lig.indices[0]
+            molsetups = preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
+            res, chain, num = cov_lig.res_id
+            suffixes = output.get_suffixes(molsetups)
+            for molsetup, suffix in zip(molsetups, suffixes):
+                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+                if success:
+                    pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
+                    name = molsetup.name
+                    output(pdbqt_string, name, (cov_lig.label, suffix))
+                else:
+                    nr_failures += 1
+                    this_mol_had_failure = True
+                    print(error_msg, file=sys.stderr)
+                    
+    else:
+        molsetups = preparator.prepare(mol)
+        suffixes = output.get_suffixes(molsetups) 
+        for molsetup, suffix in zip(molsetups, suffixes):
+            pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+            if success:
+                name = molsetup.name
+                output(pdbqt_string, name, (suffix,))
+                if args.verbose: 
+                    molsetup.show()
+            else:
+                nr_failures += 1
+                this_mol_had_failure = True
+                print(error_msg, file=sys.stderr)
+
+    return is_valid, this_mol_had_failure, nr_failures
+
+def _mp_wrapper(mp_tuple):
 
 
 if __name__ == '__main__':
@@ -301,6 +369,7 @@ if __name__ == '__main__':
             )
 
     # initialize covalent object for receptor
+    covalent_builder = None
     if is_covalent:
         rec_filename = args.receptor
         _, rec_extension = os.path.splitext(rec_filename)
@@ -315,57 +384,33 @@ if __name__ == '__main__':
     nr_failures = 0
     is_after_first = False
     preparator = MoleculePreparation.from_config(config)
+
+    prep_inputs ={
+        "args": args,
+        "output": output,
+        "backend": backend,
+        "is_covalent": is_covalent,
+        "is_after_first": is_after_first,
+        "preparator": preparator,
+        "covalent_builder": covalent_builder,
+    }
+
+    mp_input = []
     for mol in mol_supplier:
-        if is_after_first and output.is_multimol == False:
-            print("Processed only the first molecule of multiple molecule input.")
-            print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
-                input_molecule_filename))
-            break
-        is_after_first = True
+        if args.parallelize is not None:
+            mp_input.append((mol, prep_inputs))
+            continue
+        is_valid, this_mol_had_failure, nr_f = prep_single_mol(mol, prep_inputs)
 
-        # check that molecule was successfully loaded
-        if backend == 'rdkit':
-            is_valid = mol is not None
-        elif backend == 'ob':
-            is_valid = mol.NumAtoms() > 0
         input_mol_skipped += int(is_valid==False)
-        if not is_valid: continue
-
-        this_mol_had_failure = False
-
-        if is_covalent:
-            for cov_lig in covalent_builder.process(mol, args.tether_smarts, args.tether_smarts_indices):
-                root_atom_index = cov_lig.indices[0]
-                molsetups = preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
-                res, chain, num = cov_lig.res_id
-                suffixes = output.get_suffixes(molsetups)
-                for molsetup, suffix in zip(molsetups, suffixes):
-                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
-                    if success:
-                        pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
-                        name = molsetup.name
-                        output(pdbqt_string, name, (cov_lig.label, suffix))
-                    else:
-                        nr_failures += 1
-                        this_mol_had_failure = True
-                        print(error_msg, file=sys.stderr)
-                        
-        else:
-            molsetups = preparator.prepare(mol)
-            suffixes = output.get_suffixes(molsetups) 
-            for molsetup, suffix in zip(molsetups, suffixes):
-                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
-                if success:
-                    name = molsetup.name
-                    output(pdbqt_string, name, (suffix,))
-                    if args.verbose: 
-                        molsetup.show()
-                else:
-                    nr_failures += 1
-                    this_mol_had_failure = True
-                    print(error_msg, file=sys.stderr)
-
         input_mol_with_failure += int(this_mol_had_failure)
+        nr_failures += nr_f
+    if args.parallelize is not None:
+        with Pool(args.parallelize) as pool:
+            for is_valid, this_mol_had_failure, nr_f in pool.imap(_mp_wrapper, mp_input):
+                input_mol_skipped += int(is_valid==False)
+                input_mol_with_failure += int(this_mol_had_failure)
+                nr_failures += nr_f
 
     if output.is_multimol:
         print("Input molecules processed: %d, skipped: %d" % (output.counter, input_mol_skipped))
