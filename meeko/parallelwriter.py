@@ -7,8 +7,6 @@ import sys
 import logging
 import traceback
 import platform
-import queue
-from meeko import MoleculePreparation
 import time
 
 if platform.system() == "Darwin":  # mac

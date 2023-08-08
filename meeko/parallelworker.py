@@ -8,7 +8,7 @@ import logging
 import traceback
 import platform
 import queue
-from meeko import MoleculePreparation
+from .preparation import MoleculePreparation
 
 if platform.system() == "Darwin":  # mac
     import multiprocess as multiprocessing

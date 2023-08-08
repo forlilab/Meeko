@@ -9,8 +9,8 @@ from time import sleep
 import logging
 import queue
 import traceback
-from meeko import ParallelWorker
-from meeko import ParallelWriter
+from .parallelworker import ParallelWorker
+from .parallelwriter import ParallelWriter
 import sys
 
 if platform.system() == "Darwin":  # mac
