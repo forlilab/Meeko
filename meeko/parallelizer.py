@@ -9,9 +9,9 @@ from time import sleep
 import logging
 import queue
 import traceback
-from .parallelworker import ParallelWorker
-from .parallelwriter import ParallelWriter
+from .preparation import MoleculePreparation
 import sys
+from rdkit import Chem
 
 if platform.system() == "Darwin":  # mac
     import multiprocess as multiprocessing
@@ -20,13 +20,8 @@ else:
 
 
 class Parallelizer:
-    def __init__(self, max_proc, mol_supplier, args, output, backend, is_covalent, preparator, covalent_builder) -> None:
-        self.processed_mols = 0
-        self.num_mols = 0
+    def __init__(self, max_proc, args, output, backend, is_covalent, preparator, covalent_builder) -> None:
         self.n_workers = max_proc - 1  # reserve one core for pdbqt writing
-        self.mol_supplier = mol_supplier
-        self.queueIn = multiprocessing.Queue(maxsize=10 * max_proc)
-        self.queueOut = multiprocessing.Queue(maxsize=10 * max_proc)
 
         self.args = args
         self.output = output
@@ -35,67 +30,28 @@ class Parallelizer:
         self.preparator = preparator
         self.covalent_builder = covalent_builder
 
-    def process_mols(self):
-        self.workers = []
-        self.p_conn, self.c_conn = multiprocessing.Pipe(True)
-        logging.info("Starting {0} file readers".format(self.n_workers))
+        self.processed_mols = 0
+        self.input_mol_skipped = 0
+        self.input_mol_with_failure = 0
+        self.nr_failures = 0
 
-        for i in range(self.n_workers):
-            s = ParallelWorker(self.args, self.output, self.backend, self.is_covalent, self.preparator, self.covalent_builder, self.queueIn, self.queueOut, self.c_conn)
-            s.start()
-            self.workers.append(s)
+    def _mp_wrapper(self, mol):
+        output_bundle = MoleculePreparation.prep_single_mol(mol, self.args, self.output, self.backend, self.is_covalent, self.preparator, self.covalent_builder, write_output=False)
+        return output_bundle
+
+    def process_mols(self, mol_supplier):
+        # set pickle options to prevent loss of names
+        Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.MolProps |
+                                        Chem.PropertyPickleOptions.PrivateProps)
         
-        w = ParallelWriter(self.output, self.queueOut, self.n_workers, self.c_conn)
-        w.start()
-        self.workers.append(w)
+        pool = multiprocessing.Pool(self.n_workers)
+        for is_valid, this_mol_had_failure, nr_f, output_pdbqts_info in pool.imap_unordered(self._mp_wrapper, mol_supplier):
+            for pdbqt_string, name, covLabel_suffix in output_pdbqts_info:
+                self.output(pdbqt_string, name, covLabel_suffix)
+                print(f"Done {name}")
+                self.processed_mols += 1
+            self.input_mol_skipped += int(is_valid==False)
+            self.input_mol_with_failure += int(this_mol_had_failure)
+            self.nr_failures += nr_f
 
-        # process items in the queue
-        try:
-            for mol in self.mol_supplier:
-                self._add_to_queue(mol)
-        except Exception as e:
-            tb = traceback.format_exc()
-            self._kill_all_workers(e, tb)
-        # put as many poison pills in the queue as there are workers
-        for i in range(self.num_readers):
-            self.queueIn.put(None)
-
-        # check for exceptions
-        while w.is_alive():
-            sleep(0.5)
-            self._check_for_worker_exceptions()
-        w.join()
-
-        return w.input_mol_skipped, w.input_mol_with_failure, w.nr_failures
-
-    def _add_to_queue(self, mol):
-        max_attempts = 750
-        timeout = 0.5  # seconds
-        attempts = 0
-        while True:
-            if attempts >= max_attempts:
-                raise RuntimeError(
-                    "Something is blocking the multiprocessing queue. Exiting program."
-                ) from queue.Full
-            try:
-                self.queueIn.put(mol, block=True, timeout=timeout)
-                self.num_mols += 1
-                self._check_for_worker_exceptions()
-                break
-            except queue.Full:
-                # logging.debug(f"Queue full: queueIn.put attempt {attempts} timed out. {max_attempts - attempts} put attempts remaining.")
-                attempts += 1
-                self._check_for_worker_exceptions()
-
-    def _check_for_worker_exceptions(self):
-        if self.p_conn.poll():
-            logging.debug("Caught error in multiprocessing")
-            error, tb = self.p_conn.recv()
-            self._kill_all_workers(error, tb)
-
-    def _kill_all_workers(self, error, tb):
-        for s in self.workers:
-            s.kill()
-        logging.debug(tb)
-        print(tb)
-        raise error
+        return self.input_mol_skipped, self.input_mol_with_failure, self.nr_failures

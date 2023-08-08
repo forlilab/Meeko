@@ -326,8 +326,8 @@ if __name__ == '__main__':
             sys.exit(1)
 
     if args.parallelize is not None:
-        pool = Parallelizer(args.parallelize, mol_supplier, args, output, backend, is_covalent, preparator, covalent_builder)
-        input_mol_skipped, input_mol_with_failure, nr_failures = pool.process_mols()
+        pool = Parallelizer(args.parallelize, args, output, backend, is_covalent, preparator, covalent_builder)
+        input_mol_skipped, input_mol_with_failure, nr_failures = pool.process_mols(mol_supplier)
     else:
         for mol in mol_supplier:
             is_valid, this_mol_had_failure, nr_f, _ = MoleculePreparation.prep_single_mol(mol, args, output, backend, is_covalent, preparator, covalent_builder)
