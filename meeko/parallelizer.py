@@ -48,7 +48,7 @@ class Parallelizer:
         for is_valid, this_mol_had_failure, nr_f, output_pdbqts_info in pool.imap_unordered(self._mp_wrapper, mol_supplier):
             for pdbqt_string, name, covLabel_suffix in output_pdbqts_info:
                 self.output(pdbqt_string, name, covLabel_suffix)
-                print(f"Done {name}")
+                logging.info(f"Done writing PDBQT for {name}")
                 self.processed_mols += 1
             self.input_mol_skipped += int(is_valid==False)
             self.input_mol_with_failure += int(this_mol_had_failure)

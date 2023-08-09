@@ -34,8 +34,6 @@ from .reactive import reactive_typer
 from .reactive import get_reactive_config
 from .writer import PDBQTWriterLegacy
 from .parallelizer import Parallelizer
-from .parallelworker import ParallelWorker
-from .parallelwriter import ParallelWriter
 from . import analysis
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
@@ -47,8 +45,6 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'get_reactive_config',
         'gridbox',
         "Parallelizer",
-        "ParallelWorker",
-        "ParallelWriter"
 ]
 
 if _has_openbabel:

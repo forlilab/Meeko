@@ -6,6 +6,7 @@
 
 from inspect import signature
 import json
+import logging
 import os
 import pathlib
 import sys
@@ -292,7 +293,7 @@ class MoleculePreparation:
                     else:
                         nr_failures += 1
                         this_mol_had_failure = True
-                        print(error_msg, file=sys.stderr)
+                        logging.error(error_msg)
                         
         else:
             molsetups = preparator.prepare(mol)
@@ -305,12 +306,11 @@ class MoleculePreparation:
                         output(pdbqt_string, name, (suffix,))
                     else:
                         output_pdbqts_info.append((pdbqt_string, name, (suffix,)))
-                    if args.verbose: 
-                        molsetup.show()
+                    molsetup.show()
                 else:
                     nr_failures += 1
                     this_mol_had_failure = True
-                    print(error_msg, file=sys.stderr)
+                    logging.error(error_msg)
 
         return is_valid, this_mol_had_failure, nr_failures, output_pdbqts_info
 

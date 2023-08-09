@@ -8,7 +8,7 @@ import os
 import sys
 import json
 import warnings
-import platform
+import logging
 
 from rdkit import Chem
 
@@ -59,6 +59,8 @@ def cmd_lineparser():
     parser.set_defaults(**config)
     parser.add_argument("-v", "--verbose", dest="verbose",
                         action="store_true", help="print information about molecule setup")
+    parser.add_argument("-d", "--debug",
+                        action="store_true", help="print debugging information")
 
     io_group = parser.add_argument_group("Input/Output")
     io_group.add_argument("-i", "--mol", dest="input_molecule_filename", required=True,
@@ -277,6 +279,17 @@ if __name__ == '__main__':
     args, config, backend, is_covalent = cmd_lineparser()
     input_molecule_filename = args.input_molecule_filename
 
+    # set logging level
+    levels = {10: "debug", 20: "info", 30: "warning"}
+    if args.debug:
+        level = logging.DEBUG
+    elif args.verbose:
+        level = logging.INFO
+    else:
+        level = logging.WARNING
+    logging.getLogger().setLevel(level)
+    logging.info(f"Logging level set to {levels[level]}")
+
     # read input
     input_fname, ext = os.path.splitext(input_molecule_filename)
     ext = ext[1:].lower()
@@ -320,8 +333,8 @@ if __name__ == '__main__':
     preparator = MoleculePreparation.from_config(config)
 
     if len(mol_supplier) > 1 and not output.is_multimol:
-            print("Given multiple molecule input but no output options.")
-            print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
+            logging.error("Given multiple molecule input but no output options.")
+            logging.error("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
                 args.input_molecule_filename))
             sys.exit(1)
 
