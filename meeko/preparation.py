@@ -60,7 +60,7 @@ class MoleculePreparation:
             rigidify_bonds_smarts=[],
             rigidify_bonds_indices=[],
             input_atom_params=None,
-            load_atom_params=None,
+            load_atom_params="ad4_types",
             add_atom_types=(),
             input_offatom_params=None, 
             load_offatom_params=None,
@@ -92,11 +92,12 @@ class MoleculePreparation:
         self.input_atom_params = input_atom_params
         self.load_atom_params = load_atom_params
         self.add_atom_types = add_atom_types
-        self.atom_params = self._get_atom_params(
+
+        self.atom_params = self.get_atom_params(
                 input_atom_params,
                 load_atom_params,
                 add_atom_types,
-                packaged_params)
+                self.packaged_params)
 
         self.load_offatom_params = load_offatom_params
         self.charge_model = charge_model
@@ -105,7 +106,7 @@ class MoleculePreparation:
         if dihedral_model == "openff-2.0.0":
             _, dihedral_list, _ = load_openff()
             self.dihedral_params = dihedral_list
-        elif dihedral_model = None:
+        elif dihedral_model is None:
             pass
         else:
             raise ValueError("unrecognized dihedral_model: %s" % dihedral_model)
@@ -122,49 +123,53 @@ class MoleculePreparation:
         self._water_builder = HydrateMoleculeLegacy()
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
 
-        self.curated_offatom_params = {}
-        self.curated_dihedral_params = {}
+        self.offatom_params = {}
+        self.dihedral_params = {}
 
 
-        @staticmethod
-        def _get_atom_params(input_atom_params, load_atom_params, add_atom_types, packaged_params):
+    @staticmethod
+    def get_atom_params(input_atom_params, load_atom_params, add_atom_types, packaged_params):
+        if input_atom_params is None:
+            atom_params = {}
+        else:
             atom_params = json.loads(json.dumps(input_atom_params))
-            if type(load_atom_params) == str:
-                load_atom_params = [load_atom_params]
-            for name in load_atom_params:
-                filename = None
-                if name == "openff-2.0.0_vdw":
-                    vdw_list, _, _ = load_openff() 
-                    d = {"openff-2.0.0_vdw": vdw_list}
-                elif name in packaged_params:
-                    filename = packaged_params[name]
-                elif name.endswith(".json"):
-                    filename = name
-                else:
-                    msg =  "names passed to 'load_atom_params' need to suffixed with .json" + os.linesep
-                    msg += "or be the unsuffixed basename of a JSON file in %s." % str(params_dir) + os.linesep
-                    msg += "name was %s" % name 
-                    raise ValueError(msg)
-                if filename is not None:
-                    with open(filename) as f:
-                        d = json.load(f)
-                atom_params.update(d)
-                overlapping_groups = set(atom_params).intersection(set(d))
-                if len(overlapping_groups):
-                    msg = "overlapping parameter groups: %s" % str(overlapping_groups)
-                    raise ValueError(msg)
-                elif types == {dict}:
+        if type(load_atom_params) == str:
+            load_atom_params = [load_atom_params]
+        elif load_atom_params is None:
+            load_atom_params = ()
+        for name in load_atom_params:
+            filename = None
+            if name == "openff-2.0.0_vdw":
+                vdw_list, _, _ = load_openff() 
+                d = {"openff-2.0.0_vdw": vdw_list}
+            elif name in packaged_params:
+                filename = packaged_params[name]
+            elif name.endswith(".json"):
+                filename = name
+            else:
+                msg =  "names passed to 'load_atom_params' need to suffixed with .json" + os.linesep
+                msg += "or be the unsuffixed basename of a JSON file in %s." % str(params_dir) + os.linesep
+                msg += "name was %s" % name 
+                raise ValueError(msg)
+            if filename is not None:
+                with open(filename) as f:
+                    d = json.load(f)
+            overlapping_groups = set(atom_params).intersection(set(d))
+            atom_params.update(d)
+            if len(overlapping_groups):
+                msg = "overlapping parameter groups: %s" % str(overlapping_groups)
+                raise ValueError(msg)
 
-             if len(add_atom_types) > 0:
-                group_keys = list(self.atom_params.keys())
-                if len(group_keys) != 1:
-                    msg = "add_atom_types is usable only when there is one group of parameters"
-                    msg += ", but there are %d groups: %s" % (len(keys), str(keys))
-                    raise RuntimeError(msg)
-                key = group_keys[0]
-                self.atom_params[key].extend(add_atom_types)
-                   
-            return atom_params
+        if len(add_atom_types) > 0:
+            group_keys = list(self.atom_params.keys())
+            if len(group_keys) != 1:
+                msg = "add_atom_types is usable only when there is one group of parameters"
+                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
+                raise RuntimeError(msg)
+            key = group_keys[0]
+            self.atom_params[key].extend(add_atom_types)
+               
+        return atom_params
 
                 ### else:
                 ###     msg = "When atom_params is a list, it must consist of either:" + os.linesep
@@ -205,7 +210,7 @@ class MoleculePreparation:
             defaults[key] = sig.parameters[key].default 
         return defaults
 
-    @ classmethod
+    @classmethod
     def from_config(cls, config):
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]

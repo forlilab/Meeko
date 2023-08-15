@@ -226,6 +226,8 @@ class MoleculeSetup:
         self.set_chiral(idx, chiral)
         self.set_ignore(idx, ignore)
         self.graph.setdefault(idx, [])
+        for key in self.atom_params:
+            self.atom_params[key].append(None)
         return idx
 
     def del_atom(self, idx):
@@ -670,8 +672,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
         molsetup.init_atom(assign_charges, coords)
-        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         molsetup.init_bond()
+        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         return molsetup
 
 
