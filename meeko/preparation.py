@@ -139,9 +139,9 @@ class MoleculePreparation:
             load_atom_params = ()
         for name in load_atom_params:
             filename = None
-            if name == "openff-2.0.0_vdw":
+            if name == "openff-2.0.0":
                 vdw_list, _, _ = load_openff() 
-                d = {"openff-2.0.0_vdw": vdw_list}
+                d = {"openff-2.0.0": vdw_list}
             elif name in packaged_params:
                 filename = packaged_params[name]
             elif name.endswith(".json"):
