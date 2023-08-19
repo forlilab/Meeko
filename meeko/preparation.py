@@ -105,11 +105,11 @@ class MoleculePreparation:
 
         if dihedral_model == "openff-2.0.0":
             _, dihedral_list, _ = load_openff()
-            self.dihedral_params = dihedral_list
         elif dihedral_model is None:
-            pass
+            dihedral_list = []
         else:
             raise ValueError("unrecognized dihedral_model: %s" % dihedral_model)
+        self.dihedral_params = dihedral_list
 
         self.reactive_smarts = reactive_smarts
         self.reactive_smarts_idx = reactive_smarts_idx
@@ -124,7 +124,6 @@ class MoleculePreparation:
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
 
         self.offatom_params = {}
-        self.dihedral_params = {}
 
 
     @staticmethod
