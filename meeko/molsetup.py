@@ -109,8 +109,8 @@ class MoleculeSetup:
         charges = [chrg/18.2223 for chrg in prmtop.read_flag("CHARGE")]
         atomic_nrs = prmtop.read_flag("ATOMIC_NUMBER")
         pdbqt_string = ""
-        molsetup.atom_params["vdw_r"] = []
-        molsetup.atom_params["vdw_eps"] = []
+        molsetup.atom_params["rmin_half"] = []
+        molsetup.atom_params["epsilon"] = []
         vdw_by_atype = {}
         for vdw in prmtop._retrieve_vdw():
             if vdw.atom in vdw_by_atype:
@@ -133,9 +133,13 @@ class MoleculeSetup:
                 pdbinfo = pdbinfo,
                 chiral = False,
                 ignore = False,
+                add_atom_params = {
+                    "rmin_half": vdw_by_atype[atype]["rmin_half"],
+                    "epsilon": vdw_by_atype[atype]["epsilon"],
+                }
             )
-            molsetup.atom_params["vdw_r"].append(vdw_by_atype[atype]["rmin_half"])
-            molsetup.atom_params["vdw_eps"].append(vdw_by_atype[atype]["epsilon"])
+            #molsetup.atom_params["rmin_half"].append(vdw_by_atype[atype]["rmin_half"])
+            #molsetup.atom_params["epsilon"].append(vdw_by_atype[atype]["epsilon"])
         bond_order = 1 # the prmtop does not have bond orders, so we set all to 1
         bonds_inc_h = prmtop.read_flag("BONDS_INC_HYDROGEN")
         bonds_not_h = prmtop.read_flag("BONDS_WITHOUT_HYDROGEN")
@@ -209,7 +213,7 @@ class MoleculeSetup:
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
             element=None, charge=0.0, atom_type=None, pdbinfo=None,
-            ignore=False, chiral=False, overwrite=False):
+            ignore=False, chiral=False, overwrite=False, add_atom_params=None):
         """ function to add all atom information at once;
             every property is optional
         """
@@ -226,6 +230,12 @@ class MoleculeSetup:
         self.set_chiral(idx, chiral)
         self.set_ignore(idx, ignore)
         self.graph.setdefault(idx, [])
+        for key in self.atom_params:
+            if type(add_atom_params) == dict and key in add_atom_params:
+                value = add_atom_params[key]
+            else:
+                value = None
+            self.atom_params[key].append(value)
         return idx
 
     def del_atom(self, idx):
@@ -670,8 +680,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
         molsetup.init_atom(assign_charges, coords)
-        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         molsetup.init_bond()
+        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         return molsetup
 
 

@@ -134,7 +134,6 @@ def get_dihedrals_block(molsetup, indexmap, name):
         index = molsetup.dihedral_partaking_atoms[atomidx]
         atomidx_by_index.setdefault(index, set())
         atomidx_by_index[index].add(atomidx)
-        index = molsetup.dihedral_partaking_atoms[atomidx]
         label = molsetup.dihedral_labels[atomidx] if atomidx in molsetup.dihedral_labels else None
         if label is None:
             label = "from_meeko_%d" % index
