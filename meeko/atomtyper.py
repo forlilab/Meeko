@@ -241,13 +241,10 @@ class AtomTyper:
     def set_espaloma_charges(molsetup):
         if not _has_espaloma or not _has_torch:
             raise ImportError("espaloma and pytorch are required")
-        pretrained_model = pathlib.Path(espaloma.__file__).parents[1] / "espaloma_model.pt"
-        if not pretrained_model.exists():
-            msg = "Could not find %s" % pretrained_model
-            msg += "Consider:"
-            msg += "    $ cd %s" % pretrained_model.parents[0]
-            msg += "    $ wget http://data.wangyq.net/espaloma_model.pt"
-            raise RuntimeError(msg)
+
+        # Fetch and load latest pretrained model from GitHub
+        espaloma_model = espaloma.get_model("latest")
+
         from .molsetup import RDKitMoleculeSetup
         if not isinstance(molsetup, RDKitMoleculeSetup):
             raise NotImplementedError("need rdkit molecule for espaloma charges")
@@ -255,7 +252,6 @@ class AtomTyper:
         rdmol = molsetup.mol
         openffmol = Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)
         molgraph = espaloma.Graph(openffmol)
-        espaloma_model = torch.load(pretrained_model)
         espaloma_model(molgraph.heterograph)
         charges = [float(q) for q in molgraph.nodes["n1"].data["q"]]
         total_charge = 0.0
@@ -265,7 +261,7 @@ class AtomTyper:
             total_charge += charges[i]
         for j in range(i+1, len(molsetup.charge)):
             if molsetup.charge[j] != 0.:
-                raise RuntimeError("expected zero charge beyond real atoms, at this point") 
+                raise RuntimeError("expected zero charge beyond real atoms, at this point")
 
 
 class AtomicGeometry():
