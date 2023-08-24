@@ -4,29 +4,14 @@
 # Meeko atom typer
 #
 
-import os
-import json
-import pathlib
+# import os
+# import json
+# import pathlib
 
 import numpy as np
 
-from .utils import utils
+# from .utils import utils
 from .utils import pdbutils
-
-try:
-    import espaloma
-except ImportError:
-    _has_espaloma = False
-else:
-    _has_espaloma = True
-
-try:
-    import torch
-except ImportError:
-    _has_torch = False
-else:
-    _has_torch = True
-
 
 class AtomTyper:
 
@@ -40,20 +25,13 @@ class AtomTyper:
 
         cls._type_atoms(molsetup, atom_params)
         
-        if charge_model == "espaloma":
-            AtomTyper.set_espaloma_charges(molsetup) 
-        elif charge_model == "gasteiger":
-            pass # gasteiger automatically set in molsetup
-        else:
-            raise RuntimeError("only espaloma/gasteiger charges accepted")
-
         # offatoms must be typed after charges, because offsites pull charge
         if offatom_params is not None:
             cached_offatoms = cls._cache_offatoms(molsetup, offatom_params)
             coords = [x for x in molsetup.coord.values()]
             cls._set_offatoms(molsetup, cached_offatoms, coords)
 
-        if dihedral_params is not None:
+        if dihedral_params not in (None, 'espaloma'):
             cls._type_dihedrals(molsetup, dihedral_params)
 
         return
@@ -236,33 +214,6 @@ class AtomTyper:
                 atom_idxs = tuple([hit[j] for j in idxs])
                 molsetup.dihedral_partaking_atoms[atom_idxs] = dihedral_index
                 molsetup.dihedral_labels[atom_idxs] = tid
-
-    @staticmethod
-    def set_espaloma_charges(molsetup):
-        if not _has_espaloma or not _has_torch:
-            raise ImportError("espaloma and pytorch are required")
-
-        # Fetch and load latest pretrained model from GitHub
-        espaloma_model = espaloma.get_model("latest")
-
-        from .molsetup import RDKitMoleculeSetup
-        if not isinstance(molsetup, RDKitMoleculeSetup):
-            raise NotImplementedError("need rdkit molecule for espaloma charges")
-        from openff.toolkit.topology import Molecule
-        rdmol = molsetup.mol
-        openffmol = Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)
-        molgraph = espaloma.Graph(openffmol)
-        espaloma_model(molgraph.heterograph)
-        charges = [float(q) for q in molgraph.nodes["n1"].data["q"]]
-        total_charge = 0.0
-        for i in range(len(charges)):
-            #print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
-            molsetup.charge[i] = charges[i] 
-            total_charge += charges[i]
-        for j in range(i+1, len(molsetup.charge)):
-            if molsetup.charge[j] != 0.:
-                raise RuntimeError("expected zero charge beyond real atoms, at this point")
-
 
 class AtomicGeometry():
     """generate reference frames and add extra sites"""

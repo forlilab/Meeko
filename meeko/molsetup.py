@@ -850,7 +850,6 @@ class RDKitMoleculeSetup(MoleculeSetup):
                 return True
         return False
 
-
 class OBMoleculeSetup(MoleculeSetup):
 
     def get_mol_name(self):

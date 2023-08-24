@@ -17,6 +17,7 @@ from rdkit import Chem
 from .molsetup import OBMoleculeSetup
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
+from .espalomatyper import EspalomaTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
@@ -72,10 +73,6 @@ class MoleculePreparation:
             remove_smiles=False,
         ):
 
-        allowed_charge_models = ["espaloma", "gasteiger"]
-        if charge_model not in allowed_charge_models:
-            raise ValueError("unrecognized charge_model: %s, allowed: %s" % (charge_model, allowed_charge_models))
-
         self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
         self.hydrate = hydrate
@@ -100,16 +97,26 @@ class MoleculePreparation:
                 self.packaged_params)
 
         self.load_offatom_params = load_offatom_params
-        self.charge_model = charge_model
-        self.dihedral_model = dihedral_model
+        
+        allowed_charge_models = ["espaloma", "gasteiger"]
+        if charge_model not in allowed_charge_models:
+            raise ValueError("unrecognized charge_model: %s, allowed options are: %s" % (charge_model, allowed_charge_models))
 
-        if dihedral_model == "openff-2.0.0":
-            _, dihedral_list, _ = load_openff()
-        elif dihedral_model is None:
+        self.charge_model = charge_model
+       
+        allowed_dihedral_models = [None,'openff','espaloma']
+        if dihedral_model in (None, 'espaloma'):
             dihedral_list = []
-        else:
-            raise ValueError("unrecognized dihedral_model: %s" % dihedral_model)
+        elif dihedral_model == "openff":
+            _, dihedral_list, _ = load_openff()
+        else: 
+            raise ValueError("unrecognized dihedral_model: %s, allowed options are: %s" % (dihedral_model, allowed_dihedral_models))
+        
+        self.dihedral_model = dihedral_model
         self.dihedral_params = dihedral_list
+
+        if dihedral_model == 'espaloma' or charge_model == "espaloma":
+            self.espaloma_model = EspalomaTyper()
 
         self.reactive_smarts = reactive_smarts
         self.reactive_smarts_idx = reactive_smarts_idx
@@ -124,7 +131,6 @@ class MoleculePreparation:
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
 
         self.offatom_params = {}
-
 
     @staticmethod
     def get_atom_params(input_atom_params, load_atom_params, add_atom_types, packaged_params):
@@ -261,6 +267,18 @@ class MoleculePreparation:
             self.offatom_params,
             self.dihedral_params,
         )
+        
+        # Convert molecule to graph and apply trained Espaloma model
+        if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
+            molgraph = self.espaloma_model.get_espaloma_graph(setup)
+
+        # Grab charges from graph node and set them to the molsetup
+        if self.dihedral_model == "espaloma":
+            self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
+
+        # Grab dihedrals from graph node and set them to the molsetup
+        if self.charge_model == "espaloma":
+            self.espaloma_model.set_espaloma_charges(setup, molgraph)
 
         # merge hydrogens (or any terminal atoms)
         indices = set()
