@@ -4,6 +4,8 @@ from meeko import MoleculePreparation
 from meeko import PDBQTWriterLegacy
 from rdkit import Chem
 import pathlib
+import json
+import io
 
 workdir = pathlib.Path(__file__)
 datadir = workdir.parents[0] / "rdkitmol_from_docking_data"
@@ -102,3 +104,17 @@ def test_small_03_two_deuterium(): run("small-03_two-deuterium.sdf")
 def test_small_03_three_deuterium(): run("small-03_three-deuterium.sdf")
 
 def test_small_04(): run("small-04.sdf", wet=True)
+
+def test_meeko_free_energy_prop():
+    fpath = datadir/ "vina-result-ethanol.pdbqt"
+    pdbqt_mol = PDBQTMolecule.from_file(fpath)
+    sd_string, failures = RDKitMolCreate.write_sd_string(pdbqt_mol)
+    assert len(failures) == 0
+    sio = io.BytesIO(sd_string.encode())
+    nr_mols = 0
+    for rdkit_mol in Chem.ForwardSDMolSupplier(sio):
+        nr_mols += 1
+    assert nr_mols == 1
+    data = json.loads(rdkit_mol.GetProp("meeko"))
+    assert "free_energy" in data
+    assert data["free_energy"] == -2.7

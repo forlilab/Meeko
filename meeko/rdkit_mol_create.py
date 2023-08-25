@@ -363,7 +363,7 @@ class RDKitMolCreate:
         if combined_mol is None:
             return "", failures
         nr_conformers = combined_mol.GetNumConformers()
-        property_names = {
+        keys_map_mol_to_pdbqt = {
             "free_energy": "free_energies",
             "intermolecular_energy": "intermolecular_energies",
             "internal_energy": "internal_energies",
@@ -378,18 +378,18 @@ class RDKitMolCreate:
         else:
             nr_poses = pdbqt_mol._pose_data["n_poses"]
             pose_idxs = list(range(nr_poses))
-        for prop_sdf, prop_pdbqt in property_names.items():
-            if nr_conformers == nr_poses:
-                props[prop_sdf] = prop_pdbqt
-        has_all_data = True
-        for _, key in props.items():
-            has_all_data &= len(pdbqt_mol._pose_data[key]) == nr_conformers
+
+        available_properties = {}
+        for key_in_mol, key_in_pdbqt in keys_map_mol_to_pdbqt.items():
+            if len(pdbqt_mol._pose_data[key_in_pdbqt]) == nr_conformers:
+                available_properties[key_in_mol] = key_in_pdbqt
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
             j = pose_idxs[i]
-            if has_all_data:
-                data = {k: pdbqt_mol._pose_data[v][j] for k, v in props.items()}
-                if len(data): combined_mol.SetProp("meeko", json.dumps(data))
+            data = {}
+            for (key_in_mol, key_in_pdbqt) in available_properties.items():
+                data[key_in_mol] = pdbqt_mol._pose_data[key_in_pdbqt][j]
+            if len(data): combined_mol.SetProp("meeko", json.dumps(data))
             f.write(combined_mol, i)
         f.close()
         output_string = sio.getvalue()
