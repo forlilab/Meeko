@@ -144,7 +144,7 @@ class MoleculePreparation:
             load_atom_params = ()
         for name in load_atom_params:
             filename = None
-            if name == "openff-2.0.0":
+            if name == "openff-2.0.0" or name == "openff": # TODO allow multiple versions
                 vdw_list, _, _ = load_openff() 
                 d = {"openff-2.0.0": vdw_list}
             elif name in packaged_params:
