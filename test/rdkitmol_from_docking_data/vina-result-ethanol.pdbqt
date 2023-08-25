@@ -1,0 +1,16 @@
+MODEL 1
+REMARK VINA RESULT:      -2.7      0.000      0.000
+REMARK SMILES CCO
+REMARK SMILES IDX 1 1 2 2 3 3
+REMARK H PARENT 3 4
+REMARK Flexibility Score: inf
+ROOT
+ATOM      1  C   UNL     1      -0.667  11.713  24.654  1.00  0.00     0.034 C 
+ATOM      2  C   UNL     1      -2.004  11.017  24.423  1.00  0.00     0.152 C 
+ENDROOT
+BRANCH   2   3
+ATOM      3  O   UNL     1      -2.705  11.640  23.381  1.00  0.00    -0.397 OA
+ATOM      4  H   UNL     1      -3.199  12.399  23.786  1.00  0.00     0.210 HD
+ENDBRANCH   2   3
+TORSDOF 1
+ENDMDL

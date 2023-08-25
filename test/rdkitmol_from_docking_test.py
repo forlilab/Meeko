@@ -105,7 +105,7 @@ def test_small_03_three_deuterium(): run("small-03_three-deuterium.sdf")
 
 def test_small_04(): run("small-04.sdf", wet=True)
 
-def test_meeko_free_energy_prop():
+def test_meeko_free_energy_prop_vina():
     fpath = datadir/ "vina-result-ethanol.pdbqt"
     pdbqt_mol = PDBQTMolecule.from_file(fpath)
     sd_string, failures = RDKitMolCreate.write_sd_string(pdbqt_mol)
@@ -118,3 +118,15 @@ def test_meeko_free_energy_prop():
     data = json.loads(rdkit_mol.GetProp("meeko"))
     assert "free_energy" in data
     assert data["free_energy"] == -2.7
+
+def test_meeko_free_energy_prop_adgpu():
+    fpath = datadir/ "adgpu-result-ethanol.dlg"
+    pdbqt_mol = PDBQTMolecule.from_file(fpath, is_dlg=True)
+    sd_string, failures = RDKitMolCreate.write_sd_string(pdbqt_mol, only_cluster_leads=True)
+    assert len(failures) == 0
+    sio = io.BytesIO(sd_string.encode())
+    rdkit_mols = [mol for mol in Chem.ForwardSDMolSupplier(sio)]
+    assert len(rdkit_mols) == 4 # 20 runs, 4 clusters
+    data = json.loads(rdkit_mols[0].GetProp("meeko"))
+    assert "free_energy" in data
+    assert data["free_energy"] == -2.11
