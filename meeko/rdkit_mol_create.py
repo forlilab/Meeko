@@ -362,7 +362,6 @@ class RDKitMolCreate:
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
         if combined_mol is None:
             return "", failures
-        nr_conformers = combined_mol.GetNumConformers()
         keys_map_mol_to_pdbqt = {
             "free_energy": "free_energies",
             "intermolecular_energy": "intermolecular_energies",
@@ -371,17 +370,15 @@ class RDKitMolCreate:
             "cluster_id": "cluster_id",
             "rank_in_cluster": "rank_in_cluster",
         }
-        props = {}
+        nr_poses = pdbqt_mol._pose_data["n_poses"]
         if only_cluster_leads:
-            nr_poses = len(pdbqt_mol._pose_data["cluster_leads_sorted"])
             pose_idxs = pdbqt_mol._pose_data["cluster_leads_sorted"]
         else:
-            nr_poses = pdbqt_mol._pose_data["n_poses"]
             pose_idxs = list(range(nr_poses))
 
         available_properties = {}
         for key_in_mol, key_in_pdbqt in keys_map_mol_to_pdbqt.items():
-            if len(pdbqt_mol._pose_data[key_in_pdbqt]) == nr_conformers:
+            if len(pdbqt_mol._pose_data[key_in_pdbqt]) == nr_poses:
                 available_properties[key_in_mol] = key_in_pdbqt
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
