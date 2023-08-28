@@ -557,7 +557,14 @@ class RDKitMoleculeSetup(MoleculeSetup):
         # spec. When reading SDF (e.g. from PubChem/PDB),
         # we may need to have RDKit assign stereo from coordinates, see:
         # https://sourceforge.net/p/rdkit/mailman/message/34399371/
-        mol_noH = Chem.RemoveHs(self.mol) # imines (=NH) may become chiral
+        ps = Chem.RemoveHsParameters()
+        # a user reported PDBbind Mol Blocks to have hcount=1 for Hs,
+        # which adds a query to the RDKit H atom and then Chem.RemoveHs
+        # does not remove Hs with queries by default
+        # https://github.com/forlilab/Meeko/issues/62
+        # https://github.com/rdkit/rdkit/issues/6615
+        ps.removeWithQuery = True 
+        mol_noH = Chem.RemoveHs(self.mol, ps) # imines (=NH) may become chiral
         # stereo imines [H]/N=C keep [H] after RemoveHs()
         # H isotopes also kept after RemoveHs()
         atomic_num_mol_noH = [atom.GetAtomicNum() for atom in mol_noH.GetAtoms()]
