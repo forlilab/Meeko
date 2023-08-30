@@ -7,20 +7,6 @@
 # import numpy as np
 from math import pi
 
-try:
-    import espaloma as esp
-except ImportError:
-    raise ImportError("Espaloma is required")
-
-try:
-    import torch
-except ImportError:
-    raise ImportError("Pytorch is required")
-
-try:
-    from openff.toolkit.topology import Molecule
-except ImportError:
-    raise ImportError("OpenFF is required")
 
 from .molsetup import RDKitMoleculeSetup
 
@@ -29,8 +15,27 @@ class EspalomaTyper:
     def __init__(self,
                  version='latest'
     ):
+        try:
+            import espaloma as esp
+        except ImportError:
+            raise ImportError("Espaloma is required")
+        
+        try:
+            import torch
+        except ImportError:
+            raise ImportError("Pytorch is required")
+        
+        try:
+            from openff.toolkit.topology import Molecule
+        except ImportError:
+            raise ImportError("OpenFF is required")
+
         # Fetch and load latest pretrained model from GitHub
         self.espaloma_model = esp.get_model(version)
+
+        # store methods in instance, otherwise they are out of scope
+        self.openffmol_from_rdkit = Molecule.from_rdkit 
+        self.EspalomaGraph = esp.Graph
 
     def get_espaloma_graph(self, molsetup):
         """ Apply espaloma model to a graph representation of the molecule. """
@@ -39,8 +44,8 @@ class EspalomaTyper:
             raise NotImplementedError("need rdkit molecule for espaloma typing")
         
         rdmol = molsetup.mol
-        openffmol = Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)
-        molgraph = esp.Graph(openffmol)
+        openffmol = self.openffmol_from_rdkit(rdmol, hydrogens_are_explicit=True)
+        molgraph = self.EspalomaGraph(openffmol)
         self.espaloma_model(molgraph.heterograph)
         
         return molgraph
