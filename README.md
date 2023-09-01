@@ -24,10 +24,15 @@ is enabled by default.
 
 SDF format strongly preferred over Mol2.
 See
-[this discussion](https://github.com/rdkit/rdkit/discussions/3647)
+[this discussion](https://github.com/rdkit/rdkit/discussions/3647), and
+[this one](https://sourceforge.net/p/rdkit/mailman/message/37668451/),
+[also this](rdkit/rdkit#4061),
+[and this](https://sourceforge.net/p/rdkit/mailman/message/37374678/).
 and RDKit issues
 [1755](https://github.com/rdkit/rdkit/issues/1755) and
-[917](https://github.com/rdkit/rdkit/issues/917).
+[917](https://github.com/rdkit/rdkit/issues/917). So, what could go wrong?
+For example, reading Mol2 files from ZINC
+[led to incorrect net charge of some molecules.](https://github.com/forlilab/Meeko/issues/63)
 
 
 ## API changes in v0.5
