@@ -44,6 +44,7 @@ class Mol2MolSupplier():
     Parameters
         sanitize: perform RDKit sanitization of Mol2 molecule"""
     def __init__(self, filename, sanitize=True, removeHs=False, cleanupSubstructures=True):
+        self.filename = filename
         self.fp = open(filename, 'r')
         self._opts = {'sanitize':sanitize,
                 'removeHs':removeHs,
@@ -52,6 +53,16 @@ class Mol2MolSupplier():
 
     def __iter__(self):
         return self
+    
+    def __len__(self):
+        n_mols = 0
+        buff = []
+        with open(self.filename, 'r') as fp:
+            for line in fp.readlines():
+                if '@<TRIPOS>MOLECULE' in line:
+                    n_mols += 1
+        return n_mols
+        
 
     def __next__(self):
         """ iterator step """

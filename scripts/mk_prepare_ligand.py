@@ -296,7 +296,7 @@ if __name__ == '__main__':
     if backend == 'rdkit':
         parsers = {'sdf': Chem.SDMolSupplier, 'mol2': rdkitutils.Mol2MolSupplier, 'mol': Chem.SDMolSupplier}
         if not ext in parsers:
-            print("*ERROR* Format [%s] not in supported formats [%s]" % (ext, '/'.join(list(parsers.keys()))))
+            logging.error("*ERROR* Format [%s] not in supported formats [%s]" % (ext, '/'.join(list(parsers.keys()))))
             sys.exit(1)
         mol_supplier = parsers[ext](input_molecule_filename, removeHs=False) # input must have explicit H
     elif backend == 'ob':
