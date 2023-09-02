@@ -106,6 +106,6 @@ for filename in docking_results_filenames:
             fn = '%s%s.%s' % (os.path.splitext(filename)[0], suffix_name, output_format)
         else:
             fn = output_filename
-        print(output_string, file=open(fn, 'w'))
+        print(output_string, file=open(fn, 'w'), end="")
     else:
         print(output_string)
