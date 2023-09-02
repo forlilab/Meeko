@@ -23,6 +23,7 @@ else:
 from .preparation import MoleculePreparation
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetup
+from .molsetup import Restraint
 from .utils import rdkitutils
 from .utils import pdbutils
 from .utils import geomutils
@@ -52,6 +53,7 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'oids_block_from_setup',
         'parse_offxml',
         'Hydrate',
+        'Restraint',
 ]
 
 if _has_openbabel:

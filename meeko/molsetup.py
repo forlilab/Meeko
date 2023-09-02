@@ -6,6 +6,7 @@
 
 from copy import deepcopy
 from collections import defaultdict, OrderedDict
+from dataclasses import dataclass
 import json
 import warnings
 import sys
@@ -74,6 +75,7 @@ class MoleculeSetup:
             "bonds_removed": [],
             "pseudos_by_atom": {},
         }
+        self.restraints = []
         # ring information
         self.rings = {}
         self.rings_aromatic = []
@@ -897,3 +899,22 @@ class OBMoleculeSetup(MoleculeSetup):
     def copy(self):
         """ return a copy of the current setup"""
         return OBMoleculeSetup(template=self)
+
+@dataclass
+class Restraint:
+    atom_index: int
+    target_xyz: (float, float, float)
+    kcal_per_angstrom_square: float
+    delay_angstroms: float
+
+    def copy(self):
+        new_target_xyz = (
+            self.target_xyz[0],
+            self.target_xyz[1],
+            self.target_xyz[2])
+        new_restraint = Restraint(
+            self.atom_index,
+            new_target_xyz,
+            self.kcal_per_angstrom_square,
+            self.delay_angstroms)
+        return new_restraint

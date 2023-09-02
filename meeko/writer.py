@@ -15,6 +15,8 @@ from .utils.rdkitutils import mini_periodic_table
 
 
 def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
+    if len(molsetup.restraints):
+        raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
     offchrg_type = "OFFCHRG"
     offchrg_by_parent = {}
     for i in molsetup.atom_pseudo:
@@ -296,6 +298,9 @@ class PDBQTWriterLegacy():
             bool: success
             str:  error message
         """
+
+        if len(setup.restraints):
+            raise ValueError("molsetup has restraints but these can't be written to PDBQT")
 
         success = True
         error_msg = ""
