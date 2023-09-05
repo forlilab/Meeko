@@ -76,6 +76,7 @@ class MoleculeSetup:
             "pseudos_by_atom": {},
         }
         self.restraints = []
+        self.is_sidechain = False
         # ring information
         self.rings = {}
         self.rings_aromatic = []
