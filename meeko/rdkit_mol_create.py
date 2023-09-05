@@ -13,6 +13,26 @@ import json
 import os
 
 
+def clean_extend(existing_dict, new_row):
+    nr_rows = []
+    for key in existing_dict:
+        nr_rows.append(len(existing_dict[key]))
+        if key not in new_row:
+            existing_dict[key].append(None)
+    if len(nr_rows) == 0: # existing_dict is empty 
+        nr_rows = 0
+    elif len(set(nr_rows)) != 1:
+        msg = "existing_dict has different nr of items for different attributes"
+        raise ValueError(msg)
+    else:
+        nr_rows = set(nr_rows).pop()
+    for key, value in new_row.items():
+        if key not in existing_dict:
+            existing_dict[key] = [None] * nr_rows
+        existing_dict[key].append(value)
+    return
+                
+
 class RDKitMolCreate:
 
     ambiguous_flexres_choices = {
@@ -169,6 +189,13 @@ class RDKitMolCreate:
             index_map = pdbqt_mol._pose_data['smiles_index_map'][mol_index]
             h_parent = pdbqt_mol._pose_data['smiles_h_parent'][mol_index]
             atom_idx = pdbqt_mol._atom_annotations["mol_index"][mol_index]
+            atom_is_flex = [i in pdbqt_mol._atom_annotations["flexible_residue"] for i in atom_idx]
+            if any(atom_is_flex) and all(atom_is_flex):
+                is_sidechain = True
+            elif any(atom_is_flex):
+                raise ValueError("some (but not all!) atoms of a ligand were parsed as sidechain")
+            else:
+                is_sidechain = False
 
             if smiles is None: # probably a flexible sidechain, but can be another ligand
                 residue_names = set()
@@ -189,6 +216,7 @@ class RDKitMolCreate:
                 pose_ids = range(pdbqt_mol._pose_data["n_poses"])
 
             mol = Chem.MolFromSmiles(smiles)
+            mol.SetProp("meeko", json.dumps({"is_sidechain": is_sidechain}))
             coordinates_all_poses = []
             for i in pose_ids:
                 pdbqt_mol._current_pose = i
@@ -335,13 +363,17 @@ class RDKitMolCreate:
             returns None if input is empty list or all molecules are None
         """
         combined_mol = None
+        props = {}
         for mol in mol_list:
             if mol is None:
                 continue
+            data = json.loads(mol.GetProp("meeko"))
+            clean_extend(props, data)
             if combined_mol is None: # first iteration
                 combined_mol = mol
             else:
                 combined_mol = Chem.CombineMols(combined_mol, mol)
+        combined_mol.SetProp("meeko", json.dumps(props))
         return combined_mol
 
     @classmethod
@@ -380,13 +412,17 @@ class RDKitMolCreate:
         for key_in_mol, key_in_pdbqt in keys_map_mol_to_pdbqt.items():
             if len(pdbqt_mol._pose_data[key_in_pdbqt]) == nr_poses:
                 available_properties[key_in_mol] = key_in_pdbqt
+        mol_level_data = json.loads(combined_mol.GetProp("meeko"))
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
             j = pose_idxs[i]
-            data = {}
+            conformer_data = json.loads(json.dumps(mol_level_data))
             for (key_in_mol, key_in_pdbqt) in available_properties.items():
-                data[key_in_mol] = pdbqt_mol._pose_data[key_in_pdbqt][j]
-            if len(data): combined_mol.SetProp("meeko", json.dumps(data))
+                if key_in_mol in conformer_data:
+                    msg = "key %s conflict between combined_mol and write_sd_string" % key_in_mol
+                    raise NotImplementedError(msg)
+                conformer_data[key_in_mol] = pdbqt_mol._pose_data[key_in_pdbqt][j]
+            if len(conformer_data): combined_mol.SetProp("meeko", json.dumps(conformer_data))
             f.write(combined_mol, i)
         f.close()
         output_string = sio.getvalue()
