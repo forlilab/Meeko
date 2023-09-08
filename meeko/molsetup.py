@@ -77,7 +77,7 @@ class MoleculeSetup:
         }
         self.restraints = []
         self.is_sidechain = False
-        # ring information
+        self.rmsd_symmetry_indices = ()
         self.rings = {}
         self.rings_aromatic = []
         self.atom_to_ring_id = defaultdict(list)
@@ -685,6 +685,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
         molsetup.init_atom(assign_charges, coords)
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
+        molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
         return molsetup
 
 
@@ -786,6 +787,15 @@ class RDKitMoleculeSetup(MoleculeSetup):
 
     def get_equivalent_atoms(self):
        return list(Chem.CanonicalRankAtoms(self.mol, breakTies=False))
+
+    @staticmethod
+    def get_symmetries_for_rmsd(mol, max_matches=17):
+        mol_noHs = Chem.RemoveHs(mol)
+        matches = mol.GetSubstructMatches(mol_noHs, uniquify=False, maxMatches=max_matches)
+        if len(matches) == max_matches:
+            print("warning: found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd" % max_matches)
+            print("Maybe this molecule is \"too\" symmetric?", Chem.GetProp("_Name"), Chem.MolToSmiles(mol_noHs))
+        return matches
 
     def init_atom(self, assign_charges, coords):
         """ initialize the atom table information """
