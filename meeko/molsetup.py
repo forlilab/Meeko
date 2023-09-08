@@ -17,8 +17,7 @@ from rdkit.Chem import rdPartialCharges
 
 from .utils import rdkitutils
 from .utils import utils
-
-from prmtop2pdbqt import assign_residue_params
+from .receptor_pdbqt import PDBQTReceptor
 
 try:
     from openbabel import openbabel as ob
@@ -155,6 +154,7 @@ class MoleculeSetup:
                 molsetup.add_bond(i_atom, j_atom, order=bond_order, rotatable=False)
         return molsetup
 
+
     @classmethod
     def from_pdb_and_residue_params(cls, pdb_fname, residue_params_fname=None):
         if residue_params_fname is not None:
@@ -193,7 +193,28 @@ class MoleculeSetup:
             )
             pdbinfos.append(pdbinfo)
 
-        atom_params = assign_residue_params(res_list, atom_names_list)
+        atom_params = {}
+        atom_counter = 0
+        all_ok = True
+        all_err = ""
+        for (res, atom_names) in zip(res_list, atom_names_list):
+            p, ok, err = PDBQTReceptor.get_params_for_residue(res, atom_names)
+            nr_params_to_add = set([len(values) for _, values in p.items()])
+            if len(nr_params_to_add) != 1:
+                raise RuntimeError("inconsistent number of parameters in %s" % p)
+            nr_params_to_add = nr_params_to_add.pop()
+            all_ok &= ok
+            all_err &= err
+            for key in p:
+                atom_params.set_default(key, [None]*atom_counter)
+                atom_params[key].extend(p[key])
+            atom_counter += nr_params_to_add
+            for key in atom_params:
+                if key not in p:
+                    atom_params[key].extend([None]*nr_params_to_add)
+    
+        if not all_ok:
+            raise RuntimeError(all_err)
         
         molsetup = cls()
         charges = atom_params.pop("gasteiger")

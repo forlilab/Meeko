@@ -184,6 +184,9 @@ class PDBQTReceptor:
 
         if not is_matched:
             ok = False
+            err = "residue %s did not match residue_params" % r_id + os_linesep
+            err += "ref_names: %s" % ref_names + os_linesep 
+            err += "query_names: %s" % query_names + os_linesep 
             return atom_params, ok, err
 
         for atom_name in atom_names:
