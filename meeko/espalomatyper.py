@@ -36,6 +36,7 @@ class EspalomaTyper:
         # store methods in instance, otherwise they are out of scope
         self.openffmol_from_rdkit = Molecule.from_rdkit 
         self.EspalomaGraph = esp.Graph
+        self.Pytorch = torch
 
     def get_espaloma_graph(self, molsetup):
         """ Apply espaloma model to a graph representation of the molecule. """
@@ -75,11 +76,11 @@ class EspalomaTyper:
             or "phase" not in molgraph.nodes["n4"].data
         ):
 
-            molgraph.nodes["n4"].data["periodicity"] = torch.arange(
+            molgraph.nodes["n4"].data["periodicity"] = self.Pytorch.arange(
                 1, 7
             )[None, :].repeat(molgraph.heterograph.number_of_nodes("n4"), 1)
 
-            molgraph.nodes["n4"].data["phases"] = torch.zeros(
+            molgraph.nodes["n4"].data["phases"] = self.Pytorch.zeros(
                 molgraph.heterograph.number_of_nodes("n4"), 6
             )
 
