@@ -204,9 +204,9 @@ class MoleculeSetup:
                 raise RuntimeError("inconsistent number of parameters in %s" % p)
             nr_params_to_add = nr_params_to_add.pop()
             all_ok &= ok
-            all_err &= err
+            all_err += err
             for key in p:
-                atom_params.set_default(key, [None]*atom_counter)
+                atom_params.setdefault(key, [None]*atom_counter)
                 atom_params[key].extend(p[key])
             atom_counter += nr_params_to_add
             for key in atom_params:
