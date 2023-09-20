@@ -175,7 +175,7 @@ def _aux_fourier_conversion(fourier_series):
     for fs in fourier_series:
         i = fs['periodicity'] - 1
         k = 2.0 * fs['k']
-        phase = -1 * np.radians(fs['phase'])
+        phase = -1 * fs['phase']
         tmp[i] = (k, phase)
     strings = []
     periodicity = 0

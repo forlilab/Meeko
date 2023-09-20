@@ -1,3 +1,4 @@
+import math
 import pathlib
 import xml.etree.ElementTree as ET
 
@@ -153,7 +154,7 @@ def make_dihedral_entry(attrib_dict_from_xml):
                     value.replace("* mole**-1 * kilocalorie", "")
                 )
             elif keyword == "phase":
-                dihedral_entry[key] = float(value.replace("* degree", ""))
+                dihedral_entry[key] = math.radians(float(value.replace("* degree", "")))
             elif keyword == "periodicity":
                 dihedral_entry[key] = int(value)
             elif keyword == "idivf":
