@@ -98,7 +98,7 @@ class MoleculePreparation:
 
         self.load_offatom_params = load_offatom_params
         
-        allowed_charge_models = ["espaloma", "gasteiger"]
+        allowed_charge_models = ["espaloma", "gasteiger", "zero"]
         if charge_model not in allowed_charge_models:
             raise ValueError("unrecognized charge_model: %s, allowed options are: %s" % (charge_model, allowed_charge_models))
 
@@ -254,6 +254,7 @@ class MoleculePreparation:
         setup = setup_class.from_mol(mol,
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings,
+            assign_charges=self.charge_model=="gasteiger",
             conformer_id=conformer_id,
             )
 
@@ -272,11 +273,11 @@ class MoleculePreparation:
         if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
             molgraph = self.espaloma_model.get_espaloma_graph(setup)
 
-        # Grab charges from graph node and set them to the molsetup
+        # Grab dihedrals from graph node and set them to the molsetup
         if self.dihedral_model == "espaloma":
             self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
 
-        # Grab dihedrals from graph node and set them to the molsetup
+        # Grab charges from graph node and set them to the molsetup
         if self.charge_model == "espaloma":
             self.espaloma_model.set_espaloma_charges(setup, molgraph)
 

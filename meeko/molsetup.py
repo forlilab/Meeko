@@ -27,6 +27,14 @@ except ImportError:
 else:
     _has_openbabel = True
 
+try:
+    from misctools import StereoIsomorphism
+except ImportError as _import_misctools_error:
+    _has_misctools = False
+else:
+    _has_misctools = True
+    
+
 # TODO modify so that there are no more dictionaries and only list/arrays (fix me)
 # methods like add_x,del_x,get_x will deal with indexing (fix me)
 # the goal is to remove dictionaries (fix me)
@@ -929,6 +937,21 @@ class RDKitMoleculeSetup(MoleculeSetup):
             if atom.GetTotalNumHs(includeNeighbors=False) > nr_H_neighbors:
                 return True
         return False
+
+    def restrain_to(self, target_mol, kcal_per_angstrom_square=1.0, delay_angstroms=2.0):
+        if not _has_misctools:
+            raise ImportError(_import_misctools_error)
+        stereo_isomorphism = StereoIsomorphism()
+        mapping, idx = stereo_isomorphism(target_mol, self.mol)
+        lig_to_drive = {b: a for (a, b) in mappingself.}
+        num_real_atoms = target_mol.GetNumAtoms()
+        target_positions = target_mol.GetConformer().GetPositions()
+        for atom_index in range(len(mapping)):
+            target_xyz = target_positions[lig_to_drive[atom_index]]
+            restraint = Restraint(atom_index, target_xyz, kcal_per_angstrom_square, delay_angstroms)
+            self.restraints.append(restraint)
+        return
+
 
 class OBMoleculeSetup(MoleculeSetup):
 
