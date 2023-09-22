@@ -763,6 +763,18 @@ class RDKitMoleculeSetup(MoleculeSetup):
         molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
         return molsetup
 
+    def get_rdkit_conformer(self, coords):
+        conformer = Chem.Conformer(self.atom_true_count) 
+        for atom_index in range(self.atom_true_count):
+            conformer.SetAtomPosition(atom_index, coords[atom_index])
+        return conformer
+
+    def get_rdkit_mol(self, coords):
+        mol = Chem.Mol(self.mol)
+        mol.RemoveAllConformers()
+        conf = self.get_rdkit_conformer(coords)
+        mol.AddConformer(conf, assignId=True)
+        return mol
 
     def get_smiles_and_order(self):
         """
@@ -943,7 +955,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
             raise ImportError(_import_misctools_error)
         stereo_isomorphism = StereoIsomorphism()
         mapping, idx = stereo_isomorphism(target_mol, self.mol)
-        lig_to_drive = {b: a for (a, b) in mappingself.}
+        lig_to_drive = {b: a for (a, b) in mapping}
         num_real_atoms = target_mol.GetNumAtoms()
         target_positions = target_mol.GetConformer().GetPositions()
         for atom_index in range(len(mapping)):
