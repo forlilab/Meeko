@@ -250,7 +250,7 @@ class MoleculeSetup:
         counter_atoms = 0
         x, y, z = [], [], []
         pdbinfos = []
-        for res_id in linked_rdkit_chorizo.residues: # random resnum order because dict? probably OK.
+        for res_id in linked_rdkit_chorizo.res_list:
             resmol = linked_rdkit_chorizo.residues[res_id]["resmol"]
             positions = resmol.GetConformer().GetPositions()
             chain, resn, resi = res_id.split(":")
@@ -262,7 +262,7 @@ class MoleculeSetup:
                 pdbinfo = rdkitutils.PDBAtomInfo(
                     name=props.get("atom_name", None),
                     resName=resn,
-                    resNum=resi,
+                    resNum=int(resi),
                     chain=chain)
                 pdbinfos.append(pdbinfo)
                 for key, value in props.items():
@@ -282,7 +282,7 @@ class MoleculeSetup:
                 charge = charges[i],
                 atom_type = atypes[i],
                 element = None,
-                pdbinfo = pdbinfo,
+                pdbinfo = pdbinfos[i],
                 chiral = False,
                 ignore = False,
             )
@@ -599,9 +599,6 @@ class MoleculeSetup:
             self.charge[index] = 0.0
             self.set_ignore(index, True)
             
-    def has_implicit_hydrogens(self):
-        raise NotImplementedError("This method must be overloaded by inheriting class")
-
     def init_atom(self):
         """ iterate through molecule atoms and build the atoms table """
         raise NotImplementedError("This method must be overloaded by inheriting class")
@@ -743,6 +740,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
     @classmethod
     def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
                  assign_charges=True, conformer_id=-1):
+        if self.has_implicit_hydrogens(mol):
+            raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
         if mol.GetNumConformers() == 0: 
             raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
         rdkit_conformer = mol.GetConformer(conformer_id) 
@@ -940,9 +939,10 @@ class RDKitMoleculeSetup(MoleculeSetup):
         newsetup.mol = Chem.Mol(self.mol) # not sure how deep of a copy this is
         return newsetup
 
-    def has_implicit_hydrogens(self):
+    @staticmethod
+    def has_implicit_hydrogens(mol):
         # based on needsHs from RDKit's AddHs.cpp
-        for atom in self.mol.GetAtoms():
+        for atom in mol.GetAtoms():
             nr_H_neighbors = 0
             for neighbor in atom.GetNeighbors():
                 nr_H_neighbors += int(neighbor.GetAtomicNum() == 1)

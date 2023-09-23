@@ -8,6 +8,9 @@ import pathlib
 import sys
 
 from meeko import PDBQTReceptor
+from meeko import MoleculeSetup
+from meeko import PDBQTWriterLegacy
+from meeko import LinkedRDKitChorizo
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
@@ -115,6 +118,8 @@ def get_args():
     parser.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
     parser.add_argument('--pdbqt', help="keeps existing charges and types")
     parser.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
+    parser.add_argument('-n', '--rename_residues',
+                        help="e.g. '{\"A:HIS:323\":\"A:HID:323\"}'")
     parser.add_argument('-f', '--flexres', action="append", default=[],
                         help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
     parser.add_argument('-r', '--reactive_flexres', action="append", default=[],
@@ -258,11 +263,22 @@ if len(reactive_flexres) != 1 and args.box_center_on_reactive_res:
     sys.exit(2)
 
 if args.pdb is not None:
-    receptor = PDBQTReceptor(args.pdb, skip_typing=True)
-    ok, err = receptor.assign_types_charges()
-    check(ok, err)
+    if args.rename_residues is not None:
+        res_swaps = json.loads(args.rename_residues)
+    else:
+        res_swaps = None
+    receptor = LinkedRDKitChorizo(args.pdb, res_swaps_dict=res_swaps)
+    molsetup = MoleculeSetup.from_linked_rdkit_chorizo(receptor)
+    for atom_index, atom_type in molsetup.atom_type.items():
+        if atom_type == "H":
+            molsetup.atom_ignore[atom_index] = True
+    pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
+    #ok, err = receptor.assign_types_charges()
+    #check(ok, err)
 else:
     receptor = PDBQTReceptor(args.pdbqt)
+
+raise
 
 any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
                       "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]

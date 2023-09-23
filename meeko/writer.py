@@ -7,12 +7,14 @@
 import sys
 import json
 import math
+import pathlib
 
 import numpy as np
 from rdkit import Chem
 from .utils import pdbutils
 from .utils.rdkitutils import mini_periodic_table
 
+linesep = pathlib.os.linesep
 
 def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     if len(molsetup.restraints):
@@ -216,15 +218,13 @@ class PDBQTWriterLegacy():
         return atom_name, res_name, res_num, chain
 
     @classmethod
-    def _make_pdbqt_line(cls, setup, atom_idx, resinfo_set, count):
+    def _make_pdbqt_line(cls, setup, atom_idx, count):
         """ """
         record_type = "ATOM"
         alt_id = " "
         pdbinfo = setup.pdbinfo[atom_idx]
         if pdbinfo is None:
             pdbinfo = pdbutils.PDBAtomInfo('', '', 0, '')
-        resinfo = pdbutils.PDBResInfo(pdbinfo.resName, pdbinfo.resNum, pdbinfo.chain)
-        resinfo_set.add(resinfo)
         atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo)
         in_code = ""
         occupancy = 1.0
@@ -237,7 +237,7 @@ class PDBQTWriterLegacy():
         pdbqt_line = atom.format(record_type, count, pdbinfo.name, alt_id, res_name, chain,
                            res_num, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
                            occupancy, temp_factor, charge, atom_type)
-        return pdbqt_line, resinfo_set
+        return pdbqt_line
 
     @classmethod
     def _walk_graph_recursive(cls, setup, node, data, edge_start=0, first=False):
@@ -254,8 +254,7 @@ class PDBQTWriterLegacy():
         for member in member_pool:
             if setup.atom_ignore[member] == 1:
                 continue
-            pdbqt_line, resinfo_set = cls._make_pdbqt_line(setup, member, data["resinfo_set"], data["count"])
-            data["resinfo_set"] = resinfo_set # written as if _make_pdbqt_line() doesn't modify its args (for readability)
+            pdbqt_line = cls._make_pdbqt_line(setup, member, data["count"])
             data["pdbqt_buffer"].append(pdbqt_line)
             data["numbering"][member] = data["count"] # count starts at 1
             data["count"] += 1
@@ -286,27 +285,14 @@ class PDBQTWriterLegacy():
         
         return data
 
-    @classmethod
-    def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
-        """Output a PDBQT file as a string.
-
-        Args:
-            setup: MoleculeSetup
-
-        Returns:
-            str:  PDBQT string of the molecule
-            bool: success
-            str:  error message
-        """
-
-        if len(setup.restraints):
-            raise ValueError("molsetup has restraints but these can't be written to PDBQT")
+    @staticmethod
+    def _is_molsetup_ok(setup, bad_charge_ok):
 
         success = True
         error_msg = ""
         
-        if setup.has_implicit_hydrogens():
-            error_msg += "molecule has implicit hydrogens (name=%s)\n" % setup.get_mol_name()
+        if len(setup.restraints):
+            error_msg = "molsetup has restraints but these can't be written to PDBQT"
             success = False
 
         for idx, atom_type in setup.atom_type.items():
@@ -320,6 +306,40 @@ class PDBQTWriterLegacy():
                 error_msg += 'atom number %d has non finite charge, mol name: %s, charge: %s\n' % (idx, setup.get_mol_name(), str(c))
                 success = False
 
+        return success, error_msg
+
+
+    @classmethod
+    def write_string_static_molsetup(cls, setup, bad_charge_ok=False):
+
+        pdbqt_string = ""
+        success, error_msg = cls._is_molsetup_ok(setup, bad_charge_ok)
+        if not success:
+            return pdbqt_string, success, error_msg
+        
+        count = 0
+        for atom_index, ignore in setup.atom_ignore.items():
+            if ignore:
+                continue
+            count += 1
+            pdbqt_string += cls._make_pdbqt_line(setup, atom_index, count) + linesep
+
+        return pdbqt_string, success, error_msg
+
+    @classmethod
+    def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
+        """Output a PDBQT file as a string.
+
+        Args:
+            setup: MoleculeSetup
+
+        Returns:
+            str:  PDBQT string of the molecule
+            bool: success
+            str:  error message
+        """
+    
+        success, error_msg = self._is_molsetup_ok(setup, bad_charge_ok)
         if not success:
             pdbqt_string = ""
             return pdbqt_string, success, error_msg
@@ -329,7 +349,6 @@ class PDBQTWriterLegacy():
             "numbering": {},
             "pdbqt_buffer": [],
             "count": 1,
-            "resinfo_set": set(),
         }
         atom_counter = {}
 
@@ -388,21 +407,10 @@ class PDBQTWriterLegacy():
                 # is populated in self._walk_graph_recursive.
                 data["pdbqt_buffer"].insert(i, remark_line)
 
-        if False: #self.setup.is_protein_sidechain:
-            if len(data["resinfo_set"]) > 1:
-                print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
-                print(data["resinfo_set"], file=sys.stderr)
-            resinfo = list(data["resinfo_set"])[0]
-            pdbinfo = pdbutils.PDBAtomInfo('', resinfo.resName, resinfo.resNum, resinfo.chain)
-            _, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo)
-            resinfo_string = "{:3s} {:1s}{:4d}".format(res_name, chain, res_num)
-            data["pdbqt_buffer"].insert(0, 'BEGIN_RES %s' % resinfo_string)
-            data["pdbqt_buffer"].append('END_RES %s' % resinfo_string)
-        else: # no TORSDOF in flexres
-            # torsdof is always going to be the one of the rigid, non-macrocyclic one
-            data["pdbqt_buffer"].append('TORSDOF %d' % active_tors)
+        # torsdof is always going to be the one of the rigid, non-macrocyclic one
+        data["pdbqt_buffer"].append('TORSDOF %d' % active_tors)
 
-        pdbqt_string =  '\n'.join(data["pdbqt_buffer"]) + '\n'
+        pdbqt_string =  linesep.join(data["pdbqt_buffer"]) + linesep
         return pdbqt_string, success, error_msg
 
     @classmethod
@@ -449,9 +457,9 @@ class PDBQTWriterLegacy():
              - remove TORSDOF
             this is for covalent docking (tethered)
         """
-        new_string = "BEGIN_RES %s %s %s\n" % (res, chain, num)
+        new_string = "BEGIN_RES %s %s %s" % (res, chain, num) + linesep
         atom_number = 0
-        for line in pdbqt_string.split("\n"):
+        for line in pdbqt_string.split(linesep):
             if line == "":
                 continue
             if line.startswith("TORSDOF"):
@@ -462,8 +470,8 @@ class PDBQTWriterLegacy():
                     line = line[:13] + 'CA' + line[15:]
                 elif atom_number == 2:
                     line = line[:13] + 'CB' + line[15:]
-                new_string += line + '\n'
+                new_string += line + linesep
                 continue
-            new_string += line + '\n'
-        new_string += "END_RES %s %s %s\n" % (res, chain, num)
+            new_string += line + linesep
+        new_string += "END_RES %s %s %s" % (res, chain, num) + linesep
         return new_string

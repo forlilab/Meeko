@@ -1,7 +1,12 @@
+import pathlib
+import json
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
-import json
+
+pkg_dir = pathlib.Path(__file__).parents[0]
+with open(pkg_dir / "data" / "prot_res_params.json") as f:
+    chorizo_params = json.load(f)
 
 def mapping_by_mcs(mol, ref):
     mcs_result = rdFMCS.FindMCS([mol,ref])
@@ -53,15 +58,39 @@ def h_coord_from_dipeptide(pdb1, pdb2):
     
     return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
 
-class RDKITReceptor:
-    def __init__(self, pdb_path, json_path, res_swaps):
-        self._pdb_to_resblocks(pdb_path)
-        self._rename_residues(res_swaps)
-        self._load_params(json_path)
+class LinkedRDKitChorizo:
+    def __init__(self, pdb_path, params=chorizo_params, res_swaps_dict=None):
+        self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
+        if res_swaps_dict is not None:
+            self._rename_residues(res_swaps_dict)
+        self.res_templates = self._load_params(params)
         self.atoms = []
-        self.removed_residues = []
+        self.removed_residues = self.parameterize_residues()
+        print("Removed residues:")
+        print(self.print_residues_by_resname(self.removed_residues))
+        to_remove = []
+        for res_id in self.removed_residues:
+            i = self.res_list.index(res_id)
+            to_remove.append(i)
+        for i in sorted(to_remove, reverse=True):
+            self.res_list.pop(i)
         
-    def _load_params(self,json_path):
+
+    @staticmethod
+    def print_residues_by_resname(removed_residues):
+        by_resname = dict()
+        for res_id in removed_residues:
+            chain, resn, resi = res_id.split(":")
+            by_resname.setdefault(resn, [])
+            by_resname[resn].append(f"{chain}:{resi}")
+        string = ""
+        for resname, removed_res in by_resname.items():
+            string += f"Resname: {resname}:" + pathlib.os.linesep
+            string += " ".join(removed_res) + pathlib.os.linesep
+        return string
+
+    @staticmethod 
+    def _load_params(params):
         #name changes will go in main file, temp fix
         desired_props = {
                 "atom_names": ('atom_name',str),
@@ -79,34 +108,35 @@ class RDKITReceptor:
                 "gasteiger": ("gasteiger",float)
                 }
         
-        with open(json_path,'r') as fin:
-            self.params = json.load(fin)
-
         ps = Chem.SmilesParserParams()
         ps.removeHs = False
 
-        self.res_templates = {}
-        for resn in self.params:
-            resmol = Chem.MolFromSmiles(self.params[resn]['smiles'], ps)
+        res_templates = {}
+        for resn in params:
+            resmol = Chem.MolFromSmiles(params[resn]['smiles'], ps)
             for idx, atom in enumerate(resmol.GetAtoms()):
                 for prop, (propname, type) in desired_props.items():
                     if type == bool:
-                        atom.SetBoolProp(propname, bool(self.params[resn][prop][idx]))
+                        atom.SetBoolProp(propname, bool(params[resn][prop][idx]))
                     if type == float:
-                        if self.params[resn][prop][idx]:
-                            atom.SetDoubleProp(propname, float(self.params[resn][prop][idx]))
+                        if params[resn][prop][idx] is not None:
+                            atom.SetDoubleProp(propname, float(params[resn][prop][idx]))
                     if type == str:
-                        atom.SetProp(propname, self.params[resn][prop][idx])
-            self.res_templates[resn] = resmol
+                        atom.SetProp(propname, params[resn][prop][idx])
+            res_templates[resn] = resmol
+        return res_templates
     
-    def _pdb_to_resblocks(self,pdb_path):
+    @staticmethod
+    def _pdb_to_resblocks(pdb_path):
         #TODO detect chain breaks
-        self.residues = {}
+        #TODO cyclic peptides nex res == None ?!
+        residues = {}
+        res_list = []
         with open(pdb_path, 'r') as fin:
             current_res = None
             for line in fin:
                 if line.startswith('TER'):
-                    self.residues[current_res]['next res'] = None
+                    residues[current_res]['next res'] = None
                     current_res = None
                 if line.startswith('ATOM') or line.startswith('HETATM'):
                     resname = line[17:20].strip()
@@ -115,14 +145,17 @@ class RDKITReceptor:
                     full_resid = ':'.join([chainid, resname, str(resid)])
 
                     if full_resid == current_res:
-                        self.residues[full_resid]['pdb block'] += line
+                        residues[full_resid]['pdb block'] += line
                     else:
                         if current_res:
-                            self.residues[current_res]['next res'] = full_resid
-                        self.residues[full_resid] = {}
-                        self.residues[full_resid]['pdb block'] = line
-                        self.residues[full_resid]['previous res'] = current_res
+                            residues[current_res]['next res'] = full_resid
+                        residues[full_resid] = {}
+                        residues[full_resid]['pdb block'] = line
+                        residues[full_resid]['previous res'] = current_res
                         current_res = full_resid
+                        res_list.append(full_resid)
+            residues[current_res]['next res'] = None
+        return residues, res_list
     
     def _rename_residues(self, resdict):
         for res in resdict:
@@ -136,8 +169,11 @@ class RDKITReceptor:
             next_res = self.residues[resdict[res]]['next res']
             if next_res:
                 self.residues[next_res]['previous res'] = resdict[res]
+            i = self.res_list.index(res)
+            self.res_list[i] = resdict[res]
 
     def parameterize_residues(self):
+        removed_residues = []
         for res in self.residues:
             exclude_idxs = []
             err = ''
@@ -147,9 +183,9 @@ class RDKITReceptor:
             # Check if parameters are available for a residue and rename if terminal
             resn = res.split(':')[1]
             if resn not in self.res_templates:
-                self.residues.pop(res)
-                self.removed_residues.append(res)
-                return 0
+                #self.residues.pop(res)
+                removed_residues.append(res)
+                continue
             if self.residues[res]['next res'] == None:
                 resn = 'C' + resn
             if self.residues[res]['previous res'] == None:
@@ -208,6 +244,7 @@ class RDKITReceptor:
 
             if len(missing_atoms) > 0:
                 err += f'Could not add {res=} {missing_atoms=}'
+                removed_residues.append(res)
             
             self.residues[res]['resmol'] = resmol
 
@@ -216,6 +253,7 @@ class RDKITReceptor:
                 with Chem.SDWriter(f'{resn}{res.split(":")[2]}.sdf') as w:
                     w.write(pdbmol)
                     w.write(resmol)
+        return removed_residues
 
     def write_pdb(self, outpath):
         # TODO currently does not contain residue information
