@@ -81,9 +81,9 @@ class FlexMacrocycle:
         bond_order = self.setup.bond[bond]['bond_order']
         if bond_order not in [1, 2, 3]: # aromatic, double, made rigid explicitly (order=1.1 from --rigidify)
             return -1
-        if not self.setup.get_element(atom_idx1) == 6 or self.setup.is_aromatic(atom_idx1):
+        if self.setup.atom_type[atom_idx1] != "C":
             return -1
-        if not self.setup.get_element(atom_idx2) == 6 or self.setup.is_aromatic(atom_idx2):
+        if self.setup.atom_type[atom_idx2] != "C":
             return -1
         # triple bond tolerated but not preferred (TODO true?)
         if bond_order == 3:
