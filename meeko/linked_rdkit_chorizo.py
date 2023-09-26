@@ -64,45 +64,21 @@ class LinkedRDKitChorizo:
     cterm_pad_smiles = "CN"
     nterm_pad_smiles = "CC=O"
     backbone_smarts = "[C:1](=[O:2])[C:3][N:4]"
+    backbone = Chem.MolFromSmarts(backbone_smarts)
     nterm_pad_backbone_smarts_idxs = (0, 2, 1)
     cterm_pad_backbone_smarts_idxs = (2, 3)
     rxn_cterm_pad = rdChemReactions.ReactionFromSmarts(f"[N:5][C:6].{backbone_smarts}>>[C:6][N:5]{backbone_smarts}")
     rxn_nterm_pad = rdChemReactions.ReactionFromSmarts(f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
 
-    def get_padded_mol(self, resn):
-        mol = Chem.Mol(self.residues[resn]["resmol"])
-        backbone = Chem.MolFromSmarts(self.backbone_smarts)
-        #spp = Chem.SmilesParserParams()
-        #spp.removeHs = False 
-        if self.residues[resn]["next res"] is not None:
-            next_resn = self.residues[resn]["next res"]
-            next_mol = self.residues[next_resn]["resmol"]
-            backbone_matches = next_mol.GetSubstructMatches(backbone)
-            if len(backbone_matches) != 1:
-                raise RuntimeError("expected 1 backbone match for %s, got %d" % (next_res, len(backbone_matches)))
-            cterm_pad = Chem.MolFromSmiles(self.cterm_pad_smiles)#, spp)
-            conformer = Chem.Conformer(cterm_pad.GetNumAtoms())
-            cterm_pad.AddConformer(conformer)
-            for index, smarts_index in enumerate(self.cterm_pad_backbone_smarts_idxs):
-                next_mol_index = backbone_matches[0][smarts_index]
-                pos = next_mol.GetConformer().GetAtomPosition(next_mol_index)
-                cterm_pad.GetConformer().SetAtomPosition(index, pos)
-            ps = self.rxn_cterm_pad.RunReactants((cterm_pad, mol))
-            if len(ps) != 1:
-                raise RuntimeError("expected 1 reaction product, got %d" % (len(ps)))
-            mol = ps[0][0]
-            Chem.SanitizeMol(mol)
-            mol = Chem.AddHs(mol, addCoords=True)
-        return mol
-        
 
-    def __init__(self, pdb_path, params=chorizo_params, res_swaps_dict=None):
+    def __init__(self, pdb_path, params=chorizo_params, res_swaps_dict=None, no_ter=None):
         self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
+        self.no_ter = self._check_no_ter(no_ter, self.res_list)
         if res_swaps_dict is not None:
             self._rename_residues(res_swaps_dict)
         self.res_templates = self._load_params(params)
         self.atoms = []
-        self.removed_residues = self.parameterize_residues()
+        self.removed_residues = self.parameterize_residues(self.no_ter)
         print("Removed residues:")
         print(self.print_residues_by_resname(self.removed_residues))
         to_remove = []
@@ -111,8 +87,73 @@ class LinkedRDKitChorizo:
             to_remove.append(i)
         for i in sorted(to_remove, reverse=True):
             self.res_list.pop(i)
-        
+        return
 
+
+    @staticmethod
+    def _check_no_ter(no_ter, res_list):
+        allowed_c = ("cterm", "c-term", "c")
+        allowed_n = ("nterm", "n-term", "n")
+        output = {}
+        if no_ter is None:
+            return output
+        for (resn, values) in no_ter.items():
+            if resn not in res_list:
+                raise ValueError("%s in no_ter not found" % resn)
+            output[resn] = []
+            if type(values) == str:
+                values = (values,)
+            for value in values:
+                if value.lower() in allowed_c:
+                    output[resn].append("C")
+                elif value.lower() in allowed_n:
+                    output[resn].append("N")
+                else:
+                    raise ValueError("no_ter value was %s, expected %s or %s" % (value, allowed_c, allowed_n))
+            return output
+
+
+    def get_padded_mol(self, resn):
+        #TODO disulfides, ACE, NME
+        def _join(mol, pad_mol, pad_smarts_mol, rxn, adjacent_mol=None, pad_smarts_idxs=None):
+            pad_matches = adjacent_mol.GetSubstructMatches(pad_smarts_mol)
+            if len(pad_matches) != 1:
+                raise RuntimeError("expected 1 match but got %d" % (len(pad_matches)))
+            conformer = Chem.Conformer(pad_mol.GetNumAtoms())
+            pad_mol.AddConformer(conformer)
+            if adjacent_mol is not None:
+                for index, smarts_index in enumerate(pad_smarts_idxs):
+                    adjacent_mol_index = pad_matches[0][smarts_index]
+                    pos = adjacent_mol.GetConformer().GetAtomPosition(adjacent_mol_index)
+                    pad_mol.GetConformer().SetAtomPosition(index, pos)
+            products = rxn.RunReactants((pad_mol, mol))
+            if len(products) != 1:
+                raise RuntimeError("expected 1 reaction product but got %d" % (len(ps)))
+            mol = products[0][0]
+            Chem.SanitizeMol(mol)
+            return mol
+
+        mol = Chem.Mol(self.residues[resn]["resmol"])
+        if self.residues[resn]["previous res"] is not None:
+            prev_resn = self.residues[resn]["previous res"]
+            prev_mol = self.residues[prev_resn]["resmol"]
+            nterm_pad = Chem.MolFromSmiles(self.nterm_pad_smiles)
+            mol = _join(mol, nterm_pad, self.backbone,
+                        self.rxn_nterm_pad,
+                        prev_mol,
+                        self.nterm_pad_backbone_smarts_idxs)
+            
+        if self.residues[resn]["next res"] is not None:
+            next_resn = self.residues[resn]["next res"]
+            next_mol = self.residues[next_resn]["resmol"]
+            cterm_pad = Chem.MolFromSmiles(self.cterm_pad_smiles)
+            mol = _join(mol, cterm_pad, self.backbone,
+                        self.rxn_cterm_pad,
+                        next_mol, 
+                        self.cterm_pad_backbone_smarts_idxs)
+        return mol
+
+        
     @staticmethod
     def print_residues_by_resname(removed_residues):
         by_resname = dict()
@@ -209,7 +250,7 @@ class LinkedRDKitChorizo:
             i = self.res_list.index(res)
             self.res_list[i] = resdict[res]
 
-    def parameterize_residues(self):
+    def parameterize_residues(self, no_ter):
         removed_residues = []
         for res in self.residues:
             exclude_idxs = []
@@ -224,9 +265,11 @@ class LinkedRDKitChorizo:
                 removed_residues.append(res)
                 continue
             if self.residues[res]['next res'] == None:
-                resn = 'C' + resn
+                if (res not in no_ter) or ("C" not in no_ter[res]):
+                    resn = 'C' + resn
             if self.residues[res]['previous res'] == None:
-                resn = 'N' + resn
+                if (res not in no_ter) or ("N" not in no_ter[res]):
+                    resn = 'N' + resn
 
             # TODO add to preprocessing to save time
             # Create mol object and map between the pdb and residue template
