@@ -2,6 +2,7 @@ import pathlib
 import json
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
+from rdkit.Chem import rdChemReactions
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
 
 pkg_dir = pathlib.Path(__file__).parents[0]
@@ -59,6 +60,42 @@ def h_coord_from_dipeptide(pdb1, pdb2):
     return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
 
 class LinkedRDKitChorizo:
+
+    cterm_pad_smiles = "CN"
+    nterm_pad_smiles = "CC=O"
+    backbone_smarts = "[C:1](=[O:2])[C:3][N:4]"
+    nterm_pad_backbone_smarts_idxs = (0, 2, 1)
+    cterm_pad_backbone_smarts_idxs = (2, 3)
+    rxn_cterm_pad = rdChemReactions.ReactionFromSmarts(f"[N:5][C:6].{backbone_smarts}>>[C:6][N:5]{backbone_smarts}")
+    rxn_nterm_pad = rdChemReactions.ReactionFromSmarts(f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
+
+    def get_padded_mol(self, resn):
+        mol = Chem.Mol(self.residues[resn]["resmol"])
+        backbone = Chem.MolFromSmarts(self.backbone_smarts)
+        #spp = Chem.SmilesParserParams()
+        #spp.removeHs = False 
+        if self.residues[resn]["next res"] is not None:
+            next_resn = self.residues[resn]["next res"]
+            next_mol = self.residues[next_resn]["resmol"]
+            backbone_matches = next_mol.GetSubstructMatches(backbone)
+            if len(backbone_matches) != 1:
+                raise RuntimeError("expected 1 backbone match for %s, got %d" % (next_res, len(backbone_matches)))
+            cterm_pad = Chem.MolFromSmiles(self.cterm_pad_smiles)#, spp)
+            conformer = Chem.Conformer(cterm_pad.GetNumAtoms())
+            cterm_pad.AddConformer(conformer)
+            for index, smarts_index in enumerate(self.cterm_pad_backbone_smarts_idxs):
+                next_mol_index = backbone_matches[0][smarts_index]
+                pos = next_mol.GetConformer().GetAtomPosition(next_mol_index)
+                cterm_pad.GetConformer().SetAtomPosition(index, pos)
+            ps = self.rxn_cterm_pad.RunReactants((cterm_pad, mol))
+            if len(ps) != 1:
+                raise RuntimeError("expected 1 reaction product, got %d" % (len(ps)))
+            mol = ps[0][0]
+            Chem.SanitizeMol(mol)
+            mol = Chem.AddHs(mol, addCoords=True)
+        return mol
+        
+
     def __init__(self, pdb_path, params=chorizo_params, res_swaps_dict=None):
         self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
         if res_swaps_dict is not None:
@@ -254,6 +291,7 @@ class LinkedRDKitChorizo:
                     w.write(pdbmol)
                     w.write(resmol)
         return removed_residues
+
 
     def write_pdb(self, outpath):
         # TODO currently does not contain residue information
