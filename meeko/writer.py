@@ -218,23 +218,28 @@ class PDBQTWriterLegacy():
         return atom_name, res_name, res_num, chain
 
     @classmethod
-    def _make_pdbqt_line(cls, setup, atom_idx, count):
+    def _make_pdbqt_line_from_molsetup(cls, setup, atom_idx, count):
         """ """
-        record_type = "ATOM"
-        alt_id = " "
         pdbinfo = setup.pdbinfo[atom_idx]
         if pdbinfo is None:
             pdbinfo = pdbutils.PDBAtomInfo('', '', 0, '')
         atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo)
-        in_code = ""
-        occupancy = 1.0
-        temp_factor = 0.0
         coord = setup.coord[atom_idx]
         atom_type = setup.get_atom_type(atom_idx)
         charge = setup.charge[atom_idx]
-        atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
+        pdbqt_line = cls._make_pdbqt_line(
+                count, atom_name, res_name, chain, res_num, coord, charge, atom_type)
+        return pdbqt_line
 
-        pdbqt_line = atom.format(record_type, count, pdbinfo.name, alt_id, res_name, chain,
+    @staticmethod
+    def _make_pdbqt_line(count, atom_name, res_name, chain, res_num, coord, charge, atom_type): 
+        record_type = "ATOM"
+        alt_id = " "
+        in_code = ""
+        occupancy = 1.0
+        temp_factor = 0.0
+        atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
+        pdbqt_line = atom.format(record_type, count, atom_name, alt_id, res_name, chain,
                            res_num, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
                            occupancy, temp_factor, charge, atom_type)
         return pdbqt_line
@@ -254,7 +259,7 @@ class PDBQTWriterLegacy():
         for member in member_pool:
             if setup.atom_ignore[member] == 1:
                 continue
-            pdbqt_line = cls._make_pdbqt_line(setup, member, data["count"])
+            pdbqt_line = cls._make_pdbqt_line_from_molsetup(setup, member, data["count"])
             data["pdbqt_buffer"].append(pdbqt_line)
             data["numbering"][member] = data["count"] # count starts at 1
             data["count"] += 1
@@ -310,21 +315,27 @@ class PDBQTWriterLegacy():
 
 
     @classmethod
-    def write_string_static_molsetup(cls, setup, bad_charge_ok=False):
+    def write_string_from_linked_rdkit_chorizo(cls, chorizo):
 
         pdbqt_string = ""
-        success, error_msg = cls._is_molsetup_ok(setup, bad_charge_ok)
-        if not success:
-            return pdbqt_string, success, error_msg
-        
-        count = 0
-        for atom_index, ignore in setup.atom_ignore.items():
-            if ignore:
-                continue
-            count += 1
-            pdbqt_string += cls._make_pdbqt_line(setup, atom_index, count) + linesep
-
-        return pdbqt_string, success, error_msg
+        atom_count = 0
+        for res_id in chorizo.res_list:
+            resmol = chorizo.residues[res_id]["resmol"]
+            positions = resmol.GetConformer().GetPositions()
+            chain, resname, resnum = res_id.split(":")
+            resnum = int(resnum)
+            for atom in resmol.GetAtoms(): 
+                props = atom.GetPropsAsDict()
+                atom_type = props["atom_type"]
+                if atom_type == "H":
+                    continue
+                coord = positions[atom.GetIdx()]
+                atom_name = props.get("atom_name", "")
+                charge = props["gasteiger"]
+                atom_count += 1
+                pdbqt_string += cls._make_pdbqt_line(
+                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type)
+        return pdbqt_string
 
     @classmethod
     def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
@@ -339,7 +350,7 @@ class PDBQTWriterLegacy():
             str:  error message
         """
     
-        success, error_msg = self._is_molsetup_ok(setup, bad_charge_ok)
+        success, error_msg = cls._is_molsetup_ok(setup, bad_charge_ok)
         if not success:
             pdbqt_string = ""
             return pdbqt_string, success, error_msg

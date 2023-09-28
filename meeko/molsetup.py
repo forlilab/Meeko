@@ -243,51 +243,6 @@ class MoleculeSetup:
 
         return molsetup 
 
-    @classmethod
-    def from_linked_rdkit_chorizo(cls, linked_rdkit_chorizo):
-        molsetup = cls()
-        atom_params = {}
-        counter_atoms = 0
-        x, y, z = [], [], []
-        pdbinfos = []
-        for res_id in linked_rdkit_chorizo.res_list:
-            resmol = linked_rdkit_chorizo.residues[res_id]["resmol"]
-            positions = resmol.GetConformer().GetPositions()
-            chain, resn, resi = res_id.split(":")
-            for atom in resmol.GetAtoms():
-                x.append(positions[atom.GetIdx(), 0])
-                y.append(positions[atom.GetIdx(), 1])
-                z.append(positions[atom.GetIdx(), 2])
-                props = atom.GetPropsAsDict()
-                pdbinfo = rdkitutils.PDBAtomInfo(
-                    name=props.get("atom_name", None),
-                    resName=resn,
-                    resNum=int(resi),
-                    chain=chain)
-                pdbinfos.append(pdbinfo)
-                for key, value in props.items():
-                    if key.startswith("_") or key in ("computed", "occupancy", "temp_factor", "atom_name"):
-                        continue
-                    atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
-                    atom_params[key].append(value)
-                counter_atoms += 1
-                for key in set(atom_params).difference(props): # <key> missing in <props>
-                    atom_params[key].append(None) # fill in incomplete "row"
-        charges = atom_params.pop("gasteiger")
-        atypes = atom_params.pop("atom_type")
-        for i in range(counter_atoms):
-            molsetup.add_atom(
-                i,
-                coord = (x[i], y[i], z[i]),
-                charge = charges[i],
-                atom_type = atypes[i],
-                element = None,
-                pdbinfo = pdbinfos[i],
-                chiral = False,
-                ignore = False,
-            )
-        molsetup.atom_params = atom_params
-        return molsetup 
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
             element=None, charge=0.0, atom_type=None, pdbinfo=None,
@@ -740,7 +695,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
     @classmethod
     def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
                  assign_charges=True, conformer_id=-1):
-        if self.has_implicit_hydrogens(mol):
+        if cls.has_implicit_hydrogens(mol):
             raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
         if mol.GetNumConformers() == 0: 
             raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")

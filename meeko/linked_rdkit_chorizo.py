@@ -4,6 +4,10 @@ from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
+from .writer import PDBQTWriterLegacy
+from .molsetup import RDKitMoleculeSetup
+
+from misctools import react_and_map
 
 pkg_dir = pathlib.Path(__file__).parents[0]
 with open(pkg_dir / "data" / "prot_res_params.json") as f:
@@ -59,11 +63,98 @@ def h_coord_from_dipeptide(pdb1, pdb2):
     
     return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
 
+def _snap_to_int(value, tolerance=0.12):
+    for inc in [-1, 0, 1]:
+        if abs(value - int(value) - inc) <= tolerance:
+            return int(value) + inc
+    return None
+
+def divide_int_gracefully(integer, weights, allow_equal_weights_to_differ=False):
+    for weight in weights:
+        if type(weight) not in [int, float] or weight < 0:
+            raise ValueError("weights must be numeric and non-negative")
+    if type(integer) != int:
+        raise ValueError("integer must be integer")
+    inv_total_weight = 1.0 / sum(weights)
+    shares = [w * inv_total_weight for w in weights] # normalize
+    result = [_snap_to_int(integer * s, tolerance=0.5) for s in shares]
+    surplus = integer - sum(result)
+    if surplus == 0:
+        return result
+    data = [(i, w) for (i, w) in enumerate(weights)]
+    data = sorted(data, key=lambda x: x[1], reverse=True)
+    idxs = [i for (i, _) in data] 
+    if allow_equal_weights_to_differ:
+        groups = [1 for _ in weights]
+    else:
+        groups = []
+        last_weight = None
+        for i in idxs:
+            if weights[i] == last_weight:
+                groups[-1] += 1
+            else:
+                groups.append(1)
+            last_weight = weights[i]
+
+    # iterate over all possible combinations of groups
+    # this is potentially very slow
+    nr_groups = len(groups)
+    for j in range(1, 2**nr_groups):
+        n_changes = 0
+        combo = []
+        for grpidx in range(nr_groups):
+            is_changed = bool(j & 2**grpidx) 
+            combo.append(is_changed)
+            n_changes += is_changed * groups[grpidx]
+        if n_changes == abs(surplus):
+            break
+
+    # add or subtract 1 to distribute surplus
+    increment = surplus / abs(surplus)
+    index = 0
+    for i, is_changed in enumerate(combo):
+        if is_changed:
+            for j in range(groups[i]):
+                result[idxs[index]] += increment
+                index += 1
+
+    return result
+
+def rectify_charges(q_list, net_charge=None, decimals=3):
+    """make them 3 decimals and sum to an integer"""
+
+    fstr = "%%.%df" % decimals
+    charges_dec = [float(fstr % q) for q in q_list]
+
+    if net_charge is None:
+        net_charge = _snap_to_int(sum(charges_dec), tolerance=0.15)
+        if net_charge is None:
+            msg = "net charge could not be predicted from input q_list. (residual is beyond tolerance) "
+            msg = "Please set the net_charge argument directly"
+            raise RuntimeError(msg)
+    elif type(net_charge) != int:
+        raise TypeError("net charge must be an integer")
+
+    surplus = net_charge - sum(charges_dec)
+    surplus_int = _snap_to_int(10**decimals * surplus)
+    print(surplus, surplus_int)
+
+    if surplus_int == 0:
+        return charges_dec
+
+    weights = [abs(q) for q in q_list]
+    surplus_int_splits = divide_int_gracefully(surplus_int, weights)
+    print("->", surplus_int_splits)
+    for i, increment in enumerate(surplus_int_splits):
+        charges_dec[i] += 10**-decimals * increment
+
+    return charges_dec
+
 class LinkedRDKitChorizo:
 
     cterm_pad_smiles = "CN"
     nterm_pad_smiles = "CC=O"
-    backbone_smarts = "[C:1](=[O:2])[C:3][N:4]"
+    backbone_smarts = "[C:1](=[O:2])[C:3][N:4]" # TODO make sure it matches res only once
     backbone = Chem.MolFromSmarts(backbone_smarts)
     nterm_pad_backbone_smarts_idxs = (0, 2, 1)
     cterm_pad_backbone_smarts_idxs = (2, 3)
@@ -115,7 +206,7 @@ class LinkedRDKitChorizo:
 
     def get_padded_mol(self, resn):
         #TODO disulfides, ACE, NME
-        def _join(mol, pad_mol, pad_smarts_mol, rxn, adjacent_mol=None, pad_smarts_idxs=None):
+        def _join(mol, pad_mol, pad_smarts_mol, rxn, is_res_atom, mapidx, adjacent_mol=None, pad_smarts_idxs=None):
             pad_matches = adjacent_mol.GetSubstructMatches(pad_smarts_mol)
             if len(pad_matches) != 1:
                 raise RuntimeError("expected 1 match but got %d" % (len(pad_matches)))
@@ -126,34 +217,100 @@ class LinkedRDKitChorizo:
                     adjacent_mol_index = pad_matches[0][smarts_index]
                     pos = adjacent_mol.GetConformer().GetAtomPosition(adjacent_mol_index)
                     pad_mol.GetConformer().SetAtomPosition(index, pos)
-            products = rxn.RunReactants((pad_mol, mol))
+            products, index_map = react_and_map((pad_mol, mol), rxn)
             if len(products) != 1:
                 raise RuntimeError("expected 1 reaction product but got %d" % (len(ps)))
             mol = products[0][0]
+            index_map["reactant_idx"] = index_map["reactant_idx"][0][0]
+            index_map["atom_idx"] = index_map["atom_idx"][0][0]
             Chem.SanitizeMol(mol)
-            return mol
+            new_is_res_atom = []
+            new_mapidx = {}
+            for atom in mol.GetAtoms():
+                index = atom.GetIdx()
+                reactant_idx = index_map["reactant_idx"][index]
+                if  reactant_idx == 0:
+                    new_is_res_atom.append(False)
+                elif reactant_idx == 1: # mol is 2nd reactant (0-index)
+                    atom_idx = index_map["atom_idx"][index] 
+                    new_is_res_atom.append(is_res_atom[atom_idx])
+                    if atom_idx in mapidx:
+                        new_mapidx[index] = mapidx[atom_idx]
+                else:
+                    raise RuntimeError("we have only two reactants, got %d ?" % reactant_idx)
+            return mol, new_is_res_atom, new_mapidx
 
         mol = Chem.Mol(self.residues[resn]["resmol"])
+        is_res_atom = [True for atom in mol.GetAtoms()]
+        mapidx = {atom.GetIdx(): atom.GetIdx() for atom in mol.GetAtoms()}
         if self.residues[resn]["previous res"] is not None:
             prev_resn = self.residues[resn]["previous res"]
             prev_mol = self.residues[prev_resn]["resmol"]
             nterm_pad = Chem.MolFromSmiles(self.nterm_pad_smiles)
-            mol = _join(mol, nterm_pad, self.backbone,
-                        self.rxn_nterm_pad,
-                        prev_mol,
-                        self.nterm_pad_backbone_smarts_idxs)
+            mol, is_res_atom, mapidx = _join(
+                    mol,
+                    nterm_pad,
+                    self.backbone,
+                    self.rxn_nterm_pad,
+                    is_res_atom,
+                    mapidx,
+                    prev_mol,
+                    self.nterm_pad_backbone_smarts_idxs)
             
         if self.residues[resn]["next res"] is not None:
             next_resn = self.residues[resn]["next res"]
             next_mol = self.residues[next_resn]["resmol"]
             cterm_pad = Chem.MolFromSmiles(self.cterm_pad_smiles)
-            mol = _join(mol, cterm_pad, self.backbone,
-                        self.rxn_cterm_pad,
-                        next_mol, 
-                        self.cterm_pad_backbone_smarts_idxs)
-        return mol
+            mol, is_res_atom, mapidx = _join(
+                    mol,
+                    cterm_pad,
+                    self.backbone,
+                    self.rxn_cterm_pad,
+                    is_res_atom,
+                    mapidx,
+                    next_mol, 
+                    self.cterm_pad_backbone_smarts_idxs)
+        n_atoms_before_addhs = mol.GetNumAtoms()
+        mol = Chem.AddHs(mol)
+        is_res_atom.extend([False] * (mol.GetNumAtoms() - n_atoms_before_addhs))
+        return mol, is_res_atom, mapidx
 
+    def res_to_molsetup(self, res, mk_prep, cut_at_calpha=False):
+        padded_mol, is_res_atom, mapidx = self.get_padded_mol(res)
+        bb_matches = padded_mol.GetSubstructMatches(self.backbone)
+        if len(bb_matches) != 1:
+            raise RuntimeError("expected 1 backbone match, got %d" % (len(bb_matches)))
+        c_alpha = bb_matches[0][2]
+        molsetups = mk_prep.prepare(padded_mol, root_atom_index=c_alpha)
+        if len(molsetups) > 1:
+            raise NotImplementedError("multiple molsetups not yet implemented for flexres")
+        molsetup = molsetups[0]
+        for atom_index in molsetup.atom_ignore:
+            if atom_index < len(is_res_atom):
+                is_res = is_res_atom[atom_index] # Hs from Chem.AddHs beyond length of is_res_atom
+            else:
+                is_res = False
+            bfor = molsetup.atom_ignore[atom_index]
+            ignore = not is_res
+            ignore |= cut_at_calpha and (atom_index != c_alpha) and (atom_index in bb_matches[0])
+            molsetup.atom_ignore[atom_index] |= ignore
+
+        # rectify charges to sum to integer (because of padding)
+        net_charge = sum([atom.GetFormalCharge() for atom in self.residues[res]["resmol"].GetAtoms()])
+        not_ignored_idxs = []
+        charges = []
+        for i, q in molsetup.charge.items(): # charge is ordered dict
+            if i in mapidx:
+                charges.append(q)
+                not_ignored_idxs.append(i) 
+        charges = rectify_charges(charges, net_charge, decimals=3)
+        for i, j in enumerate(not_ignored_idxs):
+            molsetup.charge[j] = charges[i]
+        self.residues[res]["molsetup"] = molsetup
+        self.residues[res]["molsetup_mapidx"] = mapidx
+        return
         
+
     @staticmethod
     def print_residues_by_resname(removed_residues):
         by_resname = dict()
