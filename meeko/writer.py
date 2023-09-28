@@ -317,14 +317,20 @@ class PDBQTWriterLegacy():
     @classmethod
     def write_string_from_linked_rdkit_chorizo(cls, chorizo):
 
-        pdbqt_string = ""
+        rigid_pdbqt_string = ""
+        flex_pdbqt_string = ""
         atom_count = 0
+        flex_atom_count = 0
         for res_id in chorizo.res_list:
             resmol = chorizo.residues[res_id]["resmol"]
             positions = resmol.GetConformer().GetPositions()
             chain, resname, resnum = res_id.split(":")
             resnum = int(resnum)
-            for atom in resmol.GetAtoms(): 
+            molsetup_mapidx = chorizo.residues[res_id].get("molsetup_mapidx", {})
+            flexres_idxs = [j for (i, j) in molsetup_mapidx.items()]
+            for atom in resmol.GetAtoms():
+                if atom.GetIdx() in flexres_idxs:
+                    continue
                 props = atom.GetPropsAsDict()
                 atom_type = props["atom_type"]
                 if atom_type == "H":
@@ -333,9 +339,23 @@ class PDBQTWriterLegacy():
                 atom_name = props.get("atom_name", "")
                 charge = props["gasteiger"]
                 atom_count += 1
-                pdbqt_string += cls._make_pdbqt_line(
-                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type)
-        return pdbqt_string
+                rigid_pdbqt_string += cls._make_pdbqt_line(
+                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type) + linesep
+            if "molsetup" in chorizo.residues[res_id]:
+                chain, resname, resnum = res_id.split(":")
+                molsetup = chorizo.residues[res_id]["molsetup"]
+                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup)
+                if not ok:
+                    raise RuntimeError(err)
+                this_flex_pdbqt, flex_atom_count = cls.adapt_pdbqt_for_autodock4_flexres(
+                    this_flex_pdbqt, 
+                    resname,
+                    chain,
+                    resnum,
+                    skip_rename_ca_cb=True,
+                    atom_count=flex_atom_count)
+                flex_pdbqt_string += this_flex_pdbqt
+        return rigid_pdbqt_string, flex_pdbqt_string
 
     @classmethod
     def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
@@ -461,7 +481,7 @@ class PDBQTWriterLegacy():
         return remarks
 
     @staticmethod
-    def adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num):
+    def adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num, skip_rename_ca_cb=False, atom_count=None):
         """ adapt pdbqt_string to be compatible with AutoDock4 requirements:
              - first and second atoms named CA and CB
              - write BEGIN_RES / END_RES
@@ -476,13 +496,22 @@ class PDBQTWriterLegacy():
             if line.startswith("TORSDOF"):
                 continue
             if line.startswith("ATOM"):
-                atom_number+=1
-                if atom_number == 1:
-                    line = line[:13] + 'CA' + line[15:]
-                elif atom_number == 2:
-                    line = line[:13] + 'CB' + line[15:]
+                if not skip_rename_ca_cb:
+                    atom_number+=1
+                    if atom_number == 1:
+                        line = line[:13] + 'CA' + line[15:]
+                    elif atom_number == 2:
+                        line = line[:13] + 'CB' + line[15:]
+                if atom_count is not None:
+                    atom_count += 1
+                    n = "%5d" % atom_count
+                    n = n[:5]
+                    line = line[:6] + n + line[11:]
                 new_string += line + linesep
                 continue
             new_string += line + linesep
         new_string += "END_RES %s %s %s" % (res, chain, num) + linesep
-        return new_string
+        if atom_count is None:
+            return new_string # just keeping backwards compatibility
+        else:
+            return new_string, atom_count

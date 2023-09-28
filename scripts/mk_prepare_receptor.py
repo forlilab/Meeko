@@ -8,6 +8,7 @@ import pathlib
 import sys
 
 from meeko import PDBQTReceptor
+from meeko import MoleculePreparation
 from meeko import MoleculeSetup
 from meeko import PDBQTWriterLegacy
 from meeko import LinkedRDKitChorizo
@@ -116,10 +117,12 @@ def check(success, error_msg):
 def get_args():
     parser = TalkativeParser()
     parser.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
-    parser.add_argument('--pdbqt', help="keeps existing charges and types")
+    #parser.add_argument('--pdbqt', help="keeps existing charges and types")
     parser.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
     parser.add_argument('-n', '--rename_residues',
                         help="e.g. '{\"A:HIS:323\":\"A:HID:323\"}'")
+    parser.add_argument(      '--no_ter',
+                        help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
     parser.add_argument('-f', '--flexres', action="append", default=[],
                         help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
     parser.add_argument('-r', '--reactive_flexres', action="append", default=[],
@@ -141,8 +144,10 @@ def get_args():
     parser.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
     args = parser.parse_args()
 
-    if (args.pdb is None) == (args.pdbqt is None):
-        msg = "need either --pdb or --pdbqt"
+    #if (args.pdb is None) == (args.pdbqt is None):
+        #msg = "need either --pdb or --pdbqt"
+    if args.pdb is None:
+        msg = "need --pdb"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
     if (args.box_center is not None) and args.box_center_on_reactive_res:
@@ -267,24 +272,31 @@ if args.pdb is not None:
         res_swaps = json.loads(args.rename_residues)
     else:
         res_swaps = None
-    receptor = LinkedRDKitChorizo(args.pdb, res_swaps_dict=res_swaps)
-    molsetup = MoleculeSetup.from_linked_rdkit_chorizo(receptor)
-    for atom_index, atom_type in molsetup.atom_type.items():
-        if atom_type == "H":
-            molsetup.atom_ignore[atom_index] = True
-    pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
+    if args.no_ter is not None:
+        no_ter = json.loads(args.no_ter)
+    else:
+        no_ter = None
+    mk_prep = MoleculePreparation() # TODO user mk_config.json
+    chorizo = LinkedRDKitChorizo(args.pdb, res_swaps_dict=res_swaps, no_ter=no_ter)
+    for res_id in all_flexres:
+        res = "%s:%s:%d" % res_id
+        chorizo.res_to_molsetup(res, mk_prep, cut_at_calpha=True)
+    rigid_pdbqt, flex_pdbqt = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
+    #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
     #ok, err = receptor.assign_types_charges()
     #check(ok, err)
-else:
-    receptor = PDBQTReceptor(args.pdbqt)
+#else:
+#    receptor = PDBQTReceptor(args.pdbqt)
+#    pdbqt, ok, err = receptor.write_pdbqt_string(flexres=all_flexres)
+#    check(ok, err)
 
-raise
+pdbqt = {
+    "rigid": rigid_pdbqt,
+    "flex": flex_pdbqt,
+}
 
 any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
                       "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]
-
-pdbqt, ok, err = receptor.write_pdbqt_string(flexres=all_flexres)
-check(ok, err)
 
 outpath = pathlib.Path(args.output_filename)
 
@@ -297,14 +309,15 @@ if len(all_flexres) == 0:
 else:
     all_flex_pdbqt = ""
     reactive_flexres_count = 0
-    for res_id, flexres_pdbqt in pdbqt["flex"].items():
-        if res_id in reactive_flexres:
-            reactive_flexres_count += 1
-            prefix_atype = "%d" % reactive_flexres_count
-            resname = res_id[1]
-            reactive_atom = reactive_flexres[res_id]
-            flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
-        all_flex_pdbqt += flexres_pdbqt
+    #for res_id, flexres_pdbqt in pdbqt["flex"].items():
+    #    if res_id in reactive_flexres:
+    #        reactive_flexres_count += 1
+    #        prefix_atype = "%d" % reactive_flexres_count
+    #        resname = res_id[1]
+    #        reactive_atom = reactive_flexres[res_id]
+    #        flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
+    #    all_flex_pdbqt += flexres_pdbqt
+    all_flex_pdbqt = pdbqt["flex"]
 
     suffix = outpath.suffix
     if outpath.suffix == "":

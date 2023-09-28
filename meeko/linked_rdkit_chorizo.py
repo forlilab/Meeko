@@ -137,14 +137,12 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
 
     surplus = net_charge - sum(charges_dec)
     surplus_int = _snap_to_int(10**decimals * surplus)
-    print(surplus, surplus_int)
 
     if surplus_int == 0:
         return charges_dec
 
     weights = [abs(q) for q in q_list]
     surplus_int_splits = divide_int_gracefully(surplus_int, weights)
-    print("->", surplus_int_splits)
     for i, increment in enumerate(surplus_int_splits):
         charges_dec[i] += 10**-decimals * increment
 
