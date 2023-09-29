@@ -154,6 +154,7 @@ class LinkedRDKitChorizo:
     nterm_pad_smiles = "CC=O"
     backbone_smarts = "[C:1](=[O:2])[C:3][N:4]" # TODO make sure it matches res only once
     backbone = Chem.MolFromSmarts(backbone_smarts)
+    backboneh = Chem.MolFromSmarts("[C:1](=[O:2])[C:3][N:4][#1]")
     nterm_pad_backbone_smarts_idxs = (0, 2, 1)
     cterm_pad_backbone_smarts_idxs = (2, 3)
     rxn_cterm_pad = rdChemReactions.ReactionFromSmarts(f"[N:5][C:6].{backbone_smarts}>>[C:6][N:5]{backbone_smarts}")
@@ -275,7 +276,7 @@ class LinkedRDKitChorizo:
 
     def res_to_molsetup(self, res, mk_prep, cut_at_calpha=False):
         padded_mol, is_res_atom, mapidx = self.get_padded_mol(res)
-        bb_matches = padded_mol.GetSubstructMatches(self.backbone)
+        bb_matches = padded_mol.GetSubstructMatches(self.backboneh)
         if len(bb_matches) != 1:
             raise RuntimeError("expected 1 backbone match, got %d" % (len(bb_matches)))
         c_alpha = bb_matches[0][2]
@@ -283,6 +284,7 @@ class LinkedRDKitChorizo:
         if len(molsetups) > 1:
             raise NotImplementedError("multiple molsetups not yet implemented for flexres")
         molsetup = molsetups[0]
+        ignored_in_molsetup = []
         for atom_index in molsetup.atom_ignore:
             if atom_index < len(is_res_atom):
                 is_res = is_res_atom[atom_index] # Hs from Chem.AddHs beyond length of is_res_atom
@@ -292,7 +294,8 @@ class LinkedRDKitChorizo:
             ignore = not is_res
             ignore |= cut_at_calpha and (atom_index != c_alpha) and (atom_index in bb_matches[0])
             molsetup.atom_ignore[atom_index] |= ignore
-
+            if ignore and is_res:
+                ignored_in_molsetup.append(mapidx[atom_index])
         # rectify charges to sum to integer (because of padding)
         net_charge = sum([atom.GetFormalCharge() for atom in self.residues[res]["resmol"].GetAtoms()])
         not_ignored_idxs = []
@@ -306,6 +309,7 @@ class LinkedRDKitChorizo:
             molsetup.charge[j] = charges[i]
         self.residues[res]["molsetup"] = molsetup
         self.residues[res]["molsetup_mapidx"] = mapidx
+        self.residues[res]["molsetup_ignored"] = ignored_in_molsetup
         return
         
 
@@ -380,14 +384,15 @@ class LinkedRDKitChorizo:
                     if full_resid == current_res:
                         residues[full_resid]['pdb block'] += line
                     else:
-                        if current_res:
+                        if current_res is not None:
                             residues[current_res]['next res'] = full_resid
                         residues[full_resid] = {}
                         residues[full_resid]['pdb block'] = line
                         residues[full_resid]['previous res'] = current_res
                         current_res = full_resid
                         res_list.append(full_resid)
-            residues[current_res]['next res'] = None
+            if current_res is not None:
+                residues[current_res]['next res'] = None
         return residues, res_list
     
     def _rename_residues(self, resdict):

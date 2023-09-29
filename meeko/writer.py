@@ -327,7 +327,8 @@ class PDBQTWriterLegacy():
             chain, resname, resnum = res_id.split(":")
             resnum = int(resnum)
             molsetup_mapidx = chorizo.residues[res_id].get("molsetup_mapidx", {})
-            flexres_idxs = [j for (i, j) in molsetup_mapidx.items()]
+            molsetup_ignored = chorizo.residues[res_id].get("molsetup_ignored", ())
+            flexres_idxs = [j for (i, j) in molsetup_mapidx.items() if j not in molsetup_ignored]
             for atom in resmol.GetAtoms():
                 if atom.GetIdx() in flexres_idxs:
                     continue
@@ -344,7 +345,7 @@ class PDBQTWriterLegacy():
             if "molsetup" in chorizo.residues[res_id]:
                 chain, resname, resnum = res_id.split(":")
                 molsetup = chorizo.residues[res_id]["molsetup"]
-                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup)
+                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup, remove_smiles=True)
                 if not ok:
                     raise RuntimeError(err)
                 this_flex_pdbqt, flex_atom_count = cls.adapt_pdbqt_for_autodock4_flexres(

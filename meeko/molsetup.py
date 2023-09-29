@@ -736,19 +736,42 @@ class RDKitMoleculeSetup(MoleculeSetup):
             and the mapping between atom indices in smiles and self.mol
         """
 
+        ### # support sidechains in which not all real atoms are included in PDBQT
+        ### ignored = []
+        ### for atom in self.mol.GetAtoms():
+        ###     index = atom.GetIdx()
+        ###     if self.atom_ignore[index]:
+        ###         ignored.append(index)
+        ### if len(ignored) > 0: # e.g. sidechain padded with amides
+        ###     mol_no_ignore = Chem.EditableMol(self.mol)
+        ###     for index in sorted(ignored, reverse=True):
+        ###         mol_no_ignore.RemoveAtom(index)
+        ###     # remove dangling Hs
+        ###     dangling_hs = []
+        ###     for atom in mol_no_ignore.GetMol().GetAtoms():
+        ###         if atom.GetAtomicNum() == 1:
+        ###             if len(atom.GetNeighbors()) == 0:
+        ###                 dangling_hs.append(atom.GetIdx())
+        ###     for index in sorted(dangling_hs, reverse=True):
+        ###         mol_no_ignore.RemoveAtom(index)
+        ###     mol_no_ignore = mol_no_ignore.GetMol()
+        ###     Chem.SanitizeMol(mol_no_ignore) 
+        ### else:
+        mol_no_ignore = self.mol
+
         # 3D SDF files written by other toolkits (OEChem, ChemAxon)
         # seem to not include the chiral flag in the bonds block, only in
         # the atoms block. RDKit ignores the atoms chiral flag as per the
         # spec. When reading SDF (e.g. from PubChem/PDB),
         # we may need to have RDKit assign stereo from coordinates, see:
         # https://sourceforge.net/p/rdkit/mailman/message/34399371/
-        mol_noH = Chem.RemoveHs(self.mol) # imines (=NH) may become chiral
+        mol_noH = Chem.RemoveHs(mol_no_ignore) # imines (=NH) may become chiral
         # stereo imines [H]/N=C keep [H] after RemoveHs()
         # H isotopes also kept after RemoveHs()
         atomic_num_mol_noH = [atom.GetAtomicNum() for atom in mol_noH.GetAtoms()]
         noH_to_H = []
         parents_of_hs = {}
-        for (index, atom) in enumerate(self.mol.GetAtoms()):
+        for (index, atom) in enumerate(mol_no_ignore.GetAtoms()):
             if atom.GetAtomicNum() == 1: continue
             for i in range(len(noH_to_H), len(atomic_num_mol_noH)):
                 if atomic_num_mol_noH[i] > 1:
@@ -782,7 +805,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
             hs_by_parent.setdefault(pidx, [])
             hs_by_parent[pidx].append(hidx)
         for pidx, hidxs in hs_by_parent.items():
-            siblings_of_h = [atom for atom in self.mol.GetAtomWithIdx(noH_to_H[pidx]).GetNeighbors() if atom.GetAtomicNum() == 1]
+            siblings_of_h = [atom for atom in mol_no_ignore.GetAtomWithIdx(noH_to_H[pidx]).GetNeighbors() if atom.GetAtomicNum() == 1]
             sortidx = [i for i, j in sorted(list(enumerate(siblings_of_h)), key=lambda x: x[1].GetIdx())]
             if len(hidxs) == len(siblings_of_h):  
                 # This is the easy case, just map H to each other in the order they appear
@@ -803,7 +826,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
                 for hidx, i in zip(hidxs, matches):
                     noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
             else:
-                raise RuntimeError("nr of Hs in mol_noH bonded to an atom exceeds nr of Hs in self.mol")
+                raise RuntimeError("nr of Hs in mol_noH bonded to an atom exceeds nr of Hs in mol_no_ignore")
 
         smiles = Chem.MolToSmiles(mol_noH)
         order_string = mol_noH.GetProp("_smilesAtomOutputOrder")
