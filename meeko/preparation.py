@@ -227,6 +227,9 @@ class MoleculePreparation:
         p = cls(**config)
         return p
 
+    def __call__(self, *args):
+        return self.prepare(*args)
+
     def prepare(self,
             mol,
             root_atom_index=None,

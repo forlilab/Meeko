@@ -161,14 +161,17 @@ class LinkedRDKitChorizo:
     rxn_nterm_pad = rdChemReactions.ReactionFromSmarts(f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
 
 
-    def __init__(self, pdb_path, params=chorizo_params, res_swaps_dict=None, no_ter=None):
+    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, no_ter=None, del_res=None):
         self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
         self.no_ter = self._check_no_ter(no_ter, self.res_list)
-        if res_swaps_dict is not None:
-            self._rename_residues(res_swaps_dict)
+        self._check_del_res(del_res, self.res_list)
+        self.del_res = del_res
+        self.mutate_res_dict = mutate_res_dict
+        if mutate_res_dict is not None:
+            self._rename_residues(mutate_res_dict)
         self.res_templates = self._load_params(params)
         self.atoms = []
-        self.removed_residues = self.parameterize_residues(self.no_ter)
+        self.removed_residues = self.parameterize_residues(self.no_ter, del_res)
         print("Removed residues:")
         print(self.print_residues_by_resname(self.removed_residues))
         to_remove = []
@@ -178,6 +181,17 @@ class LinkedRDKitChorizo:
         for i in sorted(to_remove, reverse=True):
             self.res_list.pop(i)
         return
+
+    
+    @staticmethod
+    def _check_del_res(query_res, existing_res):
+        missing = set()
+        for res in query_res:
+            if res not in existing_res:
+                missing.add(res)
+        if len(missing) > 0:
+            msg = "del_res not found: " + " ".join(missing)
+            raise ValueError(msg)
 
 
     @staticmethod
@@ -200,7 +214,7 @@ class LinkedRDKitChorizo:
                     output[resn].append("N")
                 else:
                     raise ValueError("no_ter value was %s, expected %s or %s" % (value, allowed_c, allowed_n))
-            return output
+        return output
 
 
     def get_padded_mol(self, resn):
@@ -410,9 +424,11 @@ class LinkedRDKitChorizo:
             i = self.res_list.index(res)
             self.res_list[i] = resdict[res]
 
-    def parameterize_residues(self, no_ter):
+    def parameterize_residues(self, no_ter, del_res):
         removed_residues = []
         for res in self.residues:
+            if res in del_res:
+                continue
             exclude_idxs = []
             err = ''
 
@@ -424,10 +440,12 @@ class LinkedRDKitChorizo:
                 #self.residues.pop(res)
                 removed_residues.append(res)
                 continue
-            if self.residues[res]['next res'] == None:
+            next_res = self.residues[res]['next res']
+            prev_res = self.residues[res]['previous res']
+            if next_res == None or next_res in del_res:
                 if (res not in no_ter) or ("C" not in no_ter[res]):
                     resn = 'C' + resn
-            if self.residues[res]['previous res'] == None:
+            if prev_res == None or prev_res in del_res:
                 if (res not in no_ter) or ("N" not in no_ter[res]):
                     resn = 'N' + resn
 
@@ -490,7 +508,7 @@ class LinkedRDKitChorizo:
 
             if err:
                 print(err)
-                with Chem.SDWriter(f'{resn}{res.split(":")[2]}.sdf') as w:
+                with Chem.SDWriter(f'removed-{resn}{res.split(":")[2]}.sdf') as w:
                     w.write(pdbmol)
                     w.write(resmol)
         return removed_residues
@@ -507,3 +525,22 @@ class LinkedRDKitChorizo:
                 for line in pdb_block.split('\n'):
                     if line.startswith('HETATM'):
                         fout.write(line+'\n')
+
+    def get_atom_params(self):
+        atom_params = {}
+        counter_atoms = 0
+        for res_id in self.res_list:
+            if res_id in self.del_res:
+                continue
+            resmol = self.residues[res_id]["resmol"]
+            for atom in resmol.GetAtoms():
+                props = atom.GetPropsAsDict()
+                for key, value in props.items():
+                    if key.startswith("_"):
+                        continue
+                    atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
+                    atom_params[key].append(value)
+                counter_atoms += 1
+                for key in set(atom_params).difference(props): # <key> missing in <props>
+                    atom_params[key].append(None) # fill in incomplete "row"
+        return atom_params

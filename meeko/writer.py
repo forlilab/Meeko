@@ -16,6 +16,105 @@ from .utils.rdkitutils import mini_periodic_table
 
 linesep = pathlib.os.linesep
 
+def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
+    if len(molsetup.restraints):
+        raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
+    offchrg_type = "OFFCHRG"
+    offchrg_by_parent = {}
+    for i in molsetup.atom_pseudo:
+        if molsetup.atom_type[i] == offchrg_type:
+            neigh = molsetup.get_neigh(i)
+            if len(neigh) != 1:
+                raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
+                    i, json.dumps(neigh)))
+            if neigh[0] in offchrg_by_parent:
+                raise RuntimeError("atom %d has more than one offsite charge" % neigh[0])
+            offchrg_by_parent[neigh[0]] = i
+    output_indices_start_at_one = True
+    index_start = int(output_indices_start_at_one)
+    positions_block = ""
+    charges = []
+    offchrg_by_oid_parent = {}
+    elements = []
+    n_real_atoms = molsetup.atom_true_count
+    n_fake_atoms = len(molsetup.atom_pseudo)
+    indexmap = {} # molsetup: oid
+    count_oids = 0
+    for index in range(n_real_atoms):
+        if molsetup.atom_ignore[index]:
+            continue
+        if molsetup.atom_type[index] == offchrg_type:
+            continue # handled by offchrg_by_parent
+        oid_id = count_oids + index_start
+        indexmap[index] = count_oids
+        x, y, z = molsetup.coord[index]
+        positions_block += "position.%d = (%f,%f,%f)\n" % (oid_id, x, y, z)
+        charges.append(molsetup.charge[index])
+        if index in offchrg_by_parent:
+            index_pseudo = offchrg_by_parent[index]
+            xq_abs, yq_abs, zq_abs = molsetup.coord[index_pseudo]
+            xq_rel = xq_abs - x
+            yq_rel = yq_abs - y
+            zq_rel = zq_abs - z
+            offchrg_by_oid_parent[count_oids] = {
+                "q": molsetup.charge[index_pseudo],
+                "xyz": (xq_rel, yq_rel, zq_rel),
+            }
+        count_oids += 1
+        element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
+        elements.append(element)
+    
+    tmp = []
+    for index in range(len(charges)):
+        if index in offchrg_by_oid_parent:
+            tmplist = ["%f" % charges[index], "0.0", "0.0" ,"0.0"] # xyz relative to current elemtn
+            tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
+            tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
+            tmp.append(",".join(tmplist))
+        else:
+            tmp.append("%f" % charges[index])
+    charges_line = "import_charges = {%s}\n" % ("|".join(tmp))
+    elements_line = "elements = %s\n" % (",".join(elements))
+
+    bonds = [[] for _ in range(count_oids)]
+    bond_orders = [[] for _ in range(count_oids)]
+    static_links = []
+    for i, j in molsetup.bond.keys():
+        if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
+            continue
+        if molsetup.atom_type[i] == offchrg_type or molsetup.atom_type[j] == offchrg_type:
+            continue
+        oid_i = indexmap[i]
+        oid_j = indexmap[j]
+        bonds[oid_i].append("%d" % (oid_j+index_start))
+        bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
+        if not molsetup.bond[(i, j)]["rotatable"]:
+            static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
+    bonds = [",".join(j_list) for j_list in bonds]
+    bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
+    bond_orders = [",".join(orders) for orders in bond_orders]
+    bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
+    staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
+
+
+    output = ""
+    output += "[Group: %s]\n" % name
+    output += positions_block
+    output += charges_line
+    output += elements_line
+    output += bonds_line
+    output += bondorder_line
+    output += staticlinks_line
+    output += "number = 1\t\t// can only be 1 for the sandbox currently (but any number for classical MC)\n"
+    output += "group_dipole = 1\t// not relevant for sandbox but classical MC\n"
+    output += "rand_independent=0\t// not relevant for sandbox but classical MC\n"
+    output += "bond_range = 4\t\t// bond range AD default\n"
+    output += "\n"
+    output += get_dihedrals_block(molsetup, indexmap, name)
+
+    return output, indexmap
+
+
 def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     if len(molsetup.restraints):
         raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
@@ -322,6 +421,8 @@ class PDBQTWriterLegacy():
         atom_count = 0
         flex_atom_count = 0
         for res_id in chorizo.res_list:
+            if res_id in chorizo.del_res:
+                continue
             resmol = chorizo.residues[res_id]["resmol"]
             positions = resmol.GetConformer().GetPositions()
             chain, resname, resnum = res_id.split(":")
