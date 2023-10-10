@@ -36,7 +36,7 @@ setup(
            #"scripts/mapwater.py",
            #"scripts/wet.py"],
             ],
-    package_data={"meeko" : ["data/*"]},
+    package_data={"meeko" : ["data/*", "data/params/*"]},
     data_files=[("", ["README.md", "LICENSE"]),
                 ("scripts", find_files("scripts"))],
     include_package_data=True,
