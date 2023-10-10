@@ -129,7 +129,7 @@ def get_args():
     parser.add_argument('-p', '--chorizo_pickle') 
     parser.add_argument('-n', '--mutate_residues',
                         help="e.g. '{\"A:HIS:323\":\"A:HID:323\"}'")
-    parser.add_argument(      '--no_ter',
+    parser.add_argument(      '--termini',
                         help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
     parser.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
     parser.add_argument(      '--chorizo_config', help="[.json]")
@@ -279,24 +279,23 @@ if len(reactive_flexres) != 1 and args.box_center_on_reactive_res:
 
 if args.pdb is not None:
     mutate_res_dict = {}
-    no_ter = {}
+    termini = {}
     del_res = []
     if args.chorizo_config is not None:
         with open(args.chorizo_config) as f:
             chorizo_config = json.load(f)
-        print(chorizo_config)
         mutate_res_dict.update(chorizo_config.get("mutate_res_dict", {}))
-        no_ter.update(chorizo_config.get("no_ter", {}))
+        termini.update(chorizo_config.get("termini", {}))
         del_res.extend(chorizo_config.get("del_res", []))
     # direct command line options override config
     if args.mutate_residues is not None:
         mutate_res_dict.update(json.loads(args.mutate_residues))
-    if args.no_ter is not None:
-        no_ter.update(json.loads(args.no_ter))
+    if args.termini is not None:
+        termini.update(json.loads(args.termini))
     if args.del_res is not None:
         del_res.update(json.loads(args.del_res))
     mk_prep = MoleculePreparation() # TODO user mk_config.json
-    chorizo = LinkedRDKitChorizo(args.pdb, mutate_res_dict=mutate_res_dict, no_ter=no_ter, del_res=del_res)
+    chorizo = LinkedRDKitChorizo(args.pdb, mutate_res_dict=mutate_res_dict, termini=termini, del_res=del_res)
     for res_id in all_flexres:
         res = "%s:%s:%d" % res_id
         chorizo.res_to_molsetup(res, mk_prep, cut_at_calpha=True)

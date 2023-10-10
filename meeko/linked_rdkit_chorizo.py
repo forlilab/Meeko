@@ -9,6 +9,8 @@ from .molsetup import RDKitMoleculeSetup
 
 from misctools import react_and_map
 
+import numpy as np
+
 pkg_dir = pathlib.Path(__file__).parents[0]
 with open(pkg_dir / "data" / "prot_res_params.json") as f:
     chorizo_params = json.load(f)
@@ -161,19 +163,39 @@ class LinkedRDKitChorizo:
     rxn_nterm_pad = rdChemReactions.ReactionFromSmarts(f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
 
 
-    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, no_ter=None, del_res=None):
+    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, termini=None, del_res=None):
+        suggested_mutations = {}
         self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
-        self.no_ter = self._check_no_ter(no_ter, self.res_list)
+        self.termini = self._check_termini(termini, self.res_list)
         self._check_del_res(del_res, self.res_list)
         self.del_res = del_res
         self.mutate_res_dict = mutate_res_dict
         if mutate_res_dict is not None:
             self._rename_residues(mutate_res_dict)
         self.res_templates = self._load_params(params)
-        self.atoms = []
-        self.removed_residues = self.parameterize_residues(self.no_ter, del_res)
-        print("Removed residues:")
-        print(self.print_residues_by_resname(self.removed_residues))
+
+        self.removed_residues = self.parameterize_residues(self.termini, del_res)
+
+        self.disulfide_bridges = self._find_disulfide_bridges()
+        for cys_1, cys_2 in self.disulfide_bridges:
+            if cys_1 != "CYX" or cys_2 != "CYX":
+                print(f"Likely disulfide bridge between {cys_1} and {cys_2}")
+            if cys_1 != "CYX":
+                chain, resname, resnum = cys_1.split(":")
+                suggested_mutations[cys_1] = f"{chain}:CYX:{resnum}"
+            if cys_2 != "CYX":
+                chain, resname, resnum = cys_2.split(":")
+                suggested_mutations[cys_2] = f"{chain}:CYX:{resnum}"
+
+        if len(self.removed_residues) > 0:
+            for res in self.removed_residues:
+                suggested_mutations[res] = res
+            print("The following mutations are suggested. For HIS, mutate to HID, HIE, or HIP.")
+            print(json.dumps(suggested_mutations, indent=2))
+            msg = "The following residues could not be processed:" + pathlib.os.linesep
+            msg += self.print_residues_by_resname(self.removed_residues)
+            raise RuntimeError(msg)
+
         to_remove = []
         for res_id in self.removed_residues:
             i = self.res_list.index(res_id)
@@ -181,6 +203,28 @@ class LinkedRDKitChorizo:
         for i in sorted(to_remove, reverse=True):
             self.res_list.pop(i)
         return
+
+    def _find_disulfide_bridges(self):
+        cys_list = {}
+        cutoff = 2.5 # angstrom
+        bridges = []
+        for res in self.res_list:
+            resname = res.split(":")[1]
+            if resname in ["CYS", "CYX", "CYM"]: # TODO move "protected resnames" next to residue params they are associated with
+                resmol = self.residues[res]["resmol"]
+                molxyz = resmol.GetConformer().GetPositions()
+                s_xyz = None
+                for atom in resmol.GetAtoms():
+                    if atom.GetAtomicNum() == 16:
+                        s_xyz = molxyz[atom.GetIdx()]
+                for cys, other_s_xyz in cys_list.items():
+                    v = s_xyz - other_s_xyz
+                    dist = np.sqrt(np.dot(v, v))
+                    if dist < cutoff:
+                        bridges.append((res, cys))
+                cys_list[res] = s_xyz
+        return bridges
+
 
     
     @staticmethod
@@ -195,15 +239,15 @@ class LinkedRDKitChorizo:
 
 
     @staticmethod
-    def _check_no_ter(no_ter, res_list):
+    def _check_termini(termini, res_list):
         allowed_c = ("cterm", "c-term", "c")
         allowed_n = ("nterm", "n-term", "n")
         output = {}
-        if no_ter is None:
+        if termini is None:
             return output
-        for (resn, values) in no_ter.items():
+        for (resn, values) in termini.items():
             if resn not in res_list:
-                raise ValueError("%s in no_ter not found" % resn)
+                raise ValueError("%s in termini not found" % resn)
             output[resn] = []
             if type(values) == str:
                 values = (values,)
@@ -213,12 +257,13 @@ class LinkedRDKitChorizo:
                 elif value.lower() in allowed_n:
                     output[resn].append("N")
                 else:
-                    raise ValueError("no_ter value was %s, expected %s or %s" % (value, allowed_c, allowed_n))
+                    raise ValueError("termini value was %s, expected %s or %s" % (value, allowed_c, allowed_n))
         return output
 
 
     def get_padded_mol(self, resn):
         #TODO disulfides, ACE, NME
+        # TODO double check next/previous res logic for "blunt" ending
         def _join(mol, pad_mol, pad_smarts_mol, rxn, is_res_atom, mapidx, adjacent_mol=None, pad_smarts_idxs=None):
             pad_matches = adjacent_mol.GetSubstructMatches(pad_smarts_mol)
             if len(pad_matches) != 1:
@@ -424,13 +469,13 @@ class LinkedRDKitChorizo:
             i = self.res_list.index(res)
             self.res_list[i] = resdict[res]
 
-    def parameterize_residues(self, no_ter, del_res):
+    def parameterize_residues(self, termini, del_res):
         removed_residues = []
         for res in self.residues:
             if res in del_res:
                 continue
             exclude_idxs = []
-            err = ''
+            err = ""
 
             pdbmol = Chem.MolFromPDBBlock(self.residues[res]['pdb block'], removeHs=False)
             
@@ -442,12 +487,14 @@ class LinkedRDKitChorizo:
                 continue
             next_res = self.residues[res]['next res']
             prev_res = self.residues[res]['previous res']
-            if next_res == None or next_res in del_res:
-                if (res not in no_ter) or ("C" not in no_ter[res]):
-                    resn = 'C' + resn
-            if prev_res == None or prev_res in del_res:
-                if (res not in no_ter) or ("N" not in no_ter[res]):
-                    resn = 'N' + resn
+            if termini.get(res, None) == "C":
+                if (next_res is not None) and (next_res not in del_res):
+                    raise ValueError("Trying to C-term {res} but {next_res=} exists")
+                resn = 'C' + resn
+            elif termini.get(res, None) == "N":
+                if (prev_res is not None) and (prev_res not in del_res):
+                    raise ValueError("Trying to N-term {res} but {prev_res=} exists")
+                resn = 'N' + resn
 
             # TODO add to preprocessing to save time
             # Create mol object and map between the pdb and residue template
