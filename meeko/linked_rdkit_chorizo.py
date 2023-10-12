@@ -172,9 +172,19 @@ class LinkedRDKitChorizo:
         self.mutate_res_dict = mutate_res_dict
         if mutate_res_dict is not None:
             self._rename_residues(mutate_res_dict)
-        self.res_templates = self._load_params(params)
+        self.res_templates, self.ambiguous = self._load_params(params)
 
-        self.removed_residues = self.parameterize_residues(self.termini, del_res)
+        self.removed_residues, ambiguous_chosen = self.parameterize_residues(self.termini, del_res, self.ambiguous)
+        suggested_mutations.update(ambiguous_chosen)
+
+        if len(self.removed_residues) > 0:
+            for res in self.removed_residues:
+                suggested_mutations[res] = res
+            print("The following mutations are suggested. For HIS, mutate to HID, HIE, or HIP.")
+            print(json.dumps(suggested_mutations, indent=2))
+            msg = "The following residues could not be processed:" + pathlib.os.linesep
+            msg += self.print_residues_by_resname(self.removed_residues)
+            raise RuntimeError(msg)
 
         self.disulfide_bridges = self._find_disulfide_bridges()
         for cys_1, cys_2 in self.disulfide_bridges:
@@ -187,21 +197,13 @@ class LinkedRDKitChorizo:
                 chain, resname, resnum = cys_2.split(":")
                 suggested_mutations[cys_2] = f"{chain}:CYX:{resnum}"
 
-        if len(self.removed_residues) > 0:
-            for res in self.removed_residues:
-                suggested_mutations[res] = res
-            print("The following mutations are suggested. For HIS, mutate to HID, HIE, or HIP.")
-            print(json.dumps(suggested_mutations, indent=2))
-            msg = "The following residues could not be processed:" + pathlib.os.linesep
-            msg += self.print_residues_by_resname(self.removed_residues)
-            raise RuntimeError(msg)
-
         to_remove = []
         for res_id in self.removed_residues:
             i = self.res_list.index(res_id)
             to_remove.append(i)
         for i in sorted(to_remove, reverse=True):
             self.res_list.pop(i)
+        self.suggested_mutations = suggested_mutations
         return
 
     def _find_disulfide_bridges(self):
@@ -224,7 +226,6 @@ class LinkedRDKitChorizo:
                         bridges.append((res, cys))
                 cys_list[res] = s_xyz
         return bridges
-
 
     
     @staticmethod
@@ -409,6 +410,7 @@ class LinkedRDKitChorizo:
 
         res_templates = {}
         for resn in params:
+            if resn == "ambiguous": continue
             resmol = Chem.MolFromSmiles(params[resn]['smiles'], ps)
             for idx, atom in enumerate(resmol.GetAtoms()):
                 for prop, (propname, type) in desired_props.items():
@@ -420,7 +422,8 @@ class LinkedRDKitChorizo:
                     if type == str:
                         atom.SetProp(propname, params[resn][prop][idx])
             res_templates[resn] = resmol
-        return res_templates
+        ambiguous = params["ambiguous"]
+        return res_templates, ambiguous
     
     @staticmethod
     def _pdb_to_resblocks(pdb_path):
@@ -469,8 +472,28 @@ class LinkedRDKitChorizo:
             i = self.res_list.index(res)
             self.res_list[i] = resdict[res]
 
-    def parameterize_residues(self, termini, del_res):
+    @staticmethod
+    def add_termini(resn, res, termini, residues):
+        next_res = residues[res]['next res']
+        prev_res = residues[res]['previous res']
+        if termini.get(res, None) == "C":
+            if (next_res is not None) and (next_res not in del_res):
+                raise ValueError("Trying to C-term {res} but {next_res=} exists")
+            resn = 'C' + resn
+        elif termini.get(res, None) == "N":
+            if (prev_res is not None) and (prev_res not in del_res):
+                raise ValueError("Trying to N-term {res} but {prev_res=} exists")
+            resn = 'N' + resn
+        elif termini.get(res, None) is None:
+            resn = resn # wow, such assignment, very code
+        else:
+            # TODO verify sanity of termini earlier
+            raise ValueError("termini must be either 'C' or 'N', not %s" % termini.get(res, None))
+        return resn
+
+    def parameterize_residues(self, termini, del_res, ambiguous):
         removed_residues = []
+        ambiguous_chosen = {}
         for res in self.residues:
             if res in del_res:
                 continue
@@ -479,28 +502,42 @@ class LinkedRDKitChorizo:
 
             pdbmol = Chem.MolFromPDBBlock(self.residues[res]['pdb block'], removeHs=False)
             
-            # Check if parameters are available for a residue and rename if terminal
-            resn = res.split(':')[1]
-            if resn not in self.res_templates:
+            # Check if parameters are available for a residue
+            chain, resn, resnum = res.split(':')
+            if (resn not in self.res_templates) and (resn not in ambiguous):
                 #self.residues.pop(res)
                 removed_residues.append(res)
                 continue
-            next_res = self.residues[res]['next res']
-            prev_res = self.residues[res]['previous res']
-            if termini.get(res, None) == "C":
-                if (next_res is not None) and (next_res not in del_res):
-                    raise ValueError("Trying to C-term {res} but {next_res=} exists")
-                resn = 'C' + resn
-            elif termini.get(res, None) == "N":
-                if (prev_res is not None) and (prev_res not in del_res):
-                    raise ValueError("Trying to N-term {res} but {prev_res=} exists")
-                resn = 'N' + resn
 
-            # TODO add to preprocessing to save time
-            # Create mol object and map between the pdb and residue template
-            resmol = Chem.Mol(self.res_templates[resn])
-            n_atoms = len(resmol.GetAtoms())
-            atom_map = mapping_by_mcs(resmol, pdbmol)
+            if resn in ambiguous:
+                possible_resn = ambiguous[resn]
+            else:
+                possible_resn = [resn]
+
+            #if resn == "HIS": print("HIS ambiguous:", possible_resn)
+
+            lowest_nr_missing = 9999999
+            for resn in possible_resn:
+
+                resn = self.add_termini(resn, res, termini, self.residues) # prefix C or N if applicable
+
+                # TODO add to preprocessing to save time
+                # Create mol object and map between the pdb and residue template
+                resmol = Chem.Mol(self.res_templates[resn])
+                n_atoms = len(resmol.GetAtoms())
+                atom_map = mapping_by_mcs(resmol, pdbmol)
+                nr_missing = n_atoms - len(atom_map)
+                if nr_missing < lowest_nr_missing:
+                    best_resmol = resmol
+                    lowest_nr_missing = nr_missing
+                    best_n_atoms = n_atoms
+                    best_resn = resn
+            resmol = best_resmol
+            n_atoms = best_n_atoms
+            resn = best_resn
+            if len(possible_resn) > 1:
+                print("%9s" % res, "-->", resn, "...out of", possible_resn)
+                ambiguous_chosen[res] = f"{chain}:{resn}:{resnum}"
 
             # Transfer coordinates and info for any matched atoms
             #TODO time these functions
@@ -508,8 +545,7 @@ class LinkedRDKitChorizo:
             #EmbedMolecule(resmol)
             Chem.rdDepictor.Compute2DCoords(resmol)
             resmol.GetConformer().Set3D(True)
-            for idx in atom_map.keys():
-                pdb_idx = atom_map[idx]
+            for idx, pdb_idx in atom_map.items():
                 pdb_atom = pdbmol.GetAtomWithIdx(pdb_idx)
                 pdb_coord = pdbmol.GetConformer().GetAtomPosition(pdb_idx)
                 resmol.GetConformer().SetAtomPosition(idx, pdb_coord)
@@ -532,8 +568,8 @@ class LinkedRDKitChorizo:
             
             missing_atom_elements = set([atom[0] for atom in missing_atoms.keys()])
             if len(missing_atom_elements) > 0:
-                if missing_atom_elements != set('H'):
-                    err += f'{res=} {missing_atoms=}\n'
+                # if missing_atom_elements != set('H'):
+                #     err += f'{res=} {missing_atoms=}\n'
                 
                 resmol_h = Chem.RemoveHs(resmol)
                 resmol_h = Chem.AddHs(resmol_h, addCoords=True)
@@ -550,15 +586,15 @@ class LinkedRDKitChorizo:
             if len(missing_atoms) > 0:
                 err += f'Could not add {res=} {missing_atoms=}'
                 removed_residues.append(res)
-            
-            self.residues[res]['resmol'] = resmol
+            else:
+                self.residues[res]['resmol'] = resmol
 
             if err:
                 print(err)
                 with Chem.SDWriter(f'removed-{resn}{res.split(":")[2]}.sdf') as w:
                     w.write(pdbmol)
                     w.write(resmol)
-        return removed_residues
+        return removed_residues, ambiguous_chosen
 
 
     def write_pdb(self, outpath):
