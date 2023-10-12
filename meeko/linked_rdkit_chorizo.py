@@ -201,7 +201,7 @@ class LinkedRDKitChorizo:
 
         self.disulfide_bridges = self._find_disulfide_bridges()
         for cys_1, cys_2 in self.disulfide_bridges:
-            chain_1, resname_1, resnum_2 = cys_1.split(":")
+            chain_1, resname_1, resnum_1 = cys_1.split(":")
             chain_2, resname_2, resnum_2 = cys_2.split(":")
             if resname_1 != "CYX" or resname_2 != "CYX":
                 print(f"Likely disulfide bridge between {cys_1} and {cys_2}")

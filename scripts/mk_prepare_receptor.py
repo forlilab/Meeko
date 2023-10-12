@@ -303,6 +303,7 @@ if args.pdb is not None:
     if args.chorizo_pickle is not None:
         with open(args.chorizo_pickle, "wb") as f:
             pickle.dump(chorizo, f)
+    print(json.dumps(chorizo.suggested_mutations, indent=4))
     #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
     #ok, err = receptor.assign_types_charges()
     #check(ok, err)
