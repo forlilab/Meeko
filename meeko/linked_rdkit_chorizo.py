@@ -193,25 +193,25 @@ class LinkedRDKitChorizo:
             if resname_1 != "CYX" or resname_2 != "CYX":
                 print(f"Likely disulfide bridge between {cys_1} and {cys_2}")
             if resname_1 != "CYX":
-                suggested_mutations[cys_1] = f"{chain_1}:CYX:{resnum_1}"
+                cyx_1 = f"{chain_1}:CYX:{resnum_1}"
+                suggested_mutations[cys_1] = cyx_1
+                if (cys_1 not in mutate_res_dict) and ((cys_2 not in mutate_res_dict) or resname_2 == "CYX"):
+                    self._rename_residues({cys_1: cyx_1})
+                    resmol = self.build_resmol(cyx_1, "CYX")
+                    if resmol is not None:
+                        self.residues[cyx_1]["resmol"] = resmol
+                    else:
+                        self.removed_residues.append(cyx_1)
             if resname_2 != "CYX":
-                suggested_mutations[cys_2] = f"{chain_2}:CYX:{resnum_2}"
-            if (cys_1 not in mutate_res_dict) and ((cys_2 not in mutate_res_dict) or resname_2 == "CYX"):
-                resmol = Chem.Mol(self.res_templates["CYX"])
-                pdbmol = Chem.MolFromPDBBlock(self.residues[cys_1]["pdb block"], removeHs=False)
-                resmol = self.build_resmol(resmol, pdbmol)
-                if resmol is not None:
-                    self.residues[cys_1]["resmol"] = resmol
-                else:
-                    self.removed_residues.append(cys_1)
-            if (cys_2 not in mutate_res_dict) and ((cys_1 not in mutate_res_dict) or resname_1 == "CYX"):
-                resmol = Chem.Mol(self.res_templates["CYX"])
-                pdbmol = Chem.MolFromPDBBlock(self.residues[cys_2]["pdb block"], removeHs=False)
-                resmol = self.build_resmol(resmol, pdbmol)
-                if resmol is not None:
-                    self.residues[cys_2]["resmol"] = resmol
-                else:
-                    self.removed_residues.append(cys_2)
+                cyx_2 = f"{chain_2}:CYX:{resnum_2}"
+                suggested_mutations[cys_2] = cyx_2
+                if (cys_2 not in mutate_res_dict) and ((cys_1 not in mutate_res_dict) or resname_1 == "CYX"):
+                    self._rename_residues({cys_2: cyx_2})
+                    resmol = self.build_resmol(cyx_2, "CYX")
+                    if resmol is not None:
+                        self.residues[cyx_2]["resmol"] = resmol
+                    else:
+                        self.removed_residues.append(cyx_2)
 
         to_remove = []
         for res_id in self.removed_residues:
@@ -554,19 +554,21 @@ class LinkedRDKitChorizo:
                 print("%9s" % res, "-->", resn, "...out of", possible_resn)
                 ambiguous_chosen[res] = f"{chain}:{resn}:{resnum}"
 
-            resmol = self.build_resmol(resmol, pdbmol)
+            resmol = self.build_resmol(res, resn)
             if resmol is None:
                 removed_residues.append(res)
             else:
                 self.residues[res]["resmol"] = resmol
         return removed_residues, ambiguous_chosen
 
-    @staticmethod
-    def build_resmol(resmol, pdbmol):
+    def build_resmol(self, res, resn):
         # Transfer coordinates and info for any matched atoms
         #TODO time these functions
         #TODO maybe embed in preprocessing depending on time
         #EmbedMolecule(resmol)
+
+        resmol = Chem.Mol(self.res_templates[resn])
+        pdbmol = Chem.MolFromPDBBlock(self.residues[res]["pdb block"], removeHs=False)
 
         atom_map = mapping_by_mcs(resmol, pdbmol)
         Chem.rdDepictor.Compute2DCoords(resmol) # needed?
@@ -607,7 +609,7 @@ class LinkedRDKitChorizo:
                     resmol.GetConformer().SetAtomPosition(h_idx, resmol_h.GetConformer().GetAtomPosition(h_map[h_idx]))
                     resmol.GetAtomWithIdx(h_idx).SetBoolProp('computed', True)
                     missing_atoms.pop(atom)
-
+        # TODO missing atoms from PDB? Extra PDB atoms OK currently?
         if len(missing_atoms) > 0:
             err += f'Could not add {res=} {missing_atoms=}'
             print(err)
