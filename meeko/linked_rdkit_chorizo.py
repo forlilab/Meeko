@@ -65,6 +65,19 @@ def h_coord_from_dipeptide(pdb1, pdb2):
     
     return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
 
+def h_coord_random_n_terminal(mol, debug=False):
+    mol_no_h = Chem.RemoveHs(mol)
+    for atom in mol_no_h.GetAtoms():
+        if atom.GetProp("atom_name") == "N":
+            bb_n_idx = atom.GetIdx()
+    mol_h = Chem.AddHs(mol_no_h, addCoords=True)
+    #positions = mol_h.GetConformer().GetPositions()
+    bb_n = mol_h.GetAtomWithIdx(bb_n_idx)
+    for neighbor in bb_n.GetNeighbors():
+        if neighbor.GetAtomicNum() == 1:
+            return mol_h.GetConformer().GetAtomPosition(neighbor.GetIdx())
+
+
 def _snap_to_int(value, tolerance=0.12):
     for inc in [-1, 0, 1]:
         if abs(value - int(value) - inc) <= tolerance:
@@ -513,7 +526,6 @@ class LinkedRDKitChorizo:
         for res in self.residues:
             if res in del_res:
                 continue
-            exclude_idxs = []
 
             pdbmol = Chem.MolFromPDBBlock(self.residues[res]['pdb block'], removeHs=False)
             
@@ -571,7 +583,8 @@ class LinkedRDKitChorizo:
         pdbmol = Chem.MolFromPDBBlock(self.residues[res]["pdb block"], removeHs=False)
 
         atom_map = mapping_by_mcs(resmol, pdbmol)
-        Chem.rdDepictor.Compute2DCoords(resmol) # needed?
+        #Chem.rdDepictor.Compute2DCoords(resmol)
+        resmol.AddConformer(Chem.Conformer(resmol.GetNumAtoms()))
 
         resmol.GetConformer().Set3D(True)
         for idx, pdb_idx in atom_map.items():
@@ -587,11 +600,14 @@ class LinkedRDKitChorizo:
 
         # Handle case of missing backbone amide H
         if 'H' in missing_atoms:
-            h_pos = h_coord_from_dipeptide(self.residues[res]['pdb block'], 
-                                            self.residues[self.residues[res]['previous res']]['pdb block'])
+            prev_res = self.residues[res]['previous res']
+            if prev_res is not None:
+                h_pos = h_coord_from_dipeptide(self.residues[res]['pdb block'], 
+                                                self.residues[prev_res]['pdb block'])
+            else:
+                h_pos = h_coord_random_n_terminal(resmol)
             resmol.GetConformer().SetAtomPosition(missing_atoms['H'], h_pos)
             resmol.GetAtomWithIdx(missing_atoms['H']).SetBoolProp('computed', True)
-            exclude_idxs.append(missing_atoms['H'])
             missing_atoms.pop('H')
             
         
