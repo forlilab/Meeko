@@ -188,14 +188,30 @@ class LinkedRDKitChorizo:
 
         self.disulfide_bridges = self._find_disulfide_bridges()
         for cys_1, cys_2 in self.disulfide_bridges:
-            if cys_1 != "CYX" or cys_2 != "CYX":
+            chain_1, resname_1, resnum_2 = cys_1.split(":")
+            chain_2, resname_2, resnum_2 = cys_2.split(":")
+            if resname_1 != "CYX" or resname_2 != "CYX":
                 print(f"Likely disulfide bridge between {cys_1} and {cys_2}")
-            if cys_1 != "CYX":
-                chain, resname, resnum = cys_1.split(":")
-                suggested_mutations[cys_1] = f"{chain}:CYX:{resnum}"
-            if cys_2 != "CYX":
-                chain, resname, resnum = cys_2.split(":")
-                suggested_mutations[cys_2] = f"{chain}:CYX:{resnum}"
+            if resname_1 != "CYX":
+                suggested_mutations[cys_1] = f"{chain_1}:CYX:{resnum_1}"
+            if resname_2 != "CYX":
+                suggested_mutations[cys_2] = f"{chain_2}:CYX:{resnum_2}"
+            if (cys_1 not in mutate_res_dict) and ((cys_2 not in mutate_res_dict) or resname_2 == "CYX"):
+                resmol = Chem.Mol(self.res_templates["CYX"])
+                pdbmol = Chem.MolFromPDBBlock(self.residues[cys_1]["pdb block"], removeHs=False)
+                resmol = self.build_resmol(resmol, pdbmol)
+                if resmol is not None:
+                    self.residues[cys_1]["resmol"] = resmol
+                else:
+                    self.removed_residues.append(cys_1)
+            if (cys_2 not in mutate_res_dict) and ((cys_1 not in mutate_res_dict) or resname_1 == "CYX"):
+                resmol = Chem.Mol(self.res_templates["CYX"])
+                pdbmol = Chem.MolFromPDBBlock(self.residues[cys_2]["pdb block"], removeHs=False)
+                resmol = self.build_resmol(resmol, pdbmol)
+                if resmol is not None:
+                    self.residues[cys_2]["resmol"] = resmol
+                else:
+                    self.removed_residues.append(cys_2)
 
         to_remove = []
         for res_id in self.removed_residues:
@@ -498,7 +514,6 @@ class LinkedRDKitChorizo:
             if res in del_res:
                 continue
             exclude_idxs = []
-            err = ""
 
             pdbmol = Chem.MolFromPDBBlock(self.residues[res]['pdb block'], removeHs=False)
             
@@ -539,62 +554,65 @@ class LinkedRDKitChorizo:
                 print("%9s" % res, "-->", resn, "...out of", possible_resn)
                 ambiguous_chosen[res] = f"{chain}:{resn}:{resnum}"
 
-            # Transfer coordinates and info for any matched atoms
-            #TODO time these functions
-            #TODO maybe embed in preprocessing depending on time
-            #EmbedMolecule(resmol)
-            Chem.rdDepictor.Compute2DCoords(resmol)
-            resmol.GetConformer().Set3D(True)
-            for idx, pdb_idx in atom_map.items():
-                pdb_atom = pdbmol.GetAtomWithIdx(pdb_idx)
-                pdb_coord = pdbmol.GetConformer().GetAtomPosition(pdb_idx)
-                resmol.GetConformer().SetAtomPosition(idx, pdb_coord)
-
-                resinfo = pdb_atom.GetPDBResidueInfo()
-                resmol.GetAtomWithIdx(idx).SetDoubleProp('occupancy', resinfo.GetOccupancy())
-                resmol.GetAtomWithIdx(idx).SetDoubleProp('temp_factor', resinfo.GetTempFactor())
-
-            missing_atoms = {resmol.GetAtomWithIdx(i).GetProp('atom_name'):i for i in range(n_atoms) if i not in atom_map.keys()}
-
-            # Handle case of missing backbone amide H
-            if 'H' in missing_atoms:
-                h_pos = h_coord_from_dipeptide(self.residues[res]['pdb block'], 
-                                                self.residues[self.residues[res]['previous res']]['pdb block'])
-                resmol.GetConformer().SetAtomPosition(missing_atoms['H'], h_pos)
-                resmol.GetAtomWithIdx(missing_atoms['H']).SetBoolProp('computed', True)
-                exclude_idxs.append(missing_atoms['H'])
-                missing_atoms.pop('H')
-                
-            
-            missing_atom_elements = set([atom[0] for atom in missing_atoms.keys()])
-            if len(missing_atom_elements) > 0:
-                # if missing_atom_elements != set('H'):
-                #     err += f'{res=} {missing_atoms=}\n'
-                
-                resmol_h = Chem.RemoveHs(resmol)
-                resmol_h = Chem.AddHs(resmol_h, addCoords=True)
-                h_map = mapping_by_mcs(resmol, resmol_h)
-                for atom in list(missing_atoms.keys()):
-                    if atom.startswith('H'):
-                        h_idx = missing_atoms[atom]
-                        #TODO magic function from Diogo to add H atom
-                        #TODO bring in parameterless H atom for chain breaks
-                        resmol.GetConformer().SetAtomPosition(h_idx, resmol_h.GetConformer().GetAtomPosition(h_map[h_idx]))
-                        resmol.GetAtomWithIdx(h_idx).SetBoolProp('computed', True)
-                        missing_atoms.pop(atom)
-
-            if len(missing_atoms) > 0:
-                err += f'Could not add {res=} {missing_atoms=}'
+            resmol = self.build_resmol(resmol, pdbmol)
+            if resmol is None:
                 removed_residues.append(res)
             else:
-                self.residues[res]['resmol'] = resmol
-
-            if err:
-                print(err)
-                with Chem.SDWriter(f'removed-{resn}{res.split(":")[2]}.sdf') as w:
-                    w.write(pdbmol)
-                    w.write(resmol)
+                self.residues[res]["resmol"] = resmol
         return removed_residues, ambiguous_chosen
+
+    @staticmethod
+    def build_resmol(resmol, pdbmol):
+        # Transfer coordinates and info for any matched atoms
+        #TODO time these functions
+        #TODO maybe embed in preprocessing depending on time
+        #EmbedMolecule(resmol)
+
+        atom_map = mapping_by_mcs(resmol, pdbmol)
+        Chem.rdDepictor.Compute2DCoords(resmol) # needed?
+
+        resmol.GetConformer().Set3D(True)
+        for idx, pdb_idx in atom_map.items():
+            pdb_atom = pdbmol.GetAtomWithIdx(pdb_idx)
+            pdb_coord = pdbmol.GetConformer().GetAtomPosition(pdb_idx)
+            resmol.GetConformer().SetAtomPosition(idx, pdb_coord)
+
+            resinfo = pdb_atom.GetPDBResidueInfo()
+            resmol.GetAtomWithIdx(idx).SetDoubleProp('occupancy', resinfo.GetOccupancy())
+            resmol.GetAtomWithIdx(idx).SetDoubleProp('temp_factor', resinfo.GetTempFactor())
+
+        missing_atoms = {resmol.GetAtomWithIdx(i).GetProp('atom_name'):i for i in range(resmol.GetNumAtoms()) if i not in atom_map.keys()}
+
+        # Handle case of missing backbone amide H
+        if 'H' in missing_atoms:
+            h_pos = h_coord_from_dipeptide(self.residues[res]['pdb block'], 
+                                            self.residues[self.residues[res]['previous res']]['pdb block'])
+            resmol.GetConformer().SetAtomPosition(missing_atoms['H'], h_pos)
+            resmol.GetAtomWithIdx(missing_atoms['H']).SetBoolProp('computed', True)
+            exclude_idxs.append(missing_atoms['H'])
+            missing_atoms.pop('H')
+            
+        
+        missing_atom_elements = set([atom[0] for atom in missing_atoms.keys()])
+        if len(missing_atom_elements) > 0:
+            
+            resmol_h = Chem.RemoveHs(resmol)
+            resmol_h = Chem.AddHs(resmol_h, addCoords=True)
+            h_map = mapping_by_mcs(resmol, resmol_h)
+            for atom in list(missing_atoms.keys()):
+                if atom.startswith('H'):
+                    h_idx = missing_atoms[atom]
+                    #TODO magic function from Diogo to add H atom
+                    #TODO bring in parameterless H atom for chain breaks
+                    resmol.GetConformer().SetAtomPosition(h_idx, resmol_h.GetConformer().GetAtomPosition(h_map[h_idx]))
+                    resmol.GetAtomWithIdx(h_idx).SetBoolProp('computed', True)
+                    missing_atoms.pop(atom)
+
+        if len(missing_atoms) > 0:
+            err += f'Could not add {res=} {missing_atoms=}'
+            print(err)
+            resmol = None
+        return resmol
 
 
     def write_pdb(self, outpath):
