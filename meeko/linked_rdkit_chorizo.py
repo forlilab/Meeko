@@ -16,7 +16,7 @@ with open(pkg_dir / "data" / "prot_res_params.json") as f:
     chorizo_params = json.load(f)
 
 def mapping_by_mcs(mol, ref):
-    mcs_result = rdFMCS.FindMCS([mol,ref])
+    mcs_result = rdFMCS.FindMCS([mol,ref], bondCompare=rdFMCS.BondCompare.CompareAny)
     mcs_mol = Chem.MolFromSmarts(mcs_result.smartsString)
 
     mol_idxs = mol.GetSubstructMatch(mcs_mol)
@@ -176,7 +176,7 @@ class LinkedRDKitChorizo:
     rxn_nterm_pad = rdChemReactions.ReactionFromSmarts(f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
 
 
-    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, termini=None, del_res=None):
+    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, termini=None, del_res=None, allow_bad_res=False):
         suggested_mutations = {}
         self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
         self.termini = self._check_termini(termini, self.res_list)
@@ -190,7 +190,7 @@ class LinkedRDKitChorizo:
         self.removed_residues, ambiguous_chosen = self.parameterize_residues(self.termini, del_res, self.ambiguous)
         suggested_mutations.update(ambiguous_chosen)
 
-        if len(self.removed_residues) > 0:
+        if len(self.removed_residues) > 0 and not allow_bad_res:
             for res in self.removed_residues:
                 suggested_mutations[res] = res
             print("The following mutations are suggested. For HIS, mutate to HID, HIE, or HIP.")
@@ -627,7 +627,7 @@ class LinkedRDKitChorizo:
                     missing_atoms.pop(atom)
         # TODO missing atoms from PDB? Extra PDB atoms OK currently?
         if len(missing_atoms) > 0:
-            err += f'Could not add {res=} {missing_atoms=}'
+            err = f'Could not add {res=} {missing_atoms=}'
             print(err)
             resmol = None
         return resmol

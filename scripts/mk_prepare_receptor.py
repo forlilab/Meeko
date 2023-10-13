@@ -133,6 +133,9 @@ def get_args():
                         help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
     parser.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
     parser.add_argument(      '--chorizo_config', help="[.json]")
+    parser.add_argument(      '--allow_bad_res', action="store_true",
+                                                 help="residues with missing atoms will be deleted")
+
     parser.add_argument('-f', '--flexres', action="append", default=[],
                         help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
     parser.add_argument('-r', '--reactive_flexres', action="append", default=[],
@@ -295,7 +298,8 @@ if args.pdb is not None:
     if args.del_res is not None:
         del_res.update(json.loads(args.del_res))
     mk_prep = MoleculePreparation() # TODO user mk_config.json
-    chorizo = LinkedRDKitChorizo(args.pdb, mutate_res_dict=mutate_res_dict, termini=termini, del_res=del_res)
+    chorizo = LinkedRDKitChorizo(args.pdb, mutate_res_dict=mutate_res_dict, termini=termini, del_res=del_res,
+                                 allow_bad_res=args.allow_bad_res)
     for res_id in all_flexres:
         res = "%s:%s:%d" % res_id
         chorizo.res_to_molsetup(res, mk_prep, cut_at_calpha=True)
@@ -304,6 +308,11 @@ if args.pdb is not None:
         with open(args.chorizo_pickle, "wb") as f:
             pickle.dump(chorizo, f)
     print(json.dumps(chorizo.suggested_mutations, indent=4))
+
+    if len(chorizo.removed_residues) > 0:
+        print("Automatically deleted %d residues" % len(chorizo.removed_residues))
+        print(json.dumps({"del_res": chorizo.removed_residues}, indent=4))
+
     #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
     #ok, err = receptor.assign_types_charges()
     #check(ok, err)
