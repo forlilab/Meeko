@@ -645,15 +645,21 @@ class LinkedRDKitChorizo:
                     if line.startswith('HETATM'):
                         fout.write(line+'\n')
 
-    def get_atom_params(self):
+    def export_static_atom_params(self, ignore_atom_types=("H",)):
         atom_params = {}
         counter_atoms = 0
+        coords = []
         for res_id in self.res_list:
             if res_id in self.del_res:
                 continue
             resmol = self.residues[res_id]["resmol"]
             for atom in resmol.GetAtoms():
                 props = atom.GetPropsAsDict()
+                if len(ignore_atom_types) > 0 and props["atom_type"] in ignore_atom_types:
+                    continue
+                if ("molsetup" in self.residues[res_id]) and (
+                    atom.GetIdx() not in self.residues["molsetup_ignored"]):
+                        continue
                 for key, value in props.items():
                     if key.startswith("_"):
                         continue
@@ -662,4 +668,8 @@ class LinkedRDKitChorizo:
                 counter_atoms += 1
                 for key in set(atom_params).difference(props): # <key> missing in <props>
                     atom_params[key].append(None) # fill in incomplete "row"
-        return atom_params
+                coords.append(resmol.GetConformer().GetAtomPosition(atom.GetIdx()))
+        if hasattr(self, "param_rename"): # e.g. "gasteiger" -> "q"
+            for key, new_key in self.param_rename.items():
+                atom_params[new_key] = atom_params.pop(key)
+        return atom_params, coords
