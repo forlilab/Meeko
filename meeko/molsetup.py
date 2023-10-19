@@ -857,8 +857,12 @@ class RDKitMoleculeSetup(MoleculeSetup):
         mol_noHs = Chem.RemoveHs(mol)
         matches = mol.GetSubstructMatches(mol_noHs, uniquify=False, maxMatches=max_matches)
         if len(matches) == max_matches:
+            if mol.HasProp("_Name"):
+                molname = mol.GetProp("_Name")
+            else:
+                molname = ""
             print("warning: found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd" % max_matches)
-            print("Maybe this molecule is \"too\" symmetric?", mol_noHs.GetProp("_Name"), Chem.MolToSmiles(mol_noHs))
+            print("Maybe this molecule is \"too\" symmetric? %s" % molname, Chem.MolToSmiles(mol_noHs))
         return matches
 
     def init_atom(self, assign_charges, coords):
