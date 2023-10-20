@@ -464,7 +464,7 @@ class LinkedRDKitChorizo:
         with open(pdb_path, 'r') as fin:
             current_res = None
             for line in fin:
-                if line.startswith('TER'):
+                if line.startswith('TER') and current_res is not None:
                     residues[current_res]['next res'] = None
                     current_res = None
                 if line.startswith('ATOM') or line.startswith('HETATM'):
