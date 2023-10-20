@@ -529,6 +529,9 @@ class LinkedRDKitChorizo:
                 continue
 
             pdbmol = Chem.MolFromPDBBlock(self.residues[res]['pdb block'], removeHs=False)
+            if pdbmol is None:
+                removed_residues.append(res)
+                continue
             
             # Check if parameters are available for a residue
             chain, resn, resnum = res.split(':')
