@@ -240,6 +240,7 @@ class LinkedRDKitChorizo:
         cutoff = 2.5 # angstrom
         bridges = []
         for res in self.res_list:
+            if res in self.removed_residues: continue
             resname = res.split(":")[1]
             if resname in ["CYS", "CYX", "CYM"]: # TODO move "protected resnames" next to residue params they are associated with
                 resmol = self.residues[res]["resmol"]
