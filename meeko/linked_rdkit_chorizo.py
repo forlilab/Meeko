@@ -180,6 +180,8 @@ class LinkedRDKitChorizo:
         suggested_mutations = {}
         self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
         self.termini = self._check_termini(termini, self.res_list)
+        if del_res is None:
+            del_res = ()
         self._check_del_res(del_res, self.res_list)
         self.del_res = del_res
         self.mutate_res_dict = mutate_res_dict
@@ -276,19 +278,16 @@ class LinkedRDKitChorizo:
         output = {}
         if termini is None:
             return output
-        for (resn, values) in termini.items():
+        for (resn, value) in termini.items():
             if resn not in res_list:
                 raise ValueError("%s in termini not found" % resn)
             output[resn] = []
-            if type(values) == str:
-                values = (values,)
-            for value in values:
-                if value.lower() in allowed_c:
-                    output[resn].append("C")
-                elif value.lower() in allowed_n:
-                    output[resn].append("N")
-                else:
-                    raise ValueError("termini value was %s, expected %s or %s" % (value, allowed_c, allowed_n))
+            if value.lower() in allowed_c:
+                output[resn] = "C"
+            elif value.lower() in allowed_n:
+                output[resn] = "N"
+            else:
+                raise ValueError("termini value was %s, expected %s or %s" % (value, allowed_c, allowed_n))
         return output
 
 
