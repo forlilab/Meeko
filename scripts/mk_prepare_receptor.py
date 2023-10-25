@@ -302,7 +302,7 @@ if args.pdb is not None:
                                  allow_bad_res=args.allow_bad_res)
     for res_id in all_flexres:
         res = "%s:%s:%d" % res_id
-        chorizo.res_to_molsetup(res, mk_prep, cut_at_calpha=True)
+        chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)
     rigid_pdbqt, flex_pdbqt = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
     if args.chorizo_pickle is not None:
         with open(args.chorizo_pickle, "wb") as f:

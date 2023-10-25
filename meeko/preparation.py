@@ -166,13 +166,13 @@ class MoleculePreparation:
                 raise ValueError(msg)
 
         if len(add_atom_types) > 0:
-            group_keys = list(self.atom_params.keys())
+            group_keys = list(atom_params.keys())
             if len(group_keys) != 1:
                 msg = "add_atom_types is usable only when there is one group of parameters"
                 msg += ", but there are %d groups: %s" % (len(keys), str(keys))
                 raise RuntimeError(msg)
             key = group_keys[0]
-            self.atom_params[key].extend(add_atom_types)
+            atom_params[key].extend(add_atom_types)
                
         return atom_params
 
