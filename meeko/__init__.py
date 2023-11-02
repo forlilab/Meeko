@@ -24,6 +24,7 @@ from .preparation import MoleculePreparation
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetup
 from .molsetup import Restraint
+from .molsetup import UniqAtomParams
 from .utils import rdkitutils
 from .utils import pdbutils
 from .utils import geomutils

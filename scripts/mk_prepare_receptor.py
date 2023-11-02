@@ -133,6 +133,7 @@ def get_args():
                         help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
     parser.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
     parser.add_argument(      '--chorizo_config', help="[.json]")
+    parser.add_argument(      '--mk_config', help="[.json]")
     parser.add_argument(      '--allow_bad_res', action="store_true",
                                                  help="residues with missing atoms will be deleted")
 
@@ -297,9 +298,18 @@ if args.pdb is not None:
         termini.update(json.loads(args.termini))
     if args.del_res is not None:
         del_res.update(json.loads(args.del_res))
-    mk_prep = MoleculePreparation() # TODO user mk_config.json
     chorizo = LinkedRDKitChorizo(args.pdb, mutate_res_dict=mutate_res_dict, termini=termini, del_res=del_res,
                                  allow_bad_res=args.allow_bad_res)
+    if args.mk_config is not None:
+        with open(args.mk_config) as f:
+            mk_config = json.load(f)
+        print("HERE")
+        mk_prep = MoleculePreparation.from_config(mk_config)
+        chorizo.mk_parameterize_all_residues(mk_prep)
+    else:
+        mk_prep = MoleculePreparation()
+
+
     for res_id in all_flexres:
         res = "%s:%s:%d" % res_id
         chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)

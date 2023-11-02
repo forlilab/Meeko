@@ -995,6 +995,61 @@ class OBMoleculeSetup(MoleculeSetup):
         """ return a copy of the current setup"""
         return OBMoleculeSetup(template=self)
 
+
+class UniqAtomParams:
+    def __init__(self, add_atomic_nr=False):
+        self.params = [] # aka rows
+        self.param_names = [] # aka column names
+        self.add_atomic_nr = add_atomic_nr # ADsandbox using mass to identify H-bond pairs
+
+    def add_parameter(self, new_param_dict):
+        # remove None values to avoid a column with only Nones
+        new_param_dict = {k: v for k, v in new_param_dict.items() if v is not None}
+        incoming_keys = set(new_param_dict.keys())
+        existing_keys = set(self.param_names)
+        new_keys = incoming_keys.difference(existing_keys)
+        for new_key in new_keys:
+            self.param_names.append(new_key)
+            for row in self.params:
+                row.append(None) # fill in empty "cell" in new "column"
+
+        new_row = []
+        for key in self.param_names:
+            value = new_param_dict.get(key, None)
+            new_row.append(value)
+
+        if len(new_keys) == 0: # try to match with existing row
+            for index, row in enumerate(self.params):
+                if row == new_row:
+                    return index
+
+        # if we are here, we didn't match
+        new_row_index = len(self.params)
+        self.params.append(new_row)
+        return new_row_index
+
+
+    def add_molsetup(self, molsetup):
+        if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
+            msg = '"q" and "atom_type" found in molsetup.atom_params'
+            msg += ' but are hard-coded to store molsetup.charge and'
+            msg += ' molsetup.atom_type in the internal data structure'
+            raise RuntimeError(msg)
+        param_idxs = []
+        for atom_index, ignore in molsetup.atom_ignore.items():
+            if ignore:
+                param_idx = None
+            else:
+                p = {k: v[atom_index] for (k, v) in molsetup.atom_params.items()}
+                if self.add_atomic_nr:
+                    if "atomic_nr" in p:
+                        raise RuntimeError("trying to add atomic_nr but it's already in atom_params")
+                    p["atomic_nr"] = molsetup.element[atom_index]
+                param_idx = self.add_parameter(p)
+            param_idxs.append(param_idx)
+        return param_idxs
+
+
 @dataclass
 class Restraint:
     atom_index: int

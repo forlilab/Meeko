@@ -642,7 +642,7 @@ class LinkedRDKitChorizo:
         for res in self.res_list:
             if res in self.del_res or res in self.removed_residues:
                 continue
-            self.mk_paarameterize_residue(self, res, mk_prep)
+            self.mk_parameterize_residue(res, mk_prep)
         return
 
 
