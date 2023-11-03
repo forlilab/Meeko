@@ -56,6 +56,10 @@ def reassign_bond_orders(mol, ref, mapping):
 
 def h_coord_from_dipeptide(pdb1, pdb2):
     mol = Chem.MolFromPDBBlock(pdb1+pdb2)
+    if mol is None:
+        print(pdb1)
+        print(pdb2)
+        raise RuntimeError
     mol_h = Chem.AddHs(mol, addCoords=True)
     ps = Chem.SmilesParserParams()
     ps.removeHs = False
@@ -457,7 +461,7 @@ class LinkedRDKitChorizo:
     
     @staticmethod
     def _pdb_to_resblocks(pdb_path):
-        #TODO detect chain breaks
+        #TODO detect (and test distance) chain breaks
         #TODO cyclic peptides nex res == None ?!
         residues = {}
         res_list = []
@@ -477,10 +481,18 @@ class LinkedRDKitChorizo:
                         residues[full_resid]['pdb block'] += line
                     else:
                         if current_res is not None:
-                            residues[current_res]['next res'] = full_resid
+                            last_resid = int(current_res.split(":")[2])
+                            if resid - last_resid < 2:
+                                residues[current_res]['next res'] = full_resid
+                            else: # chain break
+                                residues[current_res]['next res'] = None
+
                         residues[full_resid] = {}
                         residues[full_resid]['pdb block'] = line
-                        residues[full_resid]['previous res'] = current_res
+                        if current_res is not None and (resid - int(current_res.split(":")[2])) < 2:
+                            residues[full_resid]['previous res'] = current_res
+                        else:
+                            residues[full_resid]['previous res'] = None
                         current_res = full_resid
                         res_list.append(full_resid)
             if current_res is not None:
