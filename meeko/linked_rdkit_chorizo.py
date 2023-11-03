@@ -164,6 +164,14 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
     return charges_dec
 
 class LinkedRDKitChorizo:
+    """
+    Class description
+
+    ...
+    Attributes
+    ----------
+    
+    """
 
     cterm_pad_smiles = "CN"
     nterm_pad_smiles = "CC=O"
@@ -176,29 +184,34 @@ class LinkedRDKitChorizo:
     rxn_nterm_pad = rdChemReactions.ReactionFromSmarts(f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
 
 
-    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, termini=None, del_res=None, allow_bad_res=False):
+    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, termini=None, deleted_residues=None, allow_bad_res=False):
         suggested_mutations = {}
-        self.residues, self.res_list = self._pdb_to_resblocks(pdb_path)
-        self.termini = self._check_termini(termini, self.res_list)
-        if del_res is None:
-            del_res = ()
-        self._check_del_res(del_res, self.res_list)
-        self.del_res = del_res
+        
+        self.residues = self._pdb_to_resblocks(pdb_path)
+        res_list = self.residues.keys()
+        
+        self.termini = self._check_termini(termini, res_list)
+        if deleted_residues is None:
+            deleted_residues = ()
+        self._check_del_res(deleted_residues, res_list)
+        self.deleted_residues = deleted_residues
+        
         self.mutate_res_dict = mutate_res_dict
         if mutate_res_dict is not None:
             self._rename_residues(mutate_res_dict)
         self.res_templates, self.ambiguous = self._load_params(params)
 
-        self.removed_residues, ambiguous_chosen = self.parameterize_residues(self.termini, del_res, self.ambiguous)
+        ambiguous_chosen = self.parameterize_residues(self.termini, deleted_residues, self.ambiguous)
         suggested_mutations.update(ambiguous_chosen)
 
-        if len(self.removed_residues) > 0 and not allow_bad_res:
-            for res in self.removed_residues:
+        removed_residues = self.getIgnoredResidues()
+        if len(removed_residues) > 0 and not allow_bad_res:
+            for res in removed_residues:
                 suggested_mutations[res] = res
             print("The following mutations are suggested. For HIS, mutate to HID, HIE, or HIP.")
             print(json.dumps(suggested_mutations, indent=2))
             msg = "The following residues could not be processed:" + pathlib.os.linesep
-            msg += self.print_residues_by_resname(self.removed_residues)
+            msg += self.print_residues_by_resname(removed_residues)
             raise RuntimeError(msg)
 
         self.disulfide_bridges = self._find_disulfide_bridges()
@@ -214,9 +227,9 @@ class LinkedRDKitChorizo:
                     self._rename_residues({cys_1: cyx_1})
                     resmol = self.build_resmol(cyx_1, "CYX")
                     if resmol is not None:
-                        self.residues[cyx_1]["resmol"] = resmol
+                        self.residues[cyx_1].rdkit_mol = resmol
                     else:
-                        self.removed_residues.append(cyx_1)
+                        self.residues[cyx_1].ignore_residue = True
             if resname_2 != "CYX":
                 cyx_2 = f"{chain_2}:CYX:{resnum_2}"
                 suggested_mutations[cys_2] = cyx_2
@@ -224,16 +237,16 @@ class LinkedRDKitChorizo:
                     self._rename_residues({cys_2: cyx_2})
                     resmol = self.build_resmol(cyx_2, "CYX")
                     if resmol is not None:
-                        self.residues[cyx_2]["resmol"] = resmol
+                        self.residues[cyx_2].rdkit_mol = resmol
                     else:
-                        self.removed_residues.append(cyx_2)
+                        self.residues[cyx_2].ignore_residue = True
 
-        to_remove = []
-        for res_id in self.removed_residues:
+        """to_remove = []
+        for res_id in self.getIgnoredResidues():
             i = self.res_list.index(res_id)
             to_remove.append(i)
         for i in sorted(to_remove, reverse=True):
-            self.res_list.pop(i)
+            self.res_list.pop(i) """
         self.suggested_mutations = suggested_mutations
         return
 
@@ -241,11 +254,11 @@ class LinkedRDKitChorizo:
         cys_list = {}
         cutoff = 2.5 # angstrom
         bridges = []
-        for res in self.res_list:
-            if res in self.removed_residues: continue
+        for res in self.residues:
+            if res.ignore_residue: continue
             resname = res.split(":")[1]
             if resname in ["CYS", "CYX", "CYM"]: # TODO move "protected resnames" next to residue params they are associated with
-                resmol = self.residues[res]["resmol"]
+                resmol = self.residues[res].rdkit_mol
                 molxyz = resmol.GetConformer().GetPositions()
                 s_xyz = None
                 for atom in resmol.GetAtoms():
@@ -267,7 +280,7 @@ class LinkedRDKitChorizo:
             if res not in existing_res:
                 missing.add(res)
         if len(missing) > 0:
-            msg = "del_res not found: " + " ".join(missing)
+            msg = "deleted_residues not found: " + " ".join(missing)
             raise ValueError(msg)
 
 
@@ -328,12 +341,12 @@ class LinkedRDKitChorizo:
                     raise RuntimeError("we have only two reactants, got %d ?" % reactant_idx)
             return mol, new_is_res_atom, new_mapidx
 
-        mol = Chem.Mol(self.residues[resn]["resmol"])
+        mol = Chem.Mol(self.residues[resn].rdkit_mol)
         is_res_atom = [True for atom in mol.GetAtoms()]
         mapidx = {atom.GetIdx(): atom.GetIdx() for atom in mol.GetAtoms()}
-        if self.residues[resn]["previous res"] is not None:
-            prev_resn = self.residues[resn]["previous res"]
-            prev_mol = self.residues[prev_resn]["resmol"]
+        if self.residues[resn].previous_id is not None:
+            prev_resn = self.residues[resn].previous_id
+            prev_mol = self.residues[prev_resn].rdkit_mol
             nterm_pad = Chem.MolFromSmiles(self.nterm_pad_smiles)
             mol, is_res_atom, mapidx = _join(
                     mol,
@@ -345,9 +358,9 @@ class LinkedRDKitChorizo:
                     prev_mol,
                     self.nterm_pad_backbone_smarts_idxs)
             
-        if self.residues[resn]["next res"] is not None:
-            next_resn = self.residues[resn]["next res"]
-            next_mol = self.residues[next_resn]["resmol"]
+        if self.residues[resn].next_id is not None:
+            next_resn = self.residues[resn].next_id
+            next_mol = self.residues[next_resn].rdkit_mol
             cterm_pad = Chem.MolFromSmiles(self.cterm_pad_smiles)
             mol, is_res_atom, mapidx = _join(
                     mol,
@@ -389,7 +402,7 @@ class LinkedRDKitChorizo:
             if ignore and is_res:
                 ignored_in_molsetup.append(mapidx[atom_index])
         # rectify charges to sum to integer (because of padding)
-        net_charge = sum([atom.GetFormalCharge() for atom in self.residues[res]["resmol"].GetAtoms()])
+        net_charge = sum([atom.GetFormalCharge() for atom in self.residues[res].rdkit_mol.GetAtoms()])
         not_ignored_idxs = []
         charges = []
         for i, q in molsetup.charge.items(): # charge is ordered dict
@@ -406,9 +419,9 @@ class LinkedRDKitChorizo:
         molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep,
                                                                   is_protein_sidechain=True,
                                                                   cut_at_calpha=cut_at_calpha)
-        self.residues[res]["molsetup"] = molsetup
-        self.residues[res]["molsetup_mapidx"] = mapidx
-        self.residues[res]["molsetup_ignored"] = ignored_in_molsetup
+        self.residues[res].molsetup = molsetup
+        self.residues[res].molsetup_mapidx = mapidx
+        self.residues[res].molsetup_ignored = ignored_in_molsetup
         return
         
 
@@ -436,6 +449,7 @@ class LinkedRDKitChorizo:
         for resn in params:
             if resn == "ambiguous": continue
             resmol = Chem.MolFromSmiles(params[resn]['smiles'], ps)
+            # Using user provided parameters to assign properties to atoms.
             for idx, atom in enumerate(resmol.GetAtoms()):
                 for propname in params[resn]:
                     if propname in undesired_props:
@@ -457,61 +471,68 @@ class LinkedRDKitChorizo:
     
     @staticmethod
     def _pdb_to_resblocks(pdb_path):
-        #TODO detect chain breaks
-        #TODO cyclic peptides nex res == None ?!
         residues = {}
-        res_list = []
         with open(pdb_path, 'r') as fin:
-            current_res = None
+            # Tracking the key and the value for the current dictionary pair being read in
+            current_res_id = None # the residue id we are tracking
+            current_res = None    # the chorizo_residue object we are tracking
             for line in fin:
                 if line.startswith('TER') and current_res is not None:
-                    residues[current_res]['next res'] = None
+                    current_res.next_id = None
+                    residues[current_res_id] = current_res
                     current_res = None
+                    current_res_id = None
                 if line.startswith('ATOM') or line.startswith('HETATM'):
+                    # Generating dictionary key
                     resname = line[17:20].strip()
                     resid = int(line[22:26].strip())
                     chainid = line[21].strip()
-                    full_resid = ':'.join([chainid, resname, str(resid)])
+                    full_res_id = chainid + resname + str(resid)
 
-                    if full_resid == current_res:
-                        residues[full_resid]['pdb block'] += line
+                    if full_res_id == current_res_id:
+                        current_res.pdb_text += line
                     else:
                         if current_res is not None:
-                            residues[current_res]['next res'] = full_resid
-                        residues[full_resid] = {}
-                        residues[full_resid]['pdb block'] = line
-                        residues[full_resid]['previous res'] = current_res
-                        current_res = full_resid
-                        res_list.append(full_resid)
+                            current_res.next_id = full_res_id
+                            residues[current_res_id] = current_res
+                        # Updates tracking to the new key-value pair we're dealing with
+                        current_res = ChorizoResidue(full_res_id, line)
+                        current_res.previous_res_id = current_res_id
+                        current_res_id = full_res_id
             if current_res is not None:
-                residues[current_res]['next res'] = None
-        return residues, res_list
+                current_res.next_id = None
+                residues[current_res_id] = current_res
+        return residues
     
-    def _rename_residues(self, resdict):
-        for res in resdict:
+    def _rename_residues(self, mutate_dict):
+        for res in mutate_dict:
             old_resn = res.split(':')[1]
-            new_resn = resdict[res].split(':')[1]
-            self.residues[resdict[res]] = self.residues.pop(res)
-            # self.residues[resdict[res]]['pdb block'] = self.residues[resdict[res]]['pdb block'].replace(old_resn, new_resn)
-            previous_res = self.residues[resdict[res]]['previous res']
+            new_resn = mutate_dict[res].split(':')[1]
+            old_residue = self.residues[mutate_dict[res]]
+            self.residues[mutate_dict[res]] = self.residues[res]
+            # self.residues[mutate_dict[res]] = self.residues.pop(res)
+            # self.residues[mutate_dict[res]]['pdb block'] = self.residues[mutate_dict[res]]['pdb block'].replace(old_resn, new_resn)
+            previous_res = self.residues[mutate_dict[res]].previous_id
             if previous_res:
-                self.residues[previous_res]['next res'] = resdict[res]
-            next_res = self.residues[resdict[res]]['next res']
+                self.residues[previous_res].next_id = mutate_dict[res]
+            next_res = self.residues[mutate_dict[res]].next_id
             if next_res:
-                self.residues[next_res]['previous res'] = resdict[res]
-            i = self.res_list.index(res)
-            self.res_list[i] = resdict[res]
+                self.residues[next_res].previous_id = mutate_dict[res]
+
+            """i = self.res_list.index(res)
+            self.res_list[i] = mutate_dict[res]"""
 
     @staticmethod
     def add_termini(resn, res, termini, residues):
-        next_res = residues[res]['next res']
-        prev_res = residues[res]['previous res']
+        # resn, res, termini, self.residues -> input
+        next_res = residues[res].next_id
+        prev_res = residues[res].previous_id
         if termini.get(res, None) == "C":
-            if (next_res is not None) and (next_res not in del_res):
+            if (next_res is not None) and (not residues[next_res].user_deleted):
                 raise ValueError("Trying to C-term {res} but {next_res=} exists")
             resn = 'C' + resn
         elif termini.get(res, None) == "N":
-            if (prev_res is not None) and (prev_res not in del_res):
+            if (prev_res is not None) and (not residues[prev_res].user_deleted):
                 raise ValueError("Trying to N-term {res} but {prev_res=} exists")
             resn = 'N' + resn
         elif termini.get(res, None) is None:
@@ -521,23 +542,24 @@ class LinkedRDKitChorizo:
             raise ValueError("termini must be either 'C' or 'N', not %s" % termini.get(res, None))
         return resn
 
-    def parameterize_residues(self, termini, del_res, ambiguous):
-        removed_residues = []
+    def parameterize_residues(self, termini, deleted_residues, ambiguous):
         ambiguous_chosen = {}
         for res in self.residues:
-            if res in del_res:
+            # skip deleted resides
+            if res in deleted_residues:
                 continue
-
-            pdbmol = Chem.MolFromPDBBlock(self.residues[res]['pdb block'], removeHs=False)
+            
+            # if we can't generate an RDKit Mol for the residue, mark it as ignored and skip
+            pdbmol = Chem.MolFromPDBBlock(self.residues[res].pdb_text, removeHs=False)
             if pdbmol is None:
-                removed_residues.append(res)
+                self.residues[res].ignore_residue = True
                 continue
             
             # Check if parameters are available for a residue
             chain, resn, resnum = res.split(':')
             if (resn not in self.res_templates) and (resn not in ambiguous):
                 #self.residues.pop(res)
-                removed_residues.append(res)
+                self.residues[res].ignore_residue = True
                 continue
 
             if resn in ambiguous:
@@ -548,6 +570,7 @@ class LinkedRDKitChorizo:
             #if resn == "HIS": print("HIS ambiguous:", possible_resn)
 
             lowest_nr_missing = 9999999
+            # loops through possible resmol generated for the residue based on number of atoms missing
             for resn in possible_resn:
 
                 resn = self.add_termini(resn, res, termini, self.residues) # prefix C or N if applicable
@@ -572,10 +595,10 @@ class LinkedRDKitChorizo:
 
             resmol = self.build_resmol(res, resn)
             if resmol is None:
-                removed_residues.append(res)
+                self.residues[res].ignore_residue = True
             else:
-                self.residues[res]["resmol"] = resmol
-        return removed_residues, ambiguous_chosen
+                self.residues[res].rdkit_mol = resmol
+        return ambiguous_chosen
 
     def build_resmol(self, res, resn):
         # Transfer coordinates and info for any matched atoms
@@ -584,7 +607,7 @@ class LinkedRDKitChorizo:
         #EmbedMolecule(resmol)
 
         resmol = Chem.Mol(self.res_templates[resn])
-        pdbmol = Chem.MolFromPDBBlock(self.residues[res]["pdb block"], removeHs=False)
+        pdbmol = Chem.MolFromPDBBlock(self.residues[res].pdb_text, removeHs=False)
 
         atom_map = mapping_by_mcs(resmol, pdbmol)
         #Chem.rdDepictor.Compute2DCoords(resmol)
@@ -604,10 +627,10 @@ class LinkedRDKitChorizo:
 
         # Handle case of missing backbone amide H
         if 'H' in missing_atoms:
-            prev_res = self.residues[res]['previous res']
+            prev_res = self.residues[res].previous_id
             if prev_res is not None:
-                h_pos = h_coord_from_dipeptide(self.residues[res]['pdb block'], 
-                                                self.residues[prev_res]['pdb block'])
+                h_pos = h_coord_from_dipeptide(self.residues[res].pdb_text, 
+                                                self.residues[prev_res].pdb_text)
             else:
                 h_pos = h_coord_random_n_terminal(resmol)
             resmol.GetConformer().SetAtomPosition(missing_atoms['H'], h_pos)
@@ -639,16 +662,16 @@ class LinkedRDKitChorizo:
 
     def mk_parameterize_all_residues(self, mk_prep):
         # TODO disulfide bridges are hard-coded, generalize branching maybe
-        for res in self.res_list:
-            if res in self.del_res or res in self.removed_residues:
+        for res in self.residues:
+            if self.residues[res].user_deleted or self.residues[res].ignore_residue:
                 continue
-            self.mk_paarameterize_residue(self, res, mk_prep)
+            self.mk_parameterize_residue(self, res, mk_prep)
         return
 
 
     def mk_parameterize_residue(self, res, mk_prep): 
         molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep)
-        resmol = self.residues[res]["resmol"]
+        resmol = self.residues[res].rdkit_mol
         for molsetup_idx, resmol_idx in mapidx.items(): # ignoring pseudo atoms, rdkit atom props no good for pseudos
             atom = resmol.GetAtomWithIdx(resmol_idx)
             atom.SetDoubleProp("q", molsetup.charge[molsetup_idx])
@@ -671,7 +694,7 @@ class LinkedRDKitChorizo:
         with open(outpath, 'w') as fout:
             for res in self.residues:
                 try:
-                    pdb_block = Chem.MolToPDBBlock(self.residues[res]['resmol'])
+                    pdb_block = Chem.MolToPDBBlock(self.residues[res].rdkit_mol)
                 except:
                     print(res)
                 for line in pdb_block.split('\n'):
@@ -682,15 +705,15 @@ class LinkedRDKitChorizo:
         atom_params = {}
         counter_atoms = 0
         coords = []
-        for res_id in self.res_list:
-            if res_id in self.del_res:
+        for res_id in self.residues:
+            if self.residues[res_id].user_deleted:
                 continue
-            resmol = self.residues[res_id]["resmol"]
+            resmol = self.residues[res_id].rdkit_mol
             for atom in resmol.GetAtoms():
                 props = atom.GetPropsAsDict()
                 if len(ignore_atom_types) > 0 and props["atom_type"] in ignore_atom_types:
                     continue
-                if ("molsetup" in self.residues[res_id]) and (
+                if (self.residues[res_id].molsetup) and (
                     atom.GetIdx() not in self.residues["molsetup_ignored"]):
                         continue
                 for key, value in props.items():
@@ -706,3 +729,64 @@ class LinkedRDKitChorizo:
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
         return atom_params, coords
+    
+    # For parsing the 
+    def getUserDeletedResidues(self):
+        return {k: v for k, v in self.residues.items() if v.user_deleted == True}
+        
+    def getNonUserDeletedResidues(self):
+        return {k: v for k, v in self.residues.items() if v.user_deleted == False}
+        
+    def getIgnoredResidues(self):
+        return {k: v for k, v in self.residues.items() if v.ignore_residue == True}
+        
+    def getNotIgnoredResidues(self):
+        return {k: v for k, v in self.residues.items() if v.ignore_residue == False}
+
+class ChorizoResidue:
+    """
+    A class representing a single residue in the chain of chorizo residues
+    """
+
+    #self.previous_id -> or pointer to residue object itself? For now keeping as just id, but we should look again and see what would work best
+    #self.next_id
+    def __init__(self, residue_id, pdb_text):
+        self.residue_id = residue_id
+        self.pdb_text = pdb_text
+        self.previous_id = None
+        self.next_id = None
+
+        self.rdkit_mol = None
+        self.molsetup = None
+        self.molsetup_mapidx = None
+        self.molsetup_ignored = None # Check about these data types
+
+        # flags
+        self.ignore_residue = False
+        self.is_movable = False
+        self.user_deleted = False
+
+        self.additional_connections = []
+
+    def populate_molsetup_with_rdkit():
+        # should populates molsetup internal object with rdkit params
+        x = 1
+
+    def add_additional_connections(residue, atom):
+        # should be used to add the additional connections
+        x = 5
+
+    def toJson(self):
+        # once I'm done making this object do some custom JSON encoding here
+        print("to JSON eventually")
+
+class ResidueAdditionalConnection:
+    """
+    Represents additional connections & bonds from a residue
+    """
+    def __init__(self):
+        self.hello_world = "hello world"
+
+    def toJson(self):
+        # once I'm done making this object do some custom JSON encoding here
+        print("to JSON eventually")
