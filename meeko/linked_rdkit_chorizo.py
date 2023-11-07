@@ -165,12 +165,22 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
 
 class LinkedRDKitChorizo:
     """
-    Class description
+    This is a class used to take in information about a series of linked Chorizo residues
+    and there are most likely many more details that should be included here.
 
-    ...
     Attributes
     ----------
-    
+    cterm_pad_smiles: string
+    nterm_pad_smiles: string
+    backbone_smarts: string
+    backbone: rdkit.Chem.rdchem.Mol
+    backboneh: rdkit.Chem.rdchem.Mol
+    nterm_pad_backbone_smarts_idxs: tuple of ints
+    cterm_pad_backbone_smarts_idxs: tuple of ints
+    rxn_cterm_pad: RDKit ChemicalReaction
+    rxn_nterm_pad: RDKit ChemicalReaction
+
+    residues: dict (string -> ChorizoResidue) #TODO: figure out exact SciPy standard for this
     """
 
     cterm_pad_smiles = "CN"
@@ -255,7 +265,7 @@ class LinkedRDKitChorizo:
         cutoff = 2.5 # angstrom
         bridges = []
         for res in self.residues:
-            if res.ignore_residue: continue
+            if self.residues[res].ignore_residue: continue
             resname = res.split(":")[1]
             if resname in ["CYS", "CYX", "CYM"]: # TODO move "protected resnames" next to residue params they are associated with
                 resmol = self.residues[res].rdkit_mol
@@ -422,8 +432,18 @@ class LinkedRDKitChorizo:
         self.residues[res].molsetup = molsetup
         self.residues[res].molsetup_mapidx = mapidx
         self.residues[res].molsetup_ignored = ignored_in_molsetup
+        self.residues.is_movable = True
         return
-        
+
+    def add_molsetup_inflexible(self, res, mk_prep, cut_at_calpha=False):
+        molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep,
+                                                                  is_protein_sidechain=False,
+                                                                  cut_at_calpha=cut_at_calpha)  
+        self.residues[res].molsetup = molsetup
+        self.residues[res].molsetup_mapidx = mapidx
+        self.residues[res].molsetup_ignored = ignored_in_molsetup
+        self.residues.is_movable = False
+        return
 
     @staticmethod
     def print_residues_by_resname(removed_residues):
@@ -487,7 +507,7 @@ class LinkedRDKitChorizo:
                     resname = line[17:20].strip()
                     resid = int(line[22:26].strip())
                     chainid = line[21].strip()
-                    full_res_id = chainid + resname + str(resid)
+                    full_res_id = ':'.join([chainid, resname, str(resid)])
 
                     if full_res_id == current_res_id:
                         current_res.pdb_text += line
@@ -511,7 +531,7 @@ class LinkedRDKitChorizo:
             old_residue = self.residues[mutate_dict[res]]
             self.residues[mutate_dict[res]] = self.residues[res]
             # self.residues[mutate_dict[res]] = self.residues.pop(res)
-            # self.residues[mutate_dict[res]]['pdb block'] = self.residues[mutate_dict[res]]['pdb block'].replace(old_resn, new_resn)
+            # self.residues[mutate_dict[res]].['pdb block'] = self.residues[mutate_dict[res]]['pdb block'].replace(old_resn, new_resn)
             previous_res = self.residues[mutate_dict[res]].previous_id
             if previous_res:
                 self.residues[previous_res].next_id = mutate_dict[res]
@@ -730,7 +750,7 @@ class LinkedRDKitChorizo:
                 atom_params[new_key] = atom_params.pop(key)
         return atom_params, coords
     
-    # For parsing the 
+    # The following functions return filtered dictionaries of residues based on the value of residue flags.
     def getUserDeletedResidues(self):
         return {k: v for k, v in self.residues.items() if v.user_deleted == True}
         
@@ -746,15 +766,46 @@ class LinkedRDKitChorizo:
 class ChorizoResidue:
     """
     A class representing a single residue in the chain of chorizo residues
-    """
 
-    #self.previous_id -> or pointer to residue object itself? For now keeping as just id, but we should look again and see what would work best
-    #self.next_id
-    def __init__(self, residue_id, pdb_text):
+    Attributes
+    ----------
+    residue_id: string
+        the residue id, most likely the key for this object if it is being 
+        stored in a dictionary
+    pdb_text: string
+        the text from the pdb file associated with this residue
+    previous_id: string or None
+        the previous residue in this chain
+    next_id: string or None
+        the next residue in this chain
+    
+    rdkit_mol: rdkit.Chem.rdchem.Mol or None
+        the rdkit Mol object generated from this residue
+    molsetup: RDKitMoleculeSetup or None
+        the RDKitMoleculeSetup object generated from this residue
+    molsetup_mapidx: or None
+        needs info
+    molsetup_ignored: List[] or None
+        needs info
+
+    ignore_residue: bool
+        marks residues that formerly were part of the removed_residues structure,
+        put on residues that are being ignored 
+    is_movable: bool
+        marks residues that are flexible
+    user_deleted: bool
+        marks residues that the user indicated should be deleted
+
+    additional_connections: List[ResidueAdditionalConnection]
+        connections to additional residues along the chain (there's probably
+        more specific information about the nature of these connections that
+        could be added here)
+    """
+    def __init__(self, residue_id, pdb_text, previous_id=None, next_id=None):
         self.residue_id = residue_id
         self.pdb_text = pdb_text
-        self.previous_id = None
-        self.next_id = None
+        self.previous_id = previous_id
+        self.next_id = next_id
 
         self.rdkit_mol = None
         self.molsetup = None
@@ -768,25 +819,28 @@ class ChorizoResidue:
 
         self.additional_connections = []
 
-    def populate_molsetup_with_rdkit():
-        # should populates molsetup internal object with rdkit params
-        x = 1
-
-    def add_additional_connections(residue, atom):
-        # should be used to add the additional connections
-        x = 5
-
     def toJson(self):
-        # once I'm done making this object do some custom JSON encoding here
-        print("to JSON eventually")
+        return json.dumps(self, default=lambda o: o.__dict__)
 
+# This could be a named tuple or a dataclass as it stands, but that is dependent on the amount of custom behavior
+# we want to encode for these additional connections.
 class ResidueAdditionalConnection:
     """
     Represents additional connections & bonds from a residue
+
+    Attributes
+    ----------
+    connection_residue: string
+        the id of the connected residue
+    connection_atom: string
+        the specific connected atom
+    bond_order: string # TODO: is this real?
+        the bond order of the connection
     """
-    def __init__(self):
-        self.hello_world = "hello world"
+    def __init__(self, residue, atom, bond_order):
+        self.connection_residue = None
+        self.connection_atom = None
+        self.bond_order = None
 
     def toJson(self):
-        # once I'm done making this object do some custom JSON encoding here
-        print("to JSON eventually")
+        return json.dumps(self, default=lambda o: o.__dict__)
