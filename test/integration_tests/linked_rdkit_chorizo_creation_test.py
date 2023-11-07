@@ -41,8 +41,8 @@ class LinkedRDKitChorizoIntegrationTest:
 
         pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
         rigid_part, movable_part = pdbqt_strings
-        self.assertEquals(0, len(rigid_part)) # PLACEHOLDER, GET ACTUAL VALUES
-        self.assertEquals(0, len(movable_part)) # PLACEHOLDER, GET ACTUAL VALUES
+        self.assertEquals(3564, len(rigid_part))
+        self.assertEquals(0, len(movable_part))
 
     def test_AHHY_flexible_residues(self):
         # This is a placeholder for future test cases
