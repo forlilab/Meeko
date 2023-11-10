@@ -380,6 +380,7 @@ class LinkedRDKitChorizo:
         if len(molsetups) > 1:
             raise NotImplementedError("multiple molsetups not yet implemented for flexres")
         molsetup = molsetups[0]
+        molsetup.is_sidechain = is_protein_sidechain
         ignored_in_molsetup = []
         for atom_index in molsetup.atom_ignore:
             if atom_index < len(is_res_atom):
@@ -671,7 +672,9 @@ class LinkedRDKitChorizo:
                 if type(value) == float:
                     atom.SetDoubleProp(key, value)
                 elif type(value) == bool:
-                    aotm.SetBoolProp(key, value)
+                    atom.SetBoolProp(key, value)
+                elif value is None:
+                    continue
                 else:
                     atom.SetProp(key, value)
         # consider deleting existing properties/parameters
@@ -702,8 +705,8 @@ class LinkedRDKitChorizo:
                 props = atom.GetPropsAsDict()
                 if len(ignore_atom_types) > 0 and props["atom_type"] in ignore_atom_types:
                     continue
-                if ("molsetup" in self.residues[res_id]) and (
-                    atom.GetIdx() not in self.residues["molsetup_ignored"]):
+                if "molsetup" in self.residues[res_id]:
+                    if atom.GetIdx() not in self.residues[res_id]["molsetup_ignored"]:
                         continue
                 for key, value in props.items():
                     if key.startswith("_"):
