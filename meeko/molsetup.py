@@ -17,7 +17,9 @@ from rdkit.Chem import rdPartialCharges
 
 from .utils import rdkitutils
 from .utils import utils
+from .utils.geomutils import calcDihedral
 from .receptor_pdbqt import PDBQTReceptor
+
 
 try:
     from openbabel import openbabel as ob
@@ -90,6 +92,7 @@ class MoleculeSetup:
         self.atom_to_ring_id = defaultdict(list)
         self.ring_corners = {}  # used to store corner flexibility
         self.name = None
+        self.rotamers = []
 
     def copy(self):
         newsetup = MoleculeSetup()
@@ -323,6 +326,19 @@ class MoleculeSetup:
         if not idx1 in self.graph[idx2]:
             self.graph[idx2].append(idx1)
         self.set_bond(idx1, idx2, order, rotatable)
+
+    def add_rotamer(self, indices_list, angles_list):
+        xyz = self.coord
+        rotamer = {}
+        for (i1, i2, i3, i4), angle in zip(indices_list, angles_list):
+            bond_id = self.get_bond_id(i2, i3)
+            if bond_id in rotamer:
+                raise RuntimeError("repeated bond %d-%d" % bond_id)
+            if not self.bond[bond_id]["rotatable"]:
+                raise RuntimeError("trying to add rotamer for non rotatable bond %d-%d" % bond_id)
+            d0 = calcDihedral(xyz[i1], xyz[i2], xyz[i3], xyz[i4])
+            rotamer[bond_id] = angle - d0
+        self.rotamers.append(rotamer)
 
     def set_atom_type(self, idx, atom_type):
         """ set the atom type for atom index
@@ -715,20 +731,44 @@ class RDKitMoleculeSetup(MoleculeSetup):
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
+
+        # to store sets of coordinates, e.g. docked poses, as dictionaries indexed by
+        # the atom index, because not all atoms need to have new coordinates specified
+        # Unspecified hydrogen positions bonded to modified heavy atom positions
+        # are to be calculated "on-the-fly".
+        molsetup.modified_atom_positions = [] # list of dictionaries where keys are atom indices
+
         return molsetup
 
-    def get_rdkit_conformer(self, coords):
-        conformer = Chem.Conformer(self.atom_true_count) 
-        for atom_index in range(self.atom_true_count):
-            conformer.SetAtomPosition(atom_index, coords[atom_index])
-        return conformer
+    def get_conformer_with_modified_positions(self, new_atom_positions):
+        # we operate on one conformer at a time because SetTerminalAtomPositions
+        # acts on all conformers of a molecule, and we don't want to guarantee
+        # that all conformers require the same set of terminal atoms to be updated
+        new_mol = Chem.Mol(self.mol)
+        new_conformer = Chem.Conformer(self.mol.GetConformer())
+        is_set_list = [False] * self.mol.GetNumAtoms()
+        for atom_index, new_position in new_atom_positions.items():
+            new_conformer.SetAtomPosition(atom_index, new_position)
+            is_set_list[atom_index] = True
+        new_mol.RemoveAllConformers()
+        new_mol.AddConformer(new_conformer, assignId=True)
+        for atom_index, is_set in enumerate(is_set_list):
+            if not is_set and new_mol.GetAtomWithIdx(atom_idx).GetAtomicNum() == 1:
+                neighbors = new_mol.GetAtomWithIdx(atom_idx).GetNeighbors()
+                if len(neighbors) != 1:
+                    raise RuntimeError("Expected H to have one neighbors")
+                Chem.SetTerminalAtomCoords(new_mol, atom_index, neighbors[0].GetIdx())
+        return new_conformer
 
-    def get_rdkit_mol(self, coords):
-        mol = Chem.Mol(self.mol)
-        mol.RemoveAllConformers()
-        conf = self.get_rdkit_conformer(coords)
-        mol.AddConformer(conf, assignId=True)
-        return mol
+    def get_mol_with_modified_positions(self, new_atom_positions_list=None):
+        if new_atom_positions_list is None:
+            new_atom_positions_list = self.modified_atom_positions
+        new_mol = Chem.Mol(self.mol)
+        new_mol.RemoveAllConformers()
+        for new_atom_positions in new_atom_positions_list:
+            conformer = self.get_conformer_with_modified_positions(new_atom_positions)
+            new_mol.AddConformer(conformer, assignId=True)
+        return new_mol
 
     def get_smiles_and_order(self):
         """

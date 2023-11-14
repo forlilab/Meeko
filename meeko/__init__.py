@@ -32,6 +32,7 @@ from .utils import utils
 from .atomtyper import AtomTyper
 from .receptor_pdbqt import PDBQTReceptor
 from .linked_rdkit_chorizo import LinkedRDKitChorizo
+from .linked_rdkit_chorizo import add_rotamers_to_chorizo_molsetups
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
 from .reactive import reactive_typer
@@ -48,6 +49,7 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
         'LinkedRDKitChorizo',
+        'add_rotamers_to_chorizo_molsetups',
         'RDKitMolCreate',
         'PDBQTWriterLegacy',
         'reactive_typer',
