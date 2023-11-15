@@ -10,6 +10,8 @@ import sys
 
 
 from meeko import PDBQTReceptor
+from meeko import PDBQTMolecule
+from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
 from meeko import MoleculeSetup
 from meeko import PDBQTWriterLegacy
@@ -149,7 +151,7 @@ def get_args():
     parser.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
-    parser.add_argument('--ligand', help="PDBQT of reference ligand")
+    parser.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
     parser.add_argument('--padding', help="padding around reference ligand [A]", type=float)
     parser.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
     parser.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
@@ -399,7 +401,24 @@ if not args.skip_gpf:
         box_center = ca + 5 * v
         box_size = args.box_size
     elif args.ligand is not None:
-        box_center, box_size = gridbox.calc_box(args.ligand, args.padding)
+        ft = pathlib.Path(args.ligand).suffix
+        suppliers = {
+            ".pdb": Chem.MolFromPDBFile,
+            ".mol": Chem.MolFromMolFile,
+            ".mol2": Chem.MolFromMol2File,
+            ".sdf": Chem.SDMolSupplier,
+            ".pdbqt": None
+        }
+        if ft not in suppliers.keys():
+            check(success=False, error_msg=f"Given --ligand file type {ft} not readable!")
+        elif ft != ".sdf" and ft != ".pdbqt":
+            ligmol = suppliers[ft](args.ligand)
+        elif ft == ".sdf":
+            ligmol = suppliers[ft](args.ligand)[0]  # assume we only want first molecule in file
+        else:  # .pdbqt
+            ligmol = RDKitMolCreate.from_pdbqt_mol(PDBQTMolecule.from_file(args.ligand))[0]  # assume we only want first molecule in file
+        
+        box_center, box_size = gridbox.calc_box(ligmol.GetConformer().GetPositions(), args.padding)
     else:
         print("Error: No box center specified.", file=sys.stderr)
         sys.exit(2)
@@ -410,7 +429,7 @@ if not args.skip_gpf:
     written_files_log["description"].append("atomic parameters for B and Si (for autogrid)")
     with open(ff_fn, "w") as f:
         f.write(gridbox.boron_silicon_atompar)
-    rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
+    rec_types = ['HD', 'C', 'A', 'N', 'NA', 'OA', 'F', 'P', 'SA', 'S', 'Cl', 'Br', 'I', 'Mg', 'Ca', 'Mn', 'Fe', 'Zn']
     gpf_string, npts = gridbox.get_gpf_string(box_center, box_size, rigid_fn, rec_types, any_lig_base_types,
                                                 ff_param_fname=ff_fn.name)
     # write GPF
@@ -428,12 +447,13 @@ if not args.skip_gpf:
         f.write(gridbox.box_to_pdb_string(box_center, npts))
 
     # check all flexres are inside the box
-    any_outside = False
-    for atom in receptor.atoms(pdbqt["flex_indices"]):
-        if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
-            print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
-            print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
-            break # only need to warn once
+    if len(reactive_flexres) > 0:
+        any_outside = False
+        for atom in receptor.atoms(pdbqt["flex_indices"]):
+            if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
+                print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
+                print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
+                break # only need to warn once
 
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:
