@@ -1041,6 +1041,34 @@ class UniqAtomParams:
         self.params = [] # aka rows
         self.param_names = [] # aka column names
 
+    @classmethod
+    def from_dict(cls, dictionary):
+        uap = UniqAtomParams()
+        uap.params = [row.copy() for row in dictionary["params"]]
+        uap.param_names = dictionary["param_names"].copy()
+        return uap
+
+    def get_indices_from_atom_params(self, atom_params):
+        nr_items = set([len(values) for key, values in atom_params.items()])
+        if len(nr_items) != 1:
+            raise RuntimeError(f"all lists in atom_params must have same length, got {nr_items}")
+        if set(atom_params) != set(self.param_names):
+            msg = f"parameter names in atom_params differ from internal ones\n"
+            msg += f"  - in atom_params: {set(atom_params)}"
+            msg += f"  - internal: {set(self.param_names)}"
+            raise RuntimeError(msg)
+        nr_items = nr_items.pop()
+        param_idxs = []
+        for i in range(nr_items):
+            row = [atom_params[key][i] for key in self.param_names]
+            param_index = None
+            for j, existing_row in enumerate(self.params):
+                if row == existing_row:
+                    param_index = j
+                    break
+            param_idxs.append(param_index)
+        return param_idxs 
+
     def add_parameter(self, new_param_dict):
         # remove None values to avoid a column with only Nones
         new_param_dict = {k: v for k, v in new_param_dict.items() if v is not None}
