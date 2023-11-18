@@ -246,6 +246,14 @@ class MoleculeSetup:
 
         return molsetup 
 
+    def set_types_from_uniq_atom_params(self, uniq_atom_params, prefix):
+        param_idxs = uniq_atom_params.get_indices_from_atom_params(self.atom_params)
+        if len(param_idxs) != len(self.atom_type):
+            raise RuntimeError("{len(param_idxs)} parameters but {len(self.atom_type)} in molsetup")
+        for i, j in enumerate(param_idxs):
+            self.atom_type[i] = f"{prefix}{j}"
+        return None
+
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
             element=None, charge=0.0, atom_type=None, pdbinfo=None,
