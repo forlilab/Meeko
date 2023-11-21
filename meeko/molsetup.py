@@ -7,6 +7,7 @@
 from copy import deepcopy
 from collections import defaultdict, OrderedDict
 import json
+import logging
 import warnings
 import sys
 
@@ -90,7 +91,7 @@ class MoleculeSetup:
         if idx is None:
             idx = len(self.coord)
         if idx in self.coord and not overwrite:
-            print("ADD_ATOM> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
+            logging.error("ADD_ATOM> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
             return False
         self.set_coord(idx, coord)
         self.set_charge(idx, charge)
@@ -129,7 +130,7 @@ class MoleculeSetup:
         """
         idx = self.atom_true_count + len(self.atom_pseudo)
         if idx in self.coord and not overwrite:
-            print("ADD_PSEUDO> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
+            logging.error("ADD_PSEUDO> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
             return False
         self.atom_pseudo.append(idx)
         # add the pseudoatom information to the atoms
@@ -489,34 +490,34 @@ class MoleculeSetup:
     def show(self):
         tot_charge = 0
 
-        print("Molecule setup\n")
-        print("==============[ ATOMS ]===================================================")
-        print("idx  |          coords            | charge |ign| atype    | connections")
-        print("-----+----------------------------+--------+---+----------+--------------- . . . ")
+        logging.info(f"Molecule setup for {self.get_mol_name()}\n")
+        logging.debug("==============[ ATOMS ]===================================================")
+        logging.debug("idx  |          coords            | charge |ign| atype    | connections")
+        logging.debug("-----+----------------------------+--------+---+----------+--------------- . . . ")
         for k, v in list(self.coord.items()):
-            print("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
+            logging.debug("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
                   self.charge[k], self.atom_ignore[k]),
                   "| % -8s |" % self.atom_type[k],
                   self.graph[k])
             tot_charge += self.charge[k]
-        print("-----+----------------------------+--------+---+----------+--------------- . . . ")
-        print("  TOT CHARGE: %3.3f" % tot_charge)
+        logging.debug("-----+----------------------------+--------+---+----------+--------------- . . . ")
+        logging.debug("  TOT CHARGE: %3.3f" % tot_charge)
 
-        print("\n======[ DIRECTIONAL VECTORS ]==========")
+        logging.debug("\n======[ DIRECTIONAL VECTORS ]==========")
         for k, v in list(self.coord.items()):
             if k in self.interaction_vector:
-                print("% 4d " % k, self.atom_type[k], end=' ')
+                logging.debug("% 4d " % k, self.atom_type[k], end=' ')
 
-        print("\n==============[ BONDS ]================")
+        logging.debug("\n==============[ BONDS ]================")
         # For sanity users, we won't show those keys for now
         keys_to_not_show = ['bond_order', 'type']
         for k, v in list(self.bond.items()):
             t = ', '.join('%s: %s' % (i, j) for i, j in v.items() if not i in keys_to_not_show)
-            print("% 8s - " % str(k), t)
+            logging.debug("% 8s - " % str(k), t)
 
         # _macrocycle_typer.show_macrocycle_scores(self)
 
-        print('')
+        logging.debug('')
 
 
 
@@ -533,7 +534,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
             RDKitMoleculeSetup.warned_not3D = True
         if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one." 
-            print(msg, file=sys.stderr)
+            logging.error(msg)
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()

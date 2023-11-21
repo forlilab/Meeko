@@ -7,6 +7,7 @@
 import os
 from collections import defaultdict
 
+import logging
 import numpy as np
 from scipy import spatial
 
@@ -676,7 +677,7 @@ class PDBQTMolecule:
             as_model (bool): Qdd MODEL/ENDMDL keywords to the output PDBQT string (default: False)
 
         """
-        print(overwrite and os.path.isfile(output_pdbqtfilename))
+        logging.info(overwrite and os.path.isfile(output_pdbqtfilename))
         if not overwrite and os.path.isfile(output_pdbqtfilename):
             raise RuntimeError('Output PDBQT file %s already exists' % output_pdbqtfilename)
 

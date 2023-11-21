@@ -6,6 +6,7 @@
 
 from inspect import signature
 import json
+import logging
 import os
 import pathlib
 import sys
@@ -259,4 +260,57 @@ class MoleculePreparation:
         warnings.warn("MoleculePreparation.write_pdbqt_file() is deprecated since Meeko v0.5", DeprecationWarning)
         with open(pdbqt_filename,'w') as w:
             w.write(self.write_pdbqt_string(add_index_map, remove_smiles))
+
+    @staticmethod
+    def prep_single_mol(mol, args, output, backend, is_covalent, preparator, covalent_builder, write_output=True):
+        nr_failures = 0
+
+        # check that molecule was successfully loaded
+        if backend == 'rdkit':
+            is_valid = mol is not None
+        elif backend == 'ob':
+            is_valid = mol.NumAtoms() > 0
+        if not is_valid: return False, None, None
+
+        this_mol_had_failure = False
+        output_pdbqts_info = []
+
+        if is_covalent:
+            for cov_lig in covalent_builder.process(mol, args.tether_smarts, args.tether_smarts_indices):
+                root_atom_index = cov_lig.indices[0]
+                molsetups = preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
+                res, chain, num = cov_lig.res_id
+                suffixes = output.get_suffixes(molsetups)
+                for molsetup, suffix in zip(molsetups, suffixes):
+                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+                    if success:
+                        pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
+                        name = molsetup.name
+                        if write_output:
+                            output(pdbqt_string, name, (cov_lig.label, suffix))
+                        else:
+                            output_pdbqts_info.append((pdbqt_string, name, (cov_lig.label, suffix)))
+                    else:
+                        nr_failures += 1
+                        this_mol_had_failure = True
+                        logging.error(error_msg)
+                        
+        else:
+            molsetups = preparator.prepare(mol)
+            suffixes = output.get_suffixes(molsetups) 
+            for molsetup, suffix in zip(molsetups, suffixes):
+                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+                if success:
+                    name = molsetup.name
+                    if write_output:
+                        output(pdbqt_string, name, (suffix,))
+                    else:
+                        output_pdbqts_info.append((pdbqt_string, name, (suffix,)))
+                    molsetup.show()
+                else:
+                    nr_failures += 1
+                    this_mol_had_failure = True
+                    logging.error(error_msg)
+
+        return is_valid, this_mol_had_failure, nr_failures, output_pdbqts_info
 

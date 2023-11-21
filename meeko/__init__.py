@@ -33,6 +33,7 @@ from .rdkit_mol_create import RDKitMolCreate
 from .reactive import reactive_typer
 from .reactive import get_reactive_config
 from .writer import PDBQTWriterLegacy
+from .parallelizer import Parallelizer
 from . import analysis
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
@@ -43,6 +44,7 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'reactive_typer',
         'get_reactive_config',
         'gridbox',
+        "Parallelizer",
 ]
 
 if _has_openbabel:

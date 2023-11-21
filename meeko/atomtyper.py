@@ -6,6 +6,7 @@
 
 import os
 
+import logging
 import numpy as np
 
 from .utils import utils
@@ -56,7 +57,7 @@ class AtomTyper:
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
                 msg = 'WARNING: %s is modified in multiple smartsgroups: %s' % (atompar, set(ensure[atompar]))
-                print(msg)
+                logging.warning(msg)
         return
 
 

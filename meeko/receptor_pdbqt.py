@@ -6,6 +6,7 @@
 
 from collections import defaultdict
 import json
+import logging
 from os import linesep as os_linesep
 import pathlib
 import sys
@@ -211,7 +212,7 @@ class PDBQTReceptor:
             ok &= ok_
             err += err_
             if not ok_:
-                print("did not match %s with template" % str(r_id), file=sys.stderr)
+                logging.error("did not match %s with template" % str(r_id))
                 continue
             for key in wanted_params:
                 atom_params[key].extend(params_this_res[key])

@@ -7,6 +7,7 @@
 import os
 import sys
 from collections import defaultdict
+import logging
 from operator import itemgetter
 
 
@@ -224,7 +225,7 @@ class FlexMacrocycle:
 
 
     def show_macrocycle_scores(self, setup):
-        print("Warning: not showing macrocycle scores, check implementation.")
+        logging.warning("Warning: not showing macrocycle scores, check implementation.")
         return
         if setup is not None:
             print("\n==============[ MACROCYCLE SCORES ]================")

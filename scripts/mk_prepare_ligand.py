@@ -8,12 +8,14 @@ import os
 import sys
 import json
 import warnings
+import logging
 
 from rdkit import Chem
 
 from meeko import MoleculePreparation
 from meeko import rdkitutils
 from meeko import PDBQTWriterLegacy
+from meeko import Parallelizer
 
 try:
     import prody
@@ -57,6 +59,8 @@ def cmd_lineparser():
     parser.set_defaults(**config)
     parser.add_argument("-v", "--verbose", dest="verbose",
                         action="store_true", help="print information about molecule setup")
+    parser.add_argument("-d", "--debug",
+                        action="store_true", help="print debugging information")
 
     io_group = parser.add_argument_group("Input/Output")
     io_group.add_argument("-i", "--mol", dest="input_molecule_filename", required=True,
@@ -103,6 +107,7 @@ def cmd_lineparser():
                         action="store_true", help="write map of atom indices from input to pdbqt")
     config_group.add_argument("--remove_smiles", dest="remove_smiles",
                         action="store_true", help="do not write smiles as remark to pdbqt")
+    config_group.add_argument("--parallelize", help="Number of CPU cores to use for parallel processing. Will use all cores by default.", nargs="?", const=os.cpu_count())
     reactive_group = parser.add_argument_group("Reactive docking")
     reactive_group.add_argument('--reactive_smarts',  help="SMARTS pattern for reactive group")
     reactive_group.add_argument('--reactive_smarts_idx', help='index (1-based) of the reactive atom in --reactive_smarts', type=int)
@@ -269,11 +274,21 @@ class Output:
         else:
             return tuple("mk%d" % (i + 1) for i in range(len(molsetups)))
 
-
 if __name__ == '__main__':
 
     args, config, backend, is_covalent = cmd_lineparser()
     input_molecule_filename = args.input_molecule_filename
+
+    # set logging level
+    levels = {10: "debug", 20: "info", 30: "warning"}
+    if args.debug:
+        level = logging.DEBUG
+    elif args.verbose:
+        level = logging.INFO
+    else:
+        level = logging.WARNING
+    logging.getLogger().setLevel(level)
+    logging.info(f"Logging level set to {levels[level]}")
 
     # read input
     input_fname, ext = os.path.splitext(input_molecule_filename)
@@ -281,7 +296,7 @@ if __name__ == '__main__':
     if backend == 'rdkit':
         parsers = {'sdf': Chem.SDMolSupplier, 'mol2': rdkitutils.Mol2MolSupplier, 'mol': Chem.SDMolSupplier}
         if not ext in parsers:
-            print("*ERROR* Format [%s] not in supported formats [%s]" % (ext, '/'.join(list(parsers.keys()))))
+            logging.error("*ERROR* Format [%s] not in supported formats [%s]" % (ext, '/'.join(list(parsers.keys()))))
             sys.exit(1)
         mol_supplier = parsers[ext](input_molecule_filename, removeHs=False) # input must have explicit H
     elif backend == 'ob':
@@ -301,6 +316,7 @@ if __name__ == '__main__':
             )
 
     # initialize covalent object for receptor
+    covalent_builder = None
     if is_covalent:
         rec_filename = args.receptor
         _, rec_extension = os.path.splitext(rec_filename)
@@ -315,57 +331,22 @@ if __name__ == '__main__':
     nr_failures = 0
     is_after_first = False
     preparator = MoleculePreparation.from_config(config)
-    for mol in mol_supplier:
-        if is_after_first and output.is_multimol == False:
-            print("Processed only the first molecule of multiple molecule input.")
-            print("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
-                input_molecule_filename))
-            break
-        is_after_first = True
 
-        # check that molecule was successfully loaded
-        if backend == 'rdkit':
-            is_valid = mol is not None
-        elif backend == 'ob':
-            is_valid = mol.NumAtoms() > 0
-        input_mol_skipped += int(is_valid==False)
-        if not is_valid: continue
+    if len(mol_supplier) > 1 and not output.is_multimol:
+            logging.error("Given multiple molecule input but no output options.")
+            logging.error("Use --multimol_prefix and/or --multimol_outdir to process all molecules in %s." % (
+                args.input_molecule_filename))
+            sys.exit(1)
 
-        this_mol_had_failure = False
-
-        if is_covalent:
-            for cov_lig in covalent_builder.process(mol, args.tether_smarts, args.tether_smarts_indices):
-                root_atom_index = cov_lig.indices[0]
-                molsetups = preparator.prepare(cov_lig.mol, root_atom_index=root_atom_index, not_terminal_atoms=[root_atom_index])
-                res, chain, num = cov_lig.res_id
-                suffixes = output.get_suffixes(molsetups)
-                for molsetup, suffix in zip(molsetups, suffixes):
-                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
-                    if success:
-                        pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
-                        name = molsetup.name
-                        output(pdbqt_string, name, (cov_lig.label, suffix))
-                    else:
-                        nr_failures += 1
-                        this_mol_had_failure = True
-                        print(error_msg, file=sys.stderr)
-                        
-        else:
-            molsetups = preparator.prepare(mol)
-            suffixes = output.get_suffixes(molsetups) 
-            for molsetup, suffix in zip(molsetups, suffixes):
-                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
-                if success:
-                    name = molsetup.name
-                    output(pdbqt_string, name, (suffix,))
-                    if args.verbose: 
-                        molsetup.show()
-                else:
-                    nr_failures += 1
-                    this_mol_had_failure = True
-                    print(error_msg, file=sys.stderr)
-
-        input_mol_with_failure += int(this_mol_had_failure)
+    if args.parallelize is not None:
+        pool = Parallelizer(args.parallelize, args, output, backend, is_covalent, preparator, covalent_builder)
+        input_mol_skipped, input_mol_with_failure, nr_failures = pool.process_mols(mol_supplier)
+    else:
+        for mol in mol_supplier:
+            is_valid, this_mol_had_failure, nr_f, _ = MoleculePreparation.prep_single_mol(mol, args, output, backend, is_covalent, preparator, covalent_builder)
+            input_mol_skipped += int(is_valid==False)
+            input_mol_with_failure += int(this_mol_had_failure)
+            nr_failures += nr_f
 
     if output.is_multimol:
         print("Input molecules processed: %d, skipped: %d" % (output.counter, input_mol_skipped))
