@@ -336,7 +336,7 @@ class LinkedRDKitChorizo:
         mol = Chem.Mol(self.residues[resn]["resmol"])
         is_res_atom = [True for atom in mol.GetAtoms()]
         mapidx = {atom.GetIdx(): atom.GetIdx() for atom in mol.GetAtoms()}
-        if self.residues[resn]["previous res"] is not None:
+        if self.residues[resn]["previous res"] is not None and "resmol" in self.residues[resn]["previous res"]:
             prev_resn = self.residues[resn]["previous res"]
             prev_mol = self.residues[prev_resn]["resmol"]
             nterm_pad = Chem.MolFromSmiles(self.nterm_pad_smiles)
@@ -350,7 +350,7 @@ class LinkedRDKitChorizo:
                     prev_mol,
                     self.nterm_pad_backbone_smarts_idxs)
             
-        if self.residues[resn]["next res"] is not None:
+        if self.residues[resn]["next res"] is not None and "resmol" in self.residues[resn]["next res"]:
             next_resn = self.residues[resn]["next res"]
             next_mol = self.residues[next_resn]["resmol"]
             cterm_pad = Chem.MolFromSmiles(self.cterm_pad_smiles)

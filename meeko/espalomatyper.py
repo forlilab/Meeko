@@ -45,7 +45,7 @@ class EspalomaTyper:
             raise NotImplementedError("need rdkit molecule for espaloma typing")
         
         rdmol = molsetup.mol
-        openffmol = self.openffmol_from_rdkit(rdmol, hydrogens_are_explicit=True)
+        openffmol = self.openffmol_from_rdkit(rdmol, hydrogens_are_explicit=True, allow_undefined_stereo=True)
         molgraph = self.EspalomaGraph(openffmol)
         self.espaloma_model(molgraph.heterograph)
         
