@@ -396,6 +396,8 @@ class LinkedRDKitChorizo:
                 ignored_in_molsetup.append(mapidx[atom_index])
         # rectify charges to sum to integer (because of padding)
         net_charge = sum([atom.GetFormalCharge() for atom in self.residues[res]["resmol"].GetAtoms()])
+        if mk_prep.charge_model == "zero":
+            net_charge = 0
         not_ignored_idxs = []
         charges = []
         for i, q in molsetup.charge.items(): # charge is ordered dict
