@@ -197,6 +197,7 @@ class LinkedRDKitChorizo:
     def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, termini=None, deleted_residues=None, allow_bad_res=False):
         suggested_mutations = {}
         
+        # Generates the residue representations based purely on the information in the pdb file to begin with.
         self.residues = self._pdb_to_resblocks(pdb_path)
         res_list = self.residues.keys()
         
@@ -330,7 +331,7 @@ class LinkedRDKitChorizo:
                     pad_mol.GetConformer().SetAtomPosition(index, pos)
             products, index_map = react_and_map((pad_mol, mol), rxn)
             if len(products) != 1:
-                raise RuntimeError("expected 1 reaction product but got %d" % (len(ps)))
+                raise RuntimeError("expected 1 reaction product but got %d" % (len(products)))
             mol = products[0][0]
             index_map["reactant_idx"] = index_map["reactant_idx"][0][0]
             index_map["atom_idx"] = index_map["atom_idx"][0][0]
@@ -495,7 +496,7 @@ class LinkedRDKitChorizo:
         with open(pdb_path, 'r') as fin:
             # Tracking the key and the value for the current dictionary pair being read in
             current_res_id = None # the residue id we are tracking
-            current_res = None    # the chorizo_residue object we are tracking
+            current_res = None    # the ChorizoResidue object we are tracking
             for line in fin:
                 if line.startswith('TER') and current_res is not None:
                     current_res.next_id = None
@@ -517,7 +518,7 @@ class LinkedRDKitChorizo:
                             residues[current_res_id] = current_res
                         # Updates tracking to the new key-value pair we're dealing with
                         current_res = ChorizoResidue(full_res_id, line)
-                        current_res.previous_res_id = current_res_id
+                        current_res.previous_id = current_res_id
                         current_res_id = full_res_id
             if current_res is not None:
                 current_res.next_id = None
@@ -702,7 +703,7 @@ class LinkedRDKitChorizo:
                 if type(value) == float:
                     atom.SetDoubleProp(key, value)
                 elif type(value) == bool:
-                    aotm.SetBoolProp(key, value)
+                    atom.SetBoolProp(key, value)
                 else:
                     atom.SetProp(key, value)
         # consider deleting existing properties/parameters
@@ -810,7 +811,7 @@ class ChorizoResidue:
         self.rdkit_mol = None
         self.molsetup = None
         self.molsetup_mapidx = None
-        self.molsetup_ignored = None # Check about these data types
+        self.molsetup_ignored = None # Check about these data types/Do we want the default to be None or empty
 
         # flags
         self.ignore_residue = False
@@ -833,8 +834,8 @@ class ResidueAdditionalConnection:
     connection_residue: string
         the id of the connected residue
     connection_atom: string
-        the specific connected atom
-    bond_order: string # TODO: is this real?
+        the connected atom
+    bond_order: string                    # SHOULD MAYBE NOT BE A STRING?
         the bond order of the connection
     """
     def __init__(self, residue, atom, bond_order):

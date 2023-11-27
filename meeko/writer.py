@@ -420,15 +420,15 @@ class PDBQTWriterLegacy():
         flex_pdbqt_string = ""
         atom_count = 0
         flex_atom_count = 0
-        for res_id in chorizo.res_list:
-            if res_id in chorizo.del_res:
+        for res_id in chorizo.residues:
+            if chorizo.residues[res_id].user_deleted:
                 continue
-            resmol = chorizo.residues[res_id]["resmol"]
+            resmol = chorizo.residues[res_id].rdkit_mol
             positions = resmol.GetConformer().GetPositions()
             chain, resname, resnum = res_id.split(":")
             resnum = int(resnum)
-            molsetup_mapidx = chorizo.residues[res_id].get("molsetup_mapidx", {})
-            molsetup_ignored = chorizo.residues[res_id].get("molsetup_ignored", ())
+            molsetup_mapidx = {} if chorizo.residues[res_id].molsetup_mapidx is None else chorizo.residues[res_id].molsetup_mapidx
+            molsetup_ignored = () if chorizo.residues[res_id].molsetup_ignored is None else chorizo.residues[res_id].molsetup_ignored
             flexres_idxs = [j for (i, j) in molsetup_mapidx.items() if j not in molsetup_ignored]
             for atom in resmol.GetAtoms():
                 if atom.GetIdx() in flexres_idxs:
@@ -443,9 +443,9 @@ class PDBQTWriterLegacy():
                 atom_count += 1
                 rigid_pdbqt_string += cls._make_pdbqt_line(
                     atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type) + linesep
-            if "molsetup" in chorizo.residues[res_id]:
+            if chorizo.residues[res_id].molsetup:
                 chain, resname, resnum = res_id.split(":")
-                molsetup = chorizo.residues[res_id]["molsetup"]
+                molsetup = chorizo.residues[res_id].molsetup
                 this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup, remove_smiles=True)
                 if not ok:
                     raise RuntimeError(err)
