@@ -165,8 +165,8 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
 
 class LinkedRDKitChorizo:
     """
-    This is a class used to take in information about a series of linked Chorizo residues
-    and there are most likely many more details that should be included here.
+    This is a class used to represent linked residues and associate them with RDKit and other information
+    and there are most likely many more details that should be included in this little blurb.
 
     Attributes
     ----------
@@ -180,7 +180,14 @@ class LinkedRDKitChorizo:
     rxn_cterm_pad: RDKit ChemicalReaction
     rxn_nterm_pad: RDKit ChemicalReaction
 
-    residues: dict (string -> ChorizoResidue) #TODO: figure out exact SciPy standard for this
+    TODO: Organize the following in a way that makes sense
+    residues: dict (string -> ChorizoResidue) #TODO: figure out exact SciPy standard for dictionary key/value notation
+    termini:
+    deleted_residues:
+    mutate_res_dict:
+    res_templates:
+    ambiguous:
+    disulfide_bridges:
     """
 
     cterm_pad_smiles = "CN"
@@ -526,22 +533,33 @@ class LinkedRDKitChorizo:
         return residues
     
     def _rename_residues(self, mutate_dict):
+        residue_order = list(self.residues.keys())
+        newResidues = self.residues #TODO: This is pretty space inefficient. see if we can get around this
         for res in mutate_dict:
             old_resn = res.split(':')[1]
             new_resn = mutate_dict[res].split(':')[1]
-            old_residue = self.residues[mutate_dict[res]]
-            self.residues[mutate_dict[res]] = self.residues[res]
-            # self.residues[mutate_dict[res]] = self.residues.pop(res)
-            # self.residues[mutate_dict[res]].['pdb block'] = self.residues[mutate_dict[res]]['pdb block'].replace(old_resn, new_resn)
-            previous_res = self.residues[mutate_dict[res]].previous_id
-            if previous_res:
-                self.residues[previous_res].next_id = mutate_dict[res]
-            next_res = self.residues[mutate_dict[res]].next_id
-            if next_res:
-                self.residues[next_res].previous_id = mutate_dict[res]
+            # Adds the previous residue as a new key in the dictionary
+            newResidues[mutate_dict[res]] = newResidues.pop(res)
+            # modifies the residue id so it is consistent with the new name we are giving the residue
+            # TODO: Check if we want to do this or leave the original id in there
+            newResidues[mutate_dict[res]].residue_id = mutate_dict[res]
 
-            """i = self.res_list.index(res)
-            self.res_list[i] = mutate_dict[res]"""
+            # updates dictionary ids
+            previous_res = newResidues[mutate_dict[res]].previous_id
+            if previous_res:
+                newResidues[previous_res].next_id = mutate_dict[res]
+            next_res = newResidues[mutate_dict[res]].next_id
+            if next_res:
+                newResidues[next_res].previous_id = mutate_dict[res]
+
+            # tracks locations for reordering
+            i = residue_order.index(res)
+            residue_order[i] = mutate_dict[res]
+        
+        # clears and recreates self.residues in the desired order
+        self.residues.clear
+        for residue in residue_order:
+            self.residues[residue] = newResidues[residue]
 
     @staticmethod
     def add_termini(resn, res, termini, residues):
@@ -791,7 +809,7 @@ class ChorizoResidue:
 
     ignore_residue: bool
         marks residues that formerly were part of the removed_residues structure,
-        put on residues that are being ignored 
+        put on residues that are being ignored due to being incomplete or incorrect
     is_movable: bool
         marks residues that are flexible
     user_deleted: bool
