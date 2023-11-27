@@ -17,7 +17,9 @@ from rdkit.Chem import rdPartialCharges
 
 from .utils import rdkitutils
 from .utils import utils
+from .utils.geomutils import calcDihedral
 from .receptor_pdbqt import PDBQTReceptor
+
 
 try:
     from openbabel import openbabel as ob
@@ -90,6 +92,7 @@ class MoleculeSetup:
         self.atom_to_ring_id = defaultdict(list)
         self.ring_corners = {}  # used to store corner flexibility
         self.name = None
+        self.rotamers = []
 
     def copy(self):
         newsetup = MoleculeSetup()
@@ -243,6 +246,14 @@ class MoleculeSetup:
 
         return molsetup 
 
+    def set_types_from_uniq_atom_params(self, uniq_atom_params, prefix):
+        param_idxs = uniq_atom_params.get_indices_from_atom_params(self.atom_params)
+        if len(param_idxs) != len(self.atom_type):
+            raise RuntimeError("{len(param_idxs)} parameters but {len(self.atom_type)} in molsetup")
+        for i, j in enumerate(param_idxs):
+            self.atom_type[i] = f"{prefix}{j}"
+        return None
+
 
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
             element=None, charge=0.0, atom_type=None, pdbinfo=None,
@@ -323,6 +334,19 @@ class MoleculeSetup:
         if not idx1 in self.graph[idx2]:
             self.graph[idx2].append(idx1)
         self.set_bond(idx1, idx2, order, rotatable)
+
+    def add_rotamer(self, indices_list, angles_list):
+        xyz = self.coord
+        rotamer = {}
+        for (i1, i2, i3, i4), angle in zip(indices_list, angles_list):
+            bond_id = self.get_bond_id(i2, i3)
+            if bond_id in rotamer:
+                raise RuntimeError("repeated bond %d-%d" % bond_id)
+            if not self.bond[bond_id]["rotatable"]:
+                raise RuntimeError("trying to add rotamer for non rotatable bond %d-%d" % bond_id)
+            d0 = calcDihedral(xyz[i1], xyz[i2], xyz[i3], xyz[i4])
+            rotamer[bond_id] = angle - d0
+        self.rotamers.append(rotamer)
 
     def set_atom_type(self, idx, atom_type):
         """ set the atom type for atom index
@@ -715,20 +739,44 @@ class RDKitMoleculeSetup(MoleculeSetup):
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
+
+        # to store sets of coordinates, e.g. docked poses, as dictionaries indexed by
+        # the atom index, because not all atoms need to have new coordinates specified
+        # Unspecified hydrogen positions bonded to modified heavy atom positions
+        # are to be calculated "on-the-fly".
+        molsetup.modified_atom_positions = [] # list of dictionaries where keys are atom indices
+
         return molsetup
 
-    def get_rdkit_conformer(self, coords):
-        conformer = Chem.Conformer(self.atom_true_count) 
-        for atom_index in range(self.atom_true_count):
-            conformer.SetAtomPosition(atom_index, coords[atom_index])
-        return conformer
+    def get_conformer_with_modified_positions(self, new_atom_positions):
+        # we operate on one conformer at a time because SetTerminalAtomPositions
+        # acts on all conformers of a molecule, and we don't want to guarantee
+        # that all conformers require the same set of terminal atoms to be updated
+        new_mol = Chem.Mol(self.mol)
+        new_conformer = Chem.Conformer(self.mol.GetConformer())
+        is_set_list = [False] * self.mol.GetNumAtoms()
+        for atom_index, new_position in new_atom_positions.items():
+            new_conformer.SetAtomPosition(atom_index, new_position)
+            is_set_list[atom_index] = True
+        new_mol.RemoveAllConformers()
+        new_mol.AddConformer(new_conformer, assignId=True)
+        for atom_index, is_set in enumerate(is_set_list):
+            if not is_set and new_mol.GetAtomWithIdx(atom_idx).GetAtomicNum() == 1:
+                neighbors = new_mol.GetAtomWithIdx(atom_idx).GetNeighbors()
+                if len(neighbors) != 1:
+                    raise RuntimeError("Expected H to have one neighbors")
+                Chem.SetTerminalAtomCoords(new_mol, atom_index, neighbors[0].GetIdx())
+        return new_conformer
 
-    def get_rdkit_mol(self, coords):
-        mol = Chem.Mol(self.mol)
-        mol.RemoveAllConformers()
-        conf = self.get_rdkit_conformer(coords)
-        mol.AddConformer(conf, assignId=True)
-        return mol
+    def get_mol_with_modified_positions(self, new_atom_positions_list=None):
+        if new_atom_positions_list is None:
+            new_atom_positions_list = self.modified_atom_positions
+        new_mol = Chem.Mol(self.mol)
+        new_mol.RemoveAllConformers()
+        for new_atom_positions in new_atom_positions_list:
+            conformer = self.get_conformer_with_modified_positions(new_atom_positions)
+            new_mol.AddConformer(conformer, assignId=True)
+        return new_mol
 
     def get_smiles_and_order(self):
         """
@@ -994,6 +1042,92 @@ class OBMoleculeSetup(MoleculeSetup):
     def copy(self):
         """ return a copy of the current setup"""
         return OBMoleculeSetup(template=self)
+
+
+class UniqAtomParams:
+    def __init__(self):
+        self.params = [] # aka rows
+        self.param_names = [] # aka column names
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        uap = UniqAtomParams()
+        uap.params = [row.copy() for row in dictionary["params"]]
+        uap.param_names = dictionary["param_names"].copy()
+        return uap
+
+    def get_indices_from_atom_params(self, atom_params):
+        nr_items = set([len(values) for key, values in atom_params.items()])
+        if len(nr_items) != 1:
+            raise RuntimeError(f"all lists in atom_params must have same length, got {nr_items}")
+        if set(atom_params) != set(self.param_names):
+            msg = f"parameter names in atom_params differ from internal ones\n"
+            msg += f"  - in atom_params: {set(atom_params)}"
+            msg += f"  - internal: {set(self.param_names)}"
+            raise RuntimeError(msg)
+        nr_items = nr_items.pop()
+        param_idxs = []
+        for i in range(nr_items):
+            row = [atom_params[key][i] for key in self.param_names]
+            param_index = None
+            for j, existing_row in enumerate(self.params):
+                if row == existing_row:
+                    param_index = j
+                    break
+            param_idxs.append(param_index)
+        return param_idxs 
+
+    def add_parameter(self, new_param_dict):
+        # remove None values to avoid a column with only Nones
+        new_param_dict = {k: v for k, v in new_param_dict.items() if v is not None}
+        incoming_keys = set(new_param_dict.keys())
+        existing_keys = set(self.param_names)
+        new_keys = incoming_keys.difference(existing_keys)
+        for new_key in new_keys:
+            self.param_names.append(new_key)
+            for row in self.params:
+                row.append(None) # fill in empty "cell" in new "column"
+
+        new_row = []
+        for key in self.param_names:
+            value = new_param_dict.get(key, None)
+            new_row.append(value)
+
+        if len(new_keys) == 0: # try to match with existing row
+            for index, row in enumerate(self.params):
+                if row == new_row:
+                    return index
+
+        # if we are here, we didn't match
+        new_row_index = len(self.params)
+        self.params.append(new_row)
+        return new_row_index
+
+
+    def add_molsetup(self, molsetup, add_atomic_nr=False, add_atom_type=False):
+        if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
+            msg = '"q" and "atom_type" found in molsetup.atom_params'
+            msg += ' but are hard-coded to store molsetup.charge and'
+            msg += ' molsetup.atom_type in the internal data structure'
+            raise RuntimeError(msg)
+        param_idxs = []
+        for atom_index, ignore in molsetup.atom_ignore.items():
+            if ignore:
+                param_idx = None
+            else:
+                p = {k: v[atom_index] for (k, v) in molsetup.atom_params.items()}
+                if add_atomic_nr:
+                    if "atomic_nr" in p:
+                        raise RuntimeError("trying to add atomic_nr but it's already in atom_params")
+                    p["atomic_nr"] = molsetup.element[atom_index]
+                if add_atom_type:
+                    if "atom_type" in p:
+                        raise RuntimeError("trying to add atom_type but it's already in atom_params")
+                    p["atom_type"] = molsetup.atom_type[atom_index]
+                param_idx = self.add_parameter(p)
+            param_idxs.append(param_idx)
+        return param_idxs
+
 
 @dataclass
 class Restraint:

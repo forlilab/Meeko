@@ -10,6 +10,8 @@ import sys
 
 
 from meeko import PDBQTReceptor
+from meeko import PDBQTMolecule
+from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
 from meeko import MoleculeSetup
 from meeko import PDBQTWriterLegacy
@@ -133,6 +135,7 @@ def get_args():
                         help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
     parser.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
     parser.add_argument(      '--chorizo_config', help="[.json]")
+    parser.add_argument(      '--mk_config', help="[.json]")
     parser.add_argument(      '--allow_bad_res', action="store_true",
                                                  help="residues with missing atoms will be deleted")
 
@@ -148,7 +151,7 @@ def get_args():
     parser.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
-    parser.add_argument('--ligand', help="PDBQT of reference ligand")
+    parser.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
     parser.add_argument('--padding', help="padding around reference ligand [A]", type=float)
     parser.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
     parser.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
@@ -297,9 +300,18 @@ if args.pdb is not None:
         termini.update(json.loads(args.termini))
     if args.del_res is not None:
         del_res.update(json.loads(args.del_res))
-    mk_prep = MoleculePreparation() # TODO user mk_config.json
     chorizo = LinkedRDKitChorizo(args.pdb, mutate_res_dict=mutate_res_dict, termini=termini, del_res=del_res,
                                  allow_bad_res=args.allow_bad_res)
+    if args.mk_config is not None:
+        with open(args.mk_config) as f:
+            mk_config = json.load(f)
+        print("HERE")
+        mk_prep = MoleculePreparation.from_config(mk_config)
+        chorizo.mk_parameterize_all_residues(mk_prep)
+    else:
+        mk_prep = MoleculePreparation()
+
+
     for res_id in all_flexres:
         res = "%s:%s:%d" % res_id
         chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)
@@ -389,7 +401,24 @@ if not args.skip_gpf:
         box_center = ca + 5 * v
         box_size = args.box_size
     elif args.ligand is not None:
-        box_center, box_size = gridbox.calc_box(args.ligand, args.padding)
+        ft = pathlib.Path(args.ligand).suffix
+        suppliers = {
+            ".pdb": Chem.MolFromPDBFile,
+            ".mol": Chem.MolFromMolFile,
+            ".mol2": Chem.MolFromMol2File,
+            ".sdf": Chem.SDMolSupplier,
+            ".pdbqt": None
+        }
+        if ft not in suppliers.keys():
+            check(success=False, error_msg=f"Given --ligand file type {ft} not readable!")
+        elif ft != ".sdf" and ft != ".pdbqt":
+            ligmol = suppliers[ft](args.ligand)
+        elif ft == ".sdf":
+            ligmol = suppliers[ft](args.ligand)[0]  # assume we only want first molecule in file
+        else:  # .pdbqt
+            ligmol = RDKitMolCreate.from_pdbqt_mol(PDBQTMolecule.from_file(args.ligand))[0]  # assume we only want first molecule in file
+        
+        box_center, box_size = gridbox.calc_box(ligmol.GetConformer().GetPositions(), args.padding)
     else:
         print("Error: No box center specified.", file=sys.stderr)
         sys.exit(2)
@@ -400,7 +429,7 @@ if not args.skip_gpf:
     written_files_log["description"].append("atomic parameters for B and Si (for autogrid)")
     with open(ff_fn, "w") as f:
         f.write(gridbox.boron_silicon_atompar)
-    rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
+    rec_types = ['HD', 'C', 'A', 'N', 'NA', 'OA', 'F', 'P', 'SA', 'S', 'Cl', 'Br', 'I', 'Mg', 'Ca', 'Mn', 'Fe', 'Zn']
     gpf_string, npts = gridbox.get_gpf_string(box_center, box_size, rigid_fn, rec_types, any_lig_base_types,
                                                 ff_param_fname=ff_fn.name)
     # write GPF
@@ -418,12 +447,13 @@ if not args.skip_gpf:
         f.write(gridbox.box_to_pdb_string(box_center, npts))
 
     # check all flexres are inside the box
-    any_outside = False
-    for atom in receptor.atoms(pdbqt["flex_indices"]):
-        if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
-            print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
-            print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
-            break # only need to warn once
+    if len(reactive_flexres) > 0:
+        any_outside = False
+        for atom in receptor.atoms(pdbqt["flex_indices"]):
+            if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
+                print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
+                print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
+                break # only need to warn once
 
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:

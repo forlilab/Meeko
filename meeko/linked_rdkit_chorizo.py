@@ -6,6 +6,7 @@ from rdkit.Chem import rdChemReactions
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
 from .writer import PDBQTWriterLegacy
 from .molsetup import RDKitMoleculeSetup
+from .utils.rdkitutils import mini_periodic_table
 
 from misctools import react_and_map
 
@@ -56,6 +57,10 @@ def reassign_bond_orders(mol, ref, mapping):
 
 def h_coord_from_dipeptide(pdb1, pdb2):
     mol = Chem.MolFromPDBBlock(pdb1+pdb2)
+    if mol is None:
+        print(pdb1)
+        print(pdb2)
+        raise RuntimeError
     mol_h = Chem.AddHs(mol, addCoords=True)
     ps = Chem.SmilesParserParams()
     ps.removeHs = False
@@ -362,7 +367,7 @@ class LinkedRDKitChorizo:
         mol = Chem.Mol(self.residues[resn].rdkit_mol)
         is_res_atom = [True for atom in mol.GetAtoms()]
         mapidx = {atom.GetIdx(): atom.GetIdx() for atom in mol.GetAtoms()}
-        if self.residues[resn].previous_id is not None:
+        if self.residues[resn].previous_id is not None and self.residues[self.residues[resn].previous_id].rdkit_mol is not None:
             prev_resn = self.residues[resn].previous_id
             prev_mol = self.residues[prev_resn].rdkit_mol
             nterm_pad = Chem.MolFromSmiles(self.nterm_pad_smiles)
@@ -376,7 +381,7 @@ class LinkedRDKitChorizo:
                     prev_mol,
                     self.nterm_pad_backbone_smarts_idxs)
             
-        if self.residues[resn].next_id is not None:
+        if self.residues[resn].next_id is not None and self.residues[self.residues[resn].next_id].rdkit_mol is not None:
             next_resn = self.residues[resn].next_id
             next_mol = self.residues[next_resn].rdkit_mol
             cterm_pad = Chem.MolFromSmiles(self.cterm_pad_smiles)
@@ -407,6 +412,7 @@ class LinkedRDKitChorizo:
         if len(molsetups) > 1:
             raise NotImplementedError("multiple molsetups not yet implemented for flexres")
         molsetup = molsetups[0]
+        molsetup.is_sidechain = is_protein_sidechain
         ignored_in_molsetup = []
         for atom_index in molsetup.atom_ignore:
             if atom_index < len(is_res_atom):
@@ -421,6 +427,8 @@ class LinkedRDKitChorizo:
                 ignored_in_molsetup.append(mapidx[atom_index])
         # rectify charges to sum to integer (because of padding)
         net_charge = sum([atom.GetFormalCharge() for atom in self.residues[res].rdkit_mol.GetAtoms()])
+        if mk_prep.charge_model == "zero":
+            net_charge = 0
         not_ignored_idxs = []
         charges = []
         for i, q in molsetup.charge.items(): # charge is ordered dict
@@ -499,6 +507,8 @@ class LinkedRDKitChorizo:
     
     @staticmethod
     def _pdb_to_resblocks(pdb_path):
+        #TODO detect (and test distance) chain breaks
+        #TODO cyclic peptides nex res == None ?!
         residues = {}
         with open(pdb_path, 'r') as fin:
             # Tracking the key and the value for the current dictionary pair being read in
@@ -520,13 +530,21 @@ class LinkedRDKitChorizo:
                     if full_res_id == current_res_id:
                         current_res.pdb_text += line
                     else:
-                        if current_res is not None:
-                            current_res.next_id = full_res_id
-                            residues[current_res_id] = current_res
+                        if current_res_id is not None:
+                            last_resid = int(current_res_id.split(":")[2])
+                            if resid - last_resid < 2:
+                                current_res.next_id = full_res_id
+                            else: # chain break
+                                current_res.next_id = None
+                        
                         # Updates tracking to the new key-value pair we're dealing with
                         current_res = ChorizoResidue(full_res_id, line)
-                        current_res.previous_id = current_res_id
+                        if current_res_id is not None and (resid - int(current_res_id.split(":")[2])) < 2:
+                            current_res.previous_id = current_res_id
+                        else:
+                            current_res.previous_id = None
                         current_res_id = full_res_id
+                        residues[current_res_id] = current_res
             if current_res is not None:
                 current_res.next_id = None
                 residues[current_res_id] = current_res
@@ -728,17 +746,41 @@ class LinkedRDKitChorizo:
         return
                 
 
-    def write_pdb(self, outpath):
-        # TODO currently does not contain residue information
-        with open(outpath, 'w') as fout:
-            for res in self.residues:
-                try:
-                    pdb_block = Chem.MolToPDBBlock(self.residues[res].rdkit_mol)
-                except:
-                    print(res)
-                for line in pdb_block.split('\n'):
-                    if line.startswith('HETATM'):
-                        fout.write(line+'\n')
+    def to_pdb(self, use_modified_coords=False, modified_coords_index=0):
+        pdbout = ""
+        atom_count = 0
+        icode = ""
+        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                       {:2s} "
+        pdb_line += pathlib.os.linesep
+        for res_id in self.residues:
+            if self.residues[res_id].user_deleted or self.residues[res_id].ignore_residue:
+                continue
+            resmol = self.residues[res_id].rdkit_mol
+            if use_modified_coords and self.residues[res_id].molsetup is not None:
+                molsetup = self.residues[res_id].molsetup
+                if len(molsetup.modified_atom_positions) <= modified_coords_index:
+                    errmsg = "Requesting pose %d but only got %d in molsetup of %s" % (
+                            modified_coords_index, len(molsetup.modified_atom_positions), res_id)
+                    raise RuntimeError(errmsg)
+                p = molsetup.modified_atom_positions[modified_coords_index]
+                modified_positions = molsetup.get_conformer_with_modified_positions(p).GetPositions()
+                positions = {}
+                for i, j in self.residues[res_id].molsetup_mapidx.items():
+                    positions[j] = modified_positions[i]
+            else:
+                positions = {i: xyz for (i, xyz) in enumerate(resmol.GetConformer().GetPositions())}
+
+            chain, resname, resnum = res_id.split(":")
+            resnum = int(resnum)
+
+            for (i, atom) in enumerate(resmol.GetAtoms()):
+                atom_count += 1
+                props = atom.GetPropsAsDict()
+                atom_name = props.get("atom_name", "")
+                x, y, z = positions[i]
+                element = mini_periodic_table[atom.GetAtomicNum()]
+                pdbout += pdb_line.format("ATOM", atom_count, atom_name, resname, chain, resnum, icode, x, y, z, element)
+        return pdbout
 
     def export_static_atom_params(self, ignore_atom_types=("H",)):
         atom_params = {}
@@ -752,8 +794,8 @@ class LinkedRDKitChorizo:
                 props = atom.GetPropsAsDict()
                 if len(ignore_atom_types) > 0 and props["atom_type"] in ignore_atom_types:
                     continue
-                if (self.residues[res_id].molsetup) and (
-                    atom.GetIdx() not in self.residues["molsetup_ignored"]):
+                if (self.residues[res_id].molsetup):
+                    if atom.GetIdx() not in self.residues[res_id].molsetup_ignored:
                         continue
                 for key, value in props.items():
                     if key.startswith("_"):
@@ -781,6 +823,102 @@ class LinkedRDKitChorizo:
         
     def getNotIgnoredResidues(self):
         return {k: v for k, v in self.residues.items() if v.ignore_residue == False}
+
+residues_rotamers = {"SER": [("C", "CA", "CB", "OG")],
+                     "THR": [("C", "CA", "CB", "CG2")],
+                     "CYS": [("C", "CA", "CB", "SG")],
+                     "VAL": [("C", "CA", "CB", "CG1")],
+                     "HIS": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD2")],
+                     "ASN": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "ND2")],
+                     "ASP": [("C", "CA", "CB", "CG"),
+                             ("CA", "CB", "CG", "OD1")],
+                     "ILE": [("C", "CA", "CB", "CG2"), 
+                             ("CA", "CB", "CG2", "CD1")],
+                     "LEU": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD1")],
+                     "PHE": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD2")],
+                     "TYR": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD2")],
+                     "TRP": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD2")],
+                     "GLU": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD"), 
+                             ("CB", "CG", "CD", "OE1")],
+                     "GLN": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD"), 
+                             ("CB", "CG", "CD", "OE1")],
+                     "MET": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "SD"), 
+                             ("CB", "CG", "SD", "CE")],
+                     "ARG": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD"), 
+                             ("CB", "CG", "CD", "NE"),
+                             ("CG", "CD", "NE", "CZ")],
+                     "LYS": [("C", "CA", "CB", "CG"), 
+                             ("CA", "CB", "CG", "CD"), 
+                             ("CB", "CG", "CD", "CE"),
+                             ("CG", "CD", "CE", "NZ")]}
+
+
+rotamer_res_disambiguate = {}
+for primary_res, specific_res_list in chorizo_params["ambiguous"].items():
+    for specific_res in specific_res_list:
+        rotamer_res_disambiguate[specific_res] = primary_res
+
+def add_rotamers_to_chorizo_molsetups(rotamer_states_list, chorizo):
+    no_resname_to_resname = {}
+    for res_with_resname in chorizo.residues:
+        chain, resname, resnum = res_with_resname.split(":")
+        no_resname_key = f"{chain}:{resnum}"
+        if no_resname_key in no_resname_to_resname:
+            errmsg = "both %s and %s would be keyed by %s" % (
+                res_with_resname, no_resname_to_resname[no_resname_key], no_resname_key)
+            raise RuntimeError(errmsg)
+        no_resname_to_resname[no_resname_key] = res_with_resname
+
+    state_indices_list = []
+    for state_dict in rotamer_states_list:
+        state_indices = {}
+        for res_no_resname, angles in state_dict.items():
+            res_with_resname = no_resname_to_resname[res_no_resname]
+            if not "molsetup" in chorizo.residues[res_with_resname]:
+                raise RuntimeError("no molsetup for %s, can't add rotamers" % (res_with_resname))
+            # next block is inneficient for large rotamer_states_list
+            # refactored chorizos could help by having the following
+            # data readily available
+            resmol = chorizo.residues[res_with_resname]["resmol"]
+            molsetup = chorizo.residues[res_with_resname]["molsetup"]
+            mapidx = chorizo.residues[res_with_resname]["molsetup_mapidx"]
+            mapidx_inv = {value: key for (key, value) in mapidx.items()}
+            name_to_molsetup_idx = {}
+            for atom in resmol.GetAtoms():
+                props = atom.GetPropsAsDict()
+                if "atom_name" in props:
+                    atom_name = props["atom_name"]
+                    name_to_molsetup_idx[atom_name] = mapidx_inv[atom.GetIdx()]
+
+            resname = res_with_resname.split(":")[1]
+            resname = rotamer_res_disambiguate.get(resname, resname)
+
+            atom_names = residues_rotamers[resname]
+            if len(atom_names) != len(angles):
+                raise RuntimeError(
+                    f"expected {len(atom_names)} angles for {resname}, got {len(angles)}")
+
+            atom_idxs = []
+            for names in atom_names:
+                tmp = [name_to_molsetup_idx[name] for name in names]
+                atom_idxs.append(tmp)
+
+            state_indices[res_with_resname] = len(molsetup.rotamers)
+            molsetup.add_rotamer(atom_idxs, np.radians(angles))
+
+        state_indices_list.append(state_indices)
+
+    return state_indices_list
 
 class ChorizoResidue:
     """
