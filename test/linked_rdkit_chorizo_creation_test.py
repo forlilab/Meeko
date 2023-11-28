@@ -140,6 +140,10 @@ def test_AHHY_mutate_residues():
         if not residue_object.user_deleted:
             assert residue_object.rdkit_mol != None
 
+
+    # We want to check that the mutation has not changed the order of the residues
+    assert list(chorizo.residues.keys()) == list(expected_residue_data.keys())
+
     pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
     rigid_part, movable_part = pdbqt_strings
     assert len(rigid_part) == 2592

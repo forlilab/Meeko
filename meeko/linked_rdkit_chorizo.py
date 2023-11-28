@@ -213,10 +213,12 @@ class LinkedRDKitChorizo:
         self.residues = self._pdb_to_resblocks(pdb_path)
         res_list = self.residues.keys()
         
+        # User specified modifications to the residues, capping of terminal residues, mutations, and 
+        # marking residues as deleted.
         self.termini = self._check_termini(termini, res_list)
         if deleted_residues is None:
             deleted_residues = ()
-        self._check_del_res(deleted_residues, res_list)
+        self._check_del_res(deleted_residues, self.residues)
         self.deleted_residues = deleted_residues
         
         self.mutate_res_dict = mutate_res_dict
@@ -297,11 +299,13 @@ class LinkedRDKitChorizo:
 
     
     @staticmethod
-    def _check_del_res(query_res, existing_res):
+    def _check_del_res(query_res, residues):
         missing = set()
         for res in query_res:
-            if res not in existing_res:
+            if res not in residues:
                 missing.add(res)
+            else:
+                residues[res].user_deleted = True
         if len(missing) > 0:
             msg = "deleted_residues not found: " + " ".join(missing)
             raise ValueError(msg)
@@ -552,32 +556,32 @@ class LinkedRDKitChorizo:
     
     def _rename_residues(self, mutate_dict):
         residue_order = list(self.residues.keys())
-        newResidues = self.residues #TODO: This is pretty space inefficient. see if we can get around this
         for res in mutate_dict:
             old_resn = res.split(':')[1]
             new_resn = mutate_dict[res].split(':')[1]
             # Adds the previous residue as a new key in the dictionary
-            newResidues[mutate_dict[res]] = newResidues.pop(res)
+            self.residues[mutate_dict[res]] = self.residues.pop(res)
             # modifies the residue id so it is consistent with the new name we are giving the residue
             # TODO: Check if we want to do this or leave the original id in there
-            newResidues[mutate_dict[res]].residue_id = mutate_dict[res]
+            self.residues[mutate_dict[res]].residue_id = mutate_dict[res]
 
             # updates dictionary ids
-            previous_res = newResidues[mutate_dict[res]].previous_id
+            previous_res = self.residues[mutate_dict[res]].previous_id
             if previous_res:
-                newResidues[previous_res].next_id = mutate_dict[res]
-            next_res = newResidues[mutate_dict[res]].next_id
+                self.residues[previous_res].next_id = mutate_dict[res]
+            next_res = self.residues[mutate_dict[res]].next_id
             if next_res:
-                newResidues[next_res].previous_id = mutate_dict[res]
+                self.residues[next_res].previous_id = mutate_dict[res]
 
             # tracks locations for reordering
             i = residue_order.index(res)
             residue_order[i] = mutate_dict[res]
         
-        # clears and recreates self.residues in the desired order
-        self.residues.clear
+        # clears and recreates self.residues in the desired order. Fairly inefficient
+        # but we should only be doing this once.
         for residue in residue_order:
-            self.residues[residue] = newResidues[residue]
+            value = self.residues.pop(residue)
+            self.residues[residue] = value
 
     @staticmethod
     def add_termini(resn, res, termini, residues):
