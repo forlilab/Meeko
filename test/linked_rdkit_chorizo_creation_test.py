@@ -8,13 +8,13 @@ from meeko import (
 
 import pytest
 
-# Example Files (should be moved to tests eventually)
+# Example Files (should be moved to tests directory eventually)
 ahhy_example = "example\chorizo\AHHY.pdb"
 just_one_ALA_missing = "example\chorizo\just-one-ALA-missing-CB.pdb"
 just_one_ALA = "example\chorizo\just-one-ALA.pdb"
 just_three_residues = "example\chorizo\just-three-residues.pdb"
 
-# TODO: add checks for untested chorizo fields
+# TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
 # TODO: clean up tests by pulling repeated test logic into helper functions
 
 def test_AHHY_all_static_residues():

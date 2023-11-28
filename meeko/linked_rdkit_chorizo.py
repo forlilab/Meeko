@@ -187,12 +187,13 @@ class LinkedRDKitChorizo:
 
     TODO: Organize the following in a way that makes sense
     residues: dict (string -> ChorizoResidue) #TODO: figure out exact SciPy standard for dictionary key/value notation
-    termini:
-    deleted_residues:
-    mutate_res_dict:
-    res_templates:
+    termini: dict (string (representing residue id) -> string (representing what we want the capping to look like))
+    deleted_residues: list (string) residue ids to be deleted
+    mutate_res_dict: dict (string (representing starting residue id) -> string (representing the desired mutated id))
+    res_templates: dict (string -> rdkit.Chem.rdchem.Mol)
     ambiguous:
     disulfide_bridges:
+    suggested_mutations:
     """
 
     cterm_pad_smiles = "CN"
@@ -213,19 +214,20 @@ class LinkedRDKitChorizo:
         self.residues = self._pdb_to_resblocks(pdb_path)
         res_list = self.residues.keys()
         
-        # User specified modifications to the residues, capping of terminal residues, mutations, and 
-        # marking residues as deleted.
+        # User-specified modifications to the residues, capping of terminal residues and marking residues 
+        # as deleted.
         self.termini = self._check_termini(termini, res_list)
         if deleted_residues is None:
             deleted_residues = ()
         self._check_del_res(deleted_residues, self.residues)
         self.deleted_residues = deleted_residues
         
+        # User-specified mutations to the residues that we're tracking
         self.mutate_res_dict = mutate_res_dict
         if mutate_res_dict is not None:
             self._rename_residues(mutate_res_dict)
         self.res_templates, self.ambiguous = self._load_params(params)
-
+        
         ambiguous_chosen = self.parameterize_residues(self.termini, deleted_residues, self.ambiguous)
         suggested_mutations.update(ambiguous_chosen)
 
@@ -723,9 +725,9 @@ class LinkedRDKitChorizo:
 
     def mk_parameterize_all_residues(self, mk_prep):
         # TODO disulfide bridges are hard-coded, generalize branching maybe
-        for res in self.residues:
-            if self.residues[res].user_deleted or self.residues[res].ignore_residue:
-                continue
+        for res in self.getAllValidResidues():
+            """if self.residues[res].user_deleted or self.residues[res].ignore_residue:
+                continue"""
             self.mk_parameterize_residue(self, res, mk_prep)
         return
 
@@ -791,7 +793,7 @@ class LinkedRDKitChorizo:
         counter_atoms = 0
         coords = []
         for res_id in self.residues:
-            if self.residues[res_id].user_deleted:
+            if self.residues[res_id].user_deleted or self.residues[res_id].ignore_residue:
                 continue
             resmol = self.residues[res_id].rdkit_mol
             for atom in resmol.GetAtoms():
@@ -827,6 +829,11 @@ class LinkedRDKitChorizo:
         
     def getNotIgnoredResidues(self):
         return {k: v for k, v in self.residues.items() if v.ignore_residue == False}
+    
+    # TODO: rename this
+    def getAllValidResidues(self):
+        return {k: v for k, v in self.residues.items() if v.ignore_residue == False and v.user_deleted == False}
+
 
 residues_rotamers = {"SER": [("C", "CA", "CB", "OG")],
                      "THR": [("C", "CA", "CB", "CG2")],
@@ -951,7 +958,7 @@ class ChorizoResidue:
 
     ignore_residue: bool
         marks residues that formerly were part of the removed_residues structure,
-        put on residues that are being ignored due to being incomplete or incorrect
+        put on residues that are ignored due to being incomplete or incorrect
     is_movable: bool
         marks residues that are flexible
     user_deleted: bool
