@@ -300,7 +300,9 @@ if args.pdb is not None:
         termini.update(json.loads(args.termini))
     if args.del_res is not None:
         del_res.update(json.loads(args.del_res))
-    chorizo = LinkedRDKitChorizo(args.pdb, mutate_res_dict=mutate_res_dict, termini=termini, del_res=del_res,
+    with open(args.pdb) as f:
+        pdb_string = f.read()
+    chorizo = LinkedRDKitChorizo(pdb_string, mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
                                  allow_bad_res=args.allow_bad_res)
     if args.mk_config is not None:
         with open(args.mk_config) as f:
@@ -321,7 +323,7 @@ if args.pdb is not None:
             pickle.dump(chorizo, f)
     print(json.dumps(chorizo.suggested_mutations, indent=4))
 
-    if len(chorizo.removed_residues) > 0:
+    if len(chorizo.getIgnoredResidues()) > 0:
         print("Automatically deleted %d residues" % len(chorizo.removed_residues))
         print(json.dumps({"del_res": chorizo.removed_residues}, indent=4))
 
