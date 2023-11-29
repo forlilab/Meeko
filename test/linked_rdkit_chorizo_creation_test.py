@@ -18,7 +18,9 @@ just_three_residues = "example\chorizo\just-three-residues.pdb"
 # TODO: clean up tests by pulling repeated test logic into helper functions
 
 def test_AHHY_all_static_residues():
-    chorizo = LinkedRDKitChorizo(ahhy_example)
+    f = open(ahhy_example, 'r')
+    pdb_string = f.read()
+    chorizo = LinkedRDKitChorizo(pdb_string)
     # Asserts that the residues have been imported in a way that makes sense, and that all the 
     # private functions we expect to have run have run as expected.
     assert len(chorizo.residues) == 4
@@ -49,7 +51,9 @@ def test_AHHY_all_static_residues():
         assert len(movable_part) == 0
 
 def test_AHHY_flexible_residues():
-    chorizo = LinkedRDKitChorizo(ahhy_example)
+    f = open(ahhy_example, 'r')
+    pdb_string = f.read()
+    chorizo = LinkedRDKitChorizo(pdb_string)
     assert len(chorizo.residues) == 4
     assert len(chorizo.getIgnoredResidues()) == 0
 
@@ -66,8 +70,10 @@ def test_AHHY_flexible_residues():
     assert ignored_in_molsetup == expected_ignored
 
 def test_just_three_padded_mol():
+    f = open(just_three_residues, 'r')
+    pdb_string = f.read()
     termini = {":MET:15": "N"}
-    chorizo = LinkedRDKitChorizo(just_three_residues, termini=termini)
+    chorizo = LinkedRDKitChorizo(pdb_string, termini=termini)
     assert len(chorizo.residues) == 3
     assert len(chorizo.getIgnoredResidues()) == 0
 
@@ -113,8 +119,10 @@ def test_AHHY_mutate_residues():
         "A:HIS:3": "A:HIP:3",
         }
     delete_residues = ("A:TYR:4",)
+    f = open(ahhy_example, 'r')
+    pdb_string = f.read()
     chorizo = LinkedRDKitChorizo(
-        ahhy_example,
+        pdb_string,
         deleted_residues=delete_residues,
         mutate_res_dict=mutations)
     assert len(chorizo.residues) == 4
@@ -153,10 +161,12 @@ def test_AHHY_mutate_residues():
 
 def test_residue_missing_atoms():
     # checks that we get a Runtime Error when we don't provide the argument
+    f = open(just_one_ALA_missing, 'r')
+    pdb_string = f.read()
     with pytest.raises(RuntimeError):
-        chorizo = LinkedRDKitChorizo(just_one_ALA_missing)
+        chorizo = LinkedRDKitChorizo(pdb_string)
 
-    chorizo = LinkedRDKitChorizo(just_one_ALA_missing, allow_bad_res=True)
+    chorizo = LinkedRDKitChorizo(pdb_string, allow_bad_res=True)
     assert len(chorizo.residues) == 1
     assert len(chorizo.getIgnoredResidues()) == 1
 
