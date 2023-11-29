@@ -1,5 +1,5 @@
 {"ad4_desolv_param": [
-    {"smarts": "[*]",                "ad4_sol_par":  0.00110},
+    {"smarts": "[*]",                "ad4_sol_par": -0.00110},
     {"smarts": "[#1]",               "ad4_sol_par":  0.00000},
     {"smarts": "[#1][#8,#7,#16,#9]", "ad4_sol_par":  0.00051},
     {"smarts": "[C]",                "ad4_sol_par": -0.00143},

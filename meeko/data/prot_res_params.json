@@ -14,6 +14,23 @@
 	"smiles": "O([H])[H]"
     },
 
+    "MG": {
+        "atom_name":  	    [     "OW"],
+        "atom_type":  	    [     "OA"],
+        "ad4_epsii":   	    [  0.875  ],
+        "ad4_rii":     	    [  1.3    ],
+        "ad4_sol_vol": 	    [  1.56   ],
+        "ad4_sol_par": 	    [ -0.00110],
+        "ad4_hb_rij":  	    [     null],
+        "ad4_hb_epsij":     [     null],
+        "vina_ri": 	    [  1.2    ],
+        "vina_donor":       [     true],
+        "vina_acceptor":    [    false],
+        "vina_hydrophobic": [    false],
+        "gasteiger":        [  2.0  ],
+	"smiles": "[Mg]"
+    },
+
     "WAT": {
         "atom_name":  	    [     "OW",    "HW1",    "HW2"],
         "atom_type":  	    [     "OA",    "HD" ,    "HD" ],

@@ -207,11 +207,11 @@ class LinkedRDKitChorizo:
     rxn_nterm_pad = rdChemReactions.ReactionFromSmarts(f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
 
 
-    def __init__(self, pdb_path, params=chorizo_params, mutate_res_dict=None, termini=None, deleted_residues=None, allow_bad_res=False):
+    def __init__(self, pdb_string, params=chorizo_params, mutate_res_dict=None, termini=None, deleted_residues=None, allow_bad_res=False):
         suggested_mutations = {}
         
         # Generates the residue representations based purely on the information in the pdb file to begin with.
-        self.residues = self._pdb_to_resblocks(pdb_path)
+        self.residues = self._pdb_to_resblocks(pdb_string)
         res_list = self.residues.keys()
         
         # User-specified modifications to the residues, capping of terminal residues and marking residues 
@@ -512,48 +512,47 @@ class LinkedRDKitChorizo:
         return res_templates, ambiguous
     
     @staticmethod
-    def _pdb_to_resblocks(pdb_path):
+    def _pdb_to_resblocks(pdb_string):
         #TODO detect (and test distance) chain breaks
         #TODO cyclic peptides nex res == None ?!
         residues = {}
-        with open(pdb_path, 'r') as fin:
-            # Tracking the key and the value for the current dictionary pair being read in
-            current_res_id = None # the residue id we are tracking
-            current_res = None    # the ChorizoResidue object we are tracking
-            for line in fin:
-                if line.startswith('TER') and current_res is not None:
-                    current_res.next_id = None
-                    residues[current_res_id] = current_res
-                    current_res = None
-                    current_res_id = None
-                if line.startswith('ATOM') or line.startswith('HETATM'):
-                    # Generating dictionary key
-                    resname = line[17:20].strip()
-                    resid = int(line[22:26].strip())
-                    chainid = line[21].strip()
-                    full_res_id = ':'.join([chainid, resname, str(resid)])
-
-                    if full_res_id == current_res_id:
-                        current_res.pdb_text += line
-                    else:
-                        if current_res_id is not None:
-                            last_resid = int(current_res_id.split(":")[2])
-                            if resid - last_resid < 2:
-                                current_res.next_id = full_res_id
-                            else: # chain break
-                                current_res.next_id = None
-                        
-                        # Updates tracking to the new key-value pair we're dealing with
-                        current_res = ChorizoResidue(full_res_id, line)
-                        if current_res_id is not None and (resid - int(current_res_id.split(":")[2])) < 2:
-                            current_res.previous_id = current_res_id
-                        else:
-                            current_res.previous_id = None
-                        current_res_id = full_res_id
-                        residues[current_res_id] = current_res
-            if current_res is not None:
+        # Tracking the key and the value for the current dictionary pair being read in
+        current_res_id = None # the residue id we are tracking
+        current_res = None    # the ChorizoResidue object we are tracking
+        for line in pdb_string.splitlines(True):
+            if line.startswith('TER') and current_res is not None:
                 current_res.next_id = None
                 residues[current_res_id] = current_res
+                current_res = None
+                current_res_id = None
+            if line.startswith('ATOM') or line.startswith('HETATM'):
+                # Generating dictionary key
+                resname = line[17:20].strip()
+                resid = int(line[22:26].strip())
+                chainid = line[21].strip()
+                full_res_id = ':'.join([chainid, resname, str(resid)])
+
+                if full_res_id == current_res_id:
+                    current_res.pdb_text += line
+                else:
+                    if current_res_id is not None:
+                        last_resid = int(current_res_id.split(":")[2])
+                        if resid - last_resid < 2:
+                            current_res.next_id = full_res_id
+                        else: # chain break
+                            current_res.next_id = None
+                    
+                    # Updates tracking to the new key-value pair we're dealing with
+                    current_res = ChorizoResidue(full_res_id, line)
+                    if current_res_id is not None and (resid - int(current_res_id.split(":")[2])) < 2:
+                        current_res.previous_id = current_res_id
+                    else:
+                        current_res.previous_id = None
+                    current_res_id = full_res_id
+                    residues[current_res_id] = current_res
+        if current_res is not None:
+            current_res.next_id = None
+            residues[current_res_id] = current_res
         return residues
     
     def _rename_residues(self, mutate_dict):
