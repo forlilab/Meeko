@@ -62,8 +62,7 @@ def test_AHHY_flexible_residues():
     
     molsetup, mapidx, ignored_in_molsetup = chorizo.res_to_molsetup(residue_id, mk_prep)
     
-    # TODO: Check whether the following is correct
-    expected_mapidx = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 11, 12: 12, 13: 13, 14: 14, 15: 15, 16: 16}
+    expected_mapidx = {2: 0, 3: 1, 4: 2, 5: 4, 6: 3, 7: 6, 8: 7, 9: 8, 10: 9, 11: 10, 12: 15, 13: 11, 14: 12, 15: 14, 16: 16, 17: 13, 19: 5}
     expected_ignored = []
     assert molsetup
     assert mapidx == expected_mapidx
@@ -105,8 +104,8 @@ def test_just_three_padded_mol():
     met15_padded, is_actual_res, atom_index_map = chorizo.get_padded_mol(":MET:15")
     met15_resmol = chorizo.residues[":MET:15"].rdkit_mol
 
-    expected_is_actual_res = [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False]
-    expected_atom_index_map = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 11, 12: 12, 13: 13, 14: 14, 15: 15, 16: 16, 17: 17, 18: 18}
+    expected_is_actual_res = [False, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False]
+    expected_atom_index_map = {2: 0, 3: 1, 4: 2, 5: 4, 6: 3, 7: 8, 8: 9, 9: 10, 10: 11, 11: 12, 12: 13, 13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 5, 19: 6, 20: 7}
     assert met15_resmol
     assert met15_padded
     assert is_actual_res == expected_is_actual_res
