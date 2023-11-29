@@ -62,7 +62,7 @@ def test_AHHY_flexible_residues():
     expected_mapidx = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 11, 12: 12, 13: 13, 14: 14, 15: 15, 16: 16}
     expected_ignored = []
     assert molsetup
-    #assert mapidx == expected_mapidx
+    assert mapidx == expected_mapidx
     assert ignored_in_molsetup == expected_ignored
 
 def test_just_three_padded_mol():

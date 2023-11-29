@@ -420,9 +420,7 @@ class PDBQTWriterLegacy():
         flex_pdbqt_string = ""
         atom_count = 0
         flex_atom_count = 0
-        for res_id in chorizo.residues:
-            if chorizo.residues[res_id].user_deleted:
-                continue
+        for res_id in chorizo.getValidResidues():
             resmol = chorizo.residues[res_id].rdkit_mol
             positions = resmol.GetConformer().GetPositions()
             chain, resname, resnum = res_id.split(":")

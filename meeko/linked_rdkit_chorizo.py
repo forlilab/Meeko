@@ -226,9 +226,12 @@ class LinkedRDKitChorizo:
         self.mutate_res_dict = mutate_res_dict
         if mutate_res_dict is not None:
             self._rename_residues(mutate_res_dict)
+
+        # Loads user specified parameters
         self.res_templates, self.ambiguous = self._load_params(params)
         
-        ambiguous_chosen = self.parameterize_residues(self.termini, deleted_residues, self.ambiguous)
+        # Uses termini and user parameters to 
+        ambiguous_chosen = self.parameterize_residues(self.termini, self.ambiguous)
         suggested_mutations.update(ambiguous_chosen)
 
         removed_residues = self.getIgnoredResidues()
@@ -299,7 +302,6 @@ class LinkedRDKitChorizo:
                 cys_list[res] = s_xyz
         return bridges
 
-    
     @staticmethod
     def _check_del_res(query_res, residues):
         missing = set()
@@ -311,7 +313,6 @@ class LinkedRDKitChorizo:
         if len(missing) > 0:
             msg = "deleted_residues not found: " + " ".join(missing)
             raise ValueError(msg)
-
 
     @staticmethod
     def _check_termini(termini, res_list):
@@ -331,7 +332,6 @@ class LinkedRDKitChorizo:
             else:
                 raise ValueError("termini value was %s, expected %s or %s" % (value, allowed_c, allowed_n))
         return output
-
 
     def get_padded_mol(self, resn):
         #TODO disulfides, ACE, NME
@@ -605,11 +605,11 @@ class LinkedRDKitChorizo:
             raise ValueError("termini must be either 'C' or 'N', not %s" % termini.get(res, None))
         return resn
 
-    def parameterize_residues(self, termini, deleted_residues, ambiguous):
+    def parameterize_residues(self, termini, ambiguous):
         ambiguous_chosen = {}
         for res in self.residues:
             # skip deleted resides
-            if res in deleted_residues:
+            if self.residues[res].user_deleted:
                 continue
             
             # if we can't generate an RDKit Mol for the residue, mark it as ignored and skip
@@ -831,7 +831,7 @@ class LinkedRDKitChorizo:
         return {k: v for k, v in self.residues.items() if v.ignore_residue == False}
     
     # TODO: rename this
-    def getAllValidResidues(self):
+    def getValidResidues(self):
         return {k: v for k, v in self.residues.items() if v.ignore_residue == False and v.user_deleted == False}
 
 
@@ -989,6 +989,10 @@ class ChorizoResidue:
 
     def toJson(self):
         return json.dumps(self, default=lambda o: o.__dict__)
+    
+    def isValidResidue(self):
+        """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to ignore"""
+        return not self.ignore_residue and not self.user_deleted
 
 # This could be a named tuple or a dataclass as it stands, but that is dependent on the amount of custom behavior
 # we want to encode for these additional connections.
