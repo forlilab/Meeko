@@ -4,7 +4,7 @@
 # Meeko
 #
 
-__version__ = "0.6.0-alpha"
+__version__ = "0.6.0-alpha.1"
 
 try:
     import openbabel
