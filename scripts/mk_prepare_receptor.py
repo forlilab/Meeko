@@ -224,9 +224,9 @@ modified_resnames = set()
 ###         print(err, file=sys.stderr)
 ###         sys.exit(2)
 
-### reactive_flexres = {}
-### all_ok = True
-### all_err = ""
+reactive_flexres = {}
+all_ok = True
+all_err = ""
 ### for resid_string in args.reactive_flexres:
 ###     res_id, ok, err = parse_residue_string(resid_string)
 ###     if ok:

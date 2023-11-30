@@ -650,9 +650,9 @@ class LinkedRDKitChorizo:
             resmol = best_resmol
             n_atoms = best_n_atoms
             resn = best_resn
-            if len(possible_resn) > 1:
-                print("%9s" % res, "-->", resn, "...out of", possible_resn)
-                ambiguous_chosen[res] = f"{chain}:{resn}:{resnum}"
+            #if len(possible_resn) > 1:
+            #    print("%9s" % res, "-->", resn, "...out of", possible_resn)
+            #    ambiguous_chosen[res] = f"{chain}:{resn}:{resnum}"
 
             resmol = self.build_resmol(res, resn)
             if resmol is None:
