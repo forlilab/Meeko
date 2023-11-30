@@ -6,6 +6,17 @@ import warnings
 import pytest
 
 
+def test_raise_error_with_overlapping_params():
+    typer = {
+            "reduced set": [
+                {"smarts": "[#1]", "atype": "H",}
+            ]
+    }
+    with pytest.raises(ValueError) as err:
+        preparator = MoleculePreparation(input_atom_params=typer, load_atom_params="ad4_types")
+    assert str(err.value).startswith("input_atom_params")
+
+
 def test1():
     typer = {
             "reduced set": [
@@ -18,7 +29,7 @@ def test1():
             ]
     }
     
-    preparator = MoleculePreparation(atom_types=typer)
+    preparator = MoleculePreparation(input_atom_params=typer, load_atom_params=None)
     
     mol = Chem.MolFromSmiles("c1ncco1") # oxazole
     mol = Chem.AddHs(mol)
@@ -47,7 +58,8 @@ def test2():
     }
     
     preparator = MoleculePreparation(
-        atom_types=typer,
+        input_atom_params=typer,
+        load_atom_params=None,
         merge_these_atom_types=("H", "H_MERGE"),
     )
     

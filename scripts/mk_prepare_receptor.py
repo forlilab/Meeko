@@ -5,14 +5,27 @@ import json
 import math
 from os import linesep as os_linesep
 import pathlib
+import pickle
 import sys
 
+
 from meeko import PDBQTReceptor
+from meeko import PDBQTMolecule
+from meeko import RDKitMolCreate
+from meeko import MoleculePreparation
+from meeko import MoleculeSetup
+from meeko import PDBQTWriterLegacy
+from meeko import LinkedRDKitChorizo
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
+from rdkit import Chem
 
 path_to_this_script = pathlib.Path(__file__).resolve()
+
+# the following preservers RDKit Atom properties in the chorizo pickle
+Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AtomProps) # |
+#                                Chem.PropertyPickleOptions.PrivateProps)
 
 def parse_residue_string(string):
     """
@@ -113,8 +126,19 @@ def check(success, error_msg):
 def get_args():
     parser = TalkativeParser()
     parser.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
-    parser.add_argument('--pdbqt', help="keeps existing charges and types")
+    #parser.add_argument('--pdbqt', help="keeps existing charges and types")
     parser.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
+    parser.add_argument('-p', '--chorizo_pickle') 
+    parser.add_argument('-n', '--mutate_residues',
+                        help="e.g. '{\"A:HIS:323\":\"A:HID:323\"}'")
+    parser.add_argument(      '--termini',
+                        help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
+    parser.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
+    parser.add_argument(      '--chorizo_config', help="[.json]")
+    parser.add_argument(      '--mk_config', help="[.json]")
+    parser.add_argument(      '--allow_bad_res', action="store_true",
+                                                 help="residues with missing atoms will be deleted")
+
     parser.add_argument('-f', '--flexres', action="append", default=[],
                         help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
     parser.add_argument('-r', '--reactive_flexres', action="append", default=[],
@@ -127,7 +151,7 @@ def get_args():
     parser.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     parser.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
-    parser.add_argument('--ligand', help="PDBQT of reference ligand")
+    parser.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
     parser.add_argument('--padding', help="padding around reference ligand [A]", type=float)
     parser.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
     parser.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
@@ -136,8 +160,10 @@ def get_args():
     parser.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
     args = parser.parse_args()
 
-    if (args.pdb is None) == (args.pdbqt is None):
-        msg = "need either --pdb or --pdbqt"
+    #if (args.pdb is None) == (args.pdbqt is None):
+        #msg = "need either --pdb or --pdbqt"
+    if args.pdb is None:
+        msg = "need --pdb"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
     if (args.box_center is not None) and args.box_center_on_reactive_res:
@@ -258,17 +284,64 @@ if len(reactive_flexres) != 1 and args.box_center_on_reactive_res:
     sys.exit(2)
 
 if args.pdb is not None:
-    receptor = PDBQTReceptor(args.pdb, skip_typing=True)
-    ok, err = receptor.assign_types_charges()
-    check(ok, err)
-else:
-    receptor = PDBQTReceptor(args.pdbqt)
+    mutate_res_dict = {}
+    termini = {}
+    del_res = []
+    if args.chorizo_config is not None:
+        with open(args.chorizo_config) as f:
+            chorizo_config = json.load(f)
+        mutate_res_dict.update(chorizo_config.get("mutate_res_dict", {}))
+        termini.update(chorizo_config.get("termini", {}))
+        del_res.extend(chorizo_config.get("del_res", []))
+    # direct command line options override config
+    if args.mutate_residues is not None:
+        mutate_res_dict.update(json.loads(args.mutate_residues))
+    if args.termini is not None:
+        termini.update(json.loads(args.termini))
+    if args.del_res is not None:
+        del_res.update(json.loads(args.del_res))
+    with open(args.pdb) as f:
+        pdb_string = f.read()
+    chorizo = LinkedRDKitChorizo(pdb_string, mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
+                                 allow_bad_res=args.allow_bad_res)
+    if args.mk_config is not None:
+        with open(args.mk_config) as f:
+            mk_config = json.load(f)
+        print("HERE")
+        mk_prep = MoleculePreparation.from_config(mk_config)
+        chorizo.mk_parameterize_all_residues(mk_prep)
+    else:
+        mk_prep = MoleculePreparation()
+
+
+    for res_id in all_flexres:
+        res = "%s:%s:%d" % res_id
+        chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)
+    rigid_pdbqt, flex_pdbqt = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
+    if args.chorizo_pickle is not None:
+        with open(args.chorizo_pickle, "wb") as f:
+            pickle.dump(chorizo, f)
+    print(json.dumps(chorizo.suggested_mutations, indent=4))
+
+    if len(chorizo.getIgnoredResidues()) > 0:
+        print("Automatically deleted %d residues" % len(chorizo.removed_residues))
+        print(json.dumps({"del_res": chorizo.removed_residues}, indent=4))
+
+    #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
+    #ok, err = receptor.assign_types_charges()
+    #check(ok, err)
+#else:
+#    receptor = PDBQTReceptor(args.pdbqt)
+#    pdbqt, ok, err = receptor.write_pdbqt_string(flexres=all_flexres)
+#    check(ok, err)
+
+pdbqt = {
+    "rigid": rigid_pdbqt,
+    "flex": flex_pdbqt,
+}
 
 any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
                       "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]
-
-pdbqt, ok, err = receptor.write_pdbqt_string(flexres=all_flexres)
-check(ok, err)
 
 outpath = pathlib.Path(args.output_filename)
 
@@ -281,14 +354,15 @@ if len(all_flexres) == 0:
 else:
     all_flex_pdbqt = ""
     reactive_flexres_count = 0
-    for res_id, flexres_pdbqt in pdbqt["flex"].items():
-        if res_id in reactive_flexres:
-            reactive_flexres_count += 1
-            prefix_atype = "%d" % reactive_flexres_count
-            resname = res_id[1]
-            reactive_atom = reactive_flexres[res_id]
-            flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
-        all_flex_pdbqt += flexres_pdbqt
+    #for res_id, flexres_pdbqt in pdbqt["flex"].items():
+    #    if res_id in reactive_flexres:
+    #        reactive_flexres_count += 1
+    #        prefix_atype = "%d" % reactive_flexres_count
+    #        resname = res_id[1]
+    #        reactive_atom = reactive_flexres[res_id]
+    #        flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
+    #    all_flex_pdbqt += flexres_pdbqt
+    all_flex_pdbqt = pdbqt["flex"]
 
     suffix = outpath.suffix
     if outpath.suffix == "":
@@ -329,7 +403,24 @@ if not args.skip_gpf:
         box_center = ca + 5 * v
         box_size = args.box_size
     elif args.ligand is not None:
-        box_center, box_size = gridbox.calc_box(args.ligand, args.padding)
+        ft = pathlib.Path(args.ligand).suffix
+        suppliers = {
+            ".pdb": Chem.MolFromPDBFile,
+            ".mol": Chem.MolFromMolFile,
+            ".mol2": Chem.MolFromMol2File,
+            ".sdf": Chem.SDMolSupplier,
+            ".pdbqt": None
+        }
+        if ft not in suppliers.keys():
+            check(success=False, error_msg=f"Given --ligand file type {ft} not readable!")
+        elif ft != ".sdf" and ft != ".pdbqt":
+            ligmol = suppliers[ft](args.ligand)
+        elif ft == ".sdf":
+            ligmol = suppliers[ft](args.ligand)[0]  # assume we only want first molecule in file
+        else:  # .pdbqt
+            ligmol = RDKitMolCreate.from_pdbqt_mol(PDBQTMolecule.from_file(args.ligand))[0]  # assume we only want first molecule in file
+        
+        box_center, box_size = gridbox.calc_box(ligmol.GetConformer().GetPositions(), args.padding)
     else:
         print("Error: No box center specified.", file=sys.stderr)
         sys.exit(2)
@@ -340,7 +431,7 @@ if not args.skip_gpf:
     written_files_log["description"].append("atomic parameters for B and Si (for autogrid)")
     with open(ff_fn, "w") as f:
         f.write(gridbox.boron_silicon_atompar)
-    rec_types = set(t for (i, t) in enumerate(receptor.atoms()["atom_type"]) if i not in pdbqt["flex_indices"])
+    rec_types = ['HD', 'C', 'A', 'N', 'NA', 'OA', 'F', 'P', 'SA', 'S', 'Cl', 'Br', 'I', 'Mg', 'Ca', 'Mn', 'Fe', 'Zn']
     gpf_string, npts = gridbox.get_gpf_string(box_center, box_size, rigid_fn, rec_types, any_lig_base_types,
                                                 ff_param_fname=ff_fn.name)
     # write GPF
@@ -358,12 +449,13 @@ if not args.skip_gpf:
         f.write(gridbox.box_to_pdb_string(box_center, npts))
 
     # check all flexres are inside the box
-    any_outside = False
-    for atom in receptor.atoms(pdbqt["flex_indices"]):
-        if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
-            print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
-            print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
-            break # only need to warn once
+    if len(reactive_flexres) > 0:
+        any_outside = False
+        for atom in receptor.atoms(pdbqt["flex_indices"]):
+            if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
+                print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
+                print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
+                break # only need to warn once
 
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:

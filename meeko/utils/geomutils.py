@@ -214,8 +214,18 @@ def getVecNormalToVec(vec):
         c = np.array([0.,1.,0.], 'f')
     return calcPlane(vec, c, norm=True)
 
+def calcDihedral(A,B,C,D):
+    """Calculate dihedral considering A in the beggining"""
+    A, B, C, D = [np.array(x) for x in (A,B,C,D)]
+    b1 = B - A
+    b2 = C - B
+    b3 = D - C
+    temp = np.linalg.norm(b2) * b1
+    y = np.dot(temp, np.cross(b2, b3))
+    x = np.dot(np.cross(b1, b2), np.cross(b2, b3))
+    return np.arctan2(y, x)
 
-def calcDihedral(a1, a2, a3, a4):
+def calcDihedral_old(a1, a2, a3, a4):
     """ given 4 set of coordinates return the dihedral
         angle between them
     """

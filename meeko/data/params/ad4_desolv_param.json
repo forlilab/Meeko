@@ -1,0 +1,11 @@
+{"ad4_desolv_param": [
+    {"smarts": "[*]",                "ad4_sol_par": -0.00110},
+    {"smarts": "[#1]",               "ad4_sol_par":  0.00000},
+    {"smarts": "[#1][#8,#7,#16,#9]", "ad4_sol_par":  0.00051},
+    {"smarts": "[C]",                "ad4_sol_par": -0.00143},
+    {"smarts": "[c]",                "ad4_sol_par": -0.00052},
+    {"smarts": "[#7]",               "ad4_sol_par": -0.00162},
+    {"smarts": "[#8]",               "ad4_sol_par": -0.00251},
+    {"smarts": "[#16]",              "ad4_sol_par": -0.00214}
+    ]
+}

@@ -17,16 +17,17 @@ from rdkit import Chem
 from .molsetup import OBMoleculeSetup
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
+from .espalomatyper import EspalomaTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
 from .macrocycle import FlexMacrocycle
 from .flexibility import FlexibilityBuilder
 from .writer import PDBQTWriterLegacy
 from .reactive import assign_reactive_types
+from .openff_xml_parser import load_openff
 
 pkg_dir = pathlib.Path(__file__).parents[0]
-with open(pkg_dir / "data" / "ad4_types.json") as f:
-    default_ad4_types = json.load(f)
+params_dir = pkg_dir / "data" / "params"
 # the above is controversial, see
 # https://stackoverflow.com/questions/6028000/how-to-read-a-static-file-from-inside-a-python-package
 
@@ -41,6 +42,12 @@ else:
 warnings.filterwarnings("default", category=DeprecationWarning)
 
 class MoleculePreparation:
+
+    packaged_params = {}
+    for path in params_dir.glob("*.json"): # e.g. data/params/ad4_types.json
+        name = path.with_suffix("").name # e.g. "ad4_types"
+        packaged_params[name] = path
+
     def __init__(self,
             merge_these_atom_types=("H",),
             hydrate=False,
@@ -53,9 +60,13 @@ class MoleculePreparation:
             double_bond_penalty=50,
             rigidify_bonds_smarts=[],
             rigidify_bonds_indices=[],
-            atom_types=None,
+            input_atom_params=None,
+            load_atom_params="ad4_types",
             add_atom_types=(),
-            offatom_params=None, 
+            input_offatom_params=None, 
+            load_offatom_params=None,
+            charge_model="gasteiger",
+            dihedral_model=None,
             reactive_smarts=None,
             reactive_smarts_idx=None,
             add_index_map=False,
@@ -74,21 +85,39 @@ class MoleculePreparation:
         self.double_bond_penalty = double_bond_penalty
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
         self.rigidify_bonds_indices = rigidify_bonds_indices
-        if atom_types is None:
-            self.atom_types = json.loads(json.dumps(default_ad4_types))
-        else:
-            self.atom_types = json.loads(json.dumps(atom_types))
-        self.add_atom_types = add_atom_types
-        if len(add_atom_types) > 0:
-            group_keys = list(self.atom_types.keys())
-            if len(group_keys) != 1:
-                msg = "add_atom_types is usable only when there is one group of parameters"
-                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
-                raise RuntimeError(msg)
-            key = group_keys[0]
-            self.atom_types[key].extend(add_atom_types)
 
-        self.offatom_params = offatom_params
+        self.input_atom_params = input_atom_params
+        self.load_atom_params = load_atom_params
+        self.add_atom_types = add_atom_types
+
+        self.atom_params = self.get_atom_params(
+                input_atom_params,
+                load_atom_params,
+                add_atom_types,
+                self.packaged_params)
+
+        self.load_offatom_params = load_offatom_params
+        
+        allowed_charge_models = ["espaloma", "gasteiger", "zero"]
+        if charge_model not in allowed_charge_models:
+            raise ValueError("unrecognized charge_model: %s, allowed options are: %s" % (charge_model, allowed_charge_models))
+
+        self.charge_model = charge_model
+       
+        allowed_dihedral_models = [None,'openff','espaloma']
+        if dihedral_model in (None, 'espaloma'):
+            dihedral_list = []
+        elif dihedral_model == "openff":
+            _, dihedral_list, _ = load_openff()
+        else: 
+            raise ValueError("unrecognized dihedral_model: %s, allowed options are: %s" % (dihedral_model, allowed_dihedral_models))
+        
+        self.dihedral_model = dihedral_model
+        self.dihedral_params = dihedral_list
+
+        if dihedral_model == 'espaloma' or charge_model == "espaloma":
+            self.espaloma_model = EspalomaTyper()
+
         self.reactive_smarts = reactive_smarts
         self.reactive_smarts_idx = reactive_smarts_idx
         self.add_index_map = add_index_map
@@ -100,6 +129,93 @@ class MoleculePreparation:
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
+
+        self.offatom_params = {}
+
+    @staticmethod
+    def get_atom_params(input_atom_params, load_atom_params, add_atom_types, packaged_params):
+        atom_params = {}
+        if type(load_atom_params) == str:
+            load_atom_params = [load_atom_params]
+        elif load_atom_params is None:
+            load_atom_params = ()
+        for name in load_atom_params:
+            filename = None
+            if name == "openff-2.0.0" or name == "openff": # TODO allow multiple versions
+                vdw_list, _, _ = load_openff() 
+                d = {"openff-2.0.0": vdw_list}
+            elif name in packaged_params:
+                filename = packaged_params[name]
+            elif name.endswith(".json"):
+                filename = name
+            else:
+                msg =  "names passed to 'load_atom_params' need to suffixed with .json" + os.linesep
+                msg += "or be the unsuffixed basename of a JSON file in %s." % str(params_dir) + os.linesep
+                msg += "name was %s" % name 
+                raise ValueError(msg)
+            if filename is not None:
+                with open(filename) as f:
+                    d = json.load(f)
+            overlapping_groups = set(atom_params).intersection(set(d))
+            if len(overlapping_groups):
+                msg = "overlapping parameter groups: %s" % str(overlapping_groups)
+                raise ValueError(msg)
+            atom_params.update(d)
+
+        if input_atom_params is not None:
+            d = json.loads(json.dumps(input_atom_params))
+            overlapping_groups = set(atom_params).intersection(set(d))
+            if len(overlapping_groups): # todo: remove duplicated code
+                msg = "overlapping parameter groups: %s" % str(overlapping_groups)
+                raise ValueError(msg)
+            params_set_here = set()
+            for group_key, rows in input_atom_params.items():
+                for row in rows:
+                    for param_name in row:
+                        if param_name not in ["smarts", "comment", "IDX"]:
+                            params_set_here.add(param_name)
+            params_set_before = set()
+            for group_key, rows in atom_params.items():
+                for row in rows:
+                    for param_name in row:
+                        if param_name not in ["smarts", "comment", "IDX"]:
+                            params_set_before.add(param_name)
+            overlap = params_set_before.intersection(params_set_here)
+            if len(overlap):
+                msg = f"input_atom_params {overlap} also set by one or more of {load_atom_params}\n"
+                msg += "consider setting load_atom_params=None"
+                raise ValueError(f"input_atom_params {overlap} also set by one or more of {load_atom_params}")
+                
+            atom_params.update(d)
+
+        if len(add_atom_types) > 0:
+            group_keys = list(atom_params.keys())
+            if len(group_keys) != 1:
+                msg = "add_atom_types is usable only when there is one group of parameters"
+                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
+                raise RuntimeError(msg)
+            key = group_keys[0]
+            atom_params[key].extend(add_atom_types)
+               
+        return atom_params
+
+                ### else:
+                ###     msg = "When atom_params is a list, it must consist of either:" + os.linesep
+                ###     msg += "  - strings (to look up default JSON files in the data dir)" + os.linesep
+                ###     msg += "  - or dictionaries (to be used directly). For example:" + os.linesep
+                ###     msg += "                  {\"SMARTS\": \"[B]\", \"atype\": \"C\"}" + os.linesep
+                ###     msg += "A total of %d types were found in atom_params:" % (len(types)) + os.linesep
+                ###     msg += str(types) + os.linesep
+                ###     raise ValueError(msg)
+                ### 
+                ### #for value in atom_params:
+                    
+
+        self.offatom_params = offatom_params
+        self.charge_model = charge_model
+        self.dihedral_params = dihedral_params
+
+
         if _has_openbabel:
             self._classes_setup[ob.OBMol] = OBMoleculeSetup
         if keep_chorded_rings and keep_equivalent_rings==False:
@@ -122,7 +238,7 @@ class MoleculePreparation:
             defaults[key] = sig.parameters[key].default 
         return defaults
 
-    @ classmethod
+    @classmethod
     def from_config(cls, config):
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
@@ -133,6 +249,9 @@ class MoleculePreparation:
             raise ValueError(err_msg)
         p = cls(**config)
         return p
+
+    def __call__(self, *args):
+        return self.prepare(*args)
 
     def prepare(self,
             mol,
@@ -161,13 +280,32 @@ class MoleculePreparation:
         setup = setup_class.from_mol(mol,
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings,
+            assign_charges=self.charge_model=="gasteiger",
             conformer_id=conformer_id,
             )
 
         self.check_external_ring_break(setup, delete_ring_bonds, glue_pseudo_atoms)
 
-        # 1.  assign atom types
-        AtomTyper.type_everything(setup, self.atom_types, self.offatom_params)
+        # 1.  assign atom params
+        AtomTyper.type_everything(
+            setup,
+            self.atom_params,
+            self.charge_model,
+            self.offatom_params,
+            self.dihedral_params,
+        )
+        
+        # Convert molecule to graph and apply trained Espaloma model
+        if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
+            molgraph = self.espaloma_model.get_espaloma_graph(setup)
+
+        # Grab dihedrals from graph node and set them to the molsetup
+        if self.dihedral_model == "espaloma":
+            self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
+
+        # Grab charges from graph node and set them to the molsetup
+        if self.charge_model == "espaloma":
+            self.espaloma_model.set_espaloma_charges(setup, molgraph)
 
         # merge hydrogens (or any terminal atoms)
         indices = set()

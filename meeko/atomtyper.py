@@ -4,23 +4,36 @@
 # Meeko atom typer
 #
 
-import os
+# import os
+# import json
+# import pathlib
 
 import numpy as np
 
-from .utils import utils
+# from .utils import utils
 from .utils import pdbutils
-
 
 class AtomTyper:
 
     @classmethod
-    def type_everything(cls, molsetup, atom_params, offatom_params=None):
+    def type_everything(cls, molsetup,
+                        atom_params,
+                        charge_model,
+                        offatom_params=None,
+                        dihedral_params=None,
+                        ):
+
         cls._type_atoms(molsetup, atom_params)
+        
+        # offatoms must be typed after charges, because offsites pull charge
         if offatom_params is not None:
             cached_offatoms = cls._cache_offatoms(molsetup, offatom_params)
-            coords = [x for x in setup.coord.values()]
-            cls._set_offatoms(setup, cached_offatoms, coords)
+            coords = [x for x in molsetup.coord.values()]
+            cls._set_offatoms(molsetup, cached_offatoms, coords)
+
+        if dihedral_params not in (None, 'espaloma'):
+            cls._type_dihedrals(molsetup, dihedral_params)
+
         return
 
     @staticmethod
@@ -32,26 +45,31 @@ class AtomTyper:
             if smartsgroup == 'comment': continue
             for line in atom_params[smartsgroup]: # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
                 smarts = str(line['smarts'])
-                if 'atype' not in line: continue
                 # get indices of the atoms in the smarts to which the parameters will be assigned
                 idxs = [0] # by default, the first atom in the smarts gets parameterized
                 if 'IDX' in line:
                     idxs = [i - 1 for i in line['IDX']] # convert from 1- to 0-indexing
                 # match SMARTS
                 hits = molsetup.find_pattern(smarts)
-                atompar = 'atype' # we care only about 'atype', for now, but may want to extend
-                atom_type = line[atompar]
-                # keep track of every "smartsgroup" that modified "atompar"
-                ensure.setdefault(atompar, [])
-                ensure[atompar].append(smartsgroup)
-                # Each "hit" is a tuple of atom indeces that matched the smarts
-                # The length of each "hit" is the number of atoms in the smarts
-                for hit in hits:
-                    # Multiple atoms may be targeted by a single smarts:
-                    # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
-                    # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
-                    for idx in idxs:
-                        molsetup.set_atom_type(hit[idx], atom_type) # overrides previous calls
+                for atompar in line:
+                    if atompar in ["smarts", "comment", "IDX"]: continue
+                    if atompar not in molsetup.atom_params:
+                        molsetup.atom_params[atompar] = [None] * len(molsetup.coord) 
+                    value = line[atompar]
+                    # keep track of every "smartsgroup" that modified "atompar"
+                    ensure.setdefault(atompar, [])
+                    ensure[atompar].append(smartsgroup)
+                    # Each "hit" is a tuple of atom indices that matched the smarts
+                    # The length of each "hit" is the number of atoms in the smarts
+                    for hit in hits:
+                        # Multiple atoms may be targeted by a single smarts:
+                        # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
+                        # "idxs" are 1-indices of atoms in the smarts to which parameters are to be assigned.
+                        for idx in idxs:
+                            if atompar == "atype":
+                                molsetup.set_atom_type(hit[idx], value) # overrides previous calls
+                            molsetup.atom_params[atompar][hit[idx]] = value
+
         # guarantee that each atompar is exclusive of a single group
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
@@ -65,6 +83,7 @@ class AtomTyper:
         """ precalculate off-site atoms """
         cached_offatoms = {}
         n_offatoms = 0
+        atoms_with_offchrg = set()
         # each parent atom can only be matched once in each smartsgroup
         for smartsgroup in offatom_params:
             if smartsgroup == "comment": continue
@@ -108,6 +127,11 @@ class AtomTyper:
                                     pass
                                 elif key == 'atype':
                                     tmp[parent_idx][-1]['atom_params'][key] = offatom[key]
+                                elif key == 'pull_charge_fraction':
+                                    if parent_idx in atoms_with_offchrg:
+                                        raise RuntimeError("atom %d has charge pulled more than once" % parent_idx)
+                                    atoms_with_offchrg.add(parent_idx)
+                                    tmp[parent_idx][-1]['atom_params'][key] = offatom[key]
                                 else:
                                     pass
             for parent_idx in tmp:
@@ -118,10 +142,15 @@ class AtomTyper:
                                               neigh=offatom['z'],
                                               xneigh=offatom['x'],
                                               x90=offatom['x90'])
+                    if "pull_charge_fraction" in atom_params:
+                        pull_charge_fraction = atom_params["pull_charge_fraction"]
+                    else:
+                        pull_charge_fraction = 0.0
                     args = (atom_params['atype'],
                             offatom['distance'],
                             offatom['theta'],
-                            offatom['phi'])
+                            offatom['phi'],
+                            pull_charge_fraction)
                     # number of coordinates (before adding new offatom)
                     cached_offatoms[n_offatoms] = (atomgeom, args)
                     n_offatoms += 1
@@ -131,29 +160,68 @@ class AtomTyper:
     def _set_offatoms(molsetup, cached_offatoms, coords):
         """add cached offatoms"""
         for k, (atomgeom, args) in cached_offatoms.items():
-            (atom_type, dist, theta, phi) = args
+            (atom_type, dist, theta, phi, pull_charge_fraction) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
             tmp = molsetup.get_pdbinfo(atomgeom.parent+1)
             pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
+            q_parent = (1 - pull_charge_fraction) * molsetup.charge[atomgeom.parent] 
+            q_offsite = pull_charge_fraction * molsetup.charge[atomgeom.parent]
             pseudo_atom = {
                     'coord': offatom_coords,
                     'anchor_list': [atomgeom.parent],
-                    'charge': 0.0,
+                    'charge': q_offsite,
                     'pdbinfo': pdbinfo,
                     'atom_type': atom_type,
-                    'bond_type': 0,
                     'rotatable': False
                     }
+            molsetup.charge[atomgeom.parent] = q_parent
             molsetup.add_pseudo(**pseudo_atom)
         return
+
+    @staticmethod
+    def _type_dihedrals(molsetup, dihedral_params):
+
+        dihedrals = {}
+
+        for line in dihedral_params:
+            smarts = str(line['smarts'])
+            hits = molsetup.find_pattern(smarts)
+            if len(hits) == 0:
+                continue # non-rotatable bonds get dihedrals
+            idxs = [i - 1 for i in line['IDX']]
+            tid = line["id"] if "id" in line else None
+            fourier_series = []
+            term_indices = {}
+            for key in line:
+                for keyword in ['phase', 'k', 'periodicity', 'idivf']:
+                    if key.startswith(keyword):
+                        t = int(key.replace(keyword, '')) # e.g. "phase2" -> int(2)
+                        if t not in term_indices:
+                            term_indices[t] = len(fourier_series)
+                            fourier_series.append({})
+                        index = term_indices[t]
+                        fourier_series[index][keyword] = line[key]
+                        break
+
+            for index in range(len(fourier_series)):
+                if "idivf" in fourier_series[index]:
+                    idivf = fourier_series[index].pop("idivf")
+                    fourier_series[index]["k"] /= idivf
+
+            dihedral_index = molsetup.add_dihedral_interaction(fourier_series)
+
+            for hit in hits:
+                atom_idxs = tuple([hit[j] for j in idxs])
+                molsetup.dihedral_partaking_atoms[atom_idxs] = dihedral_index
+                molsetup.dihedral_labels[atom_idxs] = tid
 
 class AtomicGeometry():
     """generate reference frames and add extra sites"""
 
-    PLANAR_TOL = 0.1 # angstroms, length of neighbour vecs for Z axis
-
-    def __init__(self, parent, neigh, xneigh=[], x90=False):
+    def __init__(self, parent, neigh, xneigh=[], x90=False, planar_tol=0.1):
         """arguments are indices of atoms"""
+
+        self.planar_tol = planar_tol # angstroms, length of neighbor vecs for z-axis
 
         # real atom hosting extra sites
         if type(parent) != int:
@@ -196,8 +264,8 @@ class AtomicGeometry():
                 x = np.cross(self.z, x)
             y = np.cross(z, x)
             pt = z * distance
-            pt = self._rot3D(pt, y, phi)
-            pt = self._rot3D(pt, z, theta)
+            pt = self.rot3D(pt, y, phi)
+            pt = self.rot3D(pt, z, theta)
             pt += np.array(coords[self.parent])
             return pt
 
@@ -210,7 +278,7 @@ class AtomicGeometry():
             cumsum += v
             z += self.normalized(v)
         z = self.normalized(z)
-        if np.sum(cumsum**2) < self.PLANAR_TOL**2:
+        if np.sum(cumsum**2) < self.planar_tol**2:
             raise RuntimeError('Refusing to place Z axis on planar atom')
         return z
 
@@ -222,7 +290,8 @@ class AtomicGeometry():
         x = self.normalized(x)
         return x
 
-    def _rot3D(self, pt, ax, rad):
+    @staticmethod
+    def rot3D(pt, ax, rad):
         """
             Rotate point:
             pt = (x,y,z) coordinates to be rotated

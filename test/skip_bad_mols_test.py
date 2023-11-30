@@ -6,18 +6,18 @@ import warnings
 import pytest
 
 
-def test():
+def test_missing_explicit_Hs():
     p = Chem.SmilesParserParams()
     mol = Chem.MolFromSmiles("Oc1ccc(cc1)[N+](=O)[O-]\tnitrophenol", p)
     etkdg_params = Chem.rdDistGeom.ETKDGv3()
     Chem.rdDistGeom.EmbedMolecule(mol, etkdg_params)
     mk_prep = MoleculePreparation()
-    with warnings.catch_warnings(record=True) as cought:
+    #with warnings.catch_warnings(record=True) as cought:
+    #    for w in cought:
+    #        print(w)
+    with pytest.raises(ValueError) as e:
         setups = mk_prep.prepare(mol)
-        for w in cought:
-            print(w)
-    pdbqt, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
-    assert(is_ok == False)
+
 
 mk_prep = MoleculePreparation()
 

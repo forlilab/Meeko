@@ -1,0 +1,31 @@
+{"vina_typing": [
+    {"smarts": "[#1]",  "vina_ri": null, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic": false},
+    {"smarts": "[#6]",  "vina_ri":  1.9, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic":  true},
+    {"smarts": "[#7]",  "vina_ri":  1.8, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic": false},
+    {"smarts": "[#8]",  "vina_ri":  1.7, "vina_donor": false, "vina_acceptor":  true, "vina_hydrophobic": false},
+    {"smarts": "[#15]", "vina_ri":  2.1, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic": false},
+    {"smarts": "[#16]", "vina_ri":  2.0, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic": false},
+
+    {"smarts": "[#9]",  "vina_ri":  1.5, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic":  true},
+    {"smarts": "[#17]", "vina_ri":  1.8, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic":  true},
+    {"smarts": "[#35]", "vina_ri":  2.0, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic":  true},
+    {"smarts": "[#53]", "vina_ri":  2.2, "vina_donor": false, "vina_acceptor": false, "vina_hydrophobic":  true},
+
+    {"smarts": "[#12]", "vina_ri":  1.2, "vina_donor":  true, "vina_acceptor": false, "vina_hydrophobic": false},
+    {"smarts": "[#20]", "vina_ri":  1.2, "vina_donor":  true, "vina_acceptor": false, "vina_hydrophobic": false},
+    {"smarts": "[#25]", "vina_ri":  1.2, "vina_donor":  true, "vina_acceptor": false, "vina_hydrophobic": false},
+    {"smarts": "[#26]", "vina_ri":  1.2, "vina_donor":  true, "vina_acceptor": false, "vina_hydrophobic": false},
+    {"smarts": "[#30]", "vina_ri":  1.2, "vina_donor":  true, "vina_acceptor": false, "vina_hydrophobic": false},
+
+    {"smarts": "[#8][#1]",          "vina_donor": true},
+    {"smarts": "[#7][#1]",          "vina_donor": true},
+    {"smarts": "[#16][#1]",         "vina_donor": true},
+    {"smarts": "[#7X2v3]",          "vina_acceptor": true},
+    {"smarts": "[#7X3v3]",          "vina_acceptor": true},
+    {"smarts": "[#7;X1]",           "vina_acceptor": true},
+    {"smarts": "[#7X3v3][a]",       "vina_acceptor": false},
+    {"smarts": "[#7X3v3][#6X3v4]",  "vina_acceptor": false},
+    {"smarts": "[#16X1-]",          "vina_acceptor": true},
+    {"smarts": "[#6][#7,#8,#9,#15,#16,#17,#35,#53]", "vina_hydrophobic": false}
+    ]
+}

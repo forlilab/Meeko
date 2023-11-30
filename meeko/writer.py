@@ -7,11 +7,296 @@
 import sys
 import json
 import math
+import pathlib
 
 import numpy as np
 from rdkit import Chem
 from .utils import pdbutils
 from .utils.rdkitutils import mini_periodic_table
+
+linesep = pathlib.os.linesep
+
+def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
+    if len(molsetup.restraints):
+        raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
+    offchrg_type = "OFFCHRG"
+    offchrg_by_parent = {}
+    for i in molsetup.atom_pseudo:
+        if molsetup.atom_type[i] == offchrg_type:
+            neigh = molsetup.get_neigh(i)
+            if len(neigh) != 1:
+                raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
+                    i, json.dumps(neigh)))
+            if neigh[0] in offchrg_by_parent:
+                raise RuntimeError("atom %d has more than one offsite charge" % neigh[0])
+            offchrg_by_parent[neigh[0]] = i
+    output_indices_start_at_one = True
+    index_start = int(output_indices_start_at_one)
+    positions_block = ""
+    charges = []
+    offchrg_by_oid_parent = {}
+    elements = []
+    n_real_atoms = molsetup.atom_true_count
+    n_fake_atoms = len(molsetup.atom_pseudo)
+    indexmap = {} # molsetup: oid
+    count_oids = 0
+    for index in range(n_real_atoms):
+        if molsetup.atom_ignore[index]:
+            continue
+        if molsetup.atom_type[index] == offchrg_type:
+            continue # handled by offchrg_by_parent
+        oid_id = count_oids + index_start
+        indexmap[index] = count_oids
+        x, y, z = molsetup.coord[index]
+        positions_block += "position.%d = (%f,%f,%f)\n" % (oid_id, x, y, z)
+        charges.append(molsetup.charge[index])
+        if index in offchrg_by_parent:
+            index_pseudo = offchrg_by_parent[index]
+            xq_abs, yq_abs, zq_abs = molsetup.coord[index_pseudo]
+            xq_rel = xq_abs - x
+            yq_rel = yq_abs - y
+            zq_rel = zq_abs - z
+            offchrg_by_oid_parent[count_oids] = {
+                "q": molsetup.charge[index_pseudo],
+                "xyz": (xq_rel, yq_rel, zq_rel),
+            }
+        count_oids += 1
+        element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
+        elements.append(element)
+    
+    tmp = []
+    for index in range(len(charges)):
+        if index in offchrg_by_oid_parent:
+            tmplist = ["%f" % charges[index], "0.0", "0.0" ,"0.0"] # xyz relative to current elemtn
+            tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
+            tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
+            tmp.append(",".join(tmplist))
+        else:
+            tmp.append("%f" % charges[index])
+    charges_line = "import_charges = {%s}\n" % ("|".join(tmp))
+    elements_line = "elements = %s\n" % (",".join(elements))
+
+    bonds = [[] for _ in range(count_oids)]
+    bond_orders = [[] for _ in range(count_oids)]
+    static_links = []
+    for i, j in molsetup.bond.keys():
+        if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
+            continue
+        if molsetup.atom_type[i] == offchrg_type or molsetup.atom_type[j] == offchrg_type:
+            continue
+        oid_i = indexmap[i]
+        oid_j = indexmap[j]
+        bonds[oid_i].append("%d" % (oid_j+index_start))
+        bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
+        if not molsetup.bond[(i, j)]["rotatable"]:
+            static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
+    bonds = [",".join(j_list) for j_list in bonds]
+    bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
+    bond_orders = [",".join(orders) for orders in bond_orders]
+    bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
+    staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
+
+
+    output = ""
+    output += "[Group: %s]\n" % name
+    output += positions_block
+    output += charges_line
+    output += elements_line
+    output += bonds_line
+    output += bondorder_line
+    output += staticlinks_line
+    output += "number = 1\t\t// can only be 1 for the sandbox currently (but any number for classical MC)\n"
+    output += "group_dipole = 1\t// not relevant for sandbox but classical MC\n"
+    output += "rand_independent=0\t// not relevant for sandbox but classical MC\n"
+    output += "bond_range = 4\t\t// bond range AD default\n"
+    output += "\n"
+    output += get_dihedrals_block(molsetup, indexmap, name)
+
+    return output, indexmap
+
+
+def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
+    if len(molsetup.restraints):
+        raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
+    offchrg_type = "OFFCHRG"
+    offchrg_by_parent = {}
+    for i in molsetup.atom_pseudo:
+        if molsetup.atom_type[i] == offchrg_type:
+            neigh = molsetup.get_neigh(i)
+            if len(neigh) != 1:
+                raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
+                    i, json.dumps(neigh)))
+            if neigh[0] in offchrg_by_parent:
+                raise RuntimeError("atom %d has more than one offsite charge" % neigh[0])
+            offchrg_by_parent[neigh[0]] = i
+    output_indices_start_at_one = True
+    index_start = int(output_indices_start_at_one)
+    positions_block = ""
+    charges = []
+    offchrg_by_oid_parent = {}
+    elements = []
+    n_real_atoms = molsetup.atom_true_count
+    n_fake_atoms = len(molsetup.atom_pseudo)
+    indexmap = {} # molsetup: oid
+    count_oids = 0
+    for index in range(n_real_atoms):
+        if molsetup.atom_ignore[index]:
+            continue
+        if molsetup.atom_type[index] == offchrg_type:
+            continue # handled by offchrg_by_parent
+        oid_id = count_oids + index_start
+        indexmap[index] = count_oids
+        x, y, z = molsetup.coord[index]
+        positions_block += "position.%d = (%f,%f,%f)\n" % (oid_id, x, y, z)
+        charges.append(molsetup.charge[index])
+        if index in offchrg_by_parent:
+            index_pseudo = offchrg_by_parent[index]
+            xq_abs, yq_abs, zq_abs = molsetup.coord[index_pseudo]
+            xq_rel = xq_abs - x
+            yq_rel = yq_abs - y
+            zq_rel = zq_abs - z
+            offchrg_by_oid_parent[count_oids] = {
+                "q": molsetup.charge[index_pseudo],
+                "xyz": (xq_rel, yq_rel, zq_rel),
+            }
+        count_oids += 1
+        element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
+        elements.append(element)
+    
+    tmp = []
+    for index in range(len(charges)):
+        if index in offchrg_by_oid_parent:
+            tmplist = ["%f" % charges[index], "0.0", "0.0" ,"0.0"] # xyz relative to current elemtn
+            tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
+            tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
+            tmp.append(",".join(tmplist))
+        else:
+            tmp.append("%f" % charges[index])
+    charges_line = "import_charges = {%s}\n" % ("|".join(tmp))
+    elements_line = "elements = %s\n" % (",".join(elements))
+
+    bonds = [[] for _ in range(count_oids)]
+    bond_orders = [[] for _ in range(count_oids)]
+    static_links = []
+    for i, j in molsetup.bond.keys():
+        if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
+            continue
+        if molsetup.atom_type[i] == offchrg_type or molsetup.atom_type[j] == offchrg_type:
+            continue
+        oid_i = indexmap[i]
+        oid_j = indexmap[j]
+        bonds[oid_i].append("%d" % (oid_j+index_start))
+        bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
+        if not molsetup.bond[(i, j)]["rotatable"]:
+            static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
+    bonds = [",".join(j_list) for j_list in bonds]
+    bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
+    bond_orders = [",".join(orders) for orders in bond_orders]
+    bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
+    staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
+
+
+    output = ""
+    output += "[Group: %s]\n" % name
+    output += positions_block
+    output += charges_line
+    output += elements_line
+    output += bonds_line
+    output += bondorder_line
+    output += staticlinks_line
+    output += "number = 1\t\t// can only be 1 for the sandbox currently (but any number for classical MC)\n"
+    output += "group_dipole = 1\t// not relevant for sandbox but classical MC\n"
+    output += "rand_independent=0\t// not relevant for sandbox but classical MC\n"
+    output += "bond_range = 4\t\t// bond range AD default\n"
+    output += "\n"
+    output += get_dihedrals_block(molsetup, indexmap, name)
+
+    return output, indexmap
+
+def get_dihedrals_block(molsetup, indexmap, name):
+
+    # molsetup.dihedral_interactions    is a list of unique fourier_series
+    # molsetup.dihedral_partaking_atoms has tuples of atom indices as keys, and the values
+    #                                   are the indices in molsetup.dihedral_interactions 
+    # molsetup.dihedral_labels          also has tuples of atom indices as keys, but the
+    #                                   values are not guaranteed to be unique
+
+    # Let's carefully use dihedral_labels to name the interactions
+    label_by_index = {}
+    atomidx_by_index = {}
+    for atomidx in molsetup.dihedral_partaking_atoms:
+        a, b, c, d = atomidx
+        if (molsetup.atom_ignore[a] or
+            molsetup.atom_ignore[b] or
+            molsetup.atom_ignore[c] or
+            molsetup.atom_ignore[d]):
+            continue
+        bond_id = molsetup.get_bond_id(b, c)
+        if not molsetup.bond[bond_id]["rotatable"]:
+            continue
+        index = molsetup.dihedral_partaking_atoms[atomidx]
+        atomidx_by_index.setdefault(index, set())
+        atomidx_by_index[index].add(atomidx)
+        label = molsetup.dihedral_labels[atomidx] if atomidx in molsetup.dihedral_labels else None
+        if label is None:
+            label = "from_meeko_%d" % index
+        label_by_index.setdefault(index, set())
+        label_by_index[index].add(label)
+    spent_labels = set()
+    for index in label_by_index:
+        label = "_".join(label_by_index[index])
+        number = 0
+        while label in spent_labels:
+            number += 1
+            label = "_".join(label_by_index[index]) + "_v%d" % number
+        label_by_index[index] = label
+        spent_labels.add(label)
+
+    text = ""
+    for index in label_by_index:
+        text += "[Interaction: %s, %s]\n" % (name, label_by_index[index])
+        text += "type = dihedral\n"
+        atomidx_strings = []
+        for atomidx in atomidx_by_index[index]:
+            string = ",".join(["%d" % (indexmap[i]+1) for i in atomidx])
+            atomidx_strings.append(string)
+        text += "elements = {%s}\n" % ("|".join(atomidx_strings))
+        text += "parameters = %s\n" % _aux_fourier_conversion(molsetup.dihedral_interactions[index])
+        text += '\n'
+    return text
+
+def _aux_fourier_conversion(fourier_series):
+    # convert from:
+    #   k*(1+cos(n*theta-phase))
+    # to:
+    #   (k/2)*(1+cos(n*(theta+phase)))
+    # where n = periodicity
+    max_periodicity = max([fs['periodicity'] for fs in fourier_series])
+    tmp = [(0, 0)] * max_periodicity
+    for fs in fourier_series:
+        i = fs['periodicity'] - 1
+        k = 2.0 * fs['k']
+        phase = -1 * fs['phase']
+        tmp[i] = (k, phase)
+    strings = []
+    periodicity = 0
+    for (k, phase) in tmp:
+        periodicity += 1
+        k_str = '0'
+        if phase == 0:
+            phase_str = '0'
+        else:
+            phase_str = ('%f' % (phase/np.pi)).rstrip('0').rstrip('.') + '*pi'
+            if phase_str == '1*pi':
+                phase_str = 'pi'
+            if phase_str == '-1*pi':
+                phase_str = '-pi'
+            if periodicity != 1:
+                phase_str += "/%d" % periodicity
+        if k != 0: k_str = '%f*4.184/60.221' % (k)
+        strings.append("%s,%s" % (k_str, phase_str))
+    return "(" + ";".join(strings) + ")"
+
 
 
 class PDBQTWriterLegacy():
@@ -32,28 +317,31 @@ class PDBQTWriterLegacy():
         return atom_name, res_name, res_num, chain
 
     @classmethod
-    def _make_pdbqt_line(cls, setup, atom_idx, resinfo_set, count):
+    def _make_pdbqt_line_from_molsetup(cls, setup, atom_idx, count):
         """ """
-        record_type = "ATOM"
-        alt_id = " "
         pdbinfo = setup.pdbinfo[atom_idx]
         if pdbinfo is None:
             pdbinfo = pdbutils.PDBAtomInfo('', '', 0, '')
-        resinfo = pdbutils.PDBResInfo(pdbinfo.resName, pdbinfo.resNum, pdbinfo.chain)
-        resinfo_set.add(resinfo)
         atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo)
-        in_code = ""
-        occupancy = 1.0
-        temp_factor = 0.0
         coord = setup.coord[atom_idx]
         atom_type = setup.get_atom_type(atom_idx)
         charge = setup.charge[atom_idx]
-        atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
+        pdbqt_line = cls._make_pdbqt_line(
+                count, atom_name, res_name, chain, res_num, coord, charge, atom_type)
+        return pdbqt_line
 
-        pdbqt_line = atom.format(record_type, count, pdbinfo.name, alt_id, res_name, chain,
+    @staticmethod
+    def _make_pdbqt_line(count, atom_name, res_name, chain, res_num, coord, charge, atom_type): 
+        record_type = "ATOM"
+        alt_id = " "
+        in_code = ""
+        occupancy = 1.0
+        temp_factor = 0.0
+        atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
+        pdbqt_line = atom.format(record_type, count, atom_name, alt_id, res_name, chain,
                            res_num, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
                            occupancy, temp_factor, charge, atom_type)
-        return pdbqt_line, resinfo_set
+        return pdbqt_line
 
     @classmethod
     def _walk_graph_recursive(cls, setup, node, data, edge_start=0, first=False):
@@ -70,8 +358,7 @@ class PDBQTWriterLegacy():
         for member in member_pool:
             if setup.atom_ignore[member] == 1:
                 continue
-            pdbqt_line, resinfo_set = cls._make_pdbqt_line(setup, member, data["resinfo_set"], data["count"])
-            data["resinfo_set"] = resinfo_set # written as if _make_pdbqt_line() doesn't modify its args (for readability)
+            pdbqt_line = cls._make_pdbqt_line_from_molsetup(setup, member, data["count"])
             data["pdbqt_buffer"].append(pdbqt_line)
             data["numbering"][member] = data["count"] # count starts at 1
             data["count"] += 1
@@ -102,24 +389,14 @@ class PDBQTWriterLegacy():
         
         return data
 
-    @classmethod
-    def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
-        """Output a PDBQT file as a string.
-
-        Args:
-            setup: MoleculeSetup
-
-        Returns:
-            str:  PDBQT string of the molecule
-            bool: success
-            str:  error message
-        """
+    @staticmethod
+    def _is_molsetup_ok(setup, bad_charge_ok):
 
         success = True
         error_msg = ""
         
-        if setup.has_implicit_hydrogens():
-            error_msg += "molecule has implicit hydrogens (name=%s)\n" % setup.get_mol_name()
+        if len(setup.restraints):
+            error_msg = "molsetup has restraints but these can't be written to PDBQT"
             success = False
 
         for idx, atom_type in setup.atom_type.items():
@@ -133,6 +410,67 @@ class PDBQTWriterLegacy():
                 error_msg += 'atom number %d has non finite charge, mol name: %s, charge: %s\n' % (idx, setup.get_mol_name(), str(c))
                 success = False
 
+        return success, error_msg
+
+
+    @classmethod
+    def write_string_from_linked_rdkit_chorizo(cls, chorizo):
+
+        rigid_pdbqt_string = ""
+        flex_pdbqt_string = ""
+        atom_count = 0
+        flex_atom_count = 0
+        for res_id in chorizo.getValidResidues():
+            resmol = chorizo.residues[res_id].rdkit_mol
+            positions = resmol.GetConformer().GetPositions()
+            chain, resname, resnum = res_id.split(":")
+            resnum = int(resnum)
+            molsetup_mapidx = {} if chorizo.residues[res_id].molsetup_mapidx is None else chorizo.residues[res_id].molsetup_mapidx
+            molsetup_ignored = () if chorizo.residues[res_id].molsetup_ignored is None else chorizo.residues[res_id].molsetup_ignored
+            flexres_idxs = [j for (i, j) in molsetup_mapidx.items() if j not in molsetup_ignored]
+            for atom in resmol.GetAtoms():
+                if atom.GetIdx() in flexres_idxs:
+                    continue
+                props = atom.GetPropsAsDict()
+                atom_type = props["atom_type"]
+                if atom_type == "H":
+                    continue
+                coord = positions[atom.GetIdx()]
+                atom_name = props.get("atom_name", "")
+                charge = props["gasteiger"]
+                atom_count += 1
+                rigid_pdbqt_string += cls._make_pdbqt_line(
+                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type) + linesep
+            if chorizo.residues[res_id].molsetup:
+                chain, resname, resnum = res_id.split(":")
+                molsetup = chorizo.residues[res_id].molsetup
+                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup, remove_smiles=True)
+                if not ok:
+                    raise RuntimeError(err)
+                this_flex_pdbqt, flex_atom_count = cls.adapt_pdbqt_for_autodock4_flexres(
+                    this_flex_pdbqt, 
+                    resname,
+                    chain,
+                    resnum,
+                    skip_rename_ca_cb=True,
+                    atom_count=flex_atom_count)
+                flex_pdbqt_string += this_flex_pdbqt
+        return rigid_pdbqt_string, flex_pdbqt_string
+
+    @classmethod
+    def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
+        """Output a PDBQT file as a string.
+
+        Args:
+            setup: MoleculeSetup
+
+        Returns:
+            str:  PDBQT string of the molecule
+            bool: success
+            str:  error message
+        """
+    
+        success, error_msg = cls._is_molsetup_ok(setup, bad_charge_ok)
         if not success:
             pdbqt_string = ""
             return pdbqt_string, success, error_msg
@@ -142,7 +480,6 @@ class PDBQTWriterLegacy():
             "numbering": {},
             "pdbqt_buffer": [],
             "count": 1,
-            "resinfo_set": set(),
         }
         atom_counter = {}
 
@@ -201,21 +538,10 @@ class PDBQTWriterLegacy():
                 # is populated in self._walk_graph_recursive.
                 data["pdbqt_buffer"].insert(i, remark_line)
 
-        if False: #self.setup.is_protein_sidechain:
-            if len(data["resinfo_set"]) > 1:
-                print("Warning: more than a single resName, resNum, chain in flexres", file=sys.stderr)
-                print(data["resinfo_set"], file=sys.stderr)
-            resinfo = list(data["resinfo_set"])[0]
-            pdbinfo = pdbutils.PDBAtomInfo('', resinfo.resName, resinfo.resNum, resinfo.chain)
-            _, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo)
-            resinfo_string = "{:3s} {:1s}{:4d}".format(res_name, chain, res_num)
-            data["pdbqt_buffer"].insert(0, 'BEGIN_RES %s' % resinfo_string)
-            data["pdbqt_buffer"].append('END_RES %s' % resinfo_string)
-        else: # no TORSDOF in flexres
-            # torsdof is always going to be the one of the rigid, non-macrocyclic one
-            data["pdbqt_buffer"].append('TORSDOF %d' % active_tors)
+        # torsdof is always going to be the one of the rigid, non-macrocyclic one
+        data["pdbqt_buffer"].append('TORSDOF %d' % active_tors)
 
-        pdbqt_string =  '\n'.join(data["pdbqt_buffer"]) + '\n'
+        pdbqt_string =  linesep.join(data["pdbqt_buffer"]) + linesep
         return pdbqt_string, success, error_msg
 
     @classmethod
@@ -255,28 +581,37 @@ class PDBQTWriterLegacy():
         return remarks
 
     @staticmethod
-    def adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num):
+    def adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num, skip_rename_ca_cb=False, atom_count=None):
         """ adapt pdbqt_string to be compatible with AutoDock4 requirements:
              - first and second atoms named CA and CB
              - write BEGIN_RES / END_RES
              - remove TORSDOF
             this is for covalent docking (tethered)
         """
-        new_string = "BEGIN_RES %s %s %s\n" % (res, chain, num)
+        new_string = "BEGIN_RES %s %s %s" % (res, chain, num) + linesep
         atom_number = 0
-        for line in pdbqt_string.split("\n"):
+        for line in pdbqt_string.split(linesep):
             if line == "":
                 continue
             if line.startswith("TORSDOF"):
                 continue
             if line.startswith("ATOM"):
-                atom_number+=1
-                if atom_number == 1:
-                    line = line[:13] + 'CA' + line[15:]
-                elif atom_number == 2:
-                    line = line[:13] + 'CB' + line[15:]
-                new_string += line + '\n'
+                if not skip_rename_ca_cb:
+                    atom_number+=1
+                    if atom_number == 1:
+                        line = line[:13] + 'CA' + line[15:]
+                    elif atom_number == 2:
+                        line = line[:13] + 'CB' + line[15:]
+                if atom_count is not None:
+                    atom_count += 1
+                    n = "%5d" % atom_count
+                    n = n[:5]
+                    line = line[:6] + n + line[11:]
+                new_string += line + linesep
                 continue
-            new_string += line + '\n'
-        new_string += "END_RES %s %s %s\n" % (res, chain, num)
-        return new_string
+            new_string += line + linesep
+        new_string += "END_RES %s %s %s" % (res, chain, num) + linesep
+        if atom_count is None:
+            return new_string # just keeping backwards compatibility
+        else:
+            return new_string, atom_count

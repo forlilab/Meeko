@@ -84,11 +84,11 @@ def box_to_pdb_string(box_center, npts, spacing=0.375):
     pdb_out = ""
     line = "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f  1.00 10.00          %1s" + os_linesep
     for idx in range(len(corners)):
-    	x = corners[idx][0]
-    	y = corners[idx][1]
-    	z = corners[idx][2]
-    	pdb_out += line % (count, "Ne", res, chain, idx+1, x, y, z, "Ne")
-    	count += 1
+        x = corners[idx][0]
+        y = corners[idx][1]
+        z = corners[idx][2]
+        pdb_out += line % (count, "Ne", res, chain, idx+1, x, y, z, "Ne")
+        count += 1
 
     # center
     pdb_out += line % (count+1, "Xe", res, chain, idx+1, center_x, center_y, center_z, "Xe")
@@ -122,28 +122,26 @@ def is_point_outside_box(point, center, npts, spacing=0.375):
     is_outside |= z >= maxcorner[2] or z <= mincorner[2]
     return is_outside
 
-def calc_box(fname, padding):
-    """Crude PDBQT parsing is used here because it allows input of autosite pdbqts"""
+def calc_box(coord_array, padding):
+    """Calulate gridbox around given coordinate array with given padding
+
+    Args:
+        coord_array (array-like): array of XYZ coordinates as strings or floats
+        padding (string/float): padding (in angstroms) for box around given coordinates
+
+    Returns:
+        tuple: tuple of tuples with center coordinates (angstroms) and dimension sizes (angstroms) for box
+    """    
     padding = float(padding)
-    x_min = float('inf')
-    x_min = float('inf')
-    y_min = float('inf')
-    z_min = float('inf')
-    x_max = float('-inf')
-    y_max = float('-inf')
-    z_max = float('-inf')
-    with open(fname) as f:
-        for line in f:
-            if line.startswith('ATOM') or line.startswith('HETATM'):
-                x = float(line[30:38])
-                y = float(line[38:46])
-                z = float(line[46:54])
-                x_max = max(x, x_max)
-                y_max = max(y, y_max)
-                z_max = max(z, z_max)
-                x_min = min(x, x_min)
-                y_min = min(y, y_min)
-                z_min = min(z, z_min)
+    xa = [float(c[0]) for c in coord_array]
+    ya = [float(c[1]) for c in coord_array]
+    za = [float(c[2]) for c in coord_array]
+    x_min = min(xa)
+    x_max = max(xa)
+    y_min = min(ya)
+    y_max = max(ya)
+    z_min = min(za)
+    z_max = max(za)
     center_x = (x_min + x_max) / 2.0
     center_y = (y_min + y_max) / 2.0
     center_z = (z_min + z_max) / 2.0
