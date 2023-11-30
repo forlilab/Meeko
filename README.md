@@ -1,7 +1,7 @@
 # Meeko: preparation of small molecules for AutoDock
 
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
-[![PyPI version fury.io](https://img.shields.io/badge/version-0.5.0-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
+[![PyPI version fury.io](https://img.shields.io/badge/version-0.6.0-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
 
 Meeko reads an RDKit molecule object and writes a PDBQT string (or file)
 for [AutoDock-Vina](https://github.com/ccsb-scripps/AutoDock-Vina)
@@ -33,6 +33,14 @@ and RDKit issues
 [917](https://github.com/rdkit/rdkit/issues/917). So, what could go wrong?
 For example, reading Mol2 files from ZINC
 [led to incorrect net charge of some molecules.](https://github.com/forlilab/Meeko/issues/63)
+
+
+## v0.6.0-alpha
+
+This release aims to distribute an enhanced `mk_prepare_receptor.py`.
+Some features are still being developed, hence the `-alpha` suffix in the version.
+Reactive docking is not working in v0.6.0-alpha, but should be restored soon.
+Documentation is also work in progress.
 
 
 ## API changes in v0.5
