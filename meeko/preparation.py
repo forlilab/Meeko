@@ -134,10 +134,7 @@ class MoleculePreparation:
 
     @staticmethod
     def get_atom_params(input_atom_params, load_atom_params, add_atom_types, packaged_params):
-        if input_atom_params is None:
-            atom_params = {}
-        else:
-            atom_params = json.loads(json.dumps(input_atom_params))
+        atom_params = {}
         if type(load_atom_params) == str:
             load_atom_params = [load_atom_params]
         elif load_atom_params is None:
@@ -160,10 +157,36 @@ class MoleculePreparation:
                 with open(filename) as f:
                     d = json.load(f)
             overlapping_groups = set(atom_params).intersection(set(d))
-            atom_params.update(d)
             if len(overlapping_groups):
                 msg = "overlapping parameter groups: %s" % str(overlapping_groups)
                 raise ValueError(msg)
+            atom_params.update(d)
+
+        if input_atom_params is not None:
+            d = json.loads(json.dumps(input_atom_params))
+            overlapping_groups = set(atom_params).intersection(set(d))
+            if len(overlapping_groups): # todo: remove duplicated code
+                msg = "overlapping parameter groups: %s" % str(overlapping_groups)
+                raise ValueError(msg)
+            params_set_here = set()
+            for group_key, rows in input_atom_params.items():
+                for row in rows:
+                    for param_name in row:
+                        if param_name not in ["smarts", "comment", "IDX"]:
+                            params_set_here.add(param_name)
+            params_set_before = set()
+            for group_key, rows in atom_params.items():
+                for row in rows:
+                    for param_name in row:
+                        if param_name not in ["smarts", "comment", "IDX"]:
+                            params_set_before.add(param_name)
+            overlap = params_set_before.intersection(params_set_here)
+            if len(overlap):
+                msg = f"input_atom_params {overlap} also set by one or more of {load_atom_params}\n"
+                msg += "consider setting load_atom_params=None"
+                raise ValueError(f"input_atom_params {overlap} also set by one or more of {load_atom_params}")
+                
+            atom_params.update(d)
 
         if len(add_atom_types) > 0:
             group_keys = list(atom_params.keys())

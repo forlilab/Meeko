@@ -64,7 +64,7 @@ class AtomTyper:
                     for hit in hits:
                         # Multiple atoms may be targeted by a single smarts:
                         # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
-                        # "idxs" are 1-indeces of atoms in the smarts to which parameters are to be assigned.
+                        # "idxs" are 1-indices of atoms in the smarts to which parameters are to be assigned.
                         for idx in idxs:
                             if atompar == "atype":
                                 molsetup.set_atom_type(hit[idx], value) # overrides previous calls

@@ -6,13 +6,15 @@ from meeko import (
     MoleculePreparation
     )
 
+import pathlib
 import pytest
 
 # Example Files (should be moved to tests directory eventually)
-ahhy_example = "example\chorizo\AHHY.pdb"
-just_one_ALA_missing = "example\chorizo\just-one-ALA-missing-CB.pdb"
-just_one_ALA = "example\chorizo\just-one-ALA.pdb"
-just_three_residues = "example\chorizo\just-three-residues.pdb"
+ahhy_example = pathlib.Path("example/chorizo/AHHY.pdb")
+just_one_ALA_missing = pathlib.Path("example/chorizo/just-one-ALA-missing-CB.pdb")
+just_one_ALA = pathlib.Path("example/chorizo/just-one-ALA.pdb")
+just_three_residues = pathlib.Path("example/chorizo/just-three-residues.pdb")
+
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
 # TODO: clean up tests by pulling repeated test logic into helper functions
@@ -47,7 +49,9 @@ def test_AHHY_all_static_residues():
 
         pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
         rigid_part, movable_part = pdbqt_strings
-        assert len(rigid_part) == 3564
+        rigid_part = "".join(rigid_part.splitlines()) # remove newline chars because Windows/Unix differ
+
+        assert len(rigid_part) == 3476
         assert len(movable_part) == 0
 
 def test_AHHY_flexible_residues():
@@ -95,7 +99,8 @@ def test_just_three_padded_mol():
 
     pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
     rigid_part, movable_part = pdbqt_strings
-    assert len(rigid_part) == 2268
+    rigid_part = "".join(rigid_part.splitlines()) # remove newline chars because Windows/Unix differ
+    assert len(rigid_part) == 2212
     assert len(movable_part) == 0
 
     expected_termini = {':MET:15': 'N'}
@@ -153,7 +158,9 @@ def test_AHHY_mutate_residues():
 
     pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
     rigid_part, movable_part = pdbqt_strings
-    assert len(rigid_part) == 2592
+    rigid_part = "".join(rigid_part.splitlines()) # remove newline chars because Windows/Unix differ
+
+    assert len(rigid_part) == 2528
     assert len(movable_part) == 0
 
     assert chorizo.residues['A:TYR:4'].user_deleted

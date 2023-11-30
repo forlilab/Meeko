@@ -290,7 +290,6 @@ class MoleculeSetup:
         # element
         # type
         # neighbor graph
-        # chiral
         # ignore
         # update bonds bonds (using the neighbor graph)
         # If pseudo-atom, update other information, too
@@ -299,7 +298,7 @@ class MoleculeSetup:
     # pseudo-atoms
     def add_pseudo(self, coord=np.array([0.0,0.0,0.0], dtype='float'), charge=0.0,
             anchor_list=None, atom_type=None, rotatable=False,
-            pdbinfo=None, directional_vectors=None, ignore=False, chira0=False, overwrite=False):
+            pdbinfo=None, directional_vectors=None, ignore=False, overwrite=False):
         """ add a new pseudoatom
             multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
 
