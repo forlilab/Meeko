@@ -81,3 +81,51 @@ class Mol2MolSupplier():
         mol=Chem.MolFromMol2Block("".join(self.buff), **self._opts)
         self.buff = [line]
         return mol
+
+def react_and_map(reactants, rxn):
+    """run reaction and keep track of atom indices from reagents to products"""
+
+    # https://github.com/rdkit/rdkit/discussions/4327#discussioncomment-998612
+
+    # keep track of the reactant that each atom belongs to
+    for i, reactant in enumerate(reactants):
+        for atom in reactant.GetAtoms():
+            atom.SetIntProp("reactant_idx", i)
+
+    reactive_atoms_idxmap = {}
+    for i in range(rxn.GetNumReactantTemplates()):
+        reactant_template = rxn.GetReactantTemplate(i)
+        for atom in reactant_template.GetAtoms():
+            if atom.GetAtomMapNum():
+                reactive_atoms_idxmap[atom.GetAtomMapNum()] = i
+
+    products_list = rxn.RunReactants(reactants)
+
+    index_map = {"reactant_idx": [], "atom_idx": []}
+    for products in products_list:
+        result_reac_map = []
+        result_atom_map = []
+        for product in products:
+            atom_idxmap = [] 
+            reac_idxmap = []
+            for atom in product.GetAtoms():
+                if atom.HasProp("reactant_idx"):
+                    reactant_idx = atom.GetIntProp("reactant_idx")
+                elif atom.HasProp("old_mapno"): # this atom matched the reaction SMARTS
+                    reactant_idx = reactive_atoms_idxmap[atom.GetIntProp("old_mapno")]
+                    #if atom.HasProp("reactant_idx"):
+                    #    raise RuntimeError("did not expect both old_mapno and reactant_idx")
+                    #    #print("did not expect both old_mapno and reactant_idx")
+                else:
+                    reactant_idx = None # the reaction SMARTS creates new atoms
+                reac_idxmap.append(reactant_idx)
+                if atom.HasProp("react_atom_idx"):
+                    atom_idxmap.append(atom.GetIntProp("react_atom_idx"))
+                else:
+                    atom_idxmap.append(None)
+            result_reac_map.append(reac_idxmap)
+            result_atom_map.append(atom_idxmap)
+        index_map["reactant_idx"].append(result_reac_map)
+        index_map["atom_idx"].append(result_atom_map)
+
+    return products_list, index_map

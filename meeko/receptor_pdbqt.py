@@ -351,6 +351,7 @@ class PDBQTReceptor:
         for i, line in enumerate(pdbqtstr.split(os_linesep)[:-1]):
             if line.startswith("ATOM") or line.startswith("HETATM"):
                 name = line[12:16].strip()
+                print(name, "<<<") # TODO need proper atom names from chorizo
                 atype = line[77:].strip()
                 if name == reactive_name:
                     new_type = prefix_atype + get_reactive_atype(atype, 1)

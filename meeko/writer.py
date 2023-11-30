@@ -415,9 +415,17 @@ class PDBQTWriterLegacy():
 
     @classmethod
     def write_string_from_linked_rdkit_chorizo(cls, chorizo):
-
-        rigid_pdbqt_string = ""
+        rigid_pdbqt_string, flex_pdbqt_dict = cls.write_string_flexdict_from_linked_rdkit_chorizo(chorizo)
         flex_pdbqt_string = ""
+        for res_id, pdbqt_string in flex_pdbqt_dict.items():
+            flex_pdbqt_string += pdbqt_string
+        return rigid_pdbqt_string, flex_pdbqt_string
+
+
+    @classmethod
+    def write_from_linked_rdkit_chorizo(cls, chorizo):
+        rigid_pdbqt_string = ""
+        flex_pdbqt_dict = {}
         atom_count = 0
         flex_atom_count = 0
         for res_id in chorizo.getValidResidues():
@@ -433,7 +441,7 @@ class PDBQTWriterLegacy():
                     continue
                 props = atom.GetPropsAsDict()
                 atom_type = props["atom_type"]
-                if atom_type == "H":
+                if atom_type == "H": # TODO read ignore flag in molsetup
                     continue
                 coord = positions[atom.GetIdx()]
                 atom_name = props.get("atom_name", "")
@@ -454,8 +462,8 @@ class PDBQTWriterLegacy():
                     resnum,
                     skip_rename_ca_cb=True,
                     atom_count=flex_atom_count)
-                flex_pdbqt_string += this_flex_pdbqt
-        return rigid_pdbqt_string, flex_pdbqt_string
+                flex_pdbqt_dict[res_id] = this_flex_pdbqt
+        return rigid_pdbqt_string, flex_pdbqt_dict 
 
     @classmethod
     def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):

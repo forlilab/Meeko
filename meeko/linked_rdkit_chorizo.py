@@ -7,8 +7,7 @@ from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
 from .writer import PDBQTWriterLegacy
 from .molsetup import RDKitMoleculeSetup
 from .utils.rdkitutils import mini_periodic_table
-
-from misctools import react_and_map
+from .utils.rdkitutils import react_and_map
 
 import numpy as np
 
@@ -454,7 +453,7 @@ class LinkedRDKitChorizo:
         self.residues[res].molsetup = molsetup
         self.residues[res].molsetup_mapidx = mapidx
         self.residues[res].molsetup_ignored = ignored_in_molsetup
-        self.residues.is_movable = True
+        self.residues[res].is_movable = True
         return
 
     def add_molsetup_inflexible(self, res, mk_prep, cut_at_calpha=False):
@@ -464,7 +463,7 @@ class LinkedRDKitChorizo:
         self.residues[res].molsetup = molsetup
         self.residues[res].molsetup_mapidx = mapidx
         self.residues[res].molsetup_ignored = ignored_in_molsetup
-        self.residues.is_movable = False
+        self.residues[res].is_movable = False
         return
 
     @staticmethod

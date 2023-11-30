@@ -125,39 +125,48 @@ def check(success, error_msg):
 
 def get_args():
     parser = TalkativeParser()
-    parser.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
-    #parser.add_argument('--pdbqt', help="keeps existing charges and types")
-    parser.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
-    parser.add_argument('-p', '--chorizo_pickle') 
-    parser.add_argument('-n', '--mutate_residues',
-                        help="e.g. '{\"A:HIS:323\":\"A:HID:323\"}'")
-    parser.add_argument(      '--termini',
-                        help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
-    parser.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
-    parser.add_argument(      '--chorizo_config', help="[.json]")
-    parser.add_argument(      '--mk_config', help="[.json]")
-    parser.add_argument(      '--allow_bad_res', action="store_true",
-                                                 help="residues with missing atoms will be deleted")
 
-    parser.add_argument('-f', '--flexres', action="append", default=[],
+    io_group = parser.add_argument_group("Input/Output")
+    io_group.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
+    #parser.add_argument('--pdbqt', help="keeps existing charges and types")
+    io_group.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
+    io_group.add_argument('-p', '--chorizo_pickle') 
+
+    config_group = parser.add_argument_group("Receptor perception")
+    config_group.add_argument('-n', '--mutate_residues',
+                                  help="e.g. '{\"A:HIS:323\":\"A:HID:323\"}'")
+    config_group.add_argument(      '--termini',
+                                  help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
+    config_group.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
+    config_group.add_argument(      '--chorizo_config', help="[.json]")
+    config_group.add_argument(      '--mk_config', help="[.json]")
+    config_group.add_argument(      '--allow_bad_res', action="store_true",
+                                                 help="delete residues with missing atoms instead of raising error")
+    config_group.add_argument('-f', '--flexres', action="append", default=[],
                         help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
-    parser.add_argument('-r', '--reactive_flexres', action="append", default=[],
-                        help="same as --flexres but for reactive residues (max 8)")
-    parser.add_argument('-g', '--reactive_name', action="append", default=[],
-                        help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific")
-    parser.add_argument('-s', '--reactive_name_specific', action="append", default=[],
-                        help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.")
-    #parser.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
-    parser.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
-    parser.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
-    parser.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
-    parser.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
-    parser.add_argument('--padding', help="padding around reference ligand [A]", type=float)
-    parser.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
-    parser.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
-    parser.add_argument('--eps_12', default=2.5, type=float, help="epsilon for reactive atoms (1-2 interaction)")
-    parser.add_argument('--r_eq_13_scaling', default=0.5, type=float, help="r_eq scaling for 1-3 interaction across reactive atoms")
-    parser.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
+
+    box_group = parser.add_argument_group("Size and center of grid box")
+    #box_group.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
+    box_group.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
+    box_group.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
+    box_group.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
+    box_group.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
+    box_group.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
+    box_group.add_argument('--padding', help="padding around reference ligand [A]", type=float)
+
+
+    #reactive_group = parser.add_argument_group("Reactive")
+    #reactive_group.add_argument('-r', '--reactive_flexres', action="append", default=[],
+    #                    help="same as --flexres but for reactive residues (max 8)")
+    #reactive_group.add_argument('-g', '--reactive_name', action="append", default=[],
+    #                    help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific")
+    #reactive_group.add_argument('-s', '--reactive_name_specific', action="append", default=[],
+    #                    help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.")
+
+    #reactive_group.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
+    #reactive_group.add_argument('--eps_12', default=2.5, type=float, help="epsilon for reactive atoms (1-2 interaction)")
+    #reactive_group.add_argument('--r_eq_13_scaling', default=0.5, type=float, help="r_eq scaling for 1-3 interaction across reactive atoms")
+    #reactive_group.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
     args = parser.parse_args()
 
     #if (args.pdb is None) == (args.pdbqt is None):
@@ -307,7 +316,6 @@ if args.pdb is not None:
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
-        print("HERE")
         mk_prep = MoleculePreparation.from_config(mk_config)
         chorizo.mk_parameterize_all_residues(mk_prep)
     else:
@@ -317,15 +325,19 @@ if args.pdb is not None:
     for res_id in all_flexres:
         res = "%s:%s:%d" % res_id
         chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)
-    rigid_pdbqt, flex_pdbqt = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
+    rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
     if args.chorizo_pickle is not None:
         with open(args.chorizo_pickle, "wb") as f:
             pickle.dump(chorizo, f)
-    print(json.dumps(chorizo.suggested_mutations, indent=4))
+
+    suggested_config = {}
+    if len(chorizo.suggested_mutations):
+        suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
 
     if len(chorizo.getIgnoredResidues()) > 0:
         print("Automatically deleted %d residues" % len(chorizo.removed_residues))
-        print(json.dumps({"del_res": chorizo.removed_residues}, indent=4))
+        print(json.dumps(chorizo.removed_residues, indent=4))
+        suggested_config["del_res"] = chorizo.removed_residues.copy()
 
     #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
     #ok, err = receptor.assign_types_charges()
@@ -337,7 +349,7 @@ if args.pdb is not None:
 
 pdbqt = {
     "rigid": rigid_pdbqt,
-    "flex": flex_pdbqt,
+    "flex": flex_pdbqt_dict,
 }
 
 any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
@@ -354,15 +366,16 @@ if len(all_flexres) == 0:
 else:
     all_flex_pdbqt = ""
     reactive_flexres_count = 0
-    #for res_id, flexres_pdbqt in pdbqt["flex"].items():
-    #    if res_id in reactive_flexres:
-    #        reactive_flexres_count += 1
-    #        prefix_atype = "%d" % reactive_flexres_count
-    #        resname = res_id[1]
-    #        reactive_atom = reactive_flexres[res_id]
-    #        flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
-    #    all_flex_pdbqt += flexres_pdbqt
-    all_flex_pdbqt = pdbqt["flex"]
+    for res_id, flexres_pdbqt in pdbqt["flex"].items():
+        res_id = tuple(res_id.split(":"))
+        res_id = res_id[:2] + (int(res_id[2]),)
+        if res_id in reactive_flexres:
+            reactive_flexres_count += 1
+            prefix_atype = "%d" % reactive_flexres_count
+            resname = res_id[1]
+            reactive_atom = reactive_flexres[res_id]
+            flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
+        all_flex_pdbqt += flexres_pdbqt
 
     suffix = outpath.suffix
     if outpath.suffix == "":
@@ -379,6 +392,13 @@ written_files_log["filename"].append(rigid_fn)
 written_files_log["description"].append("static (i.e., rigid) receptor input file")
 with open(rigid_fn, "w") as f:
     f.write(pdbqt["rigid"])
+
+if len(suggested_config):
+    suggested_fn = str(outpath.with_suffix("")) + "_suggested-config.json"
+    written_files_log["filename"].append(suggested_fn)
+    written_files_log["description"].append("log of automated decisions for user inspection")
+    with open(suggested_fn, "w") as f:
+        json.dump(suggested_config, f)
 
 # GPF for autogrid4
 if not args.skip_gpf:
@@ -451,11 +471,16 @@ if not args.skip_gpf:
     # check all flexres are inside the box
     if len(reactive_flexres) > 0:
         any_outside = False
-        for atom in receptor.atoms(pdbqt["flex_indices"]):
-            if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
-                print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
-                print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
-                break # only need to warn once
+        for res_id, res in chorizo.residues.items():
+            if not res.is_movable:
+                continue
+            for index, coord in res.molsetup.coord.items():
+                if index in res.molsetup_ignored:
+                    continue
+                if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
+                    print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
+                    print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
+                    break # only need to warn once
 
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:
