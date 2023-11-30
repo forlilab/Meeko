@@ -210,47 +210,48 @@ reactive_atom = {
     "HID": "ND1", "GLU": "OE2", "THR": "OG1", "MET":  "SD",
 }
 modified_resnames = set()
-for react_name_str in args.reactive_name:
-    (resname, name), ok, err = parse_resname_and_name(react_name_str)
-    if ok:
-        if resname in modified_resnames:
-            print("Command line error: repeated resname %s passed to --reactive_resname" % resname + os_linesep, file=sys.stderr)
-            sys.exit(2)
-        modified_resnames.add(resname)
-        reactive_atom[resname] = name
-    else:
-        print("Error in parsing --reactive_name argument" + os_linesep, file=sys.stderr)
-        print(err, file=sys.stderr)
-        sys.exit(2)
 
-reactive_flexres = {}
-all_ok = True
-all_err = ""
-for resid_string in args.reactive_flexres:
-    res_id, ok, err = parse_residue_string(resid_string)
-    if ok:
-        resname = res_id[1]
-        if resname in reactive_atom:
-            reactive_flexres[res_id] = reactive_atom[resname]
-        else:
-            all_ok = False
-            all_err += "no default reactive name for %s, " % resname
-            all_err += "use --reactive_name or --reactive_name_specific" + os_linesep
-    all_ok &= ok
-    all_err += err
+### for react_name_str in args.reactive_name:
+###     (resname, name), ok, err = parse_resname_and_name(react_name_str)
+###     if ok:
+###         if resname in modified_resnames:
+###             print("Command line error: repeated resname %s passed to --reactive_resname" % resname + os_linesep, file=sys.stderr)
+###             sys.exit(2)
+###         modified_resnames.add(resname)
+###         reactive_atom[resname] = name
+###     else:
+###         print("Error in parsing --reactive_name argument" + os_linesep, file=sys.stderr)
+###         print(err, file=sys.stderr)
+###         sys.exit(2)
 
-for string in args.reactive_name_specific:
-    out, ok, err = parse_residue_string_and_name(string)
-    if ok:
-        # override name if res_id was also passed to --reactive_flexres
-        reactive_flexres[out["res_id"]] = out["name"]
-    all_ok &= ok
-    all_err += err
+### reactive_flexres = {}
+### all_ok = True
+### all_err = ""
+### for resid_string in args.reactive_flexres:
+###     res_id, ok, err = parse_residue_string(resid_string)
+###     if ok:
+###         resname = res_id[1]
+###         if resname in reactive_atom:
+###             reactive_flexres[res_id] = reactive_atom[resname]
+###         else:
+###             all_ok = False
+###             all_err += "no default reactive name for %s, " % resname
+###             all_err += "use --reactive_name or --reactive_name_specific" + os_linesep
+###     all_ok &= ok
+###     all_err += err
 
-if len(reactive_flexres) > 8:
-    msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
-    print("Command line error: " + msg, file=sys.stderr)
-    sys.exit(2)
+### for string in args.reactive_name_specific:
+###     out, ok, err = parse_residue_string_and_name(string)
+###     if ok:
+###         # override name if res_id was also passed to --reactive_flexres
+###         reactive_flexres[out["res_id"]] = out["name"]
+###     all_ok &= ok
+###     all_err += err
+
+### if len(reactive_flexres) > 8:
+###     msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
+###     print("Command line error: " + msg, file=sys.stderr)
+###     sys.exit(2)
 
 all_flexres = set()
 for resid_string in args.flexres:
@@ -482,73 +483,73 @@ if not args.skip_gpf:
                     print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
                     break # only need to warn once
 
-# configuration info for AutoDock-GPU reactive docking
-if len(reactive_flexres) > 0:
-    any_lig_reac_types = []
-    for order in (1, 2, 3):
-        for t in any_lig_base_types:
-            any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
-
-    rec_reac_types = []
-    for line in all_flex_pdbqt.split(os_linesep):
-        if line.startswith("ATOM") or line.startswith("HETATM"):
-            atype = line[77:].strip()
-            basetype, _ = reactive_typer.get_basetype_and_order(atype)
-            if basetype is not None: # is None if not reactive
-                rec_reac_types.append(line[77:].strip())
-
-    derivtypes, modpairs, collisions = get_reactive_config(
-                                    any_lig_reac_types,
-                                    rec_reac_types,
-                                    args.eps_12,
-                                    args.r_eq_12,
-                                    args.r_eq_13_scaling,
-                                    args.r_eq_14_scaling)
-
-    if len(collisions) > 0:
-        collision_str = ""
-        for t1, t2 in collisions:
-            collision_str += "%3s %3s" % (t1, t2) + os_linesep
-        collision_fn = str(outpath.with_suffix(".atype_collisions"))
-        written_files_log["filename"].append(collision_fn)
-        written_files_log["description"].append("type pairs (n=%d) that may lead to intra-molecular reactions" % len(collisions))
-        with open(collision_fn, "w") as f:
-            f.write(collision_str)
-
-    # The maps block is to tell AutoDock-GPU the base types for the reactive types.
-    # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
-    # lines in a single configuration file simplifies the command line call.
-    map_block = ""
-    map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
-    all_types = []
-    for basetype, reactypes in derivtypes.items():
-        all_types.append(basetype)
-        map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
-        for reactype in reactypes:
-            all_types.append(reactype)
-            map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
-    config = "ligand_types " + " ".join(all_types) + os_linesep
-    config += "fld %s.maps.fld" % map_prefix + os_linesep
-    config += map_block
-
-    # in modpairs (dict): types are keys, parameters are values
-    # now we will write a configuration file with nbp keywords
-    # that AD-GPU reads using the --import_dpf flag
-    # nbp stands for "non-bonded potential" or "non-bonded pairwise"
-    line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
-    nbp_count = 0
-    for (t1, t2), param in modpairs.items():
-        config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
-        nbp_count += 1
-    config_fn = str(outpath.with_suffix(".reactive_config"))
-    written_files_log["filename"].append(config_fn)
-    written_files_log["description"].append("reactive parameters for AutoDock-GPU")
-    with open(config_fn, "w") as f:
-        f.write(config)
-    print()
-    print("For reactive docking, pass the configuration file to AutoDock-GPU:")
-    print("    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>" % (config_fn, flex_fn))
-    print()
+### # configuration info for AutoDock-GPU reactive docking
+### if len(reactive_flexres) > 0:
+###     any_lig_reac_types = []
+###     for order in (1, 2, 3):
+###         for t in any_lig_base_types:
+###             any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
+### 
+###     rec_reac_types = []
+###     for line in all_flex_pdbqt.split(os_linesep):
+###         if line.startswith("ATOM") or line.startswith("HETATM"):
+###             atype = line[77:].strip()
+###             basetype, _ = reactive_typer.get_basetype_and_order(atype)
+###             if basetype is not None: # is None if not reactive
+###                 rec_reac_types.append(line[77:].strip())
+### 
+###     derivtypes, modpairs, collisions = get_reactive_config(
+###                                     any_lig_reac_types,
+###                                     rec_reac_types,
+###                                     args.eps_12,
+###                                     args.r_eq_12,
+###                                     args.r_eq_13_scaling,
+###                                     args.r_eq_14_scaling)
+### 
+###     if len(collisions) > 0:
+###         collision_str = ""
+###         for t1, t2 in collisions:
+###             collision_str += "%3s %3s" % (t1, t2) + os_linesep
+###         collision_fn = str(outpath.with_suffix(".atype_collisions"))
+###         written_files_log["filename"].append(collision_fn)
+###         written_files_log["description"].append("type pairs (n=%d) that may lead to intra-molecular reactions" % len(collisions))
+###         with open(collision_fn, "w") as f:
+###             f.write(collision_str)
+### 
+###     # The maps block is to tell AutoDock-GPU the base types for the reactive types.
+###     # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
+###     # lines in a single configuration file simplifies the command line call.
+###     map_block = ""
+###     map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
+###     all_types = []
+###     for basetype, reactypes in derivtypes.items():
+###         all_types.append(basetype)
+###         map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
+###         for reactype in reactypes:
+###             all_types.append(reactype)
+###             map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
+###     config = "ligand_types " + " ".join(all_types) + os_linesep
+###     config += "fld %s.maps.fld" % map_prefix + os_linesep
+###     config += map_block
+### 
+###     # in modpairs (dict): types are keys, parameters are values
+###     # now we will write a configuration file with nbp keywords
+###     # that AD-GPU reads using the --import_dpf flag
+###     # nbp stands for "non-bonded potential" or "non-bonded pairwise"
+###     line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
+###     nbp_count = 0
+###     for (t1, t2), param in modpairs.items():
+###         config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
+###         nbp_count += 1
+###     config_fn = str(outpath.with_suffix(".reactive_config"))
+###     written_files_log["filename"].append(config_fn)
+###     written_files_log["description"].append("reactive parameters for AutoDock-GPU")
+###     with open(config_fn, "w") as f:
+###         f.write(config)
+###     print()
+###     print("For reactive docking, pass the configuration file to AutoDock-GPU:")
+###     print("    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>" % (config_fn, flex_fn))
+###     print()
 
 print()
 print("Files written:")
