@@ -435,9 +435,9 @@ if not args.skip_gpf:
         if ft not in suppliers.keys():
             check(success=False, error_msg=f"Given --ligand file type {ft} not readable!")
         elif ft != ".sdf" and ft != ".pdbqt":
-            ligmol = suppliers[ft](args.ligand)
+            ligmol = suppliers[ft](args.ligand, removeHs=False)
         elif ft == ".sdf":
-            ligmol = suppliers[ft](args.ligand)[0]  # assume we only want first molecule in file
+            ligmol = suppliers[ft](args.ligand, removeHs=False)[0]  # assume we only want first molecule in file
         else:  # .pdbqt
             ligmol = RDKitMolCreate.from_pdbqt_mol(PDBQTMolecule.from_file(args.ligand))[0]  # assume we only want first molecule in file
         
