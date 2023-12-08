@@ -723,10 +723,10 @@ class LinkedRDKitChorizo:
 
     def mk_parameterize_all_residues(self, mk_prep):
         # TODO disulfide bridges are hard-coded, generalize branching maybe
-        for res in self.getAllValidResidues():
+        for res in self.getValidResidues():
             """if self.residues[res].user_deleted or self.residues[res].ignore_residue:
                 continue"""
-            self.mk_parameterize_residue(self, res, mk_prep)
+            self.mk_parameterize_residue(res, mk_prep)
         return
 
 
@@ -830,7 +830,7 @@ class LinkedRDKitChorizo:
     
     # TODO: rename this
     def getValidResidues(self):
-        return {k: v for k, v in self.residues.items() if v.ignore_residue == False and v.user_deleted == False}
+        return {k: v for k, v in self.residues.items() if v.isValidResidue()}
 
 
 residues_rotamers = {"SER": [("C", "CA", "CB", "OG")],
@@ -889,18 +889,19 @@ def add_rotamers_to_chorizo_molsetups(rotamer_states_list, chorizo):
         no_resname_to_resname[no_resname_key] = res_with_resname
 
     state_indices_list = []
-    for state_dict in rotamer_states_list:
+    for state_index, state_dict in enumerate(rotamer_states_list):
+        print(f"adding rotamer state {state_index + 1}")
         state_indices = {}
         for res_no_resname, angles in state_dict.items():
             res_with_resname = no_resname_to_resname[res_no_resname]
-            if not "molsetup" in chorizo.residues[res_with_resname]:
+            if chorizo.residues[res_with_resname].molsetup is None:
                 raise RuntimeError("no molsetup for %s, can't add rotamers" % (res_with_resname))
             # next block is inneficient for large rotamer_states_list
             # refactored chorizos could help by having the following
             # data readily available
-            resmol = chorizo.residues[res_with_resname]["resmol"]
-            molsetup = chorizo.residues[res_with_resname]["molsetup"]
-            mapidx = chorizo.residues[res_with_resname]["molsetup_mapidx"]
+            resmol = chorizo.residues[res_with_resname].rdkit_mol
+            molsetup = chorizo.residues[res_with_resname].molsetup
+            mapidx = chorizo.residues[res_with_resname].molsetup_mapidx
             mapidx_inv = {value: key for (key, value) in mapidx.items()}
             name_to_molsetup_idx = {}
             for atom in resmol.GetAtoms():
