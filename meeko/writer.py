@@ -415,7 +415,7 @@ class PDBQTWriterLegacy():
 
     @classmethod
     def write_string_from_linked_rdkit_chorizo(cls, chorizo):
-        rigid_pdbqt_string, flex_pdbqt_dict = cls.write_string_flexdict_from_linked_rdkit_chorizo(chorizo)
+        rigid_pdbqt_string, flex_pdbqt_dict = cls.write_from_linked_rdkit_chorizo(chorizo)
         flex_pdbqt_string = ""
         for res_id, pdbqt_string in flex_pdbqt_dict.items():
             flex_pdbqt_string += pdbqt_string
