@@ -335,7 +335,7 @@ if args.pdb is not None:
     if len(chorizo.suggested_mutations):
         suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
 
-    if len(chorizo.getIgnoredResidues()) > 0:
+    if len(chorizo.get_ignored_residues()) > 0:
         print("Automatically deleted %d residues" % len(chorizo.removed_residues))
         print(json.dumps(chorizo.removed_residues, indent=4))
         suggested_config["del_res"] = chorizo.removed_residues.copy()

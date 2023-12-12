@@ -64,7 +64,7 @@ class MoleculeSetup:
     def __init__(self):
 
         self.atom_pseudo = []
-        self.coord = OrderedDict()  # FIXME all OrderedDict shuold be converted to lists?
+        self.coord = OrderedDict()  # FIXME all OrderedDict should be converted to lists?
         self.charge = OrderedDict()
         self.pdbinfo = OrderedDict()
         self.atom_type = OrderedDict()
@@ -760,8 +760,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
         new_mol.RemoveAllConformers()
         new_mol.AddConformer(new_conformer, assignId=True)
         for atom_index, is_set in enumerate(is_set_list):
-            if not is_set and new_mol.GetAtomWithIdx(atom_idx).GetAtomicNum() == 1:
-                neighbors = new_mol.GetAtomWithIdx(atom_idx).GetNeighbors()
+            if not is_set and new_mol.GetAtomWithIdx(atom_index).GetAtomicNum() == 1:
+                neighbors = new_mol.GetAtomWithIdx(atom_index).GetNeighbors()
                 if len(neighbors) != 1:
                     raise RuntimeError("Expected H to have one neighbors")
                 Chem.SetTerminalAtomCoords(new_mol, atom_index, neighbors[0].GetIdx())
@@ -876,7 +876,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
                             matches.append(i)
                             break
                 if len(matches) != len(hidxs):
-                    raise RuntimeError("Number of matched isotopes %d differs from query Hs: %d" % (len(matched), len(hidxs)))
+                    raise RuntimeError("Number of matched isotopes %d differs from query Hs: %d" % (len(matches), len(hidxs)))
                 for hidx, i in zip(hidxs, matches):
                     noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
             else:

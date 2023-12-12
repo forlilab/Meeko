@@ -8,12 +8,13 @@ from meeko import (
 
 import pathlib
 import pytest
+import os
 
 # Example Files (should be moved to tests directory eventually)
-ahhy_example = pathlib.Path("example/chorizo/AHHY.pdb")
-just_one_ALA_missing = pathlib.Path("example/chorizo/just-one-ALA-missing-CB.pdb")
-just_one_ALA = pathlib.Path("example/chorizo/just-one-ALA.pdb")
-just_three_residues = pathlib.Path("example/chorizo/just-three-residues.pdb")
+ahhy_example = pathlib.Path("../example/chorizo/AHHY.pdb")
+just_one_ALA_missing = pathlib.Path("../example/chorizo/just-one-ALA-missing-CB.pdb")
+just_one_ALA = pathlib.Path("../example/chorizo/just-one-ALA.pdb")
+just_three_residues = pathlib.Path("../example/chorizo/just-three-residues.pdb")
 
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
@@ -24,9 +25,9 @@ def test_AHHY_all_static_residues():
     pdb_string = f.read()
     chorizo = LinkedRDKitChorizo(pdb_string)
     # Asserts that the residues have been imported in a way that makes sense, and that all the 
-    # private functions we expect to have run have run as expected.
+    # private functions we expect to have run as expected.
     assert len(chorizo.residues) == 4
-    assert len(chorizo.getIgnoredResidues()) == 0
+    assert len(chorizo.get_ignored_residues()) == 0
 
     expected_suggested_mutations = {'A:HIS:2': 'A:HID:2', 'A:HIS:3': 'A:HIE:3'}
     assert chorizo.suggested_mutations == expected_suggested_mutations
@@ -45,21 +46,21 @@ def test_AHHY_all_static_residues():
         assert residue_object.pdb_text == expected_object.pdb_text
         assert residue_object.previous_id == expected_object.previous_id
         assert residue_object.next_id == expected_object.next_id
-        assert residue_object.rdkit_mol != None
+        assert residue_object.rdkit_mol is not None
 
-        pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
-        rigid_part, movable_part = pdbqt_strings
-        rigid_part = "".join(rigid_part.splitlines()) # remove newline chars because Windows/Unix differ
+    pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
+    rigid_part, movable_part = pdbqt_strings
+    rigid_part = "".join(rigid_part.splitlines()) # remove newline chars because Windows/Unix differ
 
-        assert len(rigid_part) == 3476
-        assert len(movable_part) == 0
+    assert len(rigid_part) == 3476
+    assert len(movable_part) == 0
 
 def test_AHHY_flexible_residues():
     f = open(ahhy_example, 'r')
     pdb_string = f.read()
     chorizo = LinkedRDKitChorizo(pdb_string)
     assert len(chorizo.residues) == 4
-    assert len(chorizo.getIgnoredResidues()) == 0
+    assert len(chorizo.get_ignored_residues()) == 0
 
     mk_prep = MoleculePreparation()
     residue_id = "A:HIS:2"
@@ -78,7 +79,7 @@ def test_just_three_padded_mol():
     termini = {":MET:15": "N"}
     chorizo = LinkedRDKitChorizo(pdb_string, termini=termini)
     assert len(chorizo.residues) == 3
-    assert len(chorizo.getIgnoredResidues()) == 0
+    assert len(chorizo.get_ignored_residues()) == 0
 
     expected_suggested_mutations = {}
     assert chorizo.suggested_mutations == expected_suggested_mutations
@@ -130,7 +131,7 @@ def test_AHHY_mutate_residues():
         deleted_residues=delete_residues,
         mutate_res_dict=mutations)
     assert len(chorizo.residues) == 4
-    assert len(chorizo.getIgnoredResidues()) == 0
+    assert len(chorizo.get_ignored_residues()) == 0
 
     expected_suggested_mutations = {}
     assert chorizo.suggested_mutations == expected_suggested_mutations
@@ -174,10 +175,10 @@ def test_residue_missing_atoms():
 
     chorizo = LinkedRDKitChorizo(pdb_string, allow_bad_res=True)
     assert len(chorizo.residues) == 1
-    assert len(chorizo.getIgnoredResidues()) == 1
+    assert len(chorizo.get_ignored_residues()) == 1
 
     expected_removed_residues = ['A:ALA:1']
-    assert list(chorizo.getIgnoredResidues().keys()) == expected_removed_residues
+    assert list(chorizo.get_ignored_residues().keys()) == expected_removed_residues
     expected_suggested_mutations = {}
     assert chorizo.suggested_mutations == expected_suggested_mutations
 

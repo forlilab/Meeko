@@ -428,7 +428,7 @@ class PDBQTWriterLegacy():
         flex_pdbqt_dict = {}
         atom_count = 0
         flex_atom_count = 0
-        for res_id in chorizo.getValidResidues():
+        for res_id in chorizo.get_valid_residues():
             molsetup = chorizo.residues[res_id].molsetup
             chain, resname, resnum = res_id.split(":")
             resnum = int(resnum)

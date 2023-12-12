@@ -74,7 +74,7 @@ def h_coord_random_n_terminal(mol, debug=False):
     idx = mol.GetSubstructMatches(Chem.MolFromSmarts("[Nh1H2X3+0][CX4]"))
     assert len(idx) == 1, f"expected 1 backbone match got {len(idx)}"
     nitrogen = mol.GetAtomWithIdx(idx[0][0])
-    nitrogen.SetBoolProp("this_N", True) 
+    nitrogen.SetBoolProp("this_N", True)
     mol_no_h = Chem.RemoveHs(mol)
     for atom in mol_no_h.GetAtoms():
         if atom.HasProp("this_N") and atom.GetBoolProp("this_N"):
@@ -238,7 +238,7 @@ class LinkedRDKitChorizo:
         ambiguous_chosen = self.match_residues_templates(self.termini, self.ambiguous)
         suggested_mutations.update(ambiguous_chosen)
 
-        removed_residues = self.getIgnoredResidues()
+        removed_residues = self.get_ignored_residues()
         if len(removed_residues) > 0 and not allow_bad_res:
             for res in removed_residues:
                 suggested_mutations[res] = res
@@ -475,7 +475,7 @@ class LinkedRDKitChorizo:
     # def add_molsetup_inflexible(self, res, mk_prep, cut_at_calpha=False):
     #     molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep,
     #                                                               is_protein_sidechain=False,
-    #                                                               cut_at_calpha=cut_at_calpha)  
+    #                                                               cut_at_calpha=cut_at_calpha)
     #     self.residues[res].molsetup = molsetup
     #     self.residues[res].molsetup_mapidx = mapidx
     #     self.residues[res].molsetup_ignored = ignored_in_molsetup
@@ -517,7 +517,7 @@ class LinkedRDKitChorizo:
             assert list(atom_data_lengths)[0] == rdkit_mol.GetNumAtoms(), f"nr of atoms ({rdkit_mol.GetNumAtoms()}) and length of properties ({list(atom_data_lengths)[0]}) differs for {resn=}"
 
             template["atom_data"] = atom_data
-            template["rdkit_mol"] = rdkit_mol 
+            template["rdkit_mol"] = rdkit_mol
             res_templates[resn] = template
         ambiguous = {key: values.copy() for key, values in params["ambiguous"].items() if key != "//"}
         return res_templates, ambiguous
@@ -754,7 +754,7 @@ class LinkedRDKitChorizo:
 
     def mk_parameterize_all_residues(self, mk_prep):
         # TODO disulfide bridges are hard-coded, generalize branching maybe
-        for res in self.getValidResidues():
+        for res in self.get_valid_residues():
             """if self.residues[res].user_deleted or self.residues[res].ignore_residue:
                 continue"""
             self.mk_parameterize_residue(res, mk_prep)
@@ -836,21 +836,21 @@ class LinkedRDKitChorizo:
         return atom_params, coords
     
     # The following functions return filtered dictionaries of residues based on the value of residue flags.
-    def getUserDeletedResidues(self):
+    def get_user_deleted_residues(self):
         return {k: v for k, v in self.residues.items() if v.user_deleted == True}
         
-    def getNonUserDeletedResidues(self):
+    def get_non_user_deleted_residues(self):
         return {k: v for k, v in self.residues.items() if v.user_deleted == False}
         
-    def getIgnoredResidues(self):
+    def get_ignored_residues(self):
         return {k: v for k, v in self.residues.items() if v.ignore_residue == True}
         
-    def getNotIgnoredResidues(self):
+    def get_not_ignored_residues(self):
         return {k: v for k, v in self.residues.items() if v.ignore_residue == False}
     
     # TODO: rename this
-    def getValidResidues(self):
-        return {k: v for k, v in self.residues.items() if v.isValidResidue()}
+    def get_valid_residues(self):
+        return {k: v for k, v in self.residues.items() if v.is_valid_residue()}
 
 
 residues_rotamers = {"SER": [("C", "CA", "CB", "OG")],
@@ -973,8 +973,8 @@ class ChorizoResidue:
     molsetup_mapidx: dict() or None
         atom index map between molsetup (keys) and rdkit_mol (values)
     is_flexres_atom: List[] of booleans, or None
-        indicates whether each atom is part of the flexible sidechain 
-        
+        indicates whether each atom is part of the flexible sidechain
+
 
     ignore_residue: bool
         marks residues that formerly were part of the removed_residues structure,
@@ -1007,10 +1007,10 @@ class ChorizoResidue:
 
         self.additional_connections = []
 
-    def toJson(self):
+    def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)
     
-    def isValidResidue(self):
+    def is_valid_residue(self):
         """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to ignore"""
         return not self.ignore_residue and not self.user_deleted
 
@@ -1034,5 +1034,5 @@ class ResidueAdditionalConnection:
         self.connection_atom = None
         self.bond_order = None
 
-    def toJson(self):
+    def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)
