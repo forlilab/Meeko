@@ -17,6 +17,7 @@
     "MG": {
         "atom_name":  	    [     "OW"],
         "atom_type":  	    [     "OA"],
+        "atom_ignore":      [    false],
         "ad4_epsii":   	    [  0.875  ],
         "ad4_rii":     	    [  1.3    ],
         "ad4_sol_vol": 	    [  1.56   ],
@@ -27,13 +28,14 @@
         "vina_donor":       [     true],
         "vina_acceptor":    [    false],
         "vina_hydrophobic": [    false],
-        "gasteiger":        [  2.0  ],
+        "charge":        [  2.0  ],
 	"smiles": "[Mg]"
     },
 
     "WAT": {
         "atom_name":  	    [     "OW",    "HW1",    "HW2"],
         "atom_type":  	    [     "OA",    "HD" ,    "HD" ],
+        "atom_ignore": 	    [    false,    false,    false],
         "ad4_epsii":   	    [  0.2    ,  0.02   ,  0.02   ],
         "ad4_rii":     	    [  3.2    ,  2.0    ,  2.0    ],
         "ad4_sol_vol": 	    [ 17.1573 ,  0.0    ,  0.0    ],
@@ -44,13 +46,14 @@
         "vina_donor":       [     true,    false,    false],
         "vina_acceptor":    [     true,     true,    false],
         "vina_hydrophobic": [    false,    false,    false],
-        "gasteiger":        [ -0.412  ,  0.206  ,  0.206  ],
+        "charge":        [ -0.412  ,  0.206  ,  0.206  ],
 	"smiles": "O([H])[H]"
     },
 
     "ALA": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB1", "HB2", "HB3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -61,7 +64,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false],
-        "gasteiger": [0.243, -0.272, 0.168, 0.0, -0.344, 0.164, 0.041, 0.0, 0.0, 0.0],
+        "charge": [0.243, -0.272, 0.168, 0.0, -0.344, 0.164, 0.041, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -79,6 +82,7 @@
     "CYS": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "SG", "HG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "SA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0],
@@ -89,7 +93,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.243, -0.272, 0.181, 0.0, -0.342, 0.164, 0.101, 0.0, 0.0, -0.177, 0.102],
+        "charge": [0.243, -0.272, 0.181, 0.0, -0.342, 0.164, 0.101, 0.0, 0.0, -0.177, 0.102],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -108,6 +112,7 @@
     "CYX": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "SG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "SA"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103],
@@ -118,7 +123,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.244, -0.272, 0.183, 0.0, -0.343, 0.164, 0.116, 0.0, 0.0, -0.092],
+        "charge": [0.244, -0.272, 0.183, 0.0, -0.343, 0.164, 0.116, 0.0, 0.0, -0.092],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -136,6 +141,7 @@
     "CYM": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "SG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "SA"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103],
@@ -146,7 +152,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, true],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.24, -0.273, 0.147, 0.0, -0.346, 0.164, -0.144, 0.0, 0.0, -0.788],
+        "charge": [0.24, -0.273, 0.147, 0.0, -0.346, 0.164, -0.144, 0.0, 0.0, -0.788],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -164,6 +170,7 @@
     "ASP": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "OD1", "OD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "OA", "OA"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573],
@@ -174,7 +181,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, true, true],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.176, 0.0, -0.343, 0.164, 0.087, 0.0, 0.0, 0.044, -0.548, -0.549],
+        "charge": [0.242, -0.273, 0.176, 0.0, -0.343, 0.164, 0.087, 0.0, 0.0, 0.044, -0.548, -0.549],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -194,6 +201,7 @@
     "ASH": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "OD1", "OD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "OA", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573, 0.0],
@@ -204,7 +212,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, true, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.182, 0.0, -0.342, 0.164, 0.157, 0.0, 0.0, 0.305, -0.252, -0.479, 0.296],
+        "charge": [0.242, -0.273, 0.182, 0.0, -0.342, 0.164, 0.157, 0.0, 0.0, 0.305, -0.252, -0.479, 0.296],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -225,6 +233,7 @@
     "GLU": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "OE2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "OA"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, true, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573],
@@ -235,7 +244,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, true, true],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.041, 0.0, 0.0, 0.055, 0.0, 0.0, 0.041, -0.548, -0.549],
+        "charge": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.041, 0.0, 0.0, 0.055, 0.0, 0.0, 0.041, -0.548, -0.549],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -258,6 +267,7 @@
     "GLH": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "OE2", "HE2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, true, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573, 0.0],
@@ -268,7 +278,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, true, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.047, 0.0, 0.0, 0.125, 0.0, 0.0, 0.303, -0.252, -0.479, 0.296],
+        "charge": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.047, 0.0, 0.0, 0.125, 0.0, 0.0, 0.303, -0.252, -0.479, 0.296],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -292,6 +302,7 @@
     "PHE": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "CE1", "HE1", "CZ", "HZ", "CE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "A", "H", "A", "H", "A", "H", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, false, true, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -302,7 +313,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, true, false, true, false, true, false, true, false, true, false],
-        "gasteiger": [0.243, -0.272, 0.175, 0.0, -0.343, 0.164, 0.07, 0.0, 0.0, -0.045, 0.004, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004, 0.0],
+        "charge": [0.243, -0.272, 0.175, 0.0, -0.343, 0.164, 0.07, 0.0, 0.0, -0.045, 0.004, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -331,6 +342,7 @@
     "GLY": {
         "atom_name": ["C", "O", "CA", "HA2", "N", "H", "HA3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "H"],
+	"atom_ignore": [false, false, false, true, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0],
@@ -341,7 +353,7 @@
         "vina_donor": [false, false, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false],
-        "gasteiger": [0.239, -0.273, 0.216, 0.0, -0.346, 0.164, 0.0],
+        "charge": [0.239, -0.273, 0.216, 0.0, -0.346, 0.164, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -356,6 +368,7 @@
     "HIE": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "ND1", "CE1", "HE1", "NE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "NA", "A", "H", "N", "HD", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, false, true, false, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0],
@@ -366,7 +379,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.272, 0.177, 0.0, -0.343, 0.164, 0.093, 0.0, 0.0, 0.061, -0.242, 0.196, 0.0, -0.35, 0.167, 0.107, 0.0],
+        "charge": [0.242, -0.272, 0.177, 0.0, -0.343, 0.164, 0.093, 0.0, 0.0, 0.061, -0.242, 0.196, 0.0, -0.35, 0.167, 0.107, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -392,6 +405,7 @@
     "HID": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "ND1", "HD1", "CE1", "HE1", "NE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "N", "HD", "A", "H", "NA", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, false, false, true, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.02, 0.15, 0.0, 0.16, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 2.0, 4.0, 0.0, 3.5, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 0.0, 33.5103, 0.0, 22.4493, 33.5103, 0.0],
@@ -402,7 +416,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.272, 0.177, 0.0, -0.343, 0.164, 0.09, 0.0, 0.0, 0.037, -0.347, 0.167, 0.196, 0.0, -0.245, 0.134, 0.0],
+        "charge": [0.242, -0.272, 0.177, 0.0, -0.343, 0.164, 0.09, 0.0, 0.0, 0.037, -0.347, 0.167, 0.196, 0.0, -0.245, 0.134, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -428,6 +442,7 @@
     "HIP": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "ND1", "HD1", "CE1", "HE1", "NE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "N", "HD", "A", "H", "N", "HD", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, false, false, true, false, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.02, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 2.0, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 0.0, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0],
@@ -438,7 +453,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, true, false, false, false, true, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.179, 0.0, -0.343, 0.164, 0.119, 0.0, 0.0, 0.142, -0.248, 0.312, 0.4, 0.0, -0.25, 0.312, 0.244, 0.0],
+        "charge": [0.242, -0.273, 0.179, 0.0, -0.343, 0.164, 0.119, 0.0, 0.0, 0.142, -0.248, 0.312, 0.4, 0.0, -0.25, 0.312, 0.244, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -465,6 +480,7 @@
     "ILE": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB", "CG2", "HG21", "HG22", "HG23", "CG1", "HG12", "HG13", "CD1", "HD11", "HD12", "HD13"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "C", "H", "H", "H", "C", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, false, true, true, true, false, true, true, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -475,7 +491,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, true, false, false, false, true, false, false, true, false, false, false],
-        "gasteiger": [0.243, -0.272, 0.174, 0.0, -0.343, 0.164, 0.018, 0.0, 0.01, 0.0, 0.0, 0.0, 0.002, 0.0, 0.0, 0.004, 0.0, 0.0, 0.0],
+        "charge": [0.243, -0.272, 0.174, 0.0, -0.343, 0.164, 0.018, 0.0, 0.01, 0.0, 0.0, 0.0, 0.002, 0.0, 0.0, 0.004, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -502,6 +518,7 @@
     "LYS": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "CE", "HE2", "HE3", "NZ", "HZ1", "HZ2", "HZ3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "C", "H", "H", "N", "HD", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, true, false, true, true, false, true, true, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 0.0, 0.0],
@@ -512,7 +529,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.035, 0.0, 0.0, 0.008, 0.0, 0.0, 0.061, 0.0, 0.0, 0.258, 0.0, 0.0, -0.357, 0.345, 0.345, 0.345],
+        "charge": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.035, 0.0, 0.0, 0.008, 0.0, 0.0, 0.061, 0.0, 0.0, 0.258, 0.0, 0.0, -0.357, 0.345, 0.345, 0.345],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -542,6 +559,7 @@
     "LYN": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "CE", "HE2", "HE3", "NZ", "HZ2", "HZ3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "C", "H", "H", "NA", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, true, false, true, true, false, true, true, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 0.0],
@@ -552,7 +570,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.243, -0.272, 0.171, 0.0, -0.344, 0.164, 0.035, 0.0, 0.0, 0.004, 0.0, 0.0, 0.015, 0.0, 0.0, 0.077, 0.0, 0.0, -0.329, 0.118, 0.118],
+        "charge": [0.243, -0.272, 0.171, 0.0, -0.344, 0.164, 0.035, 0.0, 0.0, 0.004, 0.0, 0.0, 0.015, 0.0, 0.0, 0.077, 0.0, 0.0, -0.329, 0.118, 0.118],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -581,6 +599,7 @@
     "LEU": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG", "CD1", "HD11", "HD12", "HD13", "CD2", "HD21", "HD22", "HD23"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "C", "H", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, false, true, true, true, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -591,7 +610,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, true, false, false, false, true, false, false, false],
-        "gasteiger": [0.243, -0.272, 0.172, 0.0, -0.345, 0.165, 0.038, 0.0, 0.0, -0.015, 0.0, 0.007, 0.0, 0.0, 0.0, 0.007, 0.0, 0.0, 0.0],
+        "charge": [0.243, -0.272, 0.172, 0.0, -0.345, 0.165, 0.038, 0.0, 0.0, -0.015, 0.0, 0.007, 0.0, 0.0, 0.0, 0.007, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -618,6 +637,7 @@
     "MET": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "SD", "CE", "HE1", "HE2", "HE3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "SA", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, true, false, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.2, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 0.0, 0.0],
@@ -628,7 +648,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.272, 0.172, 0.0, -0.344, 0.164, 0.046, 0.0, 0.0, 0.072, 0.0, 0.0, -0.165, 0.085, 0.0, 0.0, 0.0],
+        "charge": [0.242, -0.272, 0.172, 0.0, -0.344, 0.164, 0.046, 0.0, 0.0, 0.072, 0.0, 0.0, -0.165, 0.085, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -653,6 +673,7 @@
     "ASN": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "OD1", "ND2", "HD22", "HD21"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "OA", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 22.4493, 0.0, 0.0],
@@ -663,7 +684,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.18, 0.0, -0.342, 0.164, 0.134, 0.0, 0.0, 0.22, -0.275, -0.368, 0.159, 0.159],
+        "charge": [0.242, -0.273, 0.18, 0.0, -0.342, 0.164, 0.134, 0.0, 0.0, 0.22, -0.275, -0.368, 0.159, 0.159],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -685,6 +706,7 @@
     "PRO": {
         "atom_name": ["C", "O", "CA", "HA", "N", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3"],
         "atom_type": ["C", "OA", "C", "H", "N", "C", "H", "H", "C", "H", "H", "C", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, true, true, false, true, true, false, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0],
@@ -695,7 +717,7 @@
         "vina_donor": [false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, true, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.243, -0.271, 0.175, 0.0, -0.329, 0.037, 0.0, 0.0, 0.024, 0.0, 0.0, 0.121, 0.0, 0.0],
+        "charge": [0.243, -0.271, 0.175, 0.0, -0.329, 0.037, 0.0, 0.0, 0.024, 0.0, 0.0, 0.121, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -718,6 +740,7 @@
     "GLN": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "NE2", "HE22", "HE21"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, true, false, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 22.4493, 0.0, 0.0],
@@ -728,7 +751,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.171, 0.0, -0.343, 0.164, 0.045, 0.0, 0.0, 0.102, 0.0, 0.0, 0.217, -0.275, -0.368, 0.159, 0.159],
+        "charge": [0.242, -0.273, 0.171, 0.0, -0.343, 0.164, 0.045, 0.0, 0.0, 0.102, 0.0, 0.0, 0.217, -0.275, -0.368, 0.159, 0.159],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -753,6 +776,7 @@
     "ARG": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "NE", "HE", "CZ", "NH1", "HH12", "HH11", "NH2", "HH22", "HH21"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "N", "HD", "C", "N", "HD", "HD", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, true, true, false, true, true, false, false, false, false, false, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.15, 0.16, 0.02, 0.02, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 4.0, 3.5, 2.0, 2.0, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 33.5103, 22.4493, 0.0, 0.0, 22.4493, 0.0, 0.0],
@@ -763,7 +787,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.038, 0.0, 0.0, 0.04, 0.0, 0.0, 0.197, 0.0, 0.0, -0.278, 0.26, 0.339, -0.29, 0.256, 0.256, -0.29, 0.256, 0.256],
+        "charge": [0.242, -0.273, 0.171, 0.0, -0.344, 0.164, 0.038, 0.0, 0.0, 0.04, 0.0, 0.0, 0.197, 0.0, 0.0, -0.278, 0.26, 0.339, -0.29, 0.256, 0.256, -0.29, 0.256, 0.256],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -795,6 +819,7 @@
     "SER": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "OG", "HG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 17.1573, 0.0],
@@ -805,7 +830,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.244, -0.272, 0.197, 0.0, -0.342, 0.164, 0.191, 0.0, 0.0, -0.392, 0.21],
+        "charge": [0.244, -0.272, 0.197, 0.0, -0.342, 0.164, 0.191, 0.0, 0.0, -0.392, 0.21],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -824,6 +849,7 @@
     "THR": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB", "CG2", "HG21", "HG22", "HG23", "OG1", "HG1"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "C", "H", "H", "H", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, false, true, true, true, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 17.1573, 0.0],
@@ -834,7 +860,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.245, -0.273, 0.199, 0.0, -0.341, 0.164, 0.143, 0.0, 0.041, 0.0, 0.0, 0.0, -0.389, 0.211],
+        "charge": [0.245, -0.273, 0.199, 0.0, -0.341, 0.164, 0.143, 0.0, 0.041, 0.0, 0.0, 0.0, -0.389, 0.211],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -856,6 +882,7 @@
     "VAL": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB", "CG1", "HG11", "HG12", "HG13", "CG2", "HG21", "HG22", "HG23"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "C", "H", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, false, true, true, true, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -866,7 +893,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, true, false, false, false, true, false, false, false],
-        "gasteiger": [0.243, -0.272, 0.173, 0.0, -0.343, 0.164, 0.015, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0],
+        "charge": [0.243, -0.272, 0.173, 0.0, -0.343, 0.164, 0.015, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -890,6 +917,7 @@
     "TRP": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "NE1", "HE1", "CE2", "CD2", "CE3", "HE3", "CZ3", "HZ3", "CH2", "HH2", "CZ2", "HZ2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "A", "H", "N", "HD", "A", "A", "A", "H", "A", "H", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.16, 0.02, 0.15, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 3.5, 2.0, 4.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -900,7 +928,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, true, true, false, true, false, true, false, true, false],
-        "gasteiger": [0.242, -0.272, 0.175, 0.0, -0.343, 0.164, 0.072, 0.0, 0.0, -0.02, 0.087, 0.0, -0.359, 0.166, 0.046, 0.003, 0.01, 0.0, 0.001, 0.0, 0.002, 0.0, 0.026, 0.0],
+        "charge": [0.242, -0.272, 0.175, 0.0, -0.343, 0.164, 0.072, 0.0, 0.0, -0.02, 0.087, 0.0, -0.359, 0.166, 0.046, 0.003, 0.01, 0.0, 0.001, 0.0, 0.002, 0.0, 0.026, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -934,6 +962,7 @@
     "TYR": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "CE1", "HE1", "CZ", "OH", "HH", "CE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "A", "H", "A", "H", "A", "OA", "HD", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, true, true, false, false, true, false, true, false, false, false, false, true, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.2, 0.02, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 3.2, 2.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 17.1573, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -944,7 +973,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, true, false, true, false, false, false, false, true, false, true, false],
-        "gasteiger": [0.243, -0.272, 0.175, 0.0, -0.343, 0.164, 0.07, 0.0, 0.0, -0.045, 0.007, 0.0, 0.046, 0.0, 0.115, -0.507, 0.294, 0.046, 0.0, 0.007, 0.0],
+        "charge": [0.243, -0.272, 0.175, 0.0, -0.343, 0.164, 0.07, 0.0, 0.0, -0.045, 0.007, 0.0, 0.046, 0.0, 0.115, -0.507, 0.294, 0.046, 0.0, 0.007, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -974,6 +1003,7 @@
     "NME": {
         "atom_name": ["CH3", "HH31", "HH32", "HH33", "N", "H"],
         "atom_type": ["C", "H", "H", "H", "N", "HD"],
+        "atom_ignore": [false, true, true, true, false, false],
         "ad4_epsii": [0.15, 0.0, 0.0, 0.0, 0.16, 0.02],
         "ad4_rii": [4.0, 0.0, 0.0, 0.0, 3.5, 2.0],
         "ad4_sol_vol": [33.5103, 0.0, 0.0, 0.0, 22.4493, 0.0],
@@ -984,7 +1014,7 @@
         "vina_donor": [false, false, false, false, true, false],
         "vina_acceptor": [false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false],
-        "gasteiger": [0.154, 0.0, 0.0, 0.0, -0.33, 0.176],
+        "charge": [0.154, 0.0, 0.0, 0.0, -0.33, 0.176],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -998,6 +1028,7 @@
     "ACE": {
         "atom_name": ["C", "O", "CH3", "H1", "H2", "H3"],
         "atom_type": ["C", "OA", "C", "H", "H", "H"],
+        "atom_ignore": [false, false, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 0.0, 0.0],
@@ -1008,7 +1039,7 @@
         "vina_donor": [false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false],
         "vina_hydrophobic": [false, false, true, false, false, false],
-        "gasteiger": [0.196, -0.3, 0.104, 0.0, 0.0, 0.0],
+        "charge": [0.196, -0.3, 0.104, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1022,6 +1053,7 @@
     "NPRO": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H2", "H3", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, true, true, false, true, true, false, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0],
@@ -1032,7 +1064,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.271, -0.274, 0.266, 0.0, -0.343, 0.339, 0.339, 0.079, 0.0, 0.0, 0.067, 0.0, 0.0, 0.256, 0.0, 0.0],
+        "charge": [0.271, -0.274, 0.266, 0.0, -0.343, 0.339, 0.339, 0.079, 0.0, 0.0, 0.067, 0.0, 0.0, 0.256, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1057,6 +1089,7 @@
     "NALA": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB1", "HB2", "HB3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -1067,7 +1100,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false],
-        "gasteiger": [0.271, -0.274, 0.261, 0.0, -0.356, 0.338, 0.338, 0.338, 0.084, 0.0, 0.0, 0.0],
+        "charge": [0.271, -0.274, 0.261, 0.0, -0.356, 0.338, 0.338, 0.338, 0.084, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1087,6 +1120,7 @@
     "NCYS": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "SG", "HG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "SA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0],
@@ -1097,7 +1131,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.273, -0.273, 0.275, 0.0, -0.354, 0.339, 0.339, 0.339, 0.138, 0.0, 0.0, -0.176, 0.1],
+        "charge": [0.273, -0.273, 0.275, 0.0, -0.354, 0.339, 0.339, 0.339, 0.138, 0.0, 0.0, -0.176, 0.1],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1118,6 +1152,7 @@
     "NCYX": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "SG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "SA"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103],
@@ -1128,7 +1163,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.273, -0.273, 0.275, 0.0, -0.353, 0.338, 0.338, 0.338, 0.154, 0.0, 0.0, -0.09],
+        "charge": [0.273, -0.273, 0.275, 0.0, -0.353, 0.338, 0.338, 0.338, 0.154, 0.0, 0.0, -0.09],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1148,6 +1183,7 @@
     "NCYM": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "SG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "SA"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103],
@@ -1158,7 +1194,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, true],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.271, -0.272, 0.242, 0.0, -0.355, 0.339, 0.339, 0.339, -0.105, 0.0, 0.0, -0.798],
+        "charge": [0.271, -0.272, 0.242, 0.0, -0.355, 0.339, 0.339, 0.339, -0.105, 0.0, 0.0, -0.798],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1178,6 +1214,7 @@
     "NASP": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "OD1", "OD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "OA", "OA"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573],
@@ -1188,7 +1225,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, true, true],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.274, -0.272, 0.272, 0.0, -0.352, 0.34, 0.34, 0.34, 0.126, 0.0, 0.0, 0.047, -0.557, -0.558],
+        "charge": [0.274, -0.272, 0.272, 0.0, -0.352, 0.34, 0.34, 0.34, 0.126, 0.0, 0.0, 0.047, -0.557, -0.558],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1210,6 +1247,7 @@
     "NASH": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "OD1", "OD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "OA", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573, 0.0],
@@ -1220,7 +1258,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, true, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false, false],
-        "gasteiger": [0.274, -0.272, 0.278, 0.0, -0.351, 0.341, 0.34, 0.34, 0.194, 0.0, 0.0, 0.305, -0.255, -0.486, 0.292],
+        "charge": [0.274, -0.272, 0.278, 0.0, -0.351, 0.341, 0.34, 0.34, 0.194, 0.0, 0.0, 0.305, -0.255, -0.486, 0.292],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1243,6 +1281,7 @@
     "NGLU": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "OE2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "OA"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, true, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573],
@@ -1253,7 +1292,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.273, -0.272, 0.267, 0.0, -0.352, 0.34, 0.34, 0.34, 0.08, 0.0, 0.0, 0.058, 0.0, 0.0, 0.041, -0.557, -0.558],
+        "charge": [0.273, -0.272, 0.267, 0.0, -0.352, 0.34, 0.34, 0.34, 0.08, 0.0, 0.0, 0.058, 0.0, 0.0, 0.041, -0.557, -0.558],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1278,6 +1317,7 @@
     "NGLH": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "OE2", "HE2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, true, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573, 0.0],
@@ -1288,7 +1328,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false],
-        "gasteiger": [0.273, -0.272, 0.267, 0.0, -0.351, 0.34, 0.34, 0.34, 0.086, 0.0, 0.0, 0.127, 0.0, 0.0, 0.299, -0.255, -0.486, 0.292],
+        "charge": [0.273, -0.272, 0.267, 0.0, -0.351, 0.34, 0.34, 0.34, 0.086, 0.0, 0.0, 0.127, 0.0, 0.0, 0.299, -0.255, -0.486, 0.292],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1314,6 +1354,7 @@
     "NPHE": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "CE1", "HE1", "CZ", "HZ", "CE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "A", "A", "H", "A", "H", "A", "H", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, true, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -1324,7 +1365,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, true, false, true, false, true, false, true, false, true, false],
-        "gasteiger": [0.272, -0.274, 0.269, 0.0, -0.355, 0.338, 0.338, 0.338, 0.109, 0.0, 0.0, -0.043, 0.004, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004, 0.0],
+        "charge": [0.272, -0.274, 0.269, 0.0, -0.355, 0.338, 0.338, 0.338, 0.109, 0.0, 0.0, -0.043, 0.004, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1355,6 +1396,7 @@
     "NGLY": {
         "atom_name": ["C", "O", "CA", "HA2", "N", "H1", "H2", "H3", "HA3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 0.0],
@@ -1365,7 +1407,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.268, -0.275, 0.353, 0.0, -0.357, 0.337, 0.337, 0.337, 0.0],
+        "charge": [0.268, -0.275, 0.353, 0.0, -0.357, 0.337, 0.337, 0.337, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1382,6 +1424,7 @@
     "NHIE": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "ND1", "CE1", "HE1", "NE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "A", "NA", "A", "H", "N", "HD", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, false, true, false, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0],
@@ -1392,7 +1435,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.274, -0.272, 0.272, 0.0, -0.352, 0.34, 0.34, 0.34, 0.131, 0.0, 0.0, 0.064, -0.245, 0.193, 0.0, -0.355, 0.165, 0.105, 0.0],
+        "charge": [0.274, -0.272, 0.272, 0.0, -0.352, 0.34, 0.34, 0.34, 0.131, 0.0, 0.0, 0.064, -0.245, 0.193, 0.0, -0.355, 0.165, 0.105, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1420,6 +1463,7 @@
     "NHID": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "ND1", "HD1", "CE1", "HE1", "NE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "A", "N", "HD", "A", "H", "NA", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, false, false, true, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.02, 0.15, 0.0, 0.16, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 2.0, 4.0, 0.0, 3.5, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 0.0, 33.5103, 0.0, 22.4493, 33.5103, 0.0],
@@ -1430,7 +1474,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.274, -0.272, 0.272, 0.0, -0.352, 0.34, 0.34, 0.34, 0.129, 0.0, 0.0, 0.04, -0.352, 0.165, 0.193, 0.0, -0.249, 0.132, 0.0],
+        "charge": [0.274, -0.272, 0.272, 0.0, -0.352, 0.34, 0.34, 0.34, 0.129, 0.0, 0.0, 0.04, -0.352, 0.165, 0.193, 0.0, -0.249, 0.132, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1458,6 +1502,7 @@
     "NHIP": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "ND1", "HD1", "CE1", "HE1", "NE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "A", "N", "HD", "A", "H", "N", "HD", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, false, false, true, false, false, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.02, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 2.0, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 0.0, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0],
@@ -1468,7 +1513,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false, true, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.275, -0.271, 0.276, 0.0, -0.351, 0.341, 0.341, 0.341, 0.157, 0.0, 0.0, 0.144, -0.25, 0.307, 0.395, 0.0, -0.253, 0.307, 0.241, 0.0],
+        "charge": [0.275, -0.271, 0.276, 0.0, -0.351, 0.341, 0.341, 0.341, 0.157, 0.0, 0.0, 0.144, -0.25, 0.307, 0.395, 0.0, -0.253, 0.307, 0.241, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1497,6 +1542,7 @@
     "NILE": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB", "CG2", "HG21", "HG22", "HG23", "CG1", "HG12", "HG13", "CD1", "HD11", "HD12", "HD13"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "C", "H", "H", "H", "C", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, false, true, true, true, false, true, true, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -1507,7 +1553,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, true, false, false, false, true, false, false, true, false, false, false],
-        "gasteiger": [0.272, -0.274, 0.267, 0.0, -0.355, 0.337, 0.338, 0.338, 0.053, 0.0, 0.014, 0.0, 0.0, 0.0, 0.006, 0.0, 0.0, 0.004, 0.0, 0.0, 0.0],
+        "charge": [0.272, -0.274, 0.267, 0.0, -0.355, 0.337, 0.338, 0.338, 0.053, 0.0, 0.014, 0.0, 0.0, 0.0, 0.006, 0.0, 0.0, 0.004, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1536,6 +1582,7 @@
     "NLYS": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "CE", "HE2", "HE3", "NZ", "HZ1", "HZ2", "HZ3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "C", "H", "H", "N", "HD", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, true, false, true, true, false, true, true, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 0.0, 0.0],
@@ -1546,7 +1593,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.274, -0.271, 0.267, 0.0, -0.352, 0.341, 0.341, 0.341, 0.075, 0.0, 0.0, 0.012, 0.0, 0.0, 0.06, 0.0, 0.0, 0.255, 0.0, 0.0, -0.363, 0.34, 0.34, 0.34],
+        "charge": [0.274, -0.271, 0.267, 0.0, -0.352, 0.341, 0.341, 0.341, 0.075, 0.0, 0.0, 0.012, 0.0, 0.0, 0.06, 0.0, 0.0, 0.255, 0.0, 0.0, -0.363, 0.34, 0.34, 0.34],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1578,6 +1625,7 @@
     "NLYN": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "CE", "HE2", "HE3", "NZ", "HZ2", "HZ3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "C", "H", "H", "NA", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, true, false, true, true, false, true, true, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 0.0],
@@ -1588,7 +1636,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.272, -0.272, 0.266, 0.0, -0.353, 0.339, 0.339, 0.339, 0.074, 0.0, 0.0, 0.008, 0.0, 0.0, 0.015, 0.0, 0.0, 0.076, 0.0, 0.0, -0.335, 0.116, 0.116],
+        "charge": [0.272, -0.272, 0.266, 0.0, -0.353, 0.339, 0.339, 0.339, 0.074, 0.0, 0.0, 0.008, 0.0, 0.0, 0.015, 0.0, 0.0, 0.076, 0.0, 0.0, -0.335, 0.116, 0.116],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1619,6 +1667,7 @@
     "NLEU": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "HG", "CD1", "HD11", "HD12", "HD13", "CD2", "HD21", "HD22", "HD23"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "C", "H", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, false, true, true, true, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -1629,7 +1678,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, true, false, false, false, true, false, false, false],
-        "gasteiger": [0.271, -0.274, 0.265, 0.0, -0.355, 0.338, 0.338, 0.338, 0.076, 0.0, 0.0, -0.011, 0.0, 0.007, 0.0, 0.0, 0.0, 0.007, 0.0, 0.0, 0.0],
+        "charge": [0.271, -0.274, 0.265, 0.0, -0.355, 0.338, 0.338, 0.338, 0.076, 0.0, 0.0, -0.011, 0.0, 0.007, 0.0, 0.0, 0.0, 0.007, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1658,6 +1707,7 @@
     "NMET": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "SD", "CE", "HE1", "HE2", "HE3"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "H", "SA", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, true, false, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.2, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 0.0, 0.0],
@@ -1668,7 +1718,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.272, -0.273, 0.266, 0.0, -0.353, 0.338, 0.338, 0.338, 0.084, 0.0, 0.0, 0.075, 0.0, 0.0, -0.168, 0.083, 0.0, 0.0, 0.0],
+        "charge": [0.272, -0.273, 0.266, 0.0, -0.353, 0.338, 0.338, 0.338, 0.084, 0.0, 0.0, 0.075, 0.0, 0.0, -0.168, 0.083, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1695,6 +1745,7 @@
     "NASN": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "OD1", "ND2", "HD22", "HD21"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "OA", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 22.4493, 0.0, 0.0],
@@ -1705,7 +1756,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false],
-        "gasteiger": [0.274, -0.272, 0.276, 0.0, -0.352, 0.34, 0.34, 0.34, 0.173, 0.0, 0.0, 0.22, -0.279, -0.374, 0.157, 0.157],
+        "charge": [0.274, -0.272, 0.276, 0.0, -0.352, 0.34, 0.34, 0.34, 0.173, 0.0, 0.0, 0.22, -0.279, -0.374, 0.157, 0.157],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1729,6 +1780,7 @@
     "NGLN": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "NE2", "HE22", "HE21"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, true, false, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 22.4493, 0.0, 0.0],
@@ -1739,7 +1791,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false],
-        "gasteiger": [0.273, -0.272, 0.267, 0.0, -0.352, 0.34, 0.34, 0.34, 0.084, 0.0, 0.0, 0.105, 0.0, 0.0, 0.214, -0.279, -0.374, 0.157, 0.157],
+        "charge": [0.273, -0.272, 0.267, 0.0, -0.352, 0.34, 0.34, 0.34, 0.084, 0.0, 0.0, 0.105, 0.0, 0.0, 0.214, -0.279, -0.374, 0.157, 0.157],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1766,6 +1818,7 @@
     "NARG": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "NE", "HE", "CZ", "NH1", "HH12", "HH11", "NH2", "HH22", "HH21"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "N", "HD", "C", "N", "HD", "HD", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, true, true, false, true, true, false, false, false, false, false, false, false, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.15, 0.16, 0.02, 0.02, 0.16, 0.02, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 4.0, 3.5, 2.0, 2.0, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 33.5103, 22.4493, 0.0, 0.0, 22.4493, 0.0, 0.0],
@@ -1776,7 +1829,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.274, -0.271, 0.268, 0.0, -0.349, 0.342, 0.342, 0.342, 0.078, 0.0, 0.0, 0.044, 0.0, 0.0, 0.195, 0.0, 0.0, -0.281, 0.257, 0.335, -0.294, 0.253, 0.253, -0.294, 0.253, 0.253],
+        "charge": [0.274, -0.271, 0.268, 0.0, -0.349, 0.342, 0.342, 0.342, 0.078, 0.0, 0.0, 0.044, 0.0, 0.0, 0.195, 0.0, 0.0, -0.281, 0.257, 0.335, -0.294, 0.253, 0.253, -0.294, 0.253, 0.253],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1810,6 +1863,7 @@
     "NSER": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "OG", "HG"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 17.1573, 0.0],
@@ -1820,7 +1874,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [0.276, -0.272, 0.291, 0.0, -0.351, 0.339, 0.339, 0.339, 0.227, 0.0, 0.0, -0.395, 0.207],
+        "charge": [0.276, -0.272, 0.291, 0.0, -0.351, 0.339, 0.339, 0.339, 0.227, 0.0, 0.0, -0.395, 0.207],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1841,6 +1895,7 @@
     "NTHR": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB", "CG2", "HG21", "HG22", "HG23", "OG1", "HG1"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "C", "H", "H", "H", "OA", "HD"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, false, true, true, true, false, false],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 3.2, 2.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 17.1573, 0.0],
@@ -1851,7 +1906,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
-        "gasteiger": [0.275, -0.272, 0.294, 0.0, -0.35, 0.339, 0.339, 0.339, 0.176, 0.0, 0.044, 0.0, 0.0, 0.0, -0.392, 0.208],
+        "charge": [0.275, -0.272, 0.294, 0.0, -0.35, 0.339, 0.339, 0.339, 0.176, 0.0, 0.044, 0.0, 0.0, 0.0, -0.392, 0.208],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1875,6 +1930,7 @@
     "NVAL": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB", "CG1", "HG11", "HG12", "HG13", "CG2", "HG21", "HG22", "HG23"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "C", "H", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, false, true, true, true, false, true, true, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -1885,7 +1941,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, true, false, false, false, true, false, false, false],
-        "gasteiger": [0.272, -0.274, 0.267, 0.0, -0.354, 0.337, 0.337, 0.337, 0.05, 0.0, 0.014, 0.0, 0.0, 0.0, 0.014, 0.0, 0.0, 0.0],
+        "charge": [0.272, -0.274, 0.267, 0.0, -0.354, 0.337, 0.337, 0.337, 0.05, 0.0, 0.014, 0.0, 0.0, 0.0, 0.014, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1911,6 +1967,7 @@
     "NTRP": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "NE1", "HE1", "CE2", "CD2", "CE3", "HE3", "CZ3", "HZ3", "CH2", "HH2", "CZ2", "HZ2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "A", "A", "H", "N", "HD", "A", "A", "A", "H", "A", "H", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.16, 0.02, 0.15, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 3.5, 2.0, 4.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -1921,7 +1978,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, true, true, false, true, false, true, false, true, false],
-        "gasteiger": [0.273, -0.272, 0.27, 0.0, -0.353, 0.339, 0.339, 0.339, 0.111, 0.0, 0.0, -0.016, 0.086, 0.0, -0.366, 0.163, 0.045, 0.003, 0.01, 0.0, 0.001, 0.0, 0.002, 0.0, 0.026, 0.0],
+        "charge": [0.273, -0.272, 0.27, 0.0, -0.353, 0.339, 0.339, 0.339, 0.111, 0.0, 0.0, -0.016, 0.086, 0.0, -0.366, 0.163, 0.045, 0.003, 0.01, 0.0, 0.001, 0.0, 0.002, 0.0, 0.026, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1957,6 +2014,7 @@
     "NTYR": {
         "atom_name": ["C", "O", "CA", "HA", "N", "H1", "H2", "H3", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "CE1", "HE1", "CZ", "OH", "HH", "CE2", "HE2", "CD2", "HD2"],
         "atom_type": ["C", "OA", "C", "H", "N", "HD", "HD", "HD", "C", "H", "H", "A", "A", "H", "A", "H", "A", "OA", "HD", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, true, false, false, false, false, false, true, true, false, false, true, false, true, false, false, false, false, true, false, true],
         "ad4_epsii": [0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.02, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.2, 0.02, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 2.0, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 3.2, 2.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 17.1573, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -1967,7 +2025,7 @@
         "vina_donor": [false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, true, false, false, true, true, false, true, false, false, false, false, true, false, true, false],
-        "gasteiger": [0.274, -0.272, 0.271, 0.0, -0.352, 0.34, 0.34, 0.34, 0.109, 0.0, 0.0, -0.042, 0.008, 0.0, 0.045, 0.0, 0.113, -0.516, 0.289, 0.045, 0.0, 0.008, 0.0],
+        "charge": [0.274, -0.272, 0.271, 0.0, -0.352, 0.34, 0.34, 0.34, 0.109, 0.0, 0.0, -0.042, 0.008, 0.0, 0.045, 0.0, 0.113, -0.516, 0.289, 0.045, 0.0, 0.008, 0.0],
         "bonds": [
             [0, 1],
             [0, 2],
@@ -1999,6 +2057,7 @@
     "CALA": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB1", "HB2", "HB3"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -2009,7 +2068,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false],
-        "gasteiger": [-0.532, 0.066, -0.531, 0.129, 0.0, -0.339, 0.169, 0.038, 0.0, 0.0, 0.0],
+        "charge": [-0.532, 0.066, -0.531, 0.129, 0.0, -0.339, 0.169, 0.038, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2028,6 +2087,7 @@
     "CCYS": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "SG", "HG"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "SA", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0],
@@ -2038,7 +2098,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, true, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.534, 0.067, -0.534, 0.14, 0.0, -0.338, 0.168, 0.099, 0.0, 0.0, -0.173, 0.105],
+        "charge": [-0.534, 0.067, -0.534, 0.14, 0.0, -0.338, 0.168, 0.099, 0.0, 0.0, -0.173, 0.105],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2058,6 +2118,7 @@
     "CCYX": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "SG"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "SA"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103],
@@ -2068,7 +2129,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.533, 0.067, -0.533, 0.143, 0.0, -0.338, 0.168, 0.115, 0.0, 0.0, -0.089],
+        "charge": [-0.533, 0.067, -0.533, 0.143, 0.0, -0.338, 0.168, 0.115, 0.0, 0.0, -0.089],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2087,6 +2148,7 @@
     "CCYM": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "SG"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "SA"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103],
@@ -2097,7 +2159,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, true],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.537, 0.063, -0.537, 0.106, 0.0, -0.343, 0.167, -0.145, 0.0, 0.0, -0.774],
+        "charge": [-0.537, 0.063, -0.537, 0.106, 0.0, -0.343, 0.167, -0.145, 0.0, 0.0, -0.774],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2116,6 +2178,7 @@
     "CASP": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "OD1", "OD2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "OA", "OA"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573],
@@ -2126,7 +2189,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, true, true],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false, false, false],
-        "gasteiger": [-0.538, 0.065, -0.538, 0.135, 0.0, -0.342, 0.167, 0.085, 0.0, 0.0, 0.045, -0.539, -0.54],
+        "charge": [-0.538, 0.065, -0.538, 0.135, 0.0, -0.342, 0.167, 0.085, 0.0, 0.0, 0.045, -0.539, -0.54],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2147,6 +2210,7 @@
     "CASH": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "OD1", "OD2", "HD2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "OA", "OA", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573, 0.0],
@@ -2157,7 +2221,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, true, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, true, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false, false, false, false],
-        "gasteiger": [-0.539, 0.065, -0.538, 0.141, 0.0, -0.342, 0.167, 0.156, 0.0, 0.0, 0.31, -0.248, -0.473, 0.301],
+        "charge": [-0.539, 0.065, -0.538, 0.141, 0.0, -0.342, 0.167, 0.156, 0.0, 0.0, 0.31, -0.248, -0.473, 0.301],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2179,6 +2243,7 @@
     "CGLU": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "OE2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "OA"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, true, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573],
@@ -2189,7 +2254,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, true, true],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false],
-        "gasteiger": [-0.538, 0.065, -0.538, 0.13, 0.0, -0.342, 0.167, 0.038, 0.0, 0.0, 0.056, 0.0, 0.0, 0.042, -0.54, -0.54],
+        "charge": [-0.538, 0.065, -0.538, 0.13, 0.0, -0.342, 0.167, 0.038, 0.0, 0.0, 0.056, 0.0, 0.0, 0.042, -0.54, -0.54],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2213,6 +2278,7 @@
     "CGLH": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "OE2", "HE2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "OA", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, true, false, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.2, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.2, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 17.1573, 0.0],
@@ -2223,7 +2289,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, true, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false],
-        "gasteiger": [-0.539, 0.065, -0.54, 0.13, 0.0, -0.342, 0.167, 0.044, 0.0, 0.0, 0.127, 0.0, 0.0, 0.308, -0.248, -0.473, 0.301],
+        "charge": [-0.539, 0.065, -0.54, 0.13, 0.0, -0.342, 0.167, 0.044, 0.0, 0.0, 0.127, 0.0, 0.0, 0.308, -0.248, -0.473, 0.301],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2248,6 +2314,7 @@
     "CPHE": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "CE1", "HE1", "CZ", "HZ", "CE2", "HE2", "CD2", "HD2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "A", "H", "A", "H", "A", "H", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, false, true, false, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -2258,7 +2325,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, true, false, true, false, true, false, true, false, true, false],
-        "gasteiger": [-0.532, 0.066, -0.532, 0.136, 0.0, -0.338, 0.169, 0.068, 0.0, 0.0, -0.045, 0.004, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004, 0.0],
+        "charge": [-0.532, 0.066, -0.532, 0.136, 0.0, -0.338, 0.169, 0.068, 0.0, 0.0, -0.045, 0.004, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2288,6 +2355,7 @@
     "CGLY": {
         "atom_name": ["OXT", "C", "O", "CA", "HA2", "N", "H", "HA3"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 0.0],
@@ -2298,7 +2366,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.532, 0.063, -0.531, 0.173, 0.0, -0.341, 0.168, 0.0],
+        "charge": [-0.532, 0.063, -0.531, 0.173, 0.0, -0.341, 0.168, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2314,6 +2382,7 @@
     "CHIE": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "ND1", "CE1", "HE1", "NE2", "HE2", "CD2", "HD2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "NA", "A", "H", "N", "HD", "A", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, false, true, false, false, false, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0],
@@ -2324,7 +2393,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.538, 0.065, -0.537, 0.136, 0.0, -0.342, 0.167, 0.091, 0.0, 0.0, 0.062, -0.238, 0.2, 0.0, -0.345, 0.17, 0.109, 0.0],
+        "charge": [-0.538, 0.065, -0.537, 0.136, 0.0, -0.342, 0.167, 0.091, 0.0, 0.0, 0.062, -0.238, 0.2, 0.0, -0.345, 0.17, 0.109, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2351,6 +2420,7 @@
     "CHID": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "ND1", "HD1", "CE1", "HE1", "NE2", "CD2", "HD2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "N", "HD", "A", "H", "NA", "A", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, false, false, true, false, false, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.02, 0.15, 0.0, 0.16, 0.15, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 2.0, 4.0, 0.0, 3.5, 4.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 0.0, 33.5103, 0.0, 22.4493, 33.5103, 0.0],
@@ -2361,7 +2431,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.538, 0.065, -0.537, 0.136, 0.0, -0.342, 0.167, 0.088, 0.0, 0.0, 0.038, -0.342, 0.17, 0.2, 0.0, -0.241, 0.136, 0.0],
+        "charge": [-0.538, 0.065, -0.537, 0.136, 0.0, -0.342, 0.167, 0.088, 0.0, 0.0, 0.038, -0.342, 0.17, 0.2, 0.0, -0.241, 0.136, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2388,6 +2458,7 @@
     "CHIP": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "ND1", "HD1", "CE1", "HE1", "NE2", "HE2", "CD2", "HD2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "N", "HD", "A", "H", "N", "HD", "A", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, false, false, true, false, false, false, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.16, 0.02, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.5, 2.0, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 22.4493, 0.0, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0],
@@ -2398,7 +2469,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, true, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.541, 0.065, -0.541, 0.138, 0.0, -0.343, 0.166, 0.117, 0.0, 0.0, 0.144, -0.244, 0.316, 0.405, 0.0, -0.246, 0.316, 0.248, 0.0],
+        "charge": [-0.541, 0.065, -0.541, 0.138, 0.0, -0.343, 0.166, 0.117, 0.0, 0.0, 0.144, -0.244, 0.316, 0.405, 0.0, -0.246, 0.316, 0.248, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2426,6 +2497,7 @@
     "CILE": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB", "CG2", "HG21", "HG22", "HG23", "CG1", "HG12", "HG13", "CD1", "HD11", "HD12", "HD13"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "C", "H", "H", "H", "C", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, false, true, true, true, false, true, true, false, true, true, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -2436,7 +2508,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, true, false, false, false, true, false, false, true, false, false, false],
-        "gasteiger": [-0.531, 0.066, -0.531, 0.135, 0.0, -0.338, 0.169, 0.014, 0.0, 0.01, 0.0, 0.0, 0.0, 0.002, 0.0, 0.0, 0.004, 0.0, 0.0, 0.0],
+        "charge": [-0.531, 0.066, -0.531, 0.135, 0.0, -0.338, 0.169, 0.014, 0.0, 0.01, 0.0, 0.0, 0.0, 0.002, 0.0, 0.0, 0.004, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2464,6 +2536,7 @@
     "CLYS": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "CE", "HE2", "HE3", "NZ", "HZ1", "HZ2", "HZ3"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "C", "H", "H", "N", "HD", "HD", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, true, false, true, true, false, true, true, false, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.02, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 2.0, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 0.0, 0.0],
@@ -2474,7 +2547,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.539, 0.065, -0.538, 0.13, 0.0, -0.343, 0.167, 0.031, 0.0, 0.0, 0.008, 0.0, 0.0, 0.062, 0.0, 0.0, 0.262, 0.0, 0.0, -0.352, 0.349, 0.349, 0.349],
+        "charge": [-0.539, 0.065, -0.538, 0.13, 0.0, -0.343, 0.167, 0.031, 0.0, 0.0, 0.008, 0.0, 0.0, 0.062, 0.0, 0.0, 0.262, 0.0, 0.0, -0.352, 0.349, 0.349, 0.349],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2505,6 +2578,7 @@
     "CLYN": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "CE", "HE2", "HE3", "NZ", "HZ2", "HZ3"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "C", "H", "H", "NA", "HD", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, true, false, true, true, false, true, true, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 0.0],
@@ -2515,7 +2589,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.536, 0.065, -0.537, 0.131, 0.0, -0.34, 0.168, 0.032, 0.0, 0.0, 0.004, 0.0, 0.0, 0.015, 0.0, 0.0, 0.079, 0.0, 0.0, -0.323, 0.121, 0.121],
+        "charge": [-0.536, 0.065, -0.537, 0.131, 0.0, -0.34, 0.168, 0.032, 0.0, 0.0, 0.004, 0.0, 0.0, 0.015, 0.0, 0.0, 0.079, 0.0, 0.0, -0.323, 0.121, 0.121],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2545,6 +2619,7 @@
     "CLEU": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG", "CD1", "HD11", "HD12", "HD13", "CD2", "HD21", "HD22", "HD23"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "C", "H", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, false, true, true, true, false, true, true, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -2555,7 +2630,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, true, false, false, false, true, false, false, false],
-        "gasteiger": [-0.532, 0.066, -0.531, 0.132, 0.0, -0.338, 0.169, 0.035, 0.0, 0.0, -0.015, 0.0, 0.007, 0.0, 0.0, 0.0, 0.007, 0.0, 0.0, 0.0],
+        "charge": [-0.532, 0.066, -0.531, 0.132, 0.0, -0.338, 0.169, 0.035, 0.0, 0.0, -0.015, 0.0, 0.007, 0.0, 0.0, 0.0, 0.007, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2583,6 +2658,7 @@
     "CMET": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "SD", "CE", "HE1", "HE2", "HE3"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "SA", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, true, false, false, true, true, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.2, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 0.0, 0.0],
@@ -2593,7 +2669,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.535, 0.066, -0.535, 0.132, 0.0, -0.339, 0.168, 0.043, 0.0, 0.0, 0.074, 0.0, 0.0, -0.161, 0.087, 0.0, 0.0, 0.0],
+        "charge": [-0.535, 0.066, -0.535, 0.132, 0.0, -0.339, 0.168, 0.043, 0.0, 0.0, 0.074, 0.0, 0.0, -0.161, 0.087, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2619,6 +2695,7 @@
     "CASN": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "OD1", "ND2", "HD22", "HD21"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "OA", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.2, 0.16, 0.02, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 22.4493, 0.0, 0.0],
@@ -2629,7 +2706,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false],
-        "gasteiger": [-0.538, 0.065, -0.538, 0.14, 0.0, -0.342, 0.167, 0.132, 0.0, 0.0, 0.223, -0.27, -0.363, 0.162, 0.162],
+        "charge": [-0.538, 0.065, -0.538, 0.14, 0.0, -0.342, 0.167, 0.132, 0.0, 0.0, 0.223, -0.27, -0.363, 0.162, 0.162],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2652,6 +2729,7 @@
     "CGLN": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "OE1", "NE2", "HE22", "HE21"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "OA", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, true, false, false, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.2, 0.16, 0.02, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 3.2, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 17.1573, 22.4493, 0.0, 0.0],
@@ -2662,7 +2740,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false],
-        "gasteiger": [-0.539, 0.065, -0.539, 0.13, 0.0, -0.342, 0.167, 0.042, 0.0, 0.0, 0.104, 0.0, 0.0, 0.221, -0.27, -0.363, 0.162, 0.162],
+        "charge": [-0.539, 0.065, -0.539, 0.13, 0.0, -0.342, 0.167, 0.042, 0.0, 0.0, 0.104, 0.0, 0.0, 0.221, -0.27, -0.363, 0.162, 0.162],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2688,6 +2766,7 @@
     "CARG": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "NE", "HE", "CZ", "NH1", "HH12", "HH11", "NH2", "HH22", "HH21"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "C", "H", "H", "C", "H", "H", "N", "HD", "C", "N", "HD", "HD", "N", "HD", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, true, true, false, true, true, false, false, false, false, false, false, false, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.16, 0.02, 0.15, 0.16, 0.02, 0.02, 0.16, 0.02, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 3.5, 2.0, 4.0, 3.5, 2.0, 2.0, 3.5, 2.0, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 22.4493, 0.0, 33.5103, 22.4493, 0.0, 0.0, 22.4493, 0.0, 0.0],
@@ -2698,7 +2777,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.541, 0.065, -0.541, 0.13, 0.0, -0.344, 0.166, 0.034, 0.0, 0.0, 0.04, 0.0, 0.0, 0.199, 0.0, 0.0, -0.275, 0.263, 0.342, -0.287, 0.259, 0.259, -0.287, 0.259, 0.259],
+        "charge": [-0.541, 0.065, -0.541, 0.13, 0.0, -0.344, 0.166, 0.034, 0.0, 0.0, 0.04, 0.0, 0.0, 0.199, 0.0, 0.0, -0.275, 0.263, 0.342, -0.287, 0.259, 0.259, -0.287, 0.259, 0.259],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2731,6 +2810,7 @@
     "CSER": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "OG", "HG"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "OA", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 3.2, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 17.1573, 0.0],
@@ -2741,7 +2821,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, true, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, false, false, false],
-        "gasteiger": [-0.536, 0.067, -0.535, 0.156, 0.0, -0.339, 0.168, 0.191, 0.0, 0.0, -0.386, 0.214],
+        "charge": [-0.536, 0.067, -0.535, 0.156, 0.0, -0.339, 0.168, 0.191, 0.0, 0.0, -0.386, 0.214],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2761,6 +2841,7 @@
     "CTHR": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB", "CG2", "HG21", "HG22", "HG23", "OG1", "HG1"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "C", "H", "H", "H", "OA", "HD"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, false, true, true, true, false, false],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.2, 0.02],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 3.2, 2.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 17.1573, 0.0],
@@ -2771,7 +2852,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, true, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, true, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
-        "gasteiger": [-0.536, 0.067, -0.536, 0.159, 0.0, -0.339, 0.168, 0.142, 0.0, 0.042, 0.0, 0.0, 0.0, -0.383, 0.216],
+        "charge": [-0.536, 0.067, -0.536, 0.159, 0.0, -0.339, 0.168, 0.142, 0.0, 0.042, 0.0, 0.0, 0.0, -0.383, 0.216],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2794,6 +2875,7 @@
     "CVAL": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB", "CG1", "HG11", "HG12", "HG13", "CG2", "HG21", "HG22", "HG23"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "C", "H", "H", "H", "C", "H", "H", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, false, true, true, true, false, true, true, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.15, 0.0, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 4.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 33.5103, 0.0, 0.0, 0.0, 33.5103, 0.0, 0.0, 0.0],
@@ -2804,7 +2886,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, true, false, false, false, true, false, false, false],
-        "gasteiger": [-0.531, 0.066, -0.531, 0.134, 0.0, -0.338, 0.169, 0.011, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0],
+        "charge": [-0.531, 0.066, -0.531, 0.134, 0.0, -0.338, 0.169, 0.011, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2829,6 +2911,7 @@
     "CTRP": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "NE1", "HE1", "CE2", "CD2", "CE3", "HE3", "CZ3", "HZ3", "CH2", "HH2", "CZ2", "HZ2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "A", "H", "N", "HD", "A", "A", "A", "H", "A", "H", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.16, 0.02, 0.15, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 3.5, 2.0, 4.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -2839,7 +2922,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, true, true, false, true, false, true, false, true, false],
-        "gasteiger": [-0.536, 0.065, -0.536, 0.135, 0.0, -0.341, 0.167, 0.07, 0.0, 0.0, -0.02, 0.089, 0.0, -0.353, 0.17, 0.047, 0.003, 0.01, 0.0, 0.001, 0.0, 0.002, 0.0, 0.027, 0.0],
+        "charge": [-0.536, 0.065, -0.536, 0.135, 0.0, -0.341, 0.167, 0.07, 0.0, 0.0, -0.02, 0.089, 0.0, -0.353, 0.17, 0.047, 0.003, 0.01, 0.0, 0.001, 0.0, 0.002, 0.0, 0.027, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2874,6 +2957,7 @@
     "CTYR": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "H", "CB", "HB2", "HB3", "CG", "CD1", "HD1", "CE1", "HE1", "CZ", "OH", "HH", "CE2", "HE2", "CD2", "HD2"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "HD", "C", "H", "H", "A", "A", "H", "A", "H", "A", "OA", "HD", "A", "H", "A", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, false, true, true, false, false, true, false, true, false, false, false, false, true, false, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.02, 0.15, 0.0, 0.0, 0.15, 0.15, 0.0, 0.15, 0.0, 0.15, 0.2, 0.02, 0.15, 0.0, 0.15, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 2.0, 4.0, 0.0, 0.0, 4.0, 4.0, 0.0, 4.0, 0.0, 4.0, 3.2, 2.0, 4.0, 0.0, 4.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 0.0, 33.5103, 0.0, 0.0, 33.5103, 33.5103, 0.0, 33.5103, 0.0, 33.5103, 17.1573, 0.0, 33.5103, 0.0, 33.5103, 0.0],
@@ -2884,7 +2968,7 @@
         "vina_donor": [false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, false, true, false, false, true, true, false, true, false, false, false, false, true, false, true, false],
-        "gasteiger": [-0.537, 0.065, -0.538, 0.135, 0.0, -0.341, 0.167, 0.067, 0.0, 0.0, -0.044, 0.007, 0.0, 0.047, 0.0, 0.117, -0.498, 0.299, 0.047, 0.0, 0.007, 0.0],
+        "charge": [-0.537, 0.065, -0.538, 0.135, 0.0, -0.341, 0.167, 0.067, 0.0, 0.0, -0.044, 0.007, 0.0, 0.047, 0.0, 0.117, -0.498, 0.299, 0.047, 0.0, 0.007, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],
@@ -2915,6 +2999,7 @@
     "CPRO": {
         "atom_name": ["OXT", "C", "O", "CA", "HA", "N", "CB", "HB3", "HB2", "CG", "HG2", "HG3", "CD", "HD2", "HD3"],
         "atom_type": ["OA", "C", "OA", "C", "H", "N", "C", "H", "H", "C", "H", "H", "C", "H", "H"],
+	"atom_ignore": [false, false, false, false, true, false, false, true, true, false, true, true, false, true, true],
         "ad4_epsii": [0.2, 0.15, 0.2, 0.15, 0.0, 0.16, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0],
         "ad4_rii": [3.2, 4.0, 3.2, 4.0, 0.0, 3.5, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 0.0, 0.0],
         "ad4_sol_vol": [17.1573, 33.5103, 17.1573, 33.5103, 0.0, 22.4493, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0, 33.5103, 0.0, 0.0],
@@ -2925,7 +3010,7 @@
         "vina_donor": [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_acceptor": [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false],
         "vina_hydrophobic": [false, false, false, false, false, false, true, false, false, true, false, false, false, false, false],
-        "gasteiger": [-0.53, 0.066, -0.53, 0.135, 0.0, -0.324, 0.034, 0.0, 0.0, 0.025, 0.0, 0.0, 0.124, 0.0, 0.0],
+        "charge": [-0.53, 0.066, -0.53, 0.135, 0.0, -0.324, 0.034, 0.0, 0.0, 0.025, 0.0, 0.0, 0.124, 0.0, 0.0],
         "bonds": [
             [0, 1],
             [1, 2],

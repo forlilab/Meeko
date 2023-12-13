@@ -64,13 +64,13 @@ def test_AHHY_flexible_residues():
     mk_prep = MoleculePreparation()
     residue_id = "A:HIS:2"
     
-    molsetup, mapidx, ignored_in_molsetup = chorizo.res_to_molsetup(residue_id, mk_prep)
+    molsetup, mapidx, is_flexres_atom = chorizo.res_to_molsetup(residue_id, mk_prep)
     
     expected_mapidx = {2: 0, 3: 1, 4: 2, 5: 4, 6: 3, 7: 6, 8: 7, 9: 8, 10: 9, 11: 10, 12: 15, 13: 11, 14: 12, 15: 14, 16: 16, 17: 13, 19: 5}
-    expected_ignored = []
+    expected_flexres = [False for _ in range(len(molsetup.atom_ignore))]
     assert molsetup
     assert mapidx == expected_mapidx
-    assert ignored_in_molsetup == expected_ignored
+    assert is_flexres_atom == expected_flexres
 
 def test_just_three_padded_mol():
     f = open(just_three_residues, 'r')

@@ -5,9 +5,10 @@ from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
 from .writer import PDBQTWriterLegacy
-from .molsetup import RDKitMoleculeSetup
+from .molsetup import MoleculeSetup
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
+from .utils.pdbutils import PDBAtomInfo
 
 import numpy as np
 
@@ -70,9 +71,13 @@ def h_coord_from_dipeptide(pdb1, pdb2):
     return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
 
 def h_coord_random_n_terminal(mol, debug=False):
+    idx = mol.GetSubstructMatches(Chem.MolFromSmarts("[Nh1H2X3+0][CX4]"))
+    assert len(idx) == 1, f"expected 1 backbone match got {len(idx)}"
+    nitrogen = mol.GetAtomWithIdx(idx[0][0])
+    nitrogen.SetBoolProp("this_N", True) 
     mol_no_h = Chem.RemoveHs(mol)
     for atom in mol_no_h.GetAtoms():
-        if atom.GetProp("atom_name") == "N":
+        if atom.HasProp("this_N") and atom.GetBoolProp("this_N"):
             bb_n_idx = atom.GetIdx()
     mol_h = Chem.AddHs(mol_no_h, addCoords=True)
     #positions = mol_h.GetConformer().GetPositions()
@@ -189,7 +194,7 @@ class LinkedRDKitChorizo:
     termini: dict (string (representing residue id) -> string (representing what we want the capping to look like))
     deleted_residues: list (string) residue ids to be deleted
     mutate_res_dict: dict (string (representing starting residue id) -> string (representing the desired mutated id))
-    res_templates: dict (string -> rdkit.Chem.rdchem.Mol)
+    res_templates: dict (string -> dict (rdkit_mol and atom_data))
     ambiguous:
     disulfide_bridges:
     suggested_mutations:
@@ -230,7 +235,7 @@ class LinkedRDKitChorizo:
         self.res_templates, self.ambiguous = self._load_params(params)
         
         # Uses termini and user parameters to 
-        ambiguous_chosen = self.parameterize_residues(self.termini, self.ambiguous)
+        ambiguous_chosen = self.match_residues_templates(self.termini, self.ambiguous)
         suggested_mutations.update(ambiguous_chosen)
 
         removed_residues = self.getIgnoredResidues()
@@ -404,6 +409,16 @@ class LinkedRDKitChorizo:
         is_res_atom.extend([False] * (mol.GetNumAtoms() - n_atoms_before_addhs))
         return mol, is_res_atom, mapidx
 
+    @staticmethod
+    def expand_resid(resid_string):
+        chain, resnum = resid_string.strip().split(":")
+        if len(chain) > 1: raise ValueError(f"chain must be empty or single character, got {chain=}")
+        if len(resnum) == 0: raise ValueError(f"resnum can't be empty in {resid_string=}")
+        if resnum[-1].isalpha(): # PDB insertion code
+            insertion_code = resnum[-1]
+            resnum
+        return chain, resnum, icode
+
     def res_to_molsetup(self, res, mk_prep, is_protein_sidechain=False, cut_at_calpha=False):
         padded_mol, is_res_atom, mapidx = self.get_padded_mol(res)
         if is_protein_sidechain:
@@ -417,19 +432,20 @@ class LinkedRDKitChorizo:
         if len(molsetups) > 1:
             raise NotImplementedError("multiple molsetups not yet implemented for flexres")
         molsetup = molsetups[0]
-        molsetup.is_sidechain = is_protein_sidechain
-        ignored_in_molsetup = []
+        molsetup.is_sidechain = is_protein_sidechain # TODO not sure this belongs here now that all residues have molsetups
+        is_flexres_atom = []
         for atom_index in molsetup.atom_ignore:
             if atom_index < len(is_res_atom):
                 is_res = is_res_atom[atom_index] # Hs from Chem.AddHs beyond length of is_res_atom
             else:
                 is_res = False
-            ignore = not is_res
-            ignore |= is_protein_sidechain and cut_at_calpha and (
-                    (atom_index != c_alpha) and (atom_index in bb_matches[0]))
-            molsetup.atom_ignore[atom_index] |= ignore
-            if ignore and is_res:
-                ignored_in_molsetup.append(mapidx[atom_index])
+            molsetup.atom_ignore[atom_index] |= not is_res # ignore padding atoms
+            is_flex = is_protein_sidechain
+            if cut_at_calpha and (atom_index != c_alpha) and (atom_index in bb_matches[0]): # TODO bb pseudos
+                is_flex = False
+            is_flexres_atom.append(is_flex)
+            chain, resname, resnum = res.split(":")
+
         # rectify charges to sum to integer (because of padding)
         net_charge = sum([atom.GetFormalCharge() for atom in self.residues[res].rdkit_mol.GetAtoms()])
         if mk_prep.charge_model == "zero":
@@ -443,28 +459,28 @@ class LinkedRDKitChorizo:
         charges = rectify_charges(charges, net_charge, decimals=3)
         for i, j in enumerate(not_ignored_idxs):
             molsetup.charge[j] = charges[i]
-        return molsetup, mapidx, ignored_in_molsetup
+        return molsetup, mapidx, is_flexres_atom
 
 
     def flexibilize_protein_sidechain(self, res, mk_prep, cut_at_calpha=False):
-        molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep,
+        molsetup, mapidx, is_flexres_atom = self.res_to_molsetup(res, mk_prep,
                                                                   is_protein_sidechain=True,
                                                                   cut_at_calpha=cut_at_calpha)
         self.residues[res].molsetup = molsetup
         self.residues[res].molsetup_mapidx = mapidx
-        self.residues[res].molsetup_ignored = ignored_in_molsetup
+        self.residues[res].is_flexres_atom = is_flexres_atom
         self.residues[res].is_movable = True
         return
 
-    def add_molsetup_inflexible(self, res, mk_prep, cut_at_calpha=False):
-        molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep,
-                                                                  is_protein_sidechain=False,
-                                                                  cut_at_calpha=cut_at_calpha)  
-        self.residues[res].molsetup = molsetup
-        self.residues[res].molsetup_mapidx = mapidx
-        self.residues[res].molsetup_ignored = ignored_in_molsetup
-        self.residues[res].is_movable = False
-        return
+    # def add_molsetup_inflexible(self, res, mk_prep, cut_at_calpha=False):
+    #     molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep,
+    #                                                               is_protein_sidechain=False,
+    #                                                               cut_at_calpha=cut_at_calpha)  
+    #     self.residues[res].molsetup = molsetup
+    #     self.residues[res].molsetup_mapidx = mapidx
+    #     self.residues[res].molsetup_ignored = ignored_in_molsetup
+    #     self.residues[res].is_movable = False
+    #     return
 
     @staticmethod
     def print_residues_by_resname(removed_residues):
@@ -489,25 +505,21 @@ class LinkedRDKitChorizo:
         res_templates = {}
         for resn in params:
             if resn == "ambiguous": continue
-            resmol = Chem.MolFromSmiles(params[resn]['smiles'], ps)
-            # Using user provided parameters to assign properties to atoms.
-            for idx, atom in enumerate(resmol.GetAtoms()):
-                for propname in params[resn]:
-                    if propname in undesired_props:
-                        continue
-                    value = params[resn][propname][idx]
-                    if value is None:
-                        continue
-                    if type(value) == bool:
-                        atom.SetBoolProp(propname, value)
-                    elif type(value) == float:
-                        atom.SetDoubleProp(propname, value)
-                    elif type(value) == str:
-                        atom.SetProp(propname, value)
-                    else:
-                        raise RuntimeError("property type:", type(value), value, "propname:", propname, "resn:", resn)
-            res_templates[resn] = resmol
-        ambiguous = params["ambiguous"]
+            template = {}
+            atom_data = {}
+            atom_data_lengths = set() # to verify consistency
+            for propname in params[resn]:
+                if propname not in undesired_props:
+                    atom_data[propname] = params[resn][propname].copy()
+                    atom_data_lengths.add(len(atom_data[propname]))
+            rdkit_mol = Chem.MolFromSmiles(params[resn]['smiles'], ps)
+            assert len(atom_data_lengths) == 1, f"not all properties have same length for {resn=}"
+            assert list(atom_data_lengths)[0] == rdkit_mol.GetNumAtoms(), f"nr of atoms ({rdkit_mol.GetNumAtoms()}) and length of properties ({list(atom_data_lengths)[0]}) differs for {resn=}"
+
+            template["atom_data"] = atom_data
+            template["rdkit_mol"] = rdkit_mol 
+            res_templates[resn] = template
+        ambiguous = {key: values.copy() for key, values in params["ambiguous"].items() if key != "//"}
         return res_templates, ambiguous
     
     @staticmethod
@@ -603,9 +615,11 @@ class LinkedRDKitChorizo:
             raise ValueError("termini must be either 'C' or 'N', not %s" % termini.get(res, None))
         return resn
 
-    def parameterize_residues(self, termini, ambiguous):
+    def match_residues_templates(self, termini, ambiguous):
         ambiguous_chosen = {}
+        dedicated_attributes = ("atom_type", "charge", "atom_ignore") # dedicated attributes in MoleculeSetup
         for res in self.residues:
+
             # skip deleted resides
             if self.residues[res].user_deleted:
                 continue
@@ -638,7 +652,7 @@ class LinkedRDKitChorizo:
 
                 # TODO add to preprocessing to save time
                 # Create mol object and map between the pdb and residue template
-                resmol = Chem.Mol(self.res_templates[resn])
+                resmol = Chem.Mol(self.res_templates[resn]["rdkit_mol"])
                 n_atoms = len(resmol.GetAtoms())
                 atom_map = mapping_by_mcs(resmol, pdbmol)
                 nr_missing = n_atoms - len(atom_map)
@@ -647,18 +661,41 @@ class LinkedRDKitChorizo:
                     lowest_nr_missing = nr_missing
                     best_n_atoms = n_atoms
                     best_resn = resn
-            resmol = best_resmol
             n_atoms = best_n_atoms
             resn = best_resn
             if len(possible_resn) > 1:
                 ambiguous_chosen[res] = f"{chain}:{resn}:{resnum}"
-            #    print("%9s" % res, "-->", resn, "...out of", possible_resn)
 
             resmol = self.build_resmol(res, resn)
             if resmol is None:
                 self.residues[res].ignore_residue = True
             else:
                 self.residues[res].rdkit_mol = resmol
+                molsetup = MoleculeSetup()
+                coords = resmol.GetConformer().GetPositions()
+                for i, xyz in enumerate(coords):
+                    molsetup.coord[i] = xyz
+                    if "atom_name" in molsetup.atom_params:
+                        atom_name = molsetup.atom_params["atom_name"][i]
+                    else:
+                        atom_name = ""
+                    chain, _, resnum = res.split(":")
+                    molsetup.pdbinfo[i] = PDBAtomInfo(atom_name, resn, int(resnum), chain)
+
+                atom_data = self.res_templates[resn]["atom_data"]
+                for key, values in atom_data.items():
+                    if key in dedicated_attributes:
+                        d = getattr(molsetup, key)
+                        for i in range(resmol.GetNumAtoms()):
+                            d[i] = values[i]
+                    else:
+                        molsetup.atom_params[key] = values.copy()
+                r = self.residues[res]
+                n = len(molsetup.atom_ignore) # nr "particles" (real atoms + pseudo atoms)
+                r.molsetup = molsetup
+                r.molsetup_mapidx = {i: i for i in range(n)} # identity mapping (padded_mol == mol)
+                r.is_flexres_atom = [False for i in range(n)]
+
         return ambiguous_chosen
 
     def build_resmol(self, res, resn):
@@ -667,7 +704,8 @@ class LinkedRDKitChorizo:
         #TODO maybe embed in preprocessing depending on time
         #EmbedMolecule(resmol)
 
-        resmol = Chem.Mol(self.res_templates[resn])
+        resmol = Chem.Mol(self.res_templates[resn]["rdkit_mol"])
+        atom_data = self.res_templates[resn]["atom_data"]
         pdbmol = Chem.MolFromPDBBlock(self.residues[res].pdb_text, removeHs=False)
 
         atom_map = mapping_by_mcs(resmol, pdbmol)
@@ -676,15 +714,10 @@ class LinkedRDKitChorizo:
 
         resmol.GetConformer().Set3D(True)
         for idx, pdb_idx in atom_map.items():
-            pdb_atom = pdbmol.GetAtomWithIdx(pdb_idx)
             pdb_coord = pdbmol.GetConformer().GetAtomPosition(pdb_idx)
             resmol.GetConformer().SetAtomPosition(idx, pdb_coord)
 
-            resinfo = pdb_atom.GetPDBResidueInfo()
-            resmol.GetAtomWithIdx(idx).SetDoubleProp('occupancy', resinfo.GetOccupancy())
-            resmol.GetAtomWithIdx(idx).SetDoubleProp('temp_factor', resinfo.GetTempFactor())
-
-        missing_atoms = {resmol.GetAtomWithIdx(i).GetProp('atom_name'):i for i in range(resmol.GetNumAtoms()) if i not in atom_map.keys()}
+        missing_atoms = {atom_data["atom_name"][i]:i for i in range(resmol.GetNumAtoms()) if i not in atom_map.keys()}
 
         # Handle case of missing backbone amide H
         if 'H' in missing_atoms:
@@ -697,11 +730,9 @@ class LinkedRDKitChorizo:
             resmol.GetConformer().SetAtomPosition(missing_atoms['H'], h_pos)
             resmol.GetAtomWithIdx(missing_atoms['H']).SetBoolProp('computed', True)
             missing_atoms.pop('H')
-            
         
         missing_atom_elements = set([atom[0] for atom in missing_atoms.keys()])
         if len(missing_atom_elements) > 0:
-            
             resmol_h = Chem.RemoveHs(resmol)
             resmol_h = Chem.AddHs(resmol_h, addCoords=True)
             h_map = mapping_by_mcs(resmol, resmol_h)
@@ -731,22 +762,10 @@ class LinkedRDKitChorizo:
 
 
     def mk_parameterize_residue(self, res, mk_prep): 
-        molsetup, mapidx, ignored_in_molsetup = self.res_to_molsetup(res, mk_prep)
-        resmol = self.residues[res].rdkit_mol
-        for molsetup_idx, resmol_idx in mapidx.items(): # ignoring pseudo atoms, rdkit atom props no good for pseudos
-            atom = resmol.GetAtomWithIdx(resmol_idx)
-            atom.SetDoubleProp("q", molsetup.charge[molsetup_idx])
-            atom.SetProp("atom_type", molsetup.atom_type[molsetup_idx])
-            #atom.SetProp("ignore", molsetup.atom_ignore[molsetup_idx])
-            for key, value_array in molsetup.atom_params.items():
-                value = value_array[molsetup_idx]
-                if type(value) == float:
-                    atom.SetDoubleProp(key, value)
-                elif type(value) == bool:
-                    atom.SetBoolProp(key, value)
-                else:
-                    atom.SetProp(key, value)
-        # consider deleting existing properties/parameters
+        molsetup, mapidx, is_flexres_atom = self.res_to_molsetup(res, mk_prep)
+        self.residues[res].molsetup = molsetup
+        self.residues[res].mapidx = mapidx
+        self.residues[res].is_flexres_atom = is_flexres_atom
         return
                 
 
@@ -786,7 +805,7 @@ class LinkedRDKitChorizo:
                 pdbout += pdb_line.format("ATOM", atom_count, atom_name, resname, chain, resnum, icode, x, y, z, element)
         return pdbout
 
-    def export_static_atom_params(self, ignore_atom_types=("H",)):
+    def export_static_atom_params(self, ignore_atom_types=("H",)): # TODO now in molsetup.atom_ignore
         atom_params = {}
         counter_atoms = 0
         coords = []
@@ -799,7 +818,7 @@ class LinkedRDKitChorizo:
                 if len(ignore_atom_types) > 0 and props["atom_type"] in ignore_atom_types:
                     continue
                 if (self.residues[res_id].molsetup):
-                    if atom.GetIdx() not in self.residues[res_id].molsetup_ignored:
+                    if atom.GetIdx() not in self.residues[res_id].molsetup_ignored: # TODO BUG using wrong mol atom idx
                         continue
                 for key, value in props.items():
                     if key.startswith("_"):
@@ -977,7 +996,7 @@ class ChorizoResidue:
         self.rdkit_mol = None
         self.molsetup = None
         self.molsetup_mapidx = None
-        self.molsetup_ignored = None # Check about these data types/Do we want the default to be None or empty
+        self.is_flexres_atom = None # Check about these data types/Do we want the default to be None or empty
 
         # flags
         self.ignore_residue = False

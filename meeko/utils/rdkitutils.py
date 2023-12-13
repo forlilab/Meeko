@@ -20,8 +20,7 @@ PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
 def getPdbInfoNoNull(atom):
     """extract information for populating an ATOM/HETATM line
     in the PDB"""
-    # res = atom.GetResidue()
-    minfo = atom.GetMonomerInfo()
+    minfo = atom.GetMonomerInfo() # same as GetPDBResidueInfo
     if minfo is None:
         atomic_number = atom.GetAtomicNum()
         if atomic_number == 0:
