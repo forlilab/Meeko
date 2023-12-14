@@ -185,3 +185,20 @@ def test_residue_missing_atoms():
     expected_residue_data = {
         'A:ALA:1': ChorizoResidue('A:ALA:1', 'ATOM      1  N   ALA A   1       6.061   2.529  -3.691  1.00  0.00           N  \nATOM      2  CA  ALA A   1       5.518   2.870  -2.403  1.00  0.00           C  \nATOM      3  C   ALA A   1       4.995   1.645  -1.690  1.00  0.00           C  \nATOM      4  O   ALA A   1       5.294   0.515  -2.156  1.00  0.00           O  \n', None, None)
     }
+
+def test_AHHY_mk_prep_and_export():
+    with open(ahhy_example, "r") as f:
+        pdb_text = f.read()
+    chorizo = LinkedRDKitChorizo(pdb_text)
+    mk_prep1 = MoleculePreparation()
+    mk_prep2 = MoleculePreparation(add_atom_types=[{"smarts": "[CH2,CH3]", "new_param": 42.0}])
+    chorizo.mk_parameterize_residue("A:ALA:1", mk_prep1)
+    chorizo.mk_parameterize_residue("A:HIS:2", mk_prep2)
+    ap, xyz = chorizo.export_static_atom_params()
+    # all parameters musthave same size
+    assert len(set([len(values) for (key, values) in ap.items()])) == 1
+#    return ap
+
+# if __name__ == "__main__":
+#     ap = test_AHHY_mk_prep_and_export()
+

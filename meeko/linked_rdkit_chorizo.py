@@ -805,30 +805,31 @@ class LinkedRDKitChorizo:
                 pdbout += pdb_line.format("ATOM", atom_count, atom_name, resname, chain, resnum, icode, x, y, z, element)
         return pdbout
 
-    def export_static_atom_params(self, ignore_atom_types=("H",)): # TODO now in molsetup.atom_ignore
+    def export_static_atom_params(self):
         atom_params = {}
         counter_atoms = 0
         coords = []
-        for res_id in self.residues:
-            if self.residues[res_id].user_deleted or self.residues[res_id].ignore_residue:
-                continue
-            resmol = self.residues[res_id].rdkit_mol
-            for atom in resmol.GetAtoms():
-                props = atom.GetPropsAsDict()
-                if len(ignore_atom_types) > 0 and props["atom_type"] in ignore_atom_types:
-                    continue
-                if (self.residues[res_id].molsetup):
-                    if atom.GetIdx() not in self.residues[res_id].molsetup_ignored: # TODO BUG using wrong mol atom idx
-                        continue
-                for key, value in props.items():
-                    if key.startswith("_"):
-                        continue
-                    atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
-                    atom_params[key].append(value)
-                counter_atoms += 1
-                for key in set(atom_params).difference(props): # <key> missing in <props>
-                    atom_params[key].append(None) # fill in incomplete "row"
-                coords.append(resmol.GetConformer().GetAtomPosition(atom.GetIdx()))
+        dedicated_attribute = ("charge", "atom_type") # molsetup has a dedicated attribute
+        for res_id in self.getValidResidues():
+            molsetup = self.residues[res_id].molsetup
+            wanted_atom_indices = []
+            for i, ignore in molsetup.atom_ignore.items():
+                if not ignore and not self.residues[res_id].is_flexres_atom[i]:
+                    wanted_atom_indices.append(i)
+            for key, values in molsetup.atom_params.items():
+                atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
+                for i in wanted_atom_indices:
+                    atom_params[key].append(values[i])
+            for key in dedicated_attribute:
+                atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
+                values_dict = getattr(molsetup, key)
+                for i in wanted_atom_indices:
+                    atom_params[key].append(values_dict[i])
+            counter_atoms += len(wanted_atom_indices)
+            added_keys = set(molsetup.atom_params).union(dedicated_attribute)
+            for key in set(atom_params).difference(added_keys): # <key> missing in current molsetup
+                atom_params[key].extend([None] * len(wanted_atom_indices)) # fill in incomplete "row"
+            coords.extend(molsetup.coord[i])
         if hasattr(self, "param_rename"): # e.g. "gasteiger" -> "q"
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
@@ -969,10 +970,11 @@ class ChorizoResidue:
         the rdkit Mol object generated from this residue
     molsetup: RDKitMoleculeSetup or None
         the RDKitMoleculeSetup object generated from this residue
-    molsetup_mapidx: or None
-        needs info
-    molsetup_ignored: List[] or None
-        needs info
+    molsetup_mapidx: dict() or None
+        atom index map between molsetup (keys) and rdkit_mol (values)
+    is_flexres_atom: List[] of booleans, or None
+        indicates whether each atom is part of the flexible sidechain 
+        
 
     ignore_residue: bool
         marks residues that formerly were part of the removed_residues structure,
