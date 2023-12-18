@@ -336,9 +336,10 @@ if args.pdb is not None:
         suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
 
     if len(chorizo.get_ignored_residues()) > 0:
-        print("Automatically deleted %d residues" % len(chorizo.removed_residues))
-        print(json.dumps(chorizo.removed_residues, indent=4))
-        suggested_config["del_res"] = chorizo.removed_residues.copy()
+        removed_residues = chorizo.get_ignored_residues()
+        print("Automatically deleted %d residues" % len(removed_residues))
+        print(json.dumps(removed_residues, indent=4))
+        suggested_config["deleted_residues"] = removed_residues.copy()
 
     #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
     #ok, err = receptor.assign_types_charges()
