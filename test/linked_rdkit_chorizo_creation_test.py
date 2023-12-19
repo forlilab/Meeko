@@ -10,11 +10,14 @@ import pathlib
 import pytest
 import os
 
+import meeko
+pkgdir = pathlib.Path(meeko.__file__).parents[1]
+
 # Example Files (should be moved to tests directory eventually)
-ahhy_example = pathlib.Path("../example/chorizo/AHHY.pdb")
-just_one_ALA_missing = pathlib.Path("../example/chorizo/just-one-ALA-missing-CB.pdb")
-just_one_ALA = pathlib.Path("../example/chorizo/just-one-ALA.pdb")
-just_three_residues = pathlib.Path("../example/chorizo/just-three-residues.pdb")
+ahhy_example         = pkgdir / "example/chorizo/AHHY.pdb"
+just_one_ALA_missing = pkgdir / "example/chorizo/just-one-ALA-missing-CB.pdb"
+just_one_ALA         = pkgdir / "example/chorizo/just-one-ALA.pdb"
+just_three_residues  = pkgdir / "example/chorizo/just-three-residues.pdb"
 
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)

@@ -274,20 +274,18 @@ class LinkedRDKitChorizo:
                 if (cys_1 not in mutate_res_dict) and ((cys_2 not in mutate_res_dict) or resname_2 == "CYX"):
                     self._rename_residues({cys_1: cyx_1})
                     resmol = self.build_resmol(cyx_1, "CYX")
-                    if resmol is not None:
-                        self.residues[cyx_1].rdkit_mol = resmol
-                    else:
-                        self.residues[cyx_1].ignore_residue = True
+                    if resmol is None:
+                        raise RuntimeError("got resmol=None while converting {cys_1} to {cyx_1}")
+                    self.build_molsetup_wrap(cyx_1, "CYX", resmol)
             if resname_2 != "CYX":
                 cyx_2 = f"{chain_2}:CYX:{resnum_2}"
                 suggested_mutations[cys_2] = cyx_2
                 if (cys_2 not in mutate_res_dict) and ((cys_1 not in mutate_res_dict) or resname_1 == "CYX"):
                     self._rename_residues({cys_2: cyx_2})
                     resmol = self.build_resmol(cyx_2, "CYX")
-                    if resmol is not None:
-                        self.residues[cyx_2].rdkit_mol = resmol
-                    else:
-                        self.residues[cyx_2].ignore_residue = True
+                    if resmol is None:
+                        raise RuntimeError("got resmol=None while converting {cys_2} to {cyx_2}")
+                    self.build_molsetup_wrap(cyx_2, "CYX", resmol)
 
         """to_remove = []
         for res_id in self.getIgnoredResidues():
@@ -302,8 +300,7 @@ class LinkedRDKitChorizo:
         cys_list = {}
         cutoff = 2.5  # angstrom
         bridges = []
-        for res in self.residues:
-            if self.residues[res].ignore_residue: continue
+        for res in self.get_valid_residues():
             resname = res.split(":")[1]
             if resname in ["CYS", "CYX",
                            "CYM"]:  # TODO move "protected resnames" next to residue params they are associated with
@@ -622,7 +619,6 @@ class LinkedRDKitChorizo:
 
     def match_residues_templates(self, termini, ambiguous):
         ambiguous_chosen = {}
-        dedicated_attributes = ("atom_type", "charge", "atom_ignore") # dedicated attributes in MoleculeSetup
         for res in self.residues:
 
             # skip deleted resides
@@ -668,6 +664,7 @@ class LinkedRDKitChorizo:
                     best_resn = resn
             n_atoms = best_n_atoms
             resn = best_resn
+            # TODO missing atoms from PDB? Extra PDB atoms OK currently?
             if len(possible_resn) > 1:
                 ambiguous_chosen[res] = f"{chain}:{resn}:{resnum}"
 
@@ -675,33 +672,52 @@ class LinkedRDKitChorizo:
             if resmol is None:
                 self.residues[res].ignore_residue = True
             else:
-                self.residues[res].rdkit_mol = resmol
-                molsetup = MoleculeSetup()
-                coords = resmol.GetConformer().GetPositions()
-                for i, xyz in enumerate(coords):
-                    molsetup.coord[i] = xyz
-                    if "atom_name" in molsetup.atom_params:
-                        atom_name = molsetup.atom_params["atom_name"][i]
-                    else:
-                        atom_name = ""
-                    chain, _, resnum = res.split(":")
-                    molsetup.pdbinfo[i] = PDBAtomInfo(atom_name, resn, int(resnum), chain)
-
-                atom_data = self.res_templates[resn]["atom_data"]
-                for key, values in atom_data.items():
-                    if key in dedicated_attributes:
-                        d = getattr(molsetup, key)
-                        for i in range(resmol.GetNumAtoms()):
-                            d[i] = values[i]
-                    else:
-                        molsetup.atom_params[key] = values.copy()
-                r = self.residues[res]
-                n = len(molsetup.atom_ignore) # nr "particles" (real atoms + pseudo atoms)
-                r.molsetup = molsetup
-                r.molsetup_mapidx = {i: i for i in range(n)} # identity mapping (padded_mol == mol)
-                r.is_flexres_atom = [False for i in range(n)]
+                self.build_molsetup_wrap(res, resn, resmol)
 
         return ambiguous_chosen
+
+    def build_molsetup_wrap(self, res_id, resname, resmol):
+        self.residues[res_id].rdkit_mol = resmol
+        coords = resmol.GetConformer().GetPositions()
+        atom_data = self.res_templates[resname]["atom_data"]
+        chain, _, resnum = res_id.split(":")
+        molsetup, molsetup_mapidx, is_flexres_atom = self.build_molsetup(coords, atom_data, chain, resname, int(resnum))
+        self.residues[res_id].molsetup = molsetup
+        self.residues[res_id].molsetup_mapidx = molsetup_mapidx
+        self.residues[res_id].is_flexres_atom = is_flexres_atom
+        return
+
+    @staticmethod
+    def build_molsetup(coords, atom_data, chain, resn, resnum):
+
+        n = set([len(coords)] + [len(values) for (key, values) in atom_data.items()])
+        if len(n) != 1:
+            raise ValueError(f"mismatch in lengths of coords or atom_data {n}")
+        n = n.pop()
+
+        molsetup = MoleculeSetup()
+        dedicated_attributes_in_molsetup = ("atom_type", "charge", "atom_ignore")
+
+        for key, values in atom_data.items():
+            if key in dedicated_attributes_in_molsetup:
+                d = getattr(molsetup, key)
+                for i in range(n):
+                    d[i] = values[i]
+            else:
+                molsetup.atom_params[key] = values.copy()
+
+        for i, xyz in enumerate(coords):
+            molsetup.coord[i] = xyz
+            if "atom_name" in molsetup.atom_params:
+                atom_name = molsetup.atom_params["atom_name"][i]
+            else:
+                atom_name = ""
+            molsetup.pdbinfo[i] = PDBAtomInfo(atom_name, resn, resnum, chain)
+
+        molsetup_mapidx = {i: i for i in range(n)} # identity mapping (padded_mol == mol)
+        is_flexres_atom = [False for i in range(n)]
+            
+        return molsetup, molsetup_mapidx, is_flexres_atom
 
     def build_resmol(self, res, resn):
         # Transfer coordinates and info for any matched atoms
@@ -714,7 +730,6 @@ class LinkedRDKitChorizo:
         pdbmol = Chem.MolFromPDBBlock(self.residues[res].pdb_text, removeHs=False)
 
         atom_map = mapping_by_mcs(resmol, pdbmol)
-        # Chem.rdDepictor.Compute2DCoords(resmol)
         resmol.AddConformer(Chem.Conformer(resmol.GetNumAtoms()))
 
         resmol.GetConformer().Set3D(True)
@@ -749,7 +764,6 @@ class LinkedRDKitChorizo:
                     resmol.GetConformer().SetAtomPosition(h_idx, resmol_h.GetConformer().GetAtomPosition(h_map[h_idx]))
                     resmol.GetAtomWithIdx(h_idx).SetBoolProp('computed', True)
                     missing_atoms.pop(atom)
-        # TODO missing atoms from PDB? Extra PDB atoms OK currently?
         if len(missing_atoms) > 0:
             err = f'Could not add {res=} {missing_atoms=}'
             print(err)
