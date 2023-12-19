@@ -220,7 +220,7 @@ class LinkedRDKitChorizo:
         f"[C:5][C:6]=[O:7].{backbone_smarts}>>{backbone_smarts}[C:6](=[O:7])[C:5]")
 
     def __init__(self, pdb_string, params=chorizo_params, mutate_res_dict=None, termini=None, deleted_residues=None,
-                 allow_bad_res=False):
+                 allow_bad_res=False, skip_auto_disulfide=False):
         suggested_mutations = {}
 
         # Generates the residue representations based purely on the information in the pdb file to begin with.
@@ -237,7 +237,9 @@ class LinkedRDKitChorizo:
 
         # User-specified mutations to the residues that we're tracking
         self.mutate_res_dict = mutate_res_dict
-        if mutate_res_dict is not None:
+        if mutate_res_dict is None:
+            mutate_res_dict = {}
+        else:
             self._rename_residues(mutate_res_dict)
 
         # Loads user specified parameters
@@ -257,7 +259,10 @@ class LinkedRDKitChorizo:
             msg += self.print_residues_by_resname(removed_residues)
             raise RuntimeError(msg)
 
-        self.disulfide_bridges = self._find_disulfide_bridges()
+        if skip_auto_disulfide:
+            self.disulfide_bridges = []
+        else:
+            self.disulfide_bridges = self._find_disulfide_bridges()
         for cys_1, cys_2 in self.disulfide_bridges:
             chain_1, resname_1, resnum_1 = cys_1.split(":")
             chain_2, resname_2, resnum_2 = cys_2.split(":")

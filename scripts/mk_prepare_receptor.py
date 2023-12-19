@@ -142,6 +142,7 @@ def get_args():
     config_group.add_argument(      '--mk_config', help="[.json]")
     config_group.add_argument(      '--allow_bad_res', action="store_true",
                                                  help="delete residues with missing atoms instead of raising error")
+    config_group.add_argument(      '--skip_auto_disulfide', action="store_true")
     config_group.add_argument('-f', '--flexres', action="append", default=[],
                         help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
 
@@ -313,7 +314,7 @@ if args.pdb is not None:
     with open(args.pdb) as f:
         pdb_string = f.read()
     chorizo = LinkedRDKitChorizo(pdb_string, mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
-                                 allow_bad_res=args.allow_bad_res)
+                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
