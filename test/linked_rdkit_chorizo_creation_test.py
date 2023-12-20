@@ -19,6 +19,7 @@ just_one_ALA_missing = pkgdir / "example/chorizo/just-one-ALA-missing-CB.pdb"
 just_one_ALA         = pkgdir / "example/chorizo/just-one-ALA.pdb"
 just_three_residues  = pkgdir / "example/chorizo/just-three-residues.pdb"
 disulfide_bridge     = pkgdir / "test/linked_rdkit_chorizo_data/just_a_disulfide_bridge.pdb"
+insertion_code       = pkgdir / "test/linked_rdkit_chorizo_data/1igy_B_82-83_has-icode.pdb"
 
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
@@ -275,6 +276,15 @@ def test_disulfides():
     assert len(chorizo_thiols2.  residues["B:CYS:95"].molsetup.coord) == nr_CYS_atoms
     assert len(chorizo_disulfide.residues["B:CYX:22"].molsetup.coord) == nr_CYX_atoms
     assert len(chorizo_disulfide.residues["B:CYX:95"].molsetup.coord) == nr_CYX_atoms
+
+def test_insertion_code():
+    with open(insertion_code, "r") as f:
+        pdb_text = f.read()
+    chorizo = LinkedRDKitChorizo(pdb_text)
+    expected_res = set(("B:82", "B:82A", "B:82B", "B:82C", "B:83"))
+    res = set(chorizo.residues)
+    assert res == expected_res
+
 
 #    return ap
 
