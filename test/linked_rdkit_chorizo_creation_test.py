@@ -18,6 +18,7 @@ ahhy_example         = pkgdir / "example/chorizo/AHHY.pdb"
 just_one_ALA_missing = pkgdir / "example/chorizo/just-one-ALA-missing-CB.pdb"
 just_one_ALA         = pkgdir / "example/chorizo/just-one-ALA.pdb"
 just_three_residues  = pkgdir / "example/chorizo/just-three-residues.pdb"
+disulfide_bridge     = pkgdir / "test/linked_rdkit_chorizo_data/just_a_disulfide_bridge.pdb"
 
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
@@ -231,6 +232,50 @@ def test_AHHY_mk_prep_and_export():
     ap, xyz = chorizo.export_static_atom_params()
     # all parameters musthave same size
     assert len(set([len(values) for (key, values) in ap.items()])) == 1
+
+def test_disulfides():
+    with open(disulfide_bridge, "r") as f:
+        pdb_text = f.read()
+
+    # auto disulfide detection is enabled by default
+    chorizo_disulfide = LinkedRDKitChorizo(pdb_text)
+
+    # no disulfides by forcing CYS22 to remain CYS (not CYX) and by disabling global disulfide detection
+    no_CYX_for_CYS22 = {"B:CYS:22": "B:CYS:22"}
+    chorizo_thiols = LinkedRDKitChorizo(pdb_text, mutate_res_dict=no_CYX_for_CYS22)
+    chorizo_thiols2 = LinkedRDKitChorizo(pdb_text, skip_auto_disulfide=True)
+
+    # check residue names
+    assert "B:CYS:22" in chorizo_thiols.residues
+    assert "B:CYS:95" in chorizo_thiols.residues
+    assert "B:CYS:22" in chorizo_thiols2.residues
+    assert "B:CYS:95" in chorizo_thiols2.residues
+    assert "B:CYX:22" in chorizo_disulfide.residues
+    assert "B:CYX:95" in chorizo_disulfide.residues
+    assert "B:CYX:22" not in chorizo_thiols.residues
+    assert "B:CYX:95" not in chorizo_thiols.residues
+    assert "B:CYX:22" not in chorizo_thiols2.residues
+    assert "B:CYX:95" not in chorizo_thiols2.residues
+    assert "B:CYS:22" not in chorizo_disulfide.residues
+    assert "B:CYS:95" not in chorizo_disulfide.residues
+
+    # check number of atoms 
+    nr_CYS_atoms = 11
+    nr_CYX_atoms = 10
+    assert chorizo_thiols.   residues["B:CYS:22"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
+    assert chorizo_thiols.   residues["B:CYS:95"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
+    assert chorizo_thiols2.  residues["B:CYS:22"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
+    assert chorizo_thiols2.  residues["B:CYS:95"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
+    assert chorizo_disulfide.residues["B:CYX:22"].rdkit_mol.GetNumAtoms() == nr_CYX_atoms
+    assert chorizo_disulfide.residues["B:CYX:95"].rdkit_mol.GetNumAtoms() == nr_CYX_atoms
+
+    assert len(chorizo_thiols.   residues["B:CYS:22"].molsetup.coord) == nr_CYS_atoms
+    assert len(chorizo_thiols.   residues["B:CYS:95"].molsetup.coord) == nr_CYS_atoms
+    assert len(chorizo_thiols2.  residues["B:CYS:22"].molsetup.coord) == nr_CYS_atoms
+    assert len(chorizo_thiols2.  residues["B:CYS:95"].molsetup.coord) == nr_CYS_atoms
+    assert len(chorizo_disulfide.residues["B:CYX:22"].molsetup.coord) == nr_CYX_atoms
+    assert len(chorizo_disulfide.residues["B:CYX:95"].molsetup.coord) == nr_CYX_atoms
+
 #    return ap
 
 # if __name__ == "__main__":
