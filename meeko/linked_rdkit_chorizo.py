@@ -445,11 +445,11 @@ class LinkedRDKitChorizo:
         if len(molsetups) > 1:
             raise NotImplementedError("multiple molsetups not yet implemented for flexres")
         molsetup = molsetups[0]
-        molsetup.is_sidechain = is_protein_sidechain # TODO not sure this belongs here now that all residues have molsetups
+        molsetup.is_sidechain = is_protein_sidechain
         is_flexres_atom = []
         for atom_index in molsetup.atom_ignore:
             if atom_index < len(is_res_atom):
-                is_res = is_res_atom[atom_index]  # Hs from Chem.AddHs beyond length of is_res_atom
+                is_res = is_res_atom[atom_index] # Hs from Chem.AddHs beyond length of is_res_atom
             else:
                 is_res = False
             molsetup.atom_ignore[atom_index] |= not is_res # ignore padding atoms
@@ -466,12 +466,14 @@ class LinkedRDKitChorizo:
         not_ignored_idxs = []
         charges = []
         for i, q in molsetup.charge.items():  # charge is ordered dict
-            if i in mapidx:
+            if i in mapidx: # TODO offsite not in mapidx
                 charges.append(q)
                 not_ignored_idxs.append(i)
         charges = rectify_charges(charges, net_charge, decimals=3)
+        pdbinfo = self.residues[res].molsetup.pdbinfo
         for i, j in enumerate(not_ignored_idxs):
             molsetup.charge[j] = charges[i]
+            molsetup.pdbinfo[j] = pdbinfo[mapidx[j]]
         return molsetup, mapidx, is_flexres_atom
 
     def flexibilize_protein_sidechain(self, res, mk_prep, cut_at_calpha=False):
