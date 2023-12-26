@@ -367,13 +367,15 @@ class RDKitMolCreate:
         for mol in mol_list:
             if mol is None:
                 continue
-            data = json.loads(mol.GetProp("meeko"))
-            clean_extend(props, data)
+            if mol.HasProp("meeko"):
+                data = json.loads(mol.GetProp("meeko"))
+                clean_extend(props, data)
             if combined_mol is None: # first iteration
                 combined_mol = mol
             else:
                 combined_mol = Chem.CombineMols(combined_mol, mol)
-        combined_mol.SetProp("meeko", json.dumps(props))
+        if len(props) > 0:
+            combined_mol.SetProp("meeko", json.dumps(props))
         return combined_mol
 
     @classmethod
