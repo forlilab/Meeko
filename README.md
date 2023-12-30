@@ -278,6 +278,11 @@ mk_prepare_ligand.py\
     -o prepared.pdbqt
 ```
 
+Prody is required for preparing ligands as flexible sidechains.
+Often, `pip install prody` suffices to install Prody in the currently
+active virtual environment (e.g., conda). For more detailed installation
+instructions visit http://prody.csb.pitt.edu/downloads/.
+
 ## Reactive Docking
 
 ### 1. Prepare protein with waterkit
