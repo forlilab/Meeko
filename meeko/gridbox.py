@@ -150,5 +150,11 @@ def calc_box(coord_array, padding):
     size_z = z_max - z_min + 2 * padding
     return (center_x, center_y, center_z), (size_x, size_y, size_z)
 
+def box_to_vina_string(gridcenter, gridsizes):
+    dims = ['x', 'y', 'z']
+    centers_str = "\n".join([f"center_{d} = {gridcenter[i]}" for i, d in enumerate(dims)])
+    sizes_str = "\n".join([f"size_{d} = {gridsizes[i]}" for i, d in enumerate(dims)])
+    return centers_str + "\n" + sizes_str
+
 boron_silicon_atompar  = "atom_par Si     4.10  0.200  35.8235  -0.00143  0.0  0.0  0  -1  -1  6" + os_linesep
 boron_silicon_atompar += "atom_par B      3.84  0.155  29.6478  -0.00152  0.0  0.0  0  -1  -1  0" + os_linesep

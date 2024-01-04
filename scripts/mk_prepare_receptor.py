@@ -153,6 +153,7 @@ def get_args():
     box_group.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
     box_group.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
     box_group.add_argument('--padding', help="padding around reference ligand [A]", type=float)
+    box_group.add_argument('--write_vinabox', help='Write vina-style gridbox file', action='store_true')
 
 
     #reactive_group = parser.add_argument_group("Reactive")
@@ -469,6 +470,14 @@ if not args.skip_gpf:
     with open(box_fn, "w") as f:
         f.write(gridbox.box_to_pdb_string(box_center, npts))
 
+    # write gridbox vina format
+    if args.write_vinabox:
+        box_vina_fn = pathlib.Path(rigid_fn).with_suffix("_box.txt")
+        written_files_log["filename"].append(box_vina_fn)
+        written_files_log["description"].append("Vina-style box dimension file")
+        with open(box_vina_fn, "w") as f:
+            f.write(gridbox.box_to_vina_string(box_center, box_size))
+    
     # check all flexres are inside the box
     if len(reactive_flexres) > 0:
         any_outside = False
