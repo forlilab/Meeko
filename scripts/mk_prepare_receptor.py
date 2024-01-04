@@ -337,9 +337,9 @@ if args.pdb is not None:
         suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
 
     if len(chorizo.getIgnoredResidues()) > 0:
-        print("Automatically deleted %d residues" % len(chorizo.removed_residues))
-        print(json.dumps(chorizo.removed_residues, indent=4))
-        suggested_config["del_res"] = chorizo.removed_residues.copy()
+        print("Automatically deleted %d residues" % len(chorizo.deleted_residues))
+        print(json.dumps(chorizo.deleted_residues, indent=4))
+        suggested_config["del_res"] = chorizo.deleted_residues.copy()
 
     #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
     #ok, err = receptor.assign_types_charges()
@@ -472,7 +472,7 @@ if not args.skip_gpf:
 
     # write gridbox vina format
     if args.write_vinabox:
-        box_vina_fn = pathlib.Path(rigid_fn).with_suffix("_box.txt")
+        box_vina_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.txt"))
         written_files_log["filename"].append(box_vina_fn)
         written_files_log["description"].append("Vina-style box dimension file")
         with open(box_vina_fn, "w") as f:
