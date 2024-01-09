@@ -20,7 +20,6 @@ from .utils import utils
 from .utils.geomutils import calcDihedral
 from .receptor_pdbqt import PDBQTReceptor
 
-
 try:
     from openbabel import openbabel as ob
     from .utils import obutils
@@ -35,7 +34,7 @@ except ImportError as _import_misctools_error:
     _has_misctools = False
 else:
     _has_misctools = True
-    
+
 
 # TODO modify so that there are no more dictionaries and only list/arrays (fix me)
 # methods like add_x,del_x,get_x will deal with indexing (fix me)
@@ -54,11 +53,85 @@ else:
 # TODO change all attributes_to_copy to have underscore ?
 
 class MoleculeSetup:
+    # TODO: fill out additional detail for docstring
     """ mol: molecule structurally prepared with explicit hydrogens
 
         the setup provides:
             - data storage
             - SMARTS matcher for all atom typers
+
+    Base molecule setup class, providing a way to store information about molecules
+    for a number of purposes.
+
+    Attributes
+    ----------
+    atom_pseudo: List[]
+        a list of indices of pseudo-atoms?
+
+    coord: OrderedDict()
+        a mapping between atom index and coordinates
+    charge: OrderedDict()
+        a mapping between atom index and charge
+    pdbinfo: OrderedDict()
+        a mapping between atom index and pdb data for that atom
+    atom_type: OrderedDict()
+        TODO: if these values are meant to be consistent, then this should be an enum?
+        a mapping from some sort of index (presumably an int) to atom type (string)
+    atom_params: dict()
+        a mapping from the name of a parameter (string) to a parameter
+
+    dihedral_interactions: list[]
+        a list of strings I think?
+    dihedral_partaking_atoms: dict()
+        a mapping from atom index (int?) to dihedral index (int?)
+    dihedral_labels: dict()
+        a mapping from atom index to a string dihedral label
+
+    atom_ignore: OrderedDict()
+        a mapping from atom index to the bool that indicates whether it should be ignored
+    chiral: OrderedDict()
+        a mapping from atom index to a bool that indicates whether an atom is chiral
+    atom_true_count: int
+        the number of atoms being represented in this molsetup
+    graph: OrderedDict()
+        a mapping from atom index (int) to a list of neighboring atom indices?
+    bond: OrderedDict()
+        a mapping from bond id (int?) to a dictionary containing two elements. The elements are
+        bond_order (int) and rotable (bool).
+    element: OrderedDict()
+        represents the atomic number of the atom index. A mapping from atom index to atomic number
+    interaction_vector: OrderedDict()
+        a mapping from atom index to a list representing directional interaction vectors for atom idx
+    flexibility_model: dict()
+        unclear what exactly is consistently contained by this dict, but it seems to be a keyword to value dictionary
+    ring_closure_info: dict() containing two elements.
+        desperately in need of refactoring.
+    restraints: list[]
+        list of restraint dataclasses
+    is_sidechain: bool
+        indicates whether this molsetup pertains to a sidechain
+    rmsd_symmetry_indices: empty tuple
+        only seems to be set in RDKit version of molsetup, at which point it set to be equal to tuples of the indices
+        of the molecule's atoms that match a substructure query.
+
+    rings: dict()
+        store information about rings, like if they have corners that can be flipped and the graph of atoms that belong
+        to them. Mapping from ring id (string?) to a dictionary with two elements:
+            'corner_flip': bool
+            'graph': dict()
+    rings_aromatic: list[]
+        contains the list of ring_id items that are aromatic
+    atom_to_ring_id: dict()
+        mapping of atom index to ring id of each atom belonging to the ring
+    ring_corners: dict()
+        unclear what this is a mapping of, but is used to store corner flexibility for the rings
+
+    name: string or None
+        should this be here or does it only need to be in the RDKit version of this class.
+        either contains the name of the molecule as provided in RDKit or is None.
+    rotamers: list[]
+        A list of rotamers, where each rotamer is represented as a dictionary mapping from bond_id (presumably a string
+        or an int) to an int or a float representing something
     """
 
     def __init__(self):
@@ -102,24 +175,66 @@ class MoleculeSetup:
     @classmethod
     def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
                  assign_charges=True):
+        """
+        Creates an instance of a molsetup object and loads data into it from an RDKit mol object?
+
+        Parameters
+        ----------
+        mol: rdkit.Chem.rdchem.Mol
+            RDKit Mol to load data from.
+        keep_chorded_rings: bool
+            needs info
+        keep_equivalent_rings: bool
+            needs info
+        assign_charges: bool
+            needs info
+
+        Returns
+        -------
+        A new molsetup object with data from the provided mol.
+        The following fields would be populated: mol, atom_true_count_, name,
+
+        Note
+        ----
+        Why is this implemented here in this way when all of the methods it calls are methods we want the
+        inheriting classes to override? Its call signatures also seem to be consistent with the way methods are
+        defined in a very specific subclass of this class, so it would behoove us to consider the sublass/superclass
+        structure here.
+        """
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
         molsetup.name = molsetup.get_mol_name()
-        molsetup.init_atom(assign_charges)
+        molsetup.init_atom(assign_charges)  # find a way to standardize signature across classes
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         return molsetup
 
     @classmethod
     def from_prmtop_inpcrd(cls, prmtop, crd_filename):
+        """
+        Creates an instance of a molsetup object and loads data into it from prmtop and a crd file.
+
+        Parameters
+        ----------
+        prmtop: unclear, should be renamed
+        crd_filename: presumable the name of a file containing coordinates
+
+        Returns
+        -------
+        A molsetup populated with data from the input prmtop and crd file.
+
+        Note
+        ____
+        Is this used anywhere or should it be deprecated. Or can it be deprecated.
+        """
         molsetup = cls()
         x, y, z = prmtop._coords_from_inpcrd(crd_filename)
         all_atom_indices = prmtop.vmdsel("")
         if len(all_atom_indices) != len(x):
             raise RuntimeError("number of prmtop atoms differs from x coordinates")
         prmtop.upper_atom_types = prmtop._gen_gaff_uppercase()
-        charges = [chrg/18.2223 for chrg in prmtop.read_flag("CHARGE")]
+        charges = [chrg / 18.2223 for chrg in prmtop.read_flag("CHARGE")]
         atomic_nrs = prmtop.read_flag("ATOMIC_NUMBER")
         pdbqt_string = ""
         molsetup.atom_params["rmin_half"] = []
@@ -132,32 +247,32 @@ class MoleculeSetup:
         for i in prmtop.atom_sel_idx:
             pdbinfo = rdkitutils.PDBAtomInfo(
                 name=prmtop.pdb_atom_name[i],
-                resName = prmtop.pdb_resname[i],
-                resNum = int(prmtop.pdb_resid[i]),
-                chain = " ",
+                resName=prmtop.pdb_resname[i],
+                resNum=int(prmtop.pdb_resid[i]),
+                chain=" ",
             )
             atype = prmtop.upper_atom_types[i]
             molsetup.add_atom(
                 i,
-                coord = (x[i], y[i], z[i]),
-                charge = charges[i],
-                atom_type = atype,
-                element = atomic_nrs[i], 
-                pdbinfo = pdbinfo,
-                chiral = False,
-                ignore = False,
-                add_atom_params = {
+                coord=(x[i], y[i], z[i]),
+                charge=charges[i],
+                atom_type=atype,
+                element=atomic_nrs[i],
+                pdbinfo=pdbinfo,
+                chiral=False,
+                ignore=False,
+                add_atom_params={
                     "rmin_half": vdw_by_atype[atype]["rmin_half"],
                     "epsilon": vdw_by_atype[atype]["epsilon"],
                 }
             )
-            #molsetup.atom_params["rmin_half"].append(vdw_by_atype[atype]["rmin_half"])
-            #molsetup.atom_params["epsilon"].append(vdw_by_atype[atype]["epsilon"])
-        bond_order = 1 # the prmtop does not have bond orders, so we set all to 1
+            # molsetup.atom_params["rmin_half"].append(vdw_by_atype[atype]["rmin_half"])
+            # molsetup.atom_params["epsilon"].append(vdw_by_atype[atype]["epsilon"])
+        bond_order = 1  # the prmtop does not have bond orders, so we set all to 1
         bonds_inc_h = prmtop.read_flag("BONDS_INC_HYDROGEN")
         bonds_not_h = prmtop.read_flag("BONDS_WITHOUT_HYDROGEN")
         bonds = bonds_inc_h + bonds_not_h
-        nr_bonds = int(len(bonds) / 3) 
+        nr_bonds = int(len(bonds) / 3)
         for index_bond in range(nr_bonds):
             i_atom = int(bonds[index_bond * 3 + 0] / 3)
             j_atom = int(bonds[index_bond * 3 + 1] / 3)
@@ -165,9 +280,27 @@ class MoleculeSetup:
                 molsetup.add_bond(i_atom, j_atom, order=bond_order, rotatable=False)
         return molsetup
 
-
     @classmethod
     def from_pdb_and_residue_params(cls, pdb_fname, residue_params_fname=None):
+        """
+        Creates an instance of a molsetup object and loads data into it from a pdb file and a parameter file.
+
+        Parameters
+        ----------
+        pdb_fname: string
+            the filepath for a pdb file to load data from
+        residue_params_fname: string or None
+            the filepath for residue parameters to be used in the molsetup
+        Returns
+        -------
+        A molsetup populated with data based off of the pdb, and if it was provided, the input parameters.
+
+        Note
+        ----
+        Are the residue parameters being used at all in this? Also, this does not seem to be used anywhere,
+        is this something we want to consider deprecating. The coordinate part of the atom being added seems to be
+        inconsistent,
+        """
         if residue_params_fname is not None:
             with open(residue_params_fname) as f:
                 residue_params = json.load(f)
@@ -191,7 +324,7 @@ class MoleculeSetup:
                 res_list.append(resn)
                 atom_names_list.append([])
             last_res = res
-            atom_name = line[12:16].strip() 
+            atom_name = line[12:16].strip()
             atom_names_list[-1].append(atom_name)
             x.append(float(line[30:38]))
             y.append(float(line[38:46]))
@@ -217,36 +350,56 @@ class MoleculeSetup:
             all_ok &= ok
             all_err += err
             for key in p:
-                atom_params.setdefault(key, [None]*atom_counter)
+                atom_params.setdefault(key, [None] * atom_counter)
                 atom_params[key].extend(p[key])
             atom_counter += nr_params_to_add
             for key in atom_params:
                 if key not in p:
-                    atom_params[key].extend([None]*nr_params_to_add)
-    
+                    atom_params[key].extend([None] * nr_params_to_add)
+
         if not all_ok:
             raise RuntimeError(all_err)
-        
+
         molsetup = cls()
         charges = atom_params.pop("gasteiger")
         atypes = atom_params.pop("atom_types")
         for i in range(len(x)):
             molsetup.add_atom(
                 i,
-                coord = (x[i], y[i], z[i]),
-                charge = charges[i],
-                atom_type = atypes[i],
-                element = None,
-                pdbinfo = pdbinfo,
-                chiral = False,
-                ignore = False,
+                coord=(x[i], y[i], z[i]),
+                charge=charges[i],
+                atom_type=atypes[i],
+                element=None,
+                pdbinfo=pdbinfo,
+                chiral=False,
+                ignore=False,
             )
 
         molsetup.atom_params = atom_params
 
-        return molsetup 
+        return molsetup
 
     def set_types_from_uniq_atom_params(self, uniq_atom_params, prefix):
+        """
+        Uses a UniqAtomParams object to set the atom_type attribute in the molsetup object. Adds the specified prefix
+        to each of the atom types.
+
+        Parameters
+        ----------
+        uniq_atom_params: UniqAtomParams
+            A uniq atom params object to extract the atom_types from
+        prefix: string
+            A prefix to be appended to all the atom_types.
+
+        Returns
+        -------
+        None
+
+        Note
+        ----
+        Deprecation candidate? What is this being used for/kept around for?
+
+        """
         param_idxs = uniq_atom_params.get_indices_from_atom_params(self.atom_params)
         if len(param_idxs) != len(self.atom_type):
             raise RuntimeError("{len(param_idxs)} parameters but {len(self.atom_type)} in molsetup")
@@ -254,10 +407,9 @@ class MoleculeSetup:
             self.atom_type[i] = f"{prefix}{j}"
         return None
 
-
-    def add_atom(self, idx=None, coord=np.array([0.0, 0.0,0.0], dtype='float'),
-            element=None, charge=0.0, atom_type=None, pdbinfo=None,
-            ignore=False, chiral=False, overwrite=False, add_atom_params=None):
+    def add_atom(self, idx=None, coord=np.array([0.0, 0.0, 0.0], dtype='float'),
+                 element=None, charge=0.0, atom_type=None, pdbinfo=None,
+                 ignore=False, chiral=False, overwrite=False, add_atom_params=None):
         """ function to add all atom information at once;
             every property is optional
         """
@@ -294,11 +446,10 @@ class MoleculeSetup:
         # update bonds bonds (using the neighbor graph)
         # If pseudo-atom, update other information, too
 
-
     # pseudo-atoms
-    def add_pseudo(self, coord=np.array([0.0,0.0,0.0], dtype='float'), charge=0.0,
-            anchor_list=None, atom_type=None, rotatable=False,
-            pdbinfo=None, directional_vectors=None, ignore=False, overwrite=False):
+    def add_pseudo(self, coord=np.array([0.0, 0.0, 0.0], dtype='float'), charge=0.0,
+                   anchor_list=None, atom_type=None, rotatable=False,
+                   pdbinfo=None, directional_vectors=None, ignore=False, overwrite=False):
         """ add a new pseudoatom
             multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
 
@@ -311,12 +462,12 @@ class MoleculeSetup:
         self.atom_pseudo.append(idx)
         # add the pseudoatom information to the atoms
         self.add_atom(idx=idx, coord=coord,
-                element=0,
-                charge=charge,
-                atom_type=atom_type,
-                pdbinfo=pdbinfo,
-                ignore=ignore,
-                overwrite=overwrite)
+                      element=0,
+                      charge=charge,
+                      atom_type=atom_type,
+                      pdbinfo=pdbinfo,
+                      ignore=ignore,
+                      overwrite=overwrite)
         # anchor atoms
         if not anchor_list is None:
             for anchor in anchor_list:
@@ -439,7 +590,7 @@ class MoleculeSetup:
         """
         indices = list(self.coord.keys())
         if true_atoms_only:
-            return [ x for x in indices if not x in self.atom_pseudo ]
+            return [x for x in indices if not x in self.atom_pseudo]
         return indices
 
     # interaction vectors
@@ -529,7 +680,7 @@ class MoleculeSetup:
         n = len(ring)
         bonds = []
         for i in range(n):
-            bond = (ring[i], ring[(i+1) % n])
+            bond = (ring[i], ring[(i + 1) % n])
             bond = (min(bond), max(bond))
             bonds.append(bond)
         return bonds
@@ -576,7 +727,7 @@ class MoleculeSetup:
             self.charge[neighbor_index] += self.get_charge(index)
             self.charge[index] = 0.0
             self.set_ignore(index, True)
-            
+
     def init_atom(self):
         """ iterate through molecule atoms and build the atoms table """
         raise NotImplementedError("This method must be overloaded by inheriting class")
@@ -606,12 +757,12 @@ class MoleculeSetup:
                     return False
             return True
 
-        hjk_ring_detection = utils.HJKRingDetection(self.graph) 
-        rings = hjk_ring_detection.scan(keep_chorded_rings, keep_equivalent_rings) # list of tuples of atom indices
+        hjk_ring_detection = utils.HJKRingDetection(self.graph)
+        rings = hjk_ring_detection.scan(keep_chorded_rings, keep_equivalent_rings)  # list of tuples of atom indices
         for ring_atom_idxs in rings:
             if isRingAromatic(ring_atom_idxs):
                 self.rings_aromatic.append(ring_atom_idxs)
-            self.rings[ring_atom_idxs] = {'corner_flip':False}
+            self.rings[ring_atom_idxs] = {'corner_flip': False}
             graph = {}
             for atom_idx in ring_atom_idxs:
                 self.atom_to_ring_id[atom_idx].append(ring_atom_idxs)
@@ -680,7 +831,7 @@ class MoleculeSetup:
             x, y, z = self.coord[index]
             string += "%3s %12.6f %12.6f %12.6f\n" % (element, x, y, z)
         return string
-            
+
     def show(self):
         tot_charge = 0
 
@@ -690,7 +841,7 @@ class MoleculeSetup:
         print("-----+----------------------------+--------+---+----------+--------------- . . . ")
         for k, v in list(self.coord.items()):
             print("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
-                  self.charge[k], self.atom_ignore[k]),
+                                                                 self.charge[k], self.atom_ignore[k]),
                   "| % -8s |" % self.atom_type[k],
                   self.graph[k])
             tot_charge += self.charge[k]
@@ -713,6 +864,7 @@ class MoleculeSetup:
 
         print('')
 
+
 class RDKitMoleculeSetup(MoleculeSetup):
 
     @classmethod
@@ -720,14 +872,14 @@ class RDKitMoleculeSetup(MoleculeSetup):
                  assign_charges=True, conformer_id=-1):
         if cls.has_implicit_hydrogens(mol):
             raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
-        if mol.GetNumConformers() == 0: 
+        if mol.GetNumConformers() == 0:
             raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
-        rdkit_conformer = mol.GetConformer(conformer_id) 
+        rdkit_conformer = mol.GetConformer(conformer_id)
         if not rdkit_conformer.Is3D():
             warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
             RDKitMoleculeSetup.warned_not3D = True
         if mol.GetNumConformers() > 1 and conformer_id == -1:
-            msg = "RDKit molecule has multiple conformers. Considering only the first one." 
+            msg = "RDKit molecule has multiple conformers. Considering only the first one."
             print(msg, file=sys.stderr)
         molsetup = cls()
         molsetup.mol = mol
@@ -743,7 +895,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
         # the atom index, because not all atoms need to have new coordinates specified
         # Unspecified hydrogen positions bonded to modified heavy atom positions
         # are to be calculated "on-the-fly".
-        molsetup.modified_atom_positions = [] # list of dictionaries where keys are atom indices
+        molsetup.modified_atom_positions = []  # list of dictionaries where keys are atom indices
 
         return molsetup
 
@@ -807,7 +959,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
         mol_no_ignore = self.mol
 
         # 3D SDF files written by other toolkits (OEChem, ChemAxon)
-        # seem to not include the chiral flag in the bonds block, only in
+        # seem to not include the chiral fla  g in the bonds block, only in
         # the atoms block. RDKit ignores the atoms chiral flag as per the
         # spec. When reading SDF (e.g. from PubChem/PDB),
         # we may need to have RDKit assign stereo from coordinates, see:
@@ -818,8 +970,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
         # does not remove Hs with queries by default
         # https://github.com/forlilab/Meeko/issues/62
         # https://github.com/rdkit/rdkit/issues/6615
-        ps.removeWithQuery = True 
-        mol_noH = Chem.RemoveHs(mol_no_ignore, ps) # imines (=NH) may become chiral
+        ps.removeWithQuery = True
+        mol_noH = Chem.RemoveHs(mol_no_ignore, ps)  # imines (=NH) may become chiral
         # stereo imines [H]/N=C keep [H] after RemoveHs()
         # H isotopes also kept after RemoveHs()
         atomic_num_mol_noH = [atom.GetAtomicNum() for atom in mol_noH.GetAtoms()]
@@ -831,20 +983,20 @@ class RDKitMoleculeSetup(MoleculeSetup):
                 if atomic_num_mol_noH[i] > 1:
                     break
                 h_atom = mol_noH.GetAtomWithIdx(len(noH_to_H))
-                assert(h_atom.GetAtomicNum() == 1)
+                assert (h_atom.GetAtomicNum() == 1)
                 neighbors = h_atom.GetNeighbors()
-                assert(len(neighbors) == 1)
+                assert (len(neighbors) == 1)
                 parents_of_hs[len(noH_to_H)] = neighbors[0].GetIdx()
                 noH_to_H.append('H')
             noH_to_H.append(index)
         extra_hydrogens = len(atomic_num_mol_noH) - len(noH_to_H)
         if extra_hydrogens > 0:
-            assert(set(atomic_num_mol_noH[len(noH_to_H):]) == {1})
+            assert (set(atomic_num_mol_noH[len(noH_to_H):]) == {1})
         for i in range(extra_hydrogens):
             h_atom = mol_noH.GetAtomWithIdx(len(noH_to_H))
-            assert(h_atom.GetAtomicNum() == 1)
+            assert (h_atom.GetAtomicNum() == 1)
             neighbors = h_atom.GetNeighbors()
-            assert(len(neighbors) == 1)
+            assert (len(neighbors) == 1)
             parents_of_hs[len(noH_to_H)] = neighbors[0].GetIdx()
             noH_to_H.append('H')
 
@@ -859,9 +1011,10 @@ class RDKitMoleculeSetup(MoleculeSetup):
             hs_by_parent.setdefault(pidx, [])
             hs_by_parent[pidx].append(hidx)
         for pidx, hidxs in hs_by_parent.items():
-            siblings_of_h = [atom for atom in mol_no_ignore.GetAtomWithIdx(noH_to_H[pidx]).GetNeighbors() if atom.GetAtomicNum() == 1]
+            siblings_of_h = [atom for atom in mol_no_ignore.GetAtomWithIdx(noH_to_H[pidx]).GetNeighbors() if
+                             atom.GetAtomicNum() == 1]
             sortidx = [i for i, j in sorted(list(enumerate(siblings_of_h)), key=lambda x: x[1].GetIdx())]
-            if len(hidxs) == len(siblings_of_h):  
+            if len(hidxs) == len(siblings_of_h):
                 # This is the easy case, just map H to each other in the order they appear
                 for i, hidx in enumerate(hidxs):
                     noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
@@ -876,7 +1029,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
                             matches.append(i)
                             break
                 if len(matches) != len(hidxs):
-                    raise RuntimeError("Number of matched isotopes %d differs from query Hs: %d" % (len(matches), len(hidxs)))
+                    raise RuntimeError(
+                        "Number of matched isotopes %d differs from query Hs: %d" % (len(matches), len(hidxs)))
                 for hidx, i in zip(hidxs, matches):
                     noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
             else:
@@ -884,10 +1038,10 @@ class RDKitMoleculeSetup(MoleculeSetup):
 
         smiles = Chem.MolToSmiles(mol_noH)
         order_string = mol_noH.GetProp("_smilesAtomOutputOrder")
-        order_string = order_string.replace(',]', ']') # remove trailing comma
-        order = json.loads(order_string) # mol_noH to smiles
+        order_string = order_string.replace(',]', ']')  # remove trailing comma
+        order = json.loads(order_string)  # mol_noH to smiles
         order = list(np.argsort(order))
-        order = {noH_to_H[i]: order[i]+1 for i in range(len(order))} # 1-index
+        order = {noH_to_H[i]: order[i] + 1 for i in range(len(order))}  # 1-index
         return smiles, order
 
     def find_pattern(self, smarts):
@@ -904,7 +1058,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
         return self.mol.GetNumAtoms()
 
     def get_equivalent_atoms(self):
-       return list(Chem.CanonicalRankAtoms(self.mol, breakTies=False))
+        return list(Chem.CanonicalRankAtoms(self.mol, breakTies=False))
 
     @staticmethod
     def get_symmetries_for_rmsd(mol, max_matches=17):
@@ -915,7 +1069,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
                 molname = mol.GetProp("_Name")
             else:
                 molname = ""
-            print("warning: found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd" % max_matches)
+            print(
+                "warning: found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd" % max_matches)
             print("Maybe this molecule is \"too\" symmetric? %s" % molname, Chem.MolToSmiles(mol_noHs))
         return matches
 
@@ -943,13 +1098,13 @@ class RDKitMoleculeSetup(MoleculeSetup):
             if idx in chiral_info:
                 chiral = chiral_info[idx]
             self.add_atom(idx,
-                    coord=coords[idx],
-                    element=a.GetAtomicNum(),
-                    charge=charges[idx],
-                    atom_type=None,
-                    pdbinfo = rdkitutils.getPdbInfoNoNull(a),
-                    chiral=False,
-                    ignore=False)
+                          coord=coords[idx],
+                          element=a.GetAtomicNum(),
+                          charge=charges[idx],
+                          atom_type=None,
+                          pdbinfo=rdkitutils.getPdbInfoNoNull(a),
+                          chiral=False,
+                          ignore=False)
 
     def init_bond(self):
         """ initialize bond information """
@@ -958,7 +1113,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
             idx2 = b.GetEndAtomIdx()
             bond_order = int(b.GetBondType())
             # fix the RDKit aromatic type (FIXME)
-            if bond_order == 12: # aromatic
+            if bond_order == 12:  # aromatic
                 bond_order = 5
             if bond_order == 1:
                 rotatable = True
@@ -972,7 +1127,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
         for key, value in self.__dict__.items():
             if key != "mol":
                 newsetup.__dict__[key] = deepcopy(value)
-        newsetup.mol = Chem.Mol(self.mol) # not sure how deep of a copy this is
+        newsetup.mol = Chem.Mol(self.mol)  # not sure how deep of a copy this is
         return newsetup
 
     @staticmethod
@@ -1013,26 +1168,26 @@ class OBMoleculeSetup(MoleculeSetup):
         output = []
         if found:
             for x in obsmarts.GetUMapList():
-                output.append([y-1 for y in x])
+                output.append([y - 1 for y in x])
         return output
 
     def get_num_mol_atoms(self):
         return self.mol.NumAtoms()
 
     def get_equivalent_atoms(self):
-        raise NotImplementedError 
-    
+        raise NotImplementedError
+
     def init_atom(self, assign_charges):
         """initialize atom data table"""
         for a in ob.OBMolAtomIter(self.mol):
             partial_charge = a.GetPartialCharge() * float(assign_charges)
             self.add_atom(a.GetIdx() - 1,
-                    coord=np.asarray(obutils.getAtomCoords(a), dtype='float'),
-                    element=a.GetAtomicNum(),
-                    charge=partial_charge,
-                    atom_type=None,
-                    pdbinfo = obutils.getPdbInfoNoNull(a),
-                    ignore=False, chiral=a.IsChiral())
+                          coord=np.asarray(obutils.getAtomCoords(a), dtype='float'),
+                          element=a.GetAtomicNum(),
+                          charge=partial_charge,
+                          atom_type=None,
+                          pdbinfo=obutils.getPdbInfoNoNull(a),
+                          ignore=False, chiral=a.IsChiral())
             # TODO check consistency for chiral model between OB and RDKit
 
     def init_bond(self):
@@ -1051,18 +1206,57 @@ class OBMoleculeSetup(MoleculeSetup):
 
 
 class UniqAtomParams:
+    """
+    This seems to be a helper class used to keep parameters organized in a particular way that lets them be more usable.
+    We should consider whether this is being used/if it is a candidate for deprecation.
+
+    Attributes
+    ----------
+    params: list[]
+        can be thought of as rows
+    param_names: list[]
+        can be thought of as columns
+    """
     def __init__(self):
-        self.params = [] # aka rows
-        self.param_names = [] # aka column names
+        self.params = []  # aka rows
+        self.param_names = []  # aka column names
 
     @classmethod
     def from_dict(cls, dictionary):
+        """
+        Creates an UniqAtomParams object, populates it with information from the input dictionary, then returns
+        the new object.
+
+        Parameters
+        ----------
+        dictionary: dict()
+            A dictionary containing the keys "params" and "param_names", where the value for "params" is parseable as
+            rows and the value for "param_names" contains the corresponding column data.
+
+        Returns
+        -------
+        A populated UniqAtomParams object
+        """
         uap = UniqAtomParams()
         uap.params = [row.copy() for row in dictionary["params"]]
         uap.param_names = dictionary["param_names"].copy()
         return uap
 
     def get_indices_from_atom_params(self, atom_params):
+        """
+        To retrieve the indices of specific atom parameters in the UniqAtomParams object.
+
+        Parameters
+        ----------
+        atom_params: dict()
+            A dict with keys that correspond to the param names already in the UniqAtomParams object. The values are
+            lists that should all be the same size, and
+
+        Returns
+        -------
+        A list of indices corresponding to the order of parameters in the atom_params value lists that indicates the
+        index of that "row" of parameters in UniqAtomParams params.
+        """
         nr_items = set([len(values) for key, values in atom_params.items()])
         if len(nr_items) != 1:
             raise RuntimeError(f"all lists in atom_params must have same length, got {nr_items}")
@@ -1081,7 +1275,7 @@ class UniqAtomParams:
                     param_index = j
                     break
             param_idxs.append(param_index)
-        return param_idxs 
+        return param_idxs
 
     def add_parameter(self, new_param_dict):
         # remove None values to avoid a column with only Nones
@@ -1092,14 +1286,14 @@ class UniqAtomParams:
         for new_key in new_keys:
             self.param_names.append(new_key)
             for row in self.params:
-                row.append(None) # fill in empty "cell" in new "column"
+                row.append(None)  # fill in empty "cell" in new "column"
 
         new_row = []
         for key in self.param_names:
             value = new_param_dict.get(key, None)
             new_row.append(value)
 
-        if len(new_keys) == 0: # try to match with existing row
+        if len(new_keys) == 0:  # try to match with existing row
             for index, row in enumerate(self.params):
                 if row == new_row:
                     return index
@@ -1108,7 +1302,6 @@ class UniqAtomParams:
         new_row_index = len(self.params)
         self.params.append(new_row)
         return new_row_index
-
 
     def add_molsetup(self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False):
         if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:

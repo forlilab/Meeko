@@ -72,6 +72,70 @@ def mapping_by_mcs(mol, ref):
     return atom_map
 
 
+def reassign_formal_charge(mol, ref, mapping):
+    # TODO this could be optimized
+    # TODO ref charges could be precalculated to speed up large structures
+    mol_charged_atoms = []
+    for idx, atom in enumerate(mol.GetAtoms()):
+        if atom.GetFormalCharge() != 0:
+            mol_charged_atoms.append(idx)
+
+    ref_charged_atoms = []
+    for idx, atom in enumerate(ref.GetAtoms()):
+        if atom.GetFormalCharge() != 0:
+            ref_charged_atoms.append(idx)
+
+    for (k, v) in mapping.items():
+        if k in ref_charged_atoms or v in mol_charged_atoms:
+            mol.GetAtomWithIdx(v).SetFormalCharge(ref.GetAtomWithIdx(k).GetFormalCharge())
+
+    return mol
+
+
+def reassign_bond_orders(mol, ref, mapping):
+    # TODO this could be optimized
+    for i in mapping.keys():
+        for ref_bond in ref.GetAtomWithIdx(i).GetBonds():
+            j = ref_bond.GetOtherAtomIdx(i)
+            if j in mapping.keys():
+                mol_bond = mol.GetBondBetweenAtoms(mapping[i], mapping[j])
+                mol_bond.SetBondType(ref_bond.GetBondType())
+    return mol
+
+
+def h_coord_from_dipeptide(pdb1, pdb2):
+    mol = Chem.MolFromPDBBlock(pdb1 + pdb2)
+    if mol is None:
+        print(pdb1)
+        print(pdb2)
+        raise RuntimeError
+    mol_h = Chem.AddHs(mol, addCoords=True)
+    ps = Chem.SmilesParserParams()
+    ps.removeHs = False
+    template = Chem.MolFromSmiles('C(=O)C([H])N([H])C(=O)C([H])N', ps)
+    h_idx = 5
+    atom_map = mapping_by_mcs(template, mol_h)
+
+    return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
+
+
+def h_coord_random_n_terminal(mol, debug=False):
+    idx = mol.GetSubstructMatches(Chem.MolFromSmarts("[Nh1H2X3+0][CX4]"))
+    assert len(idx) == 1, f"expected 1 backbone match got {len(idx)}"
+    nitrogen = mol.GetAtomWithIdx(idx[0][0])
+    nitrogen.SetBoolProp("this_N", True)
+    mol_no_h = Chem.RemoveHs(mol)
+    for atom in mol_no_h.GetAtoms():
+        if atom.HasProp("this_N") and atom.GetBoolProp("this_N"):
+            bb_n_idx = atom.GetIdx()
+    mol_h = Chem.AddHs(mol_no_h, addCoords=True)
+    # positions = mol_h.GetConformer().GetPositions()
+    bb_n = mol_h.GetAtomWithIdx(bb_n_idx)
+    for neighbor in bb_n.GetNeighbors():
+        if neighbor.GetAtomicNum() == 1:
+            return mol_h.GetConformer().GetAtomPosition(neighbor.GetIdx())
+
+
 def _snap_to_int(value, tolerance=0.12):
     for inc in [-1, 0, 1]:
         if abs(value - int(value) - inc) <= tolerance:
@@ -171,7 +235,7 @@ def update_H_positions(mol, indices_to_update):
     indices_to_update: list
         indices of hydrogens for which positions will be re-calculated
     """
-        
+
     conf = mol.GetConformer()
     tmpmol = Chem.RWMol(mol)
     to_del = {}
@@ -208,7 +272,7 @@ def update_H_positions(mol, indices_to_update):
         for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
             # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
             has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
-            if atom.GetAtomicNum() == 1 and has_new_position: 
+            if atom.GetAtomicNum() == 1 and has_new_position:
                 if atom.GetIdx() not in used_h:
                     # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
                     conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
@@ -329,6 +393,13 @@ class LinkedRDKitChorizo:
     Attributes
     ----------
     residues: dict (string -> ChorizoResidue) #TODO: figure out exact SciPy standard for dictionary key/value notation
+    termini: dict (string (representing residue id) -> string (representing what we want the capping to look like))
+    deleted_residues: list (string) residue ids to be deleted
+    mutate_res_dict: dict (string (representing starting residue id) -> string (representing the desired mutated id))
+    res_templates: dict (string -> dict (rdkit_mol and atom_data))
+    ambiguous:
+    disulfide_bridges:
+    suggested_mutations:
     """
 
     @classmethod
@@ -376,7 +447,7 @@ class LinkedRDKitChorizo:
         mk_prep: MoleculePreparation
             to parameterize the padded molecules
         set_template: dict (string -> string)
-            keys are residue IDs <chain>:<resnum> such as "A:42" 
+            keys are residue IDs <chain>:<resnum> such as "A:42"
             values identify ResidueTemplate instances
         residues_to_delete: list (string)
             list of residue IDs (e.g.; "A:42") to mark as ignored
@@ -631,7 +702,7 @@ class LinkedRDKitChorizo:
                     tmp[i] = mapidx_pad[j]
                 mapidx_pad = tmp
                 # print(f"{mapidx_pad=}")
-            
+
             # update position of hydrogens bonded to link atoms
             inv = {j: i for (i, j) in mapidx_pad.items()}
             padded_idxs_to_update = []
@@ -645,7 +716,7 @@ class LinkedRDKitChorizo:
                     padded_idxs_to_update.append(inv[neighbor.GetIdx()])
             update_H_positions(padded_mol, padded_idxs_to_update)
             source = padded_mol.GetConformer()
-            destination = residue.rdkit_mol.GetConformer() 
+            destination = residue.rdkit_mol.GetConformer()
             for i, j in zip(no_pad_idxs_to_update, padded_idxs_to_update):
                 destination.SetAtomPosition(i, source.GetAtomPosition(j))
                 # can invert chirality in 3D positions
@@ -992,7 +1063,7 @@ class ChorizoResidue:
 
     def __init__(self, raw_input_mol, rdkit_mol, mapidx_to_raw, input_resname=None, template_key=None,
                  atom_names=None): #  link_labels=None,
-                 
+
         self.raw_rdkit_mol = raw_input_mol
         self.rdkit_mol = rdkit_mol
         self.mapidx_to_raw = mapidx_to_raw
