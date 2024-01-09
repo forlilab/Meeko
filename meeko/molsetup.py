@@ -410,6 +410,38 @@ class MoleculeSetup:
     def add_atom(self, idx=None, coord=np.array([0.0, 0.0, 0.0], dtype='float'),
                  element=None, charge=0.0, atom_type=None, pdbinfo=None,
                  ignore=False, chiral=False, overwrite=False, add_atom_params=None):
+        """
+        Adds an atom with all of the atom information a user wants to specify to the molsetup. Every property is
+        optional, but possible to set.
+
+        Parameters
+        ----------
+        idx: int or None
+            atom index
+        coord: np float array of length 3
+            coordinates f the atom
+        element: int or None
+            the atomic number of the
+        charge: float
+            partial charges to be loaded for the atom
+        atom_type: string or int or None
+            needs info on exactly what these are
+        pdbinfo: string or None:
+            pdb string for the atom
+        ignore: bool
+            ignore flag for the atom
+        chiral: bool
+            indicates whether the atom should be marked as chiral
+        overwrite: bool
+            are we overwriting other atoms that may be in the same coordinate position as this one
+        add_atom_params: or None
+
+
+        Returns
+        -------
+        False if the index is already occupied and we are not overwriting existing atoms. If the method succeeds,
+        returns the index of the added atom.
+        """
         """ function to add all atom information at once;
             every property is optional
         """
@@ -434,6 +466,7 @@ class MoleculeSetup:
             self.atom_params[key].append(value)
         return idx
 
+    # TODO: are we deprecating/deleting the following or is it functionality we still want to add
     def del_atom(self, idx):
         """ remove an atom and update all data associate with it """
         pass
@@ -450,6 +483,30 @@ class MoleculeSetup:
     def add_pseudo(self, coord=np.array([0.0, 0.0, 0.0], dtype='float'), charge=0.0,
                    anchor_list=None, atom_type=None, rotatable=False,
                    pdbinfo=None, directional_vectors=None, ignore=False, overwrite=False):
+        """
+        Adds a new pseudoatom to the molsetup. Multiple bonds can be specified in "anchor_list" to support the
+        centroids of aromatic rings. If rotatable, makes the anchor atom rotatable to allow the pseudoatom movement
+
+        Parameters
+        ----------
+        coord: numpy float array of length 3
+            pseudoatom coordinates
+        charge: float
+            partial charge for the pseudoatom
+        anchor_list: list[] or None
+            a list of ints indicating multiple bonds that can be specified
+        atom_type: or None
+
+        rotatable: bool
+        pdbinfo: string or None
+        directional_vectors: or None
+        ignore: bool
+        overwrite: bool
+            indicates whether the
+        Returns
+        -------
+
+        """
         """ add a new pseudoatom
             multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
 
@@ -469,15 +526,30 @@ class MoleculeSetup:
                       ignore=ignore,
                       overwrite=overwrite)
         # anchor atoms
-        if not anchor_list is None:
+        if anchor_list is not None:
             for anchor in anchor_list:
                 self.add_bond(idx, anchor, order=0, rotatable=rotatable)
         # directional vectors
-        if not directional_vectors is None:
+        if directional_vectors is not None:
             self.add_interaction_vector(idx, directional_vectors)
         return idx
 
     def add_bond(self, idx1, idx2, order=0, rotatable=False):
+        """
+        Adds a bond to the molsetup graph between the two indices indicated.
+
+        Parameters
+        ----------
+        idx1: int
+            first atom's index
+        idx2: int
+            second atom's index
+        order: int
+            bond order
+        rotatable: bool
+            whether the bond is rotatable
+
+        """
 
         if not idx2 in self.graph[idx1]:
             self.graph[idx1].append(idx2)
@@ -542,7 +614,11 @@ class MoleculeSetup:
         self.coord[idx] = coord
 
     def get_neigh(self, idx):
-        """ return atoms connected to atom index"""
+        """ return atoms connected to atom index
+        Note
+        ----
+        This should be get_neighbors, just neigh is nowhere near clear enough.
+        """
         return self.graph[idx]
 
     def set_chiral(self, idx, chiral):
