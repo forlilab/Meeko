@@ -151,23 +151,23 @@ def get_args():
     box_group.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
     box_group.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
     box_group.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
-    box_group.add_argument('--box_center_on_reactive_res', help="project center of grid box along CA-CB bond 5 A away from CB", action="store_true")
+    box_group.add_argument('--box_center_off_reactive_res', help="project grid box center along CA-CB bond 5 A away from CB", action="store_true")
     box_group.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
     box_group.add_argument('--padding', help="padding around reference ligand [A]", type=float)
 
 
-    #reactive_group = parser.add_argument_group("Reactive")
-    #reactive_group.add_argument('-r', '--reactive_flexres', action="append", default=[],
-    #                    help="same as --flexres but for reactive residues (max 8)")
-    #reactive_group.add_argument('-g', '--reactive_name', action="append", default=[],
-    #                    help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific")
-    #reactive_group.add_argument('-s', '--reactive_name_specific', action="append", default=[],
-    #                    help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.")
+    reactive_group = parser.add_argument_group("Reactive")
+    reactive_group.add_argument('-r', '--reactive_flexres', action="append", default=[],
+                        help="same as --flexres but for reactive residues (max 8)")
+    reactive_group.add_argument('-g', '--reactive_name', action="append", default=[],
+                        help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific")
+    reactive_group.add_argument('-s', '--reactive_name_specific', action="append", default=[],
+                        help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.")
 
-    #reactive_group.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
-    #reactive_group.add_argument('--eps_12', default=2.5, type=float, help="epsilon for reactive atoms (1-2 interaction)")
-    #reactive_group.add_argument('--r_eq_13_scaling', default=0.5, type=float, help="r_eq scaling for 1-3 interaction across reactive atoms")
-    #reactive_group.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
+    reactive_group.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
+    reactive_group.add_argument('--eps_12', default=2.5, type=float, help="epsilon for reactive atoms (1-2 interaction)")
+    reactive_group.add_argument('--r_eq_13_scaling', default=0.5, type=float, help="r_eq scaling for 1-3 interaction across reactive atoms")
+    reactive_group.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
     args = parser.parse_args()
 
     #if (args.pdb is None) == (args.pdbqt is None):
@@ -176,17 +176,17 @@ def get_args():
         msg = "need --pdb"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    if (args.box_center is not None) and args.box_center_on_reactive_res:
-        msg = "can't use both --box_center and --box_center_on_reactive_res"
+    if (args.box_center is not None) and args.box_center_off_reactive_res:
+        msg = "can't use both --box_center and --box_center_off_reactive_res"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    got_center = (args.box_center is not None) or args.box_center_on_reactive_res or (args.ligand is not None)
+    got_center = (args.box_center is not None) or args.box_center_off_reactive_res or (args.ligand is not None)
     if not args.skip_gpf:
         if not got_center:
             msg  = "missing center or size of grid box to write .gpf file for autogrid4" + os_linesep
-            msg += "use --box_size and either --box_center or --box_center_on_reactive_res" + os_linesep
+            msg += "use --box_size and either --box_center or --box_center_off_reactive_res" + os_linesep
             msg += "or --ligand and --padding" + os_linesep
-            msg += "Exactly one reactive residue required for --box_center_on_reactive_res" + os_linesep
+            msg += "Exactly one reactive residue required for --box_center_off_reactive_res" + os_linesep
             msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
@@ -197,8 +197,8 @@ def get_args():
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
 
-    if (args.box_center is not None) + (args.ligand is not None) + args.box_center_on_reactive_res > 1:
-        msg = "--box_center, --box_center_on_reactive_res, and --ligand are mutually exclusive options"
+    if (args.box_center is not None) + (args.ligand is not None) + args.box_center_off_reactive_res > 1:
+        msg = "--box_center, --box_center_off_reactive_res, and --ligand are mutually exclusive options"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
 
@@ -228,31 +228,31 @@ modified_resnames = set()
 reactive_flexres = {}
 all_ok = True
 all_err = ""
-### for resid_string in args.reactive_flexres:
-###     res_id, ok, err = parse_residue_string(resid_string)
-###     if ok:
-###         resname = res_id[1]
-###         if resname in reactive_atom:
-###             reactive_flexres[res_id] = reactive_atom[resname]
-###         else:
-###             all_ok = False
-###             all_err += "no default reactive name for %s, " % resname
-###             all_err += "use --reactive_name or --reactive_name_specific" + os_linesep
-###     all_ok &= ok
-###     all_err += err
+for resid_string in args.reactive_flexres:
+    res_id, ok, err = parse_residue_string(resid_string)
+    if ok:
+        resname = res_id[1]
+        if resname in reactive_atom:
+            reactive_flexres[res_id] = reactive_atom[resname]
+        else:
+            all_ok = False
+            all_err += "no default reactive name for %s, " % resname
+            all_err += "use --reactive_name or --reactive_name_specific" + os_linesep
+    all_ok &= ok
+    all_err += err
 
-### for string in args.reactive_name_specific:
-###     out, ok, err = parse_residue_string_and_name(string)
-###     if ok:
-###         # override name if res_id was also passed to --reactive_flexres
-###         reactive_flexres[out["res_id"]] = out["name"]
-###     all_ok &= ok
-###     all_err += err
+for string in args.reactive_name_specific:
+    out, ok, err = parse_residue_string_and_name(string)
+    if ok:
+        # override name if res_id was also passed to --reactive_flexres
+        reactive_flexres[out["res_id"]] = out["name"]
+    all_ok &= ok
+    all_err += err
 
-### if len(reactive_flexres) > 8:
-###     msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
-###     print("Command line error: " + msg, file=sys.stderr)
-###     sys.exit(2)
+if len(reactive_flexres) > 8:
+    msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
+    print("Command line error: " + msg, file=sys.stderr)
+    sys.exit(2)
 
 all_flexres = set()
 for resid_string in args.flexres:
@@ -288,7 +288,7 @@ if len(all_flexres) > 0:
         print(string % (chain, resname, resnum, is_react, react_atom))
     print()
 
-if len(reactive_flexres) != 1 and args.box_center_on_reactive_res:
+if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
     msg = "--box_center_on-reactive_res can be used only with one reactive" + os_linesep
     msg += "residue, but %d reactive residues are set" % len(reactive_flexres)
     print("Command line error:" + msg, file=sys.stderr)
@@ -367,6 +367,7 @@ if len(all_flexres) == 0:
     rigid_fn = str(outpath.with_suffix(".pdbqt"))
     flex_fn = None
 else:
+    print(f"{reactive_flexres=}")
     all_flex_pdbqt = ""
     reactive_flexres_count = 0
     for res_id, flexres_pdbqt in pdbqt["flex"].items():
@@ -408,7 +409,7 @@ if not args.skip_gpf:
     if args.box_center is not None:
         box_center = args.box_center
         box_size = args.box_size
-    elif args.box_center_on_reactive_res:
+    elif args.box_center_off_reactive_res:
         # we have only one reactive residue and will set the box center
         # to be 5 Angstromg away from CB along the CA->CB vector
         idxs = receptor.atom_idxs_by_res[list(reactive_flexres.keys())[0]]
@@ -485,73 +486,73 @@ if not args.skip_gpf:
                     print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
                     break # only need to warn once
 
-### # configuration info for AutoDock-GPU reactive docking
-### if len(reactive_flexres) > 0:
-###     any_lig_reac_types = []
-###     for order in (1, 2, 3):
-###         for t in any_lig_base_types:
-###             any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
-### 
-###     rec_reac_types = []
-###     for line in all_flex_pdbqt.split(os_linesep):
-###         if line.startswith("ATOM") or line.startswith("HETATM"):
-###             atype = line[77:].strip()
-###             basetype, _ = reactive_typer.get_basetype_and_order(atype)
-###             if basetype is not None: # is None if not reactive
-###                 rec_reac_types.append(line[77:].strip())
-### 
-###     derivtypes, modpairs, collisions = get_reactive_config(
-###                                     any_lig_reac_types,
-###                                     rec_reac_types,
-###                                     args.eps_12,
-###                                     args.r_eq_12,
-###                                     args.r_eq_13_scaling,
-###                                     args.r_eq_14_scaling)
-### 
-###     if len(collisions) > 0:
-###         collision_str = ""
-###         for t1, t2 in collisions:
-###             collision_str += "%3s %3s" % (t1, t2) + os_linesep
-###         collision_fn = str(outpath.with_suffix(".atype_collisions"))
-###         written_files_log["filename"].append(collision_fn)
-###         written_files_log["description"].append("type pairs (n=%d) that may lead to intra-molecular reactions" % len(collisions))
-###         with open(collision_fn, "w") as f:
-###             f.write(collision_str)
-### 
-###     # The maps block is to tell AutoDock-GPU the base types for the reactive types.
-###     # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
-###     # lines in a single configuration file simplifies the command line call.
-###     map_block = ""
-###     map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
-###     all_types = []
-###     for basetype, reactypes in derivtypes.items():
-###         all_types.append(basetype)
-###         map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
-###         for reactype in reactypes:
-###             all_types.append(reactype)
-###             map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
-###     config = "ligand_types " + " ".join(all_types) + os_linesep
-###     config += "fld %s.maps.fld" % map_prefix + os_linesep
-###     config += map_block
-### 
-###     # in modpairs (dict): types are keys, parameters are values
-###     # now we will write a configuration file with nbp keywords
-###     # that AD-GPU reads using the --import_dpf flag
-###     # nbp stands for "non-bonded potential" or "non-bonded pairwise"
-###     line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
-###     nbp_count = 0
-###     for (t1, t2), param in modpairs.items():
-###         config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
-###         nbp_count += 1
-###     config_fn = str(outpath.with_suffix(".reactive_config"))
-###     written_files_log["filename"].append(config_fn)
-###     written_files_log["description"].append("reactive parameters for AutoDock-GPU")
-###     with open(config_fn, "w") as f:
-###         f.write(config)
-###     print()
-###     print("For reactive docking, pass the configuration file to AutoDock-GPU:")
-###     print("    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>" % (config_fn, flex_fn))
-###     print()
+# configuration info for AutoDock-GPU reactive docking
+if len(reactive_flexres) > 0:
+    any_lig_reac_types = []
+    for order in (1, 2, 3):
+        for t in any_lig_base_types:
+            any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
+
+    rec_reac_types = []
+    for line in all_flex_pdbqt.split(os_linesep):
+        if line.startswith("ATOM") or line.startswith("HETATM"):
+            atype = line[77:].strip()
+            basetype, _ = reactive_typer.get_basetype_and_order(atype)
+            if basetype is not None: # is None if not reactive
+                rec_reac_types.append(line[77:].strip())
+
+    derivtypes, modpairs, collisions = get_reactive_config(
+                                    any_lig_reac_types,
+                                    rec_reac_types,
+                                    args.eps_12,
+                                    args.r_eq_12,
+                                    args.r_eq_13_scaling,
+                                    args.r_eq_14_scaling)
+
+    if len(collisions) > 0:
+        collision_str = ""
+        for t1, t2 in collisions:
+            collision_str += "%3s %3s" % (t1, t2) + os_linesep
+        collision_fn = str(outpath.with_suffix(".atype_collisions"))
+        written_files_log["filename"].append(collision_fn)
+        written_files_log["description"].append("type pairs (n=%d) that may lead to intra-molecular reactions" % len(collisions))
+        with open(collision_fn, "w") as f:
+            f.write(collision_str)
+
+    # The maps block is to tell AutoDock-GPU the base types for the reactive types.
+    # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
+    # lines in a single configuration file simplifies the command line call.
+    map_block = ""
+    map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
+    all_types = []
+    for basetype, reactypes in derivtypes.items():
+        all_types.append(basetype)
+        map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
+        for reactype in reactypes:
+            all_types.append(reactype)
+            map_block += "map %s.%s.map" % (map_prefix, basetype) + os_linesep
+    config = "ligand_types " + " ".join(all_types) + os_linesep
+    config += "fld %s.maps.fld" % map_prefix + os_linesep
+    config += map_block
+
+    # in modpairs (dict): types are keys, parameters are values
+    # now we will write a configuration file with nbp keywords
+    # that AD-GPU reads using the --import_dpf flag
+    # nbp stands for "non-bonded potential" or "non-bonded pairwise"
+    line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + os_linesep
+    nbp_count = 0
+    for (t1, t2), param in modpairs.items():
+        config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
+        nbp_count += 1
+    config_fn = str(outpath.with_suffix(".reactive_config"))
+    written_files_log["filename"].append(config_fn)
+    written_files_log["description"].append("reactive parameters for AutoDock-GPU")
+    with open(config_fn, "w") as f:
+        f.write(config)
+    print()
+    print("For reactive docking, pass the configuration file to AutoDock-GPU:")
+    print("    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>" % (config_fn, flex_fn))
+    print()
 
 print()
 print("Files written:")

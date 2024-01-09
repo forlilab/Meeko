@@ -355,7 +355,7 @@ class LinkedRDKitChorizo:
         def _join(mol, pad_mol, pad_smarts_mol, rxn, is_res_atom, mapidx, adjacent_mol=None, pad_smarts_idxs=None):
             pad_matches = adjacent_mol.GetSubstructMatches(pad_smarts_mol)
             if len(pad_matches) != 1:
-                raise RuntimeError("expected 1 match but got %d" % (len(pad_matches)))
+                raise RuntimeError(f"expected 1 match but got {len(pad_matches)}, {resn=}")
             conformer = Chem.Conformer(pad_mol.GetNumAtoms())
             pad_mol.AddConformer(conformer)
             if adjacent_mol is not None:
