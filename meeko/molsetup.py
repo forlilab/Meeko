@@ -69,11 +69,12 @@ class MoleculeSetup:
         a list of indices of pseudo-atoms?
 
     coord: OrderedDict()
-        a mapping between atom index and coordinates
+        a mapping between atom index and coordinates, where atom indices are stored as ints and coordinates are
+        numpy arrays of three floats.
     charge: OrderedDict()
         a mapping between atom index and charge
     pdbinfo: OrderedDict()
-        a mapping between atom index and pdb data for that atom
+        a mapping between atom index (int) and pdb data (PDBAtomInfo) for that atom
     atom_type: OrderedDict()
         TODO: if these values are meant to be consistent, then this should be an enum?
         a mapping from some sort of index (presumably an int) to atom type (string)
@@ -81,7 +82,7 @@ class MoleculeSetup:
         a mapping from the name of a parameter (string) to a parameter
 
     dihedral_interactions: list[]
-        a list of strings I think?
+        a list of strings maybe?
     dihedral_partaking_atoms: dict()
         a mapping from atom index (int?) to dihedral index (int?)
     dihedral_labels: dict()
@@ -1293,6 +1294,7 @@ class UniqAtomParams:
     param_names: list[]
         can be thought of as columns
     """
+
     def __init__(self):
         self.params = []  # aka rows
         self.param_names = []  # aka column names
@@ -1424,3 +1426,40 @@ class Restraint:
             self.kcal_per_angstrom_square,
             self.delay_angstroms)
         return new_restraint
+
+
+# TODO: refactor molsetup class then refactor this and consider making it more readable.
+class MoleculeSetupEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, MoleculeSetup):
+            return {
+                "atom_pseudo": obj.atom_pseudo,
+                "coord": {k: v.tolist() for k, v in obj.coord.items()},
+                "charge": obj.charge,
+                "pdbinfo": obj.pdbinfo,
+                "atom_type": obj.atom_type,
+                "atom_params": obj.atom_params,
+                "dihedral_interactions": obj.dihedral_interactions,
+                "dihedral_partaking_atoms": obj.dihedral_partaking_atoms,
+                "dihedral_labels": obj.dihedral_labels,
+                "atom_ignore": obj.atom_ignore,
+                "chiral": obj.chiral,
+                "atom_true_count": obj.atom_true_count,
+                "graph": obj.graph,
+                "bond": obj.bond,
+                "element": obj.element,
+                "interaction_vector": obj.interaction_vector,
+                "flexibility_model": obj.flexibility_model,
+                "ring_closure_info": obj.ring_closure_info,
+                "restraints": obj.restraints,
+                "is_sidechain": obj.is_sidechain,
+                "rmsd_symmetry_indices": obj.rmsd_symmetry_indices,
+                "rings": obj.rings,
+                "rings_aromatic": obj.rings_aromatic,
+                "atom_to_ring_id": obj.atom_to_ring_id,
+                "ring_corners": obj.ring_corners,
+                "name": obj.name,
+                "rotamers": obj.rotamers
+            }
+            # return obj.__dict__ -> numpy arrays are not json serializable via json dumps
+        return json.JSONEncoder.default(self, obj)
