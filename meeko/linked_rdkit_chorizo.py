@@ -9,6 +9,8 @@ from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
 import prody
 from prody.atomic.atomgroup import AtomGroup
 from prody.atomic.selection import Selection
+
+import meeko.molsetup
 from .writer import PDBQTWriterLegacy
 from .molsetup import MoleculeSetup
 from .utils.rdkitutils import mini_periodic_table
@@ -1322,3 +1324,39 @@ class ResidueTemplate:
             if atom.GetIdx() not in mapping_inv:
                 result[element]["excess"] += 1
         return result, mapping
+
+
+class ChorizoResidueEncoder(json.JSONEncoder):
+    """
+    """
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for Chorizo Residue objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Chorizo Residue JSON format for Molsetup objects.
+            For all other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the Chorizo Residue class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, ChorizoResidue):
+            return {
+                "residue_id": obj.residue_id,
+                "pdb_text": obj.pdb_text,
+                "previous_id": obj.previous_id,
+                "next_id": obj.next_id,
+                # "rdkit_mol": obj.rdkit_mol, TODO: decide on how we want to represent mols as json
+                "molsetup": meeko.molsetup.MoleculeSetupEncoder.default(self, obj.molsetup),
+                "molsetup_mapidx": obj.molsetup_mapidx,
+                "is_flexres_atom": obj.is_flexres_atom,
+                "ignore_residue": obj.ignore_residue,
+                "is_movable": obj.is_movable,
+                "user_deleted": obj.user_deleted,
+                "additional_connections": [var.__dict__ for var in obj.additional_connections]
+            }
+        return json.JSONEncoder.default(self, obj)
