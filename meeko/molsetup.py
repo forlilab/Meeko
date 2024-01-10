@@ -1430,7 +1430,24 @@ class Restraint:
 
 # TODO: refactor molsetup class then refactor this and consider making it more readable.
 class MoleculeSetupEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for molecule setup objects.
+    """
     def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for Molecule Setup objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Molsetup JSON format for Molsetup objects. For all
+            other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the MoleculeSetup class or the default JSONEncoder output for an
+        object.
+        """
         if isinstance(obj, MoleculeSetup):
             return {
                 "atom_pseudo": obj.atom_pseudo,
@@ -1461,5 +1478,4 @@ class MoleculeSetupEncoder(json.JSONEncoder):
                 "name": obj.name,
                 "rotamers": obj.rotamers
             }
-            # return obj.__dict__ -> numpy arrays are not json serializable via json dumps
         return json.JSONEncoder.default(self, obj)

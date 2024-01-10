@@ -9,6 +9,8 @@ from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
 import prody
 from prody.atomic.atomgroup import AtomGroup
 from prody.atomic.selection import Selection
+
+import meeko.molsetup
 from .writer import PDBQTWriterLegacy
 from .molsetup import MoleculeSetup
 from .utils.rdkitutils import mini_periodic_table
@@ -171,7 +173,7 @@ def update_H_positions(mol, indices_to_update):
     indices_to_update: list
         indices of hydrogens for which positions will be re-calculated
     """
-        
+
     conf = mol.GetConformer()
     tmpmol = Chem.RWMol(mol)
     to_del = {}
@@ -208,7 +210,7 @@ def update_H_positions(mol, indices_to_update):
         for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
             # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
             has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
-            if atom.GetAtomicNum() == 1 and has_new_position: 
+            if atom.GetAtomicNum() == 1 and has_new_position:
                 if atom.GetIdx() not in used_h:
                     # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
                     conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
@@ -376,7 +378,7 @@ class LinkedRDKitChorizo:
         mk_prep: MoleculePreparation
             to parameterize the padded molecules
         set_template: dict (string -> string)
-            keys are residue IDs <chain>:<resnum> such as "A:42" 
+            keys are residue IDs <chain>:<resnum> such as "A:42"
             values identify ResidueTemplate instances
         residues_to_delete: list (string)
             list of residue IDs (e.g.; "A:42") to mark as ignored
@@ -631,7 +633,7 @@ class LinkedRDKitChorizo:
                     tmp[i] = mapidx_pad[j]
                 mapidx_pad = tmp
                 # print(f"{mapidx_pad=}")
-            
+
             # update position of hydrogens bonded to link atoms
             inv = {j: i for (i, j) in mapidx_pad.items()}
             padded_idxs_to_update = []
@@ -645,7 +647,7 @@ class LinkedRDKitChorizo:
                     padded_idxs_to_update.append(inv[neighbor.GetIdx()])
             update_H_positions(padded_mol, padded_idxs_to_update)
             source = padded_mol.GetConformer()
-            destination = residue.rdkit_mol.GetConformer() 
+            destination = residue.rdkit_mol.GetConformer()
             for i, j in zip(no_pad_idxs_to_update, padded_idxs_to_update):
                 destination.SetAtomPosition(i, source.GetAtomPosition(j))
                 # can invert chirality in 3D positions
@@ -992,7 +994,7 @@ class ChorizoResidue:
 
     def __init__(self, raw_input_mol, rdkit_mol, mapidx_to_raw, input_resname=None, template_key=None,
                  atom_names=None): #  link_labels=None,
-                 
+
         self.raw_rdkit_mol = raw_input_mol
         self.rdkit_mol = rdkit_mol
         self.mapidx_to_raw = mapidx_to_raw
@@ -1251,3 +1253,39 @@ class ResidueTemplate:
             if atom.GetIdx() not in mapping_inv:
                 result[element]["excess"] += 1
         return result, mapping
+
+
+class ChorizoResidueEncoder(json.JSONEncoder):
+    """
+    """
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for Chorizo Residue objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Chorizo Residue JSON format for Molsetup objects.
+            For all other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the Chorizo Residue class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, ChorizoResidue):
+            return {
+                "residue_id": obj.residue_id,
+                "pdb_text": obj.pdb_text,
+                "previous_id": obj.previous_id,
+                "next_id": obj.next_id,
+                # "rdkit_mol": obj.rdkit_mol, TODO: decide on how we want to represent mols as json
+                "molsetup": meeko.molsetup.MoleculeSetupEncoder.default(self, obj.molsetup),
+                "molsetup_mapidx": obj.molsetup_mapidx,
+                "is_flexres_atom": obj.is_flexres_atom,
+                "ignore_residue": obj.ignore_residue,
+                "is_movable": obj.is_movable,
+                "user_deleted": obj.user_deleted,
+                "additional_connections": [var.__dict__ for var in obj.additional_connections]
+            }
+        return json.JSONEncoder.default(self, obj)
