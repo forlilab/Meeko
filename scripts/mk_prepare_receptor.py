@@ -181,10 +181,24 @@ def get_args():
         msg = "can't use both --box_center and --box_center_off_reactive_res"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    got_center = (args.box_center is not None) or args.box_center_off_reactive_res or (args.ligand is not None)
+    if (args.padding is None) != (args.ligand is None):
+        print("--padding and --ligand must be used together", file=sys.stderr)
+        sys.exit(2)
+    nr_boxcenter_specs = 0
+    nr_boxcenter_specs += int(args.box_center is not None)
+    nr_boxcenter_specs += int(args.box_center_off_reactive_res)
+    nr_boxcenter_specs += int(args.ligand is not None)
+    if nr_boxcenter_specs > 1:
+        msg = "box center can't be specified in more than once."
+        msg += "use one of the following three options:" + os_linesep
+        msg += "  1) --box_center" + os_linesep
+        msg += "  2) --box_center_off_reactive_res" + os_linesep
+        msg += "  3) both --ligand and --padding in combination" + os_linesep
+        print(msg, file=sys.stderr)
+        sys.exit(42)
     if not args.skip_gpf:
-        if not got_center:
-            msg  = "missing center or size of grid box to write .gpf file for autogrid4" + os_linesep
+        if nr_boxcenter_specs < 1:
+            msg  = "missing center of grid box to write .gpf file for autogrid4" + os_linesep
             msg += "use --box_size and either --box_center or --box_center_off_reactive_res" + os_linesep
             msg += "or --ligand and --padding" + os_linesep
             msg += "Exactly one reactive residue required for --box_center_off_reactive_res" + os_linesep
@@ -192,7 +206,8 @@ def get_args():
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
         if (args.box_size is None) and (args.padding is None):
-            msg  = "grid box information is needed to dock with the AD4 scoring function." + os_linesep
+            msg  = "grid box size is missing to dock with the AD4 scoring function." + os_linesep
+            msg += "use either --box_size or both --ligand and --padding" + os_linesep
             msg += "The grid box center and size will be used to write a GPF file for autogrid" + os_linesep
             msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
             print("Command line error: " + msg, file=sys.stderr)
