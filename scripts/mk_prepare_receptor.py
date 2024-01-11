@@ -422,7 +422,7 @@ if not args.skip_gpf:
             if len(calpha_idx) != 1:
                 check(success=False, error_msg=f"found {len(calpha_idx)} CA in {res_id} but expected 1")
             if len(cbeta_idx) != 1:
-                check(success=False, error_msg=f"found {len(cbeta_idx)} CA in {res_id} but expected 1")
+                check(success=False, error_msg=f"found {len(cbeta_idx)} CB in {res_id} but expected 1")
             calpha_idx = calpha_idx[0]
             cbeta_idx = cbeta_idx[0]
             ca = molsetup.coord[calpha_idx]
