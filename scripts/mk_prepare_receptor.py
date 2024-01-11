@@ -8,6 +8,7 @@ import pathlib
 import pickle
 import sys
 
+import numpy as np
 
 from meeko import PDBQTReceptor
 from meeko import PDBQTMolecule
@@ -412,19 +413,25 @@ if not args.skip_gpf:
     elif args.box_center_off_reactive_res:
         # we have only one reactive residue and will set the box center
         # to be 5 Angstromg away from CB along the CA->CB vector
-        idxs = receptor.atom_idxs_by_res[list(reactive_flexres.keys())[0]]
-        ca = None
-        cb = None
-        for atom in receptor.atoms(idxs):
-            if atom["name"] == "CA":
-                ca = atom["xyz"]
-            if atom["name"] == "CB":
-                cb = atom["xyz"]
-        if ca is None or cb is None:
-            check(success=False, error_msg="could not find CA or CB in %s" % reactive_flexres[0])
-        v = (cb - ca)
-        v /= math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) + 1e-8
-        box_center = ca + 5 * v
+        box_centers = []
+        for res_id_tuple in reactive_flexres.keys():
+            res_id = f"{res_id_tuple[0]}:{res_id_tuple[1]}:{res_id_tuple[2]}"
+            molsetup = chorizo.residues[res_id].molsetup
+            calpha_idx = [i for i, pdbinfo in molsetup.pdbinfo.items() if pdbinfo.name == "CA"]
+            cbeta_idx = [i for i, pdbinfo in molsetup.pdbinfo.items() if pdbinfo.name == "CB"]
+            if len(calpha_idx) != 1:
+                check(success=False, error_msg=f"found {len(calpha_idx)} CA in {res_id} but expected 1")
+            if len(cbeta_idx) != 1:
+                check(success=False, error_msg=f"found {len(cbeta_idx)} CA in {res_id} but expected 1")
+            calpha_idx = calpha_idx[0]
+            cbeta_idx = cbeta_idx[0]
+            ca = molsetup.coord[calpha_idx]
+            cb = molsetup.coord[cbeta_idx]
+            v = (cb - ca)
+            v /= math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) + 1e-8
+            box_center = ca + 5 * v
+            box_centers.append(box_center)
+        box_center = np.mean(box_centers, 0)
         box_size = args.box_size
     elif args.ligand is not None:
         ft = pathlib.Path(args.ligand).suffix
@@ -479,9 +486,9 @@ if not args.skip_gpf:
             if not res.is_movable:
                 continue
             for index, coord in res.molsetup.coord.items():
-                if index in res.molsetup_ignored:
+                if not res.is_flexres_atom[index]:
                     continue
-                if gridbox.is_point_outside_box(atom["xyz"], box_center, npts):
+                if gridbox.is_point_outside_box(coord, box_center, npts):
                     print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
                     print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
                     break # only need to warn once
