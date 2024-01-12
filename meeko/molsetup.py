@@ -946,7 +946,7 @@ class MoleculeSetup:
         print('')
 
     @staticmethod
-    def molsetup_object_hook(obj):
+    def molsetup_json_decoder(obj):
         """
         Takes an object and attempts to decode it into a molecule setup object.
 
