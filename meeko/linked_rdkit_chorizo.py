@@ -1040,10 +1040,49 @@ class ChorizoResidue:
         return json.dumps(self, default=lambda o: o.__dict__)
 
     def is_valid_residue(self):
-        """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to
-        ignore"""
+        """
+        Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to
+        ignore
+        """
         return self.rdkit_mol is not None and not self.user_deleted
 
+
+    @staticmethod
+    def chorizo_residue_object_hook(obj):
+        """
+        Takes an object and attempts to decode it into a chorizo residue object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary from deserializing a JSON of a chorizo residue object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to a molecule setup, will return a Chorizo Residue with data
+        populated from the dictionary. Otherwise, returns the input object.
+
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+        # check that all the keys we expect are in the object dictionary as a safety measure
+        expected_residue_keys = {"residue_id", "pdb_text", "previous_id", "next_id",
+                                 # "rdkit_mol": obj.rdkit_mol, TODO: decide on how we want to represent mols as json
+                                 "molsetup", "molsetup_mapidx", "is_flexres_atom", "ignore_residue", "is_movable",
+                                 "user_deleted", "additional_connections"}
+        if set(obj.keys()) != expected_residue_keys:
+            return obj
+        # creates a chorizo residue and sets all the expected fields
+        residue = ChorizoResidue(obj["residue_id"], obj["pdb_text"], obj["previous_id"], obj["next_id"])
+        residue.molsetup = MoleculeSetup.molsetup_object_hook(obj["molsetup"])
+        residue.molsetup_mapidx = obj["molsetup_mapidx"]
+        residue.is_flexres_atom = obj["is_flexres_atom"]
+        residue.ignore_residue = obj["ignore_residue"]
+        residue.user_deleted = obj["user_deleted"]
+        residue.additional_connections = [ResidueAdditionalConnection(*v) for k, v in obj["additional_connections"]]
+        return residue
 
 class ResiduePadder:
     """
@@ -1257,7 +1296,9 @@ class ResidueTemplate:
 
 class ChorizoResidueEncoder(json.JSONEncoder):
     """
+    JSON Encoder class for Chorizo Residue objects.
     """
+
     def default(self, obj):
         """
         Overrides the default JSON encoder for data structures for Chorizo Residue objects.
