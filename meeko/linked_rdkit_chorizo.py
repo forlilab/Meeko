@@ -10,9 +10,9 @@ import prody
 from prody.atomic.atomgroup import AtomGroup
 from prody.atomic.selection import Selection
 
-import meeko.molsetup
 from .writer import PDBQTWriterLegacy
 from .molsetup import MoleculeSetup
+from .molsetup import MoleculeSetupEncoder
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.prodyutils import prody_to_rdkit, ALLOWED_PRODY_TYPES
@@ -1390,7 +1390,7 @@ class ChorizoResidueEncoder(json.JSONEncoder):
                 "previous_id": obj.previous_id,
                 "next_id": obj.next_id,
                 # "rdkit_mol": obj.rdkit_mol, TODO: decide on how we want to represent mols as json
-                "molsetup": meeko.molsetup.MoleculeSetupEncoder.default(self, obj.molsetup),
+                "molsetup": MoleculeSetupEncoder.default(self, obj.molsetup),
                 "molsetup_mapidx": obj.molsetup_mapidx,
                 "is_flexres_atom": obj.is_flexres_atom,
                 "ignore_residue": obj.ignore_residue,
