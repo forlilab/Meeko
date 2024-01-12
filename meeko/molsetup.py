@@ -18,6 +18,7 @@ from rdkit.Chem import rdPartialCharges
 from .utils import rdkitutils
 from .utils import utils
 from .utils.geomutils import calcDihedral
+from .utils.pdbutils import PDBAtomInfo
 from .receptor_pdbqt import PDBQTReceptor
 
 try:
@@ -65,6 +66,9 @@ class MoleculeSetup:
 
     Attributes
     ----------
+    mol: rdkit.Chem.rdchem.Mol
+        not guaranteed to be present in the object, contains the RDKit mol object that the molecule setup was based on
+        or corresponds to.
     atom_pseudo: List[]
         a list of indices of pseudo-atoms?
 
@@ -98,7 +102,7 @@ class MoleculeSetup:
         a mapping from atom index (int) to a list of neighboring atom indices?
     bond: OrderedDict()
         a mapping from bond id (int?) to a dictionary containing two elements. The elements are
-        bond_order (int) and rotable (bool).
+        bond_order (int) and rotatable (bool).
     element: OrderedDict()
         represents the atomic number of the atom index. A mapping from atom index to atomic number
     interaction_vector: OrderedDict()
@@ -673,7 +677,7 @@ class MoleculeSetup:
     # interaction vectors
     def add_interaction_vector(self, idx, vector_list):
         """ add vector list to list of directional interaction vectors for atom idx"""
-        if not idx in self.interaction_vector:
+        if idx not in self.interaction_vector:
             self.interaction_vector[idx] = []
         for vec in vector_list:
             self.interaction_vector[idx].append(vec)
@@ -940,6 +944,65 @@ class MoleculeSetup:
         # _macrocycle_typer.show_macrocycle_scores(self)
 
         print('')
+
+    @staticmethod
+    def molsetup_object_hook(obj):
+        """
+        Takes an object and attempts to decode it into a molecule setup object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary from deserializing a JSON of a molecule setup object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to a molecule setup, will return a molecule setup with data
+        populated from the dictionary. Otherwise, returns the input object.
+
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+        # check that all the keys we expect are in the object dictionary as a safety measure
+        expected_molsetup_keys = {"atom_pseudo", "coord", "charge", "pdbinfo", "atom_type", "atom_params",
+                                  "dihedral_interactions", "dihedral_partaking_atoms", "dihedral_labels", "atom_ignore",
+                                  "chiral", "atom_true_count", "graph", "bond", "element", "interaction_vector",
+                                  "flexibility_model", "ring_closure_info", "restraints", "is_sidechain",
+                                  "rmsd_symmetry_indices", "rings", "rings_aromatic", "atom_to_ring_id", "ring_corners",
+                                  "name", "rotamers"}
+        if set(obj.keys()) != expected_molsetup_keys:
+            return obj
+        # creates a molecule setup and sets all the expected molsetup fields.
+        molsetup = MoleculeSetup()
+        molsetup.atom_pseudo = obj["atom_pseudo"]
+        molsetup.coord = {k: np.asarray(v) for k, v in obj["coord"].items()}
+        molsetup.charge = obj["charge"]
+        molsetup.pdbinfo = {k: PDBAtomInfo(*v) for k, v in obj["pdbinfo"].items()}
+        molsetup.atom_type = obj["atom_type"]
+        molsetup.atom_params = obj["atom_params"]
+        molsetup.dihedral_interactions = obj["dihedral_interactions"]
+        molsetup.dihedral_partaking_atoms = obj["dihedral_labels"]
+        molsetup.atom_ignore = obj["atom_ignore"]
+        molsetup.chiral = obj["chiral"]
+        molsetup.atom_true_count = obj["atom_true_count"]
+        molsetup.graph = obj["graph"]
+        molsetup.bond = obj["bond"]
+        molsetup.element = obj["element"]
+        molsetup.interaction_vector = obj["interaction_vector"]
+        molsetup.flexibility_model = obj["flexibility_model"]
+        molsetup.ring_closure_info = obj["ring_closure_info"]
+        molsetup.restraints = [Restraint(*v) for k, v in obj["restraints"]]
+        molsetup.is_sidechain = obj["is_sidechain"]
+        molsetup.rmsd_symmetry_indices = obj["rmsd_symmetry_indices"]
+        molsetup.rings = obj["rings"]
+        molsetup.rings_aromatic = obj["rings_aromatic"]
+        molsetup.atom_to_ring_id = obj["atom_to_ring_id"]
+        molsetup.ring_corners = obj["ring_corners"]
+        molsetup.name = obj["name"]
+        molsetup.rotamers = obj["rotamers"]
+        return molsetup
 
 
 class RDKitMoleculeSetup(MoleculeSetup):
