@@ -689,14 +689,16 @@ class LinkedRDKitChorizo:
         if "atom_name" in atom_data:
             self.residues[res_id].set_atom_names(atom_data["atom_name"])
         chain, _, resnum = res_id.split(":")
-        molsetup, molsetup_mapidx, is_flexres_atom = self.build_molsetup(coords, atom_data, chain, resname, int(resnum))
+        atomic_nrs = [atom.GetAtomicNum() for atom in resmol.GetAtoms()]
+        molsetup, molsetup_mapidx, is_flexres_atom = self.build_molsetup(
+                coords, atom_data, chain, resname, int(resnum), atomic_nrs)
         self.residues[res_id].molsetup = molsetup
         self.residues[res_id].molsetup_mapidx = molsetup_mapidx
         self.residues[res_id].is_flexres_atom = is_flexres_atom
         return
 
     @staticmethod
-    def build_molsetup(coords, atom_data, chain, resn, resnum):
+    def build_molsetup(coords, atom_data, chain, resn, resnum, atomic_nrs):
 
         n = set([len(coords)] + [len(values) for (key, values) in atom_data.items()])
         if len(n) != 1:
@@ -721,6 +723,7 @@ class LinkedRDKitChorizo:
             else:
                 atom_name = ""
             molsetup.pdbinfo[i] = PDBAtomInfo(atom_name, resn, resnum, chain)
+            molsetup.element[i] = atomic_nrs[i]
 
         molsetup_mapidx = {i: i for i in range(n)} # identity mapping (padded_mol == mol)
         is_flexres_atom = [False for i in range(n)]
