@@ -5,6 +5,7 @@ from typing import Union
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
+from rdkit.Chem import rdMolInterchange
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
 import prody
 from prody.atomic.atomgroup import AtomGroup
@@ -1108,7 +1109,12 @@ class ChorizoResidue:
         return
 
     def to_json(self):
-        return json.dumps(self, default=lambda o: o.__dict__)
+        return json.dumps(self, cls=ChorizoResidueEncoder)
+
+    @classmethod
+    def from_json(cls, json_string):
+        residue = json.loads(json_string, object_hook=cls.chorizo_residue_json_decoder) 
+        return residue
 
     def is_valid_residue(self):
         """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to
@@ -1138,19 +1144,23 @@ class ChorizoResidue:
             return obj
         # check that all the keys we expect are in the object dictionary as a safety measure
         expected_residue_keys = {"residue_id", "pdb_text", "previous_id", "next_id",
-                                 # "rdkit_mol": obj.rdkit_mol, TODO: decide on how we want to represent mols as json
+                                 "rdkit_mol",
                                  "molsetup", "molsetup_mapidx", "is_flexres_atom", "ignore_residue", "is_movable",
                                  "user_deleted", "additional_connections"}
         if set(obj.keys()) != expected_residue_keys:
             return obj
         # creates a chorizo residue and sets all the expected fields
         residue = ChorizoResidue(obj["residue_id"], obj["pdb_text"], obj["previous_id"], obj["next_id"])
-        residue.molsetup = MoleculeSetup.molsetup_object_hook(obj["molsetup"])
+        residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
         residue.molsetup_mapidx = obj["molsetup_mapidx"]
         residue.is_flexres_atom = obj["is_flexres_atom"]
         residue.ignore_residue = obj["ignore_residue"]
         residue.user_deleted = obj["user_deleted"]
         residue.additional_connections = [ResidueAdditionalConnection(*v) for k, v in obj["additional_connections"]]
+        rdkit_mols = rdMolInterchange.JSONToMols(obj["rdkit_mol"])
+        if len(rdkit_mols) != 1:
+            raise ValueError(f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}")
+        residue.rdkit_mol = rdkit_mols[0]
         return residue
 
 class ResiduePadder:
@@ -1368,6 +1378,8 @@ class ChorizoResidueEncoder(json.JSONEncoder):
     JSON Encoder class for Chorizo Residue objects.
     """
 
+    molecule_setup_encoder = MoleculeSetupEncoder()
+
     def default(self, obj):
         """
         Overrides the default JSON encoder for data structures for Chorizo Residue objects.
@@ -1389,8 +1401,8 @@ class ChorizoResidueEncoder(json.JSONEncoder):
                 "pdb_text": obj.pdb_text,
                 "previous_id": obj.previous_id,
                 "next_id": obj.next_id,
-                # "rdkit_mol": obj.rdkit_mol, TODO: decide on how we want to represent mols as json
-                "molsetup": MoleculeSetupEncoder.default(self, obj.molsetup),
+                "rdkit_mol": rdMolInterchange.MolToJSON(obj.rdkit_mol),
+                "molsetup": self.molecule_setup_encoder.default(obj.molsetup),
                 "molsetup_mapidx": obj.molsetup_mapidx,
                 "is_flexres_atom": obj.is_flexres_atom,
                 "ignore_residue": obj.ignore_residue,

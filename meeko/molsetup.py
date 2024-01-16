@@ -14,6 +14,7 @@ import sys
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import rdPartialCharges
+from rdkit.Chem import rdMolInterchange
 
 from .utils import rdkitutils
 from .utils import utils
@@ -945,6 +946,14 @@ class MoleculeSetup:
 
         print('')
 
+    def to_json(self):
+        return json.dumps(self, cls=MoleculeSetupEncoder)
+
+    @classmethod
+    def from_json(cls, json_string):
+        molsetup = json.loads(json_string, object_hook=cls.molsetup_json_decoder)
+        return molsetup
+
     @staticmethod
     def molsetup_json_decoder(obj):
         """
@@ -965,17 +974,29 @@ class MoleculeSetup:
         # safe data, so we should ignore it.
         if type(obj) is not dict:
             return obj
+
+        # if there's a "mol" key in the input dictionary, then it's an RDKitMoleculeSetup
+        # as opposed to being the base class. OpenBabel MoleculeSetups are deprecated,
+        # assuming mol is an RDKit molecule, not an OpenBabel one.
+        if "mol" in obj:
+            mol = obj.pop("mol")
+            molsetup = RDKitMoleculeSetup()
+        else:
+            mol = None
+            molsetup = MoleculeSetup()
+
         # check that all the keys we expect are in the object dictionary as a safety measure
         expected_molsetup_keys = {"atom_pseudo", "coord", "charge", "pdbinfo", "atom_type", "atom_params",
                                   "dihedral_interactions", "dihedral_partaking_atoms", "dihedral_labels", "atom_ignore",
-                                  "chiral", "atom_true_count", "graph", "bond", "element", "interaction_vector",
-                                  "flexibility_model", "ring_closure_info", "restraints", "is_sidechain",
-                                  "rmsd_symmetry_indices", "rings", "rings_aromatic", "atom_to_ring_id", "ring_corners",
-                                  "name", "rotamers"}
+                                  "chiral", "atom_true_count", "graph",  "element", "interaction_vector",
+                                  "ring_closure_info", "restraints", "is_sidechain",
+                                  "rmsd_symmetry_indices", "rings_aromatic", "atom_to_ring_id", "ring_corners",
+                                  "name", "rotamers",
+                                  # "bond","rings", "flexibility_model",  # TODO can't encode yet
+                                  }
         if set(obj.keys()) != expected_molsetup_keys:
             return obj
         # creates a molecule setup and sets all the expected molsetup fields.
-        molsetup = MoleculeSetup()
         molsetup.atom_pseudo = obj["atom_pseudo"]
         molsetup.coord = {k: np.asarray(v) for k, v in obj["coord"].items()}
         molsetup.charge = obj["charge"]
@@ -988,20 +1009,25 @@ class MoleculeSetup:
         molsetup.chiral = obj["chiral"]
         molsetup.atom_true_count = obj["atom_true_count"]
         molsetup.graph = obj["graph"]
-        molsetup.bond = obj["bond"]
+        # molsetup.bond = obj["bond"]  # TODO can't encode yet
         molsetup.element = obj["element"]
         molsetup.interaction_vector = obj["interaction_vector"]
-        molsetup.flexibility_model = obj["flexibility_model"]
+        # molsetup.flexibility_model = obj["flexibility_model"]  # TODO can't encode yet
         molsetup.ring_closure_info = obj["ring_closure_info"]
         molsetup.restraints = [Restraint(*v) for k, v in obj["restraints"]]
         molsetup.is_sidechain = obj["is_sidechain"]
         molsetup.rmsd_symmetry_indices = obj["rmsd_symmetry_indices"]
-        molsetup.rings = obj["rings"]
+        # molsetup.rings = obj["rings"]  # TODO can't encode yet
         molsetup.rings_aromatic = obj["rings_aromatic"]
         molsetup.atom_to_ring_id = obj["atom_to_ring_id"]
         molsetup.ring_corners = obj["ring_corners"]
         molsetup.name = obj["name"]
         molsetup.rotamers = obj["rotamers"]
+        if mol is not None:
+            rdkit_mols = rdMolInterchange.JSONToMols(mol)
+            if len(rdkit_mols) != 1:
+                raise ValueError(f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}")
+            molsetup.mol = rdkit_mols[0]
         return molsetup
 
 
@@ -1512,7 +1538,7 @@ class MoleculeSetupEncoder(json.JSONEncoder):
         object.
         """
         if isinstance(obj, MoleculeSetup):
-            return {
+            output_dict = {
                 "atom_pseudo": obj.atom_pseudo,
                 "coord": {k: v.tolist() for k, v in obj.coord.items()},
                 "charge": obj.charge,
@@ -1526,19 +1552,22 @@ class MoleculeSetupEncoder(json.JSONEncoder):
                 "chiral": obj.chiral,
                 "atom_true_count": obj.atom_true_count,
                 "graph": obj.graph,
-                "bond": obj.bond,
+                #"bond": obj.bond,  # TODO uses tuples as keys which trips json
                 "element": obj.element,
                 "interaction_vector": obj.interaction_vector,
-                "flexibility_model": obj.flexibility_model,
+                #"flexibility_model": obj.flexibility_model,  # TODO uses tuples as keys which trips json
                 "ring_closure_info": obj.ring_closure_info,
                 "restraints": obj.restraints,
                 "is_sidechain": obj.is_sidechain,
                 "rmsd_symmetry_indices": obj.rmsd_symmetry_indices,
-                "rings": obj.rings,
+                #"rings": obj.rings,  # TODO uses tuples as keys which trips json
                 "rings_aromatic": obj.rings_aromatic,
                 "atom_to_ring_id": obj.atom_to_ring_id,
                 "ring_corners": obj.ring_corners,
                 "name": obj.name,
                 "rotamers": obj.rotamers
             }
+            if isinstance(obj, RDKitMoleculeSetup):
+                output_dict["mol"] = rdMolInterchange.MolToJSON(obj.mol)
+            return output_dict
         return json.JSONEncoder.default(self, obj)
