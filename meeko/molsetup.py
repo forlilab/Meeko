@@ -77,7 +77,7 @@ class MoleculeSetup:
         a mapping between atom index and coordinates, where atom indices are stored as ints and coordinates are
         numpy arrays of three floats.
     charge: OrderedDict()
-        a mapping between atom index and charge
+        a mapping between atom index (int) and charge (float)
     pdbinfo: OrderedDict()
         a mapping between atom index (int) and pdb data (PDBAtomInfo) for that atom
     atom_type: OrderedDict()
@@ -988,28 +988,31 @@ class MoleculeSetup:
         # check that all the keys we expect are in the object dictionary as a safety measure
         expected_molsetup_keys = {"atom_pseudo", "coord", "charge", "pdbinfo", "atom_type", "atom_params",
                                   "dihedral_interactions", "dihedral_partaking_atoms", "dihedral_labels", "atom_ignore",
-                                  "chiral", "atom_true_count", "graph",  "element", "interaction_vector",
+                                  "chiral", "atom_true_count", "graph", "bond", "element", "interaction_vector",
                                   "ring_closure_info", "restraints", "is_sidechain",
                                   "rmsd_symmetry_indices", "rings_aromatic", "atom_to_ring_id", "ring_corners",
                                   "name", "rotamers",
-                                  # "bond","rings", "flexibility_model",  # TODO can't encode yet
+                                  # "rings", "flexibility_model",  # TODO can't encode yet
                                   }
         if set(obj.keys()) != expected_molsetup_keys:
             return obj
-        # creates a molecule setup and sets all the expected molsetup fields.
-        molsetup.atom_pseudo = obj["atom_pseudo"]
-        molsetup.coord = {k: np.asarray(v) for k, v in obj["coord"].items()}
-        molsetup.charge = obj["charge"]
-        molsetup.pdbinfo = {k: PDBAtomInfo(*v) for k, v in obj["pdbinfo"].items()}
-        molsetup.atom_type = obj["atom_type"]
+
+        separator_char = ","
+        # creates a molecule setup and sets all the expected molsetup fields. Converts to desired type for molsetups.
+        molsetup.atom_pseudo = [int(v) for v in obj["atom_pseudo"]]
+        molsetup.coord = OrderedDict({int(k): np.asarray(v) for k, v in obj["coord"].items()})
+        molsetup.charge = OrderedDict({int(k): float(v) for k, v in obj["charge"].items()})
+        molsetup.pdbinfo = OrderedDict({int(k): PDBAtomInfo(*v) for k, v in obj["pdbinfo"].items()})
+        molsetup.atom_type = OrderedDict({int(k): v for k, v in obj["atom_type"].items()})
         molsetup.atom_params = obj["atom_params"]
         molsetup.dihedral_interactions = obj["dihedral_interactions"]
-        molsetup.dihedral_partaking_atoms = obj["dihedral_labels"]
-        molsetup.atom_ignore = obj["atom_ignore"]
-        molsetup.chiral = obj["chiral"]
+        molsetup.dihedral_partaking_atoms = obj["dihedral_partaking_atoms"]
+        molsetup.dihedral_labels = obj["dihedral_labels"]
+        molsetup.atom_ignore = OrderedDict({int(k): v for k, v in obj["atom_ignore"].items()})
+        molsetup.chiral = OrderedDict({int(k): v for k, v in obj["chiral"].items()})
         molsetup.atom_true_count = obj["atom_true_count"]
-        molsetup.graph = obj["graph"]
-        # molsetup.bond = obj["bond"]  # TODO can't encode yet
+        molsetup.graph = OrderedDict({int(k): v for k, v in obj["graph"].items()})
+        molsetup.bond = OrderedDict({tuple([int(i) for i in k.split(separator_char)]): v for k, v in obj["bond"].items()})
         molsetup.element = obj["element"]
         molsetup.interaction_vector = obj["interaction_vector"]
         # molsetup.flexibility_model = obj["flexibility_model"]  # TODO can't encode yet
@@ -1522,6 +1525,7 @@ class MoleculeSetupEncoder(json.JSONEncoder):
     """
     JSON Encoder class for molecule setup objects.
     """
+
     def default(self, obj):
         """
         Overrides the default JSON encoder for data structures for Molecule Setup objects.
@@ -1538,6 +1542,7 @@ class MoleculeSetupEncoder(json.JSONEncoder):
         object.
         """
         if isinstance(obj, MoleculeSetup):
+            separator_char = ","  # TODO: consider setting this somewhere else so it is the same for decode and encode
             output_dict = {
                 "atom_pseudo": obj.atom_pseudo,
                 "coord": {k: v.tolist() for k, v in obj.coord.items()},
@@ -1552,21 +1557,23 @@ class MoleculeSetupEncoder(json.JSONEncoder):
                 "chiral": obj.chiral,
                 "atom_true_count": obj.atom_true_count,
                 "graph": obj.graph,
-                #"bond": obj.bond,  # TODO uses tuples as keys which trips json
+                "bond": {separator_char.join([str(i) for i in k]): v for k, v in obj.bond.items()},
+                # TODO uses tuples as keys which trips json
                 "element": obj.element,
                 "interaction_vector": obj.interaction_vector,
-                #"flexibility_model": obj.flexibility_model,  # TODO uses tuples as keys which trips json
+                # "flexibility_model": obj.flexibility_model,  # TODO uses tuples as keys which trips json
                 "ring_closure_info": obj.ring_closure_info,
                 "restraints": obj.restraints,
                 "is_sidechain": obj.is_sidechain,
                 "rmsd_symmetry_indices": obj.rmsd_symmetry_indices,
-                #"rings": obj.rings,  # TODO uses tuples as keys which trips json
+                # "rings": obj.rings,  # TODO uses tuples as keys which trips json
                 "rings_aromatic": obj.rings_aromatic,
                 "atom_to_ring_id": obj.atom_to_ring_id,
                 "ring_corners": obj.ring_corners,
                 "name": obj.name,
                 "rotamers": obj.rotamers
             }
+            # Adds mol attribute if the input molecule setup is an RDKitMoleculeSetup
             if isinstance(obj, RDKitMoleculeSetup):
                 output_dict["mol"] = rdMolInterchange.MolToJSON(obj.mol)
             return output_dict
