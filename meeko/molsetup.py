@@ -957,7 +957,8 @@ class MoleculeSetup:
     @staticmethod
     def molsetup_json_decoder(obj):
         """
-        Takes an object and attempts to decode it into a molecule setup object.
+        Takes an object and attempts to decode it into a molecule setup object. Handles type conversions that it knows
+        about, otherwise leaves attributes as the output that JSON leaves them as
 
         Parameters
         ----------
@@ -989,10 +990,9 @@ class MoleculeSetup:
         expected_molsetup_keys = {"atom_pseudo", "coord", "charge", "pdbinfo", "atom_type", "atom_params",
                                   "dihedral_interactions", "dihedral_partaking_atoms", "dihedral_labels", "atom_ignore",
                                   "chiral", "atom_true_count", "graph", "bond", "element", "interaction_vector",
-                                  "ring_closure_info", "restraints", "is_sidechain",
-                                  "rmsd_symmetry_indices", "rings_aromatic", "atom_to_ring_id", "ring_corners",
+                                  "flexibility_model", "ring_closure_info", "restraints", "is_sidechain",
+                                  "rmsd_symmetry_indices", "rings", "rings_aromatic", "atom_to_ring_id", "ring_corners",
                                   "name", "rotamers",
-                                  # "rings", "flexibility_model",  # TODO can't encode yet
                                   }
         if set(obj.keys()) != expected_molsetup_keys:
             return obj
@@ -1012,17 +1012,36 @@ class MoleculeSetup:
         molsetup.chiral = OrderedDict({int(k): v for k, v in obj["chiral"].items()})
         molsetup.atom_true_count = obj["atom_true_count"]
         molsetup.graph = OrderedDict({int(k): v for k, v in obj["graph"].items()})
-        molsetup.bond = OrderedDict({tuple([int(i) for i in k.split(separator_char)]): v for k, v in obj["bond"].items()})
-        molsetup.element = obj["element"]
-        molsetup.interaction_vector = obj["interaction_vector"]
-        # molsetup.flexibility_model = obj["flexibility_model"]  # TODO can't encode yet
+        molsetup.bond = OrderedDict({tuple([int(i) for i in k.split(separator_char)]): v
+                                     for k, v in obj["bond"].items()})
+        molsetup.element = OrderedDict({int(k): v for k, v in obj["element"].items()})
+        molsetup.interaction_vector = OrderedDict(obj["interaction_vector"])
+        # Handling flexibility model dictionary of dictionaries
+        molsetup.flexibility_model = obj["flexibility_model"]
+        if 'rigid_body_connectivity' in molsetup.flexibility_model:
+            tuples_rigid_body_connectivity = \
+                {tuple([int(i) for i in k.split(separator_char)]): tuple(v)
+                 for k, v in molsetup.flexibility_model['rigid_body_connectivity'].items()}
+            molsetup.flexibility_model['rigid_body_connectivity'] = tuples_rigid_body_connectivity
+        if 'rigid_body_graph' in molsetup.flexibility_model:
+            molsetup.flexibility_model['rigid_body_graph'] = \
+                {int(k): v for k, v in molsetup.flexibility_model['rigid_body_graph'].items()}
+        if 'rigid_body_members' in molsetup.flexibility_model:
+            molsetup.flexibility_model['rigid_body_members'] = \
+                {int(k): v for k, v in molsetup.flexibility_model['rigid_body_members'].items()}
+
         molsetup.ring_closure_info = obj["ring_closure_info"]
         molsetup.restraints = [Restraint(*v) for k, v in obj["restraints"]]
         molsetup.is_sidechain = obj["is_sidechain"]
-        molsetup.rmsd_symmetry_indices = obj["rmsd_symmetry_indices"]
-        # molsetup.rings = obj["rings"]  # TODO can't encode yet
-        molsetup.rings_aromatic = obj["rings_aromatic"]
+        molsetup.rmsd_symmetry_indices = tuple([tuple(v) for v in obj["rmsd_symmetry_indices"]])
+        molsetup.rings = {tuple([int(i) for i in k.split(separator_char)]): v
+                          for k, v in obj["rings"].items()}
+        for key in molsetup.rings:
+            if 'graph' in molsetup.rings[key]:
+                molsetup.rings[key]['graph'] = {int(k): v for k, v in molsetup.rings[key]['graph'].items()}
+        molsetup.rings_aromatic = [tuple(v) for v in obj["rings_aromatic"]]
         molsetup.atom_to_ring_id = obj["atom_to_ring_id"]
+        molsetup.atom_to_ring_id = {int(k): [tuple(t) for t in v] for k, v in obj['atom_to_ring_id'].items()}
         molsetup.ring_corners = obj["ring_corners"]
         molsetup.name = obj["name"]
         molsetup.rotamers = obj["rotamers"]
@@ -1558,21 +1577,29 @@ class MoleculeSetupEncoder(json.JSONEncoder):
                 "atom_true_count": obj.atom_true_count,
                 "graph": obj.graph,
                 "bond": {separator_char.join([str(i) for i in k]): v for k, v in obj.bond.items()},
-                # TODO uses tuples as keys which trips json
                 "element": obj.element,
                 "interaction_vector": obj.interaction_vector,
-                # "flexibility_model": obj.flexibility_model,  # TODO uses tuples as keys which trips json
+                "flexibility_model": obj.flexibility_model,
                 "ring_closure_info": obj.ring_closure_info,
                 "restraints": obj.restraints,
                 "is_sidechain": obj.is_sidechain,
                 "rmsd_symmetry_indices": obj.rmsd_symmetry_indices,
-                # "rings": obj.rings,  # TODO uses tuples as keys which trips json
+                "rings": {separator_char.join([str(i) for i in k]): v for k, v in obj.rings.items()},
                 "rings_aromatic": obj.rings_aromatic,
                 "atom_to_ring_id": obj.atom_to_ring_id,
                 "ring_corners": obj.ring_corners,
                 "name": obj.name,
                 "rotamers": obj.rotamers
             }
+            # Since the flexibility model attribute contains dictionaries with tuples as keys, it needs to be treated
+            # more specifically.
+            if 'rigid_body_connectivity' in obj.flexibility_model:
+                new_rigid_body_conn_dict = {separator_char.join([str(i) for i in k]): v
+                                            for k, v in obj.flexibility_model['rigid_body_connectivity'].items()}
+                output_dict["flexibility_model"] = \
+                    {k: (v if k != 'rigid_body_connectivity' else new_rigid_body_conn_dict)
+                     for k, v in obj.flexibility_model.items()}
+
             # Adds mol attribute if the input molecule setup is an RDKitMoleculeSetup
             if isinstance(obj, RDKitMoleculeSetup):
                 output_dict["mol"] = rdMolInterchange.MolToJSON(obj.mol)
