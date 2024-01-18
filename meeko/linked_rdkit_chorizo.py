@@ -3,9 +3,12 @@ import json
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
+from rdkit.Chem import rdMolInterchange
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
+
 from .writer import PDBQTWriterLegacy
 from .molsetup import MoleculeSetup
+from .molsetup import MoleculeSetupEncoder
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.pdbutils import PDBAtomInfo
@@ -422,16 +425,6 @@ class LinkedRDKitChorizo:
         is_res_atom.extend([False] * (mol.GetNumAtoms() - n_atoms_before_addhs))
         return mol, is_res_atom, mapidx
 
-    @staticmethod
-    def expand_resid(resid_string):
-        chain, resnum = resid_string.strip().split(":")
-        if len(chain) > 1: raise ValueError(f"chain must be empty or single character, got {chain=}")
-        if len(resnum) == 0: raise ValueError(f"resnum can't be empty in {resid_string=}")
-        if resnum[-1].isalpha(): # PDB insertion code
-            insertion_code = resnum[-1]
-            resnum
-        return chain, resnum, icode
-
     def res_to_molsetup(self, res, mk_prep, is_protein_sidechain=False, cut_at_calpha=False):
         padded_mol, is_res_atom, mapidx = self.get_padded_mol(res)
         if is_protein_sidechain:
@@ -449,12 +442,12 @@ class LinkedRDKitChorizo:
         is_flexres_atom = []
         for atom_index in molsetup.atom_ignore:
             if atom_index < len(is_res_atom):
-                is_res = is_res_atom[atom_index] # Hs from Chem.AddHs beyond length of is_res_atom
+                is_res = is_res_atom[atom_index]  # Hs from Chem.AddHs beyond length of is_res_atom
             else:
                 is_res = False
-            molsetup.atom_ignore[atom_index] |= not is_res # ignore padding atoms
+            molsetup.atom_ignore[atom_index] |= not is_res  # ignore padding atoms
             is_flex = is_protein_sidechain
-            if cut_at_calpha and (atom_index != c_alpha) and (atom_index in bb_matches[0]): # TODO bb pseudos
+            if cut_at_calpha and (atom_index != c_alpha) and (atom_index in bb_matches[0]):  # TODO bb pseudos
                 is_flex = False
             is_flexres_atom.append(is_flex)
 
@@ -465,7 +458,7 @@ class LinkedRDKitChorizo:
         not_ignored_idxs = []
         charges = []
         for i, q in molsetup.charge.items():  # charge is ordered dict
-            if i in mapidx: # TODO offsite not in mapidx
+            if i in mapidx:  # TODO offsite not in mapidx
                 charges.append(q)
                 not_ignored_idxs.append(i)
         charges = rectify_charges(charges, net_charge, decimals=3)
@@ -515,14 +508,15 @@ class LinkedRDKitChorizo:
             if resn == "ambiguous": continue
             template = {}
             atom_data = {}
-            atom_data_lengths = set() # to verify consistency
+            atom_data_lengths = set()  # to verify consistency
             for propname in params[resn]:
                 if propname not in undesired_props:
                     atom_data[propname] = params[resn][propname].copy()
                     atom_data_lengths.add(len(atom_data[propname]))
             rdkit_mol = Chem.MolFromSmiles(params[resn]['smiles'], ps)
             assert len(atom_data_lengths) == 1, f"not all properties have same length for {resn=}"
-            assert list(atom_data_lengths)[0] == rdkit_mol.GetNumAtoms(), f"nr of atoms ({rdkit_mol.GetNumAtoms()}) and length of properties ({list(atom_data_lengths)[0]}) differs for {resn=}"
+            assert list(atom_data_lengths)[
+                       0] == rdkit_mol.GetNumAtoms(), f"nr of atoms ({rdkit_mol.GetNumAtoms()}) and length of properties ({list(atom_data_lengths)[0]}) differs for {resn=}"
 
             template["atom_data"] = atom_data
             template["rdkit_mol"] = rdkit_mol
@@ -725,9 +719,9 @@ class LinkedRDKitChorizo:
             molsetup.pdbinfo[i] = PDBAtomInfo(atom_name, resn, resnum, chain)
             molsetup.element[i] = atomic_nrs[i]
 
-        molsetup_mapidx = {i: i for i in range(n)} # identity mapping (padded_mol == mol)
+        molsetup_mapidx = {i: i for i in range(n)}  # identity mapping (padded_mol == mol)
         is_flexres_atom = [False for i in range(n)]
-            
+
         return molsetup, molsetup_mapidx, is_flexres_atom
 
     def build_resmol(self, res, resn):
@@ -748,7 +742,7 @@ class LinkedRDKitChorizo:
             pdb_coord = pdbmol.GetConformer().GetAtomPosition(pdb_idx)
             resmol.GetConformer().SetAtomPosition(idx, pdb_coord)
 
-        missing_atoms = {atom_data["atom_name"][i]:i for i in range(resmol.GetNumAtoms()) if i not in atom_map.keys()}
+        missing_atoms = {atom_data["atom_name"][i]: i for i in range(resmol.GetNumAtoms()) if i not in atom_map.keys()}
 
         # Handle case of missing backbone amide H
         if 'H' in missing_atoms:
@@ -789,8 +783,7 @@ class LinkedRDKitChorizo:
             self.mk_parameterize_residue(res, mk_prep)
         return
 
-
-    def mk_parameterize_residue(self, res, mk_prep): 
+    def mk_parameterize_residue(self, res, mk_prep):
         molsetup, mapidx, is_flexres_atom = self.res_to_molsetup(res, mk_prep)
         self.residues[res].molsetup = molsetup
         self.residues[res].mapidx = mapidx
@@ -838,7 +831,7 @@ class LinkedRDKitChorizo:
         atom_params = {}
         counter_atoms = 0
         coords = []
-        dedicated_attribute = ("charge", "atom_type") # molsetup has a dedicated attribute
+        dedicated_attribute = ("charge", "atom_type")  # molsetup has a dedicated attribute
         for res_id in self.get_valid_residues():
             molsetup = self.residues[res_id].molsetup
             wanted_atom_indices = []
@@ -846,20 +839,20 @@ class LinkedRDKitChorizo:
                 if not ignore and not self.residues[res_id].is_flexres_atom[i]:
                     wanted_atom_indices.append(i)
             for key, values in molsetup.atom_params.items():
-                atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
+                atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 for i in wanted_atom_indices:
                     atom_params[key].append(values[i])
             for key in dedicated_attribute:
-                atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
+                atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 values_dict = getattr(molsetup, key)
                 for i in wanted_atom_indices:
                     atom_params[key].append(values_dict[i])
             counter_atoms += len(wanted_atom_indices)
             added_keys = set(molsetup.atom_params).union(dedicated_attribute)
-            for key in set(atom_params).difference(added_keys): # <key> missing in current molsetup
-                atom_params[key].extend([None] * len(wanted_atom_indices)) # fill in incomplete "row"
+            for key in set(atom_params).difference(added_keys):  # <key> missing in current molsetup
+                atom_params[key].extend([None] * len(wanted_atom_indices))  # fill in incomplete "row"
             coords.extend(molsetup.coord[i])
-        if hasattr(self, "param_rename"): # e.g. "gasteiger" -> "q"
+        if hasattr(self, "param_rename"):  # e.g. "gasteiger" -> "q"
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
         return atom_params, coords
@@ -1025,7 +1018,7 @@ class ChorizoResidue:
         self.atom_names = None # assumes same order and length as atoms in rdkit_mol
         self.molsetup = None
         self.molsetup_mapidx = None
-        self.is_flexres_atom = None # Check about these data types/Do we want the default to be None or empty
+        self.is_flexres_atom = None  # Check about these data types/Do we want the default to be None or empty
 
         # flags
         self.ignore_residue = False
@@ -1046,11 +1039,60 @@ class ChorizoResidue:
         return
 
     def to_json(self):
-        return json.dumps(self, default=lambda o: o.__dict__)
+        return json.dumps(self, cls=ChorizoResidueEncoder)
+
+    @classmethod
+    def from_json(cls, json_string):
+        residue = json.loads(json_string, object_hook=cls.chorizo_residue_json_decoder) 
+        return residue
 
     def is_valid_residue(self):
-        """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to ignore"""
+        """
+        Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to
+        ignore
+        """
         return not self.ignore_residue and not self.user_deleted
+
+    @staticmethod
+    def chorizo_residue_json_decoder(obj):
+        """
+        Takes an object and attempts to decode it into a chorizo residue object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary from deserializing a JSON of a chorizo residue object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to a molecule setup, will return a Chorizo Residue with data
+        populated from the dictionary. Otherwise, returns the input object.
+
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+        # check that all the keys we expect are in the object dictionary as a safety measure
+        expected_residue_keys = {"residue_id", "pdb_text", "previous_id", "next_id",
+                                 "rdkit_mol",
+                                 "molsetup", "molsetup_mapidx", "is_flexres_atom", "ignore_residue", "is_movable",
+                                 "user_deleted", "additional_connections"}
+        if set(obj.keys()) != expected_residue_keys:
+            return obj
+        # creates a chorizo residue and sets all the expected fields
+        residue = ChorizoResidue(obj["residue_id"], obj["pdb_text"], obj["previous_id"], obj["next_id"])
+        residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
+        residue.molsetup_mapidx = obj["molsetup_mapidx"]
+        residue.is_flexres_atom = obj["is_flexres_atom"]
+        residue.ignore_residue = obj["ignore_residue"]
+        residue.user_deleted = obj["user_deleted"]
+        residue.additional_connections = [ResidueAdditionalConnection(*v) for k, v in obj["additional_connections"]]
+        rdkit_mols = rdMolInterchange.JSONToMols(obj["rdkit_mol"])
+        if len(rdkit_mols) != 1:
+            raise ValueError(f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}")
+        residue.rdkit_mol = rdkit_mols[0]
+        return residue
 
 
 # This could be a named tuple or a dataclass as it stands, but that is dependent on the amount of custom behavior
@@ -1076,3 +1118,43 @@ class ResidueAdditionalConnection:
 
     def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)
+
+
+class ChorizoResidueEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for Chorizo Residue objects.
+    """
+
+    molecule_setup_encoder = MoleculeSetupEncoder()
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for Chorizo Residue objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Chorizo Residue JSON format for Molsetup objects.
+            For all other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the Chorizo Residue class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, ChorizoResidue):
+            return {
+                "residue_id": obj.residue_id,
+                "pdb_text": obj.pdb_text,
+                "previous_id": obj.previous_id,
+                "next_id": obj.next_id,
+                "rdkit_mol": rdMolInterchange.MolToJSON(obj.rdkit_mol),
+                "molsetup": self.molecule_setup_encoder.default(obj.molsetup),
+                "molsetup_mapidx": obj.molsetup_mapidx,
+                "is_flexres_atom": obj.is_flexres_atom,
+                "ignore_residue": obj.ignore_residue,
+                "is_movable": obj.is_movable,
+                "user_deleted": obj.user_deleted,
+                "additional_connections": [var.__dict__ for var in obj.additional_connections]
+            }
+        return json.JSONEncoder.default(self, obj)
