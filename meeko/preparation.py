@@ -96,6 +96,8 @@ class MoleculePreparation:
                 add_atom_types,
                 self.packaged_params)
 
+        if load_offatom_params is not None:
+            raise NotImplementedError("load_offatom_params not implemented")
         self.load_offatom_params = load_offatom_params
         
         allowed_charge_models = ["espaloma", "gasteiger", "zero"]
@@ -129,8 +131,19 @@ class MoleculePreparation:
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
+        
+        if input_offatom_params is None:
+            self.offatom_params = {}
+        else:
+            self.offatom_params = input_offatom_params
 
-        self.offatom_params = {}
+        if _has_openbabel:
+            self._classes_setup[ob.OBMol] = OBMoleculeSetup
+        if keep_chorded_rings and keep_equivalent_rings==False:
+            warnings.warn("keep_equivalent_rings=False ignored because keep_chorded_rings=True", RuntimeWarning)
+        if (reactive_smarts is None) != (reactive_smarts_idx is None):
+            raise ValueError("reactive_smarts and reactive_smarts_idx require each other")
+
 
     @staticmethod
     def get_atom_params(input_atom_params, load_atom_params, add_atom_types, packaged_params):
@@ -211,17 +224,6 @@ class MoleculePreparation:
                 ### #for value in atom_params:
                     
 
-        self.offatom_params = offatom_params
-        self.charge_model = charge_model
-        self.dihedral_params = dihedral_params
-
-
-        if _has_openbabel:
-            self._classes_setup[ob.OBMol] = OBMoleculeSetup
-        if keep_chorded_rings and keep_equivalent_rings==False:
-            warnings.warn("keep_equivalent_rings=False ignored because keep_chorded_rings=True", RuntimeWarning)
-        if (reactive_smarts is None) != (reactive_smarts_idx is None):
-            raise ValueError("reactive_smarts and reactive_smarts_idx require each other")
 
     @property
     def setup(self):

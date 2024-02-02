@@ -130,3 +130,32 @@ def test_meeko_free_energy_prop_adgpu():
     data = json.loads(rdkit_mols[0].GetProp("meeko"))
     assert "free_energy" in data
     assert data["free_energy"] == -2.11
+
+def test_offsite_charges():
+    mk_config = {
+        "input_offatom_params": {
+            "offsite": [
+                {"smarts": "[#7X3;v3;!+]([*])([*])[*]",
+                 "IDX": [1],
+                 "OFFATOMS": [{"z": [2, 3, 4], "phi": 0, "distance": 0.2, "atype": "LP", "pull_charge_fraction": 1.08}]
+                 }
+            ]
+        }
+    }
+
+    sdfname = "small-01_three-deuterium.sdf"
+    fpath = datadir / sdfname
+    mk_prep = MoleculePreparation.from_config(mk_config)
+    for mol in Chem.SDMolSupplier(str(fpath), removeHs=False):
+        break # we have just 1 mol
+    setups = mk_prep.prepare(mol)
+    molsetup = setups[0]
+    pdbqt, is_ok, error_msg = PDBQTWriterLegacy.write_string(molsetup)
+    assert is_ok
+    assert "LP" in pdbqt
+    pmol = PDBQTMolecule(pdbqt, skip_typing=True)
+    rdkit_mols = RDKitMolCreate.from_pdbqt_mol(pmol)
+    assert len(rdkit_mols) == 1
+    smiles = Chem.MolToSmiles(rdkit_mols[0])
+    assert type(smiles) == str
+    assert len(smiles) > 0

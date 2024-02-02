@@ -64,7 +64,7 @@ class MoleculeSetup:
     def __init__(self):
 
         self.atom_pseudo = []
-        self.coord = OrderedDict()  # FIXME all OrderedDict shuold be converted to lists?
+        self.coord = OrderedDict()  # FIXME all OrderedDict should be converted to lists?
         self.charge = OrderedDict()
         self.pdbinfo = OrderedDict()
         self.atom_type = OrderedDict()
@@ -760,8 +760,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
         new_mol.RemoveAllConformers()
         new_mol.AddConformer(new_conformer, assignId=True)
         for atom_index, is_set in enumerate(is_set_list):
-            if not is_set and new_mol.GetAtomWithIdx(atom_idx).GetAtomicNum() == 1:
-                neighbors = new_mol.GetAtomWithIdx(atom_idx).GetNeighbors()
+            if not is_set and new_mol.GetAtomWithIdx(atom_index).GetAtomicNum() == 1:
+                neighbors = new_mol.GetAtomWithIdx(atom_index).GetNeighbors()
                 if len(neighbors) != 1:
                     raise RuntimeError("Expected H to have one neighbors")
                 Chem.SetTerminalAtomCoords(new_mol, atom_index, neighbors[0].GetIdx())
@@ -876,7 +876,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
                             matches.append(i)
                             break
                 if len(matches) != len(hidxs):
-                    raise RuntimeError("Number of matched isotopes %d differs from query Hs: %d" % (len(matched), len(hidxs)))
+                    raise RuntimeError("Number of matched isotopes %d differs from query Hs: %d" % (len(matches), len(hidxs)))
                 for hidx, i in zip(hidxs, matches):
                     noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
             else:
@@ -1110,12 +1110,14 @@ class UniqAtomParams:
         return new_row_index
 
 
-    def add_molsetup(self, molsetup, add_atomic_nr=False, add_atom_type=False):
+    def add_molsetup(self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False):
         if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
             msg = '"q" and "atom_type" found in molsetup.atom_params'
             msg += ' but are hard-coded to store molsetup.charge and'
             msg += ' molsetup.atom_type in the internal data structure'
             raise RuntimeError(msg)
+        if atom_params is None:
+            atom_params = molsetup.atom_params
         param_idxs = []
         for atom_index, ignore in molsetup.atom_ignore.items():
             if ignore:

@@ -428,31 +428,29 @@ class PDBQTWriterLegacy():
         flex_pdbqt_dict = {}
         atom_count = 0
         flex_atom_count = 0
-        for res_id in chorizo.getValidResidues():
-            resmol = chorizo.residues[res_id].rdkit_mol
-            positions = resmol.GetConformer().GetPositions()
+        for res_id in chorizo.get_valid_residues():
+            molsetup = chorizo.residues[res_id].molsetup
             chain, resname, resnum = res_id.split(":")
             resnum = int(resnum)
             molsetup_mapidx = {} if chorizo.residues[res_id].molsetup_mapidx is None else chorizo.residues[res_id].molsetup_mapidx
-            molsetup_ignored = () if chorizo.residues[res_id].molsetup_ignored is None else chorizo.residues[res_id].molsetup_ignored
-            flexres_idxs = [j for (i, j) in molsetup_mapidx.items() if j not in molsetup_ignored]
-            for atom in resmol.GetAtoms():
-                if atom.GetIdx() in flexres_idxs:
+            is_flexres_atom = chorizo.residues[res_id].is_flexres_atom
+            for i, atom_ignore in molsetup.atom_ignore.items():
+                if atom_ignore or is_flexres_atom[i]:
                     continue
-                props = atom.GetPropsAsDict()
-                atom_type = props["atom_type"]
-                if atom_type == "H": # TODO read ignore flag in molsetup
-                    continue
-                coord = positions[atom.GetIdx()]
-                atom_name = props.get("atom_name", "")
-                charge = props["gasteiger"]
+                atom_type = molsetup.atom_type[i]
+                coord = molsetup.coord[i]
+                atom_name = molsetup.pdbinfo[i].name
+                charge = molsetup.charge[i]
                 atom_count += 1
                 rigid_pdbqt_string += cls._make_pdbqt_line(
                     atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type) + linesep
-            if chorizo.residues[res_id].molsetup:
+            if chorizo.residues[res_id].is_movable:
                 chain, resname, resnum = res_id.split(":")
                 molsetup = chorizo.residues[res_id].molsetup
+                original_ignore = molsetup.atom_ignore.copy()
+                molsetup.atom_ignore = {i: ig or not is_flexres_atom[i] for (i, ig) in molsetup.atom_ignore.items()}
                 this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup, remove_smiles=True)
+                molsetup.atom_ignore = original_ignore
                 if not ok:
                     raise RuntimeError(err)
                 this_flex_pdbqt, flex_atom_count = cls.adapt_pdbqt_for_autodock4_flexres(
