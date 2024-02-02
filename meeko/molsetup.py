@@ -1110,12 +1110,14 @@ class UniqAtomParams:
         return new_row_index
 
 
-    def add_molsetup(self, molsetup, add_atomic_nr=False, add_atom_type=False):
+    def add_molsetup(self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False):
         if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
             msg = '"q" and "atom_type" found in molsetup.atom_params'
             msg += ' but are hard-coded to store molsetup.charge and'
             msg += ' molsetup.atom_type in the internal data structure'
             raise RuntimeError(msg)
+        if atom_params is None:
+            atom_params = molsetup.atom_params
         param_idxs = []
         for atom_index, ignore in molsetup.atom_ignore.items():
             if ignore:

@@ -355,7 +355,7 @@ if args.pdb is not None:
     if len(chorizo.get_ignored_residues()) > 0:
         removed_residues = chorizo.get_ignored_residues()
         print("Automatically deleted %d residues" % len(removed_residues))
-        print(json.dumps(removed_residues, indent=4))
+        print(json.dumps(list(removed_residues.keys()), indent=4))
         suggested_config["deleted_residues"] = removed_residues.copy()
 
     #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
@@ -418,7 +418,8 @@ if len(suggested_config):
     written_files_log["filename"].append(suggested_fn)
     written_files_log["description"].append("log of automated decisions for user inspection")
     with open(suggested_fn, "w") as f:
-        json.dump(suggested_config, f)
+        print(suggested_config)
+        json.dump(list(suggested_config.keys()), f)
 
 # GPF for autogrid4
 if not args.skip_gpf:
@@ -489,10 +490,21 @@ if not args.skip_gpf:
 
     # write a PDB for the box
     box_fn = str(gpf_fn) + ".pdb"
+    vinabox_fn = str(gpf_fn) + ".vinabox"
     written_files_log["filename"].append(box_fn)
     written_files_log["description"].append("PDB file to visualize the grid box")
     with open(box_fn, "w") as f:
         f.write(gridbox.box_to_pdb_string(box_center, npts))
+
+    written_files_log["filename"].append(vinabox_fn)
+    written_files_log["description"].append("box size and center for vina's --config option")
+    with open(vinabox_fn, "w") as f:
+        f.write(f"size_x = {box_size[0]:.3f}" + os_linesep)
+        f.write(f"size_y = {box_size[1]:.3f}" + os_linesep)
+        f.write(f"size_z = {box_size[2]:.3f}" + os_linesep)
+        f.write(f"center_x = {box_center[0]:.3f}" + os_linesep)
+        f.write(f"center_y = {box_center[1]:.3f}" + os_linesep)
+        f.write(f"center_z = {box_center[2]:.3f}" + os_linesep)
 
     # check all flexres are inside the box
     if len(reactive_flexres) > 0:
