@@ -454,6 +454,7 @@ class LinkedRDKitChorizo:
                 is_res = False
             molsetup.atom_ignore[atom_index] |= not is_res # ignore padding atoms
             is_flex = is_protein_sidechain
+            is_flex &= is_res 
             if cut_at_calpha and (atom_index != c_alpha) and (atom_index in bb_matches[0]): # TODO bb pseudos
                 is_flex = False
             is_flexres_atom.append(is_flex)

@@ -489,8 +489,7 @@ if not args.skip_gpf:
         f.write(gpf_string)
 
     # write a PDB for the box
-    box_fn = str(gpf_fn) + ".pdb"
-    vinabox_fn = str(gpf_fn) + ".vinabox"
+    box_fn =  str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
     written_files_log["filename"].append(box_fn)
     written_files_log["description"].append("PDB file to visualize the grid box")
     with open(box_fn, "w") as f:
@@ -505,7 +504,6 @@ if not args.skip_gpf:
     
     # check all flexres are inside the box
     if len(reactive_flexres) > 0:
-        any_outside = False
         for res_id, res in chorizo.residues.items():
             if not res.is_movable:
                 continue
