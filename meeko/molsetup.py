@@ -6,10 +6,10 @@
 
 from copy import deepcopy
 from collections import defaultdict, OrderedDict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import json
-import warnings
 import sys
+import warnings
 
 import numpy as np
 from rdkit import Chem
@@ -55,7 +55,6 @@ else:
 # TODO change all attributes_to_copy to have underscore ?
 
 class MoleculeSetup:
-    # TODO: fill out additional detail for docstring
     """ mol: molecule structurally prepared with explicit hydrogens
 
         the setup provides:
@@ -68,8 +67,8 @@ class MoleculeSetup:
     Attributes
     ----------
     mol: rdkit.Chem.rdchem.Mol
-        not guaranteed to be present in the object, contains the RDKit mol object that the molecule setup was based on
-        or corresponds to.
+        should only be an attribute in the RDKitMoleculeSetup subclass, but it is possible that it could get assigned
+        in a regular MoleculeSetup
     atom_pseudo: List[]
         a list of indices of pseudo-atoms?
 
@@ -82,7 +81,7 @@ class MoleculeSetup:
         a mapping between atom index (int) and pdb data (PDBAtomInfo) for that atom
     atom_type: OrderedDict()
         TODO: if these values are meant to be consistent, then this should be an enum?
-        a mapping from some sort of index (presumably an int) to atom type (string)
+        a mapping from atom index (presumably an int) to atom type (string)
     atom_params: dict()
         a mapping from the name of a parameter (string) to a parameter
 
@@ -102,7 +101,7 @@ class MoleculeSetup:
     graph: OrderedDict()
         a mapping from atom index (int) to a list of neighboring atom indices?
     bond: OrderedDict()
-        a mapping from bond id (int?) to a dictionary containing two elements. The elements are
+        a mapping from bond id (tuple of ints) to a dictionary containing two elements. The elements are
         bond_order (int) and rotatable (bool).
     element: OrderedDict()
         represents the atomic number of the atom index. A mapping from atom index to atomic number
@@ -599,6 +598,14 @@ class MoleculeSetup:
         """
         self.atom_ignore[idx] = state
 
+    def get_ignore(self, idx):
+        """ return if the atom is ignored"""
+        return bool(self.atom_ignore[idx])
+
+    def set_charge(self, idx, charge):
+        """ set partial charge"""
+        self.charge[idx] = charge
+
     # charge
     def get_charge(self, idx):
         """ return partial charge for atom index
@@ -607,17 +614,13 @@ class MoleculeSetup:
         """
         return self.charge[idx]
 
-    def set_charge(self, idx, charge):
-        """ set partial charge"""
-        self.charge[idx] = charge
+    def set_coord(self, idx, coord):
+        """ define coordinates of atom index"""
+        self.coord[idx] = coord
 
     def get_coord(self, idx):
         """ return coordinates of atom index"""
         return self.coord[idx]
-
-    def set_coord(self, idx, coord):
-        """ define coordinates of atom index"""
-        self.coord[idx] = coord
 
     def get_neigh(self, idx):
         """ return atoms connected to atom index
@@ -634,10 +637,6 @@ class MoleculeSetup:
     def get_chiral(self, idx):
         """ get chiral flag for atom """
         return self.chiral[idx]
-
-    def get_ignore(self, idx):
-        """ return if the atom is ignored"""
-        return bool(self.atom_ignore[idx])
 
     def is_aromatic(self, idx):
         """ check if atom is aromatic """
@@ -718,18 +717,6 @@ class MoleculeSetup:
             'rotatable': rotatable,
         }
 
-    def del_bond(self, idx1, idx2):
-        """ remove a bond from the lookup table """
-        bond_id = self.get_bond_id(idx1, idx2)
-        del self.bond[bond_id]
-        self.graph[idx1].remove(idx2)
-        # TODO check if we want to delete nodes that have no connections (we might want to keep them)
-        if not self.graph[idx1]:
-            del self.graph[idx1]
-        self.graph[idx2].remove(idx1)
-        if not self.graph[idx2]:
-            del self.graph[idx2]
-
     def get_bond(self, idx1, idx2):
         """ return properties of a bond in the lookup table
             if the bond does not exist, None is returned
@@ -743,6 +730,18 @@ class MoleculeSetup:
             return self.bond[bond_idx]
         except IndexError:
             return None
+
+    def del_bond(self, idx1, idx2):
+        """ remove a bond from the lookup table """
+        bond_id = self.get_bond_id(idx1, idx2)
+        del self.bond[bond_id]
+        self.graph[idx1].remove(idx2)
+        # TODO check if we want to delete nodes that have no connections (we might want to keep them)
+        if not self.graph[idx1]:
+            del self.graph[idx1]
+        self.graph[idx2].remove(idx1)
+        if not self.graph[idx2]:
+            del self.graph[idx2]
 
     @staticmethod
     def get_bond_id(idx1, idx2):
@@ -971,7 +970,7 @@ class MoleculeSetup:
         populated from the dictionary. Otherwise, returns the input object.
 
         """
-        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # If the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
         # safe data, so we should ignore it.
         if type(obj) is not dict:
             return obj
@@ -1031,7 +1030,9 @@ class MoleculeSetup:
                 {int(k): v for k, v in molsetup.flexibility_model['rigid_body_members'].items()}
 
         molsetup.ring_closure_info = obj["ring_closure_info"]
-        molsetup.restraints = [Restraint(*v) for k, v in obj["restraints"]]
+        molsetup.restraints = \
+            [Restraint(v["atom_index"], tuple(v["target_xyz"]), v["kcal_per_angstrom_square"], v["delay_angstrom"])
+             for v in obj["restraints"]]
         molsetup.is_sidechain = obj["is_sidechain"]
         molsetup.rmsd_symmetry_indices = tuple([tuple(v) for v in obj["rmsd_symmetry_indices"]])
         molsetup.rings = {tuple([int(i) for i in k.split(separator_char)]): v
@@ -1054,6 +1055,21 @@ class MoleculeSetup:
 
 
 class RDKitMoleculeSetup(MoleculeSetup):
+    """
+    Subclass of MoleculeSetup, used to represent MoleculeSetup objects working with RDKit objects
+
+    Attributes
+    ----------
+    mol : rdkit.Chem.rdchem.Mol
+        an RDKit Mol object to base the Molecule Setup on
+    modified_atom_positions :
+        list of dictionaries where keys are atom indices
+
+    Methods
+    -------
+    from_mol()
+        constructor for the RDKitMoleculeSetup object (consider adapting to init?)
+    """
 
     @classmethod
     def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
@@ -1147,7 +1163,7 @@ class RDKitMoleculeSetup(MoleculeSetup):
         mol_no_ignore = self.mol
 
         # 3D SDF files written by other toolkits (OEChem, ChemAxon)
-        # seem to not include the chiral fla  g in the bonds block, only in
+        # seem to not include the chiral flag in the bonds block, only in
         # the atoms block. RDKit ignores the atoms chiral flag as per the
         # spec. When reading SDF (e.g. from PubChem/PDB),
         # we may need to have RDKit assign stereo from coordinates, see:
@@ -1542,7 +1558,8 @@ class Restraint:
 # TODO: refactor molsetup class then refactor this and consider making it more readable.
 class MoleculeSetupEncoder(json.JSONEncoder):
     """
-    JSON Encoder class for molecule setup objects.
+    JSON Encoder class for molecule setup objects. Makes decisions about how to convert types to JSON serializable types
+    so they can be reliably decoded should a user want to pull the JSON back into an object.
     """
 
     def default(self, obj):
@@ -1552,44 +1569,58 @@ class MoleculeSetupEncoder(json.JSONEncoder):
         Parameters
         ----------
         obj: object
-            Can take any object as input, but will only create the Molsetup JSON format for Molsetup objects. For all
-            other objects will return the default json encoding.
+            Can take any object as input, but will only create the MoleculeSetup JSON format for MoleculeSetup objects.
+            For all other objects will return the default JSON encoding.
 
         Returns
         -------
         A JSON serializable object that represents the MoleculeSetup class or the default JSONEncoder output for an
         object.
         """
+        # Checks if the input object is a MoleculeSetup as desired
         if isinstance(obj, MoleculeSetup):
             separator_char = ","  # TODO: consider setting this somewhere else so it is the same for decode and encode
+            # Sets the elements of an output dict of attributes based off of all the attributes that are guaranteed to
+            # be present and
             output_dict = {
-                "atom_pseudo": obj.atom_pseudo,
-                "coord": {k: v.tolist() for k, v in obj.coord.items()},
+                # Attributes that are dictionaries mapping from atom index to some other property
+                "coord": {k: v.tolist() for k, v in obj.coord.items()},  # converts coords from numpy arrays to lists
                 "charge": obj.charge,
                 "pdbinfo": obj.pdbinfo,
                 "atom_type": obj.atom_type,
-                "atom_params": obj.atom_params,
+                "atom_ignore": obj.atom_ignore,
+                "chiral": obj.chiral,
+                "graph": obj.graph,
+                "element": obj.element,
+                "interaction_vector": obj.interaction_vector,
+                "atom_to_ring_id": obj.atom_to_ring_id,
+
+                # Dihedral
                 "dihedral_interactions": obj.dihedral_interactions,
                 "dihedral_partaking_atoms": obj.dihedral_partaking_atoms,
                 "dihedral_labels": obj.dihedral_labels,
-                "atom_ignore": obj.atom_ignore,
-                "chiral": obj.chiral,
-                "atom_true_count": obj.atom_true_count,
-                "graph": obj.graph,
+
+                # Dictionaries with tuple keys have the tuples converted to strings
                 "bond": {separator_char.join([str(i) for i in k]): v for k, v in obj.bond.items()},
-                "element": obj.element,
-                "interaction_vector": obj.interaction_vector,
+                "rings": {separator_char.join([str(i) for i in k]): v for k, v in obj.rings.items()},
+
+                # Dictionaries of dictionaries
+                "atom_params": obj.atom_params,
                 "flexibility_model": obj.flexibility_model,
                 "ring_closure_info": obj.ring_closure_info,
-                "restraints": obj.restraints,
-                "is_sidechain": obj.is_sidechain,
-                "rmsd_symmetry_indices": obj.rmsd_symmetry_indices,
-                "rings": {separator_char.join([str(i) for i in k]): v for k, v in obj.rings.items()},
+
+                # Lists
+                "atom_pseudo": obj.atom_pseudo,
+                "restraints": [asdict(restraint) for restraint in obj.restraints],
                 "rings_aromatic": obj.rings_aromatic,
-                "atom_to_ring_id": obj.atom_to_ring_id,
-                "ring_corners": obj.ring_corners,
+                "rotamers": obj.rotamers,
+
+                # Simple variables
+                "atom_true_count": obj.atom_true_count,
+                "is_sidechain": obj.is_sidechain,
                 "name": obj.name,
-                "rotamers": obj.rotamers
+
+                "rmsd_symmetry_indices": obj.rmsd_symmetry_indices,
             }
             # Since the flexibility model attribute contains dictionaries with tuples as keys, it needs to be treated
             # more specifically.
@@ -1600,8 +1631,9 @@ class MoleculeSetupEncoder(json.JSONEncoder):
                     {k: (v if k != 'rigid_body_connectivity' else new_rigid_body_conn_dict)
                      for k, v in obj.flexibility_model.items()}
 
-            # Adds mol attribute if the input molecule setup is an RDKitMoleculeSetup
+            # Adds mol attribute if the input MoleculeSetup is an RDKitMoleculeSetup
             if isinstance(obj, RDKitMoleculeSetup):
                 output_dict["mol"] = rdMolInterchange.MolToJSON(obj.mol)
             return output_dict
+        # If the input object is not a MoleculeSetup, returns the default JSON encoding for that object
         return json.JSONEncoder.default(self, obj)
