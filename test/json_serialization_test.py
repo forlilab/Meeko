@@ -14,6 +14,7 @@ from meeko import (
     MoleculeSetupEncoder,
     RDKitMoleculeSetup,
     ResidueAdditionalConnection,
+    Restraint
 )
 
 #from ..meeko.utils.pdbutils import PDBAtomInfo
@@ -94,8 +95,8 @@ def test_rdkit_molsetup_encoding_decoding():
         assert isinstance(list(starting_molsetup.flexibility_model['rigid_body_connectivity'].keys())[0], tuple)
         assert isinstance(list(decoded_molsetup.flexibility_model['rigid_body_connectivity'].keys())[0], tuple)
     assert decoded_molsetup.flexibility_model == starting_molsetup.flexibility_model
-    assert decoded_molsetup.ring_closure_info == starting_molsetup.ring_closure_info # EMPTY
-    assert decoded_molsetup.restraints == starting_molsetup.restraints # EMPTY
+    assert decoded_molsetup.ring_closure_info == starting_molsetup.ring_closure_info  # EMPTY
+    assert decoded_molsetup.restraints == starting_molsetup.restraints  # EMPTY
     assert decoded_molsetup.is_sidechain == starting_molsetup.is_sidechain
     assert decoded_molsetup.rmsd_symmetry_indices == starting_molsetup.rmsd_symmetry_indices
     # Assert that the starting object's bond attribute was not compromised in the serialization process:
@@ -105,6 +106,6 @@ def test_rdkit_molsetup_encoding_decoding():
     assert decoded_molsetup.rings == starting_molsetup.rings
     assert decoded_molsetup.rings_aromatic == starting_molsetup.rings_aromatic
     assert decoded_molsetup.atom_to_ring_id == starting_molsetup.atom_to_ring_id
-    assert decoded_molsetup.ring_corners == starting_molsetup.ring_corners # EMPTY
-    assert decoded_molsetup.name == starting_molsetup.name # EMPTY
-    assert decoded_molsetup.rotamers == starting_molsetup.rotamers # empty
+    assert decoded_molsetup.ring_corners == starting_molsetup.ring_corners  # EMPTY
+    assert decoded_molsetup.name == starting_molsetup.name  # EMPTY
+    assert decoded_molsetup.rotamers == starting_molsetup.rotamers  # EMPTY
