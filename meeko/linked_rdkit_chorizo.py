@@ -794,7 +794,7 @@ class LinkedRDKitChorizo:
     def mk_parameterize_residue(self, res, mk_prep): 
         molsetup, mapidx, is_flexres_atom = self.res_to_molsetup(res, mk_prep)
         self.residues[res].molsetup = molsetup
-        self.residues[res].mapidx = mapidx
+        self.residues[res].molsetup_mapidx = mapidx
         self.residues[res].is_flexres_atom = is_flexres_atom
         return
 
