@@ -60,18 +60,36 @@ def reassign_bond_orders(mol, ref, mapping):
 
 
 def h_coord_from_dipeptide(pdb1, pdb2):
+    from rdkit.Geometry import Point3D
+
     mol = Chem.MolFromPDBBlock(pdb1 + pdb2)
     if mol is None:
-        print(pdb1)
-        print(pdb2)
-        raise RuntimeError
-    mol_h = Chem.AddHs(mol, addCoords=True)
-    ps = Chem.SmilesParserParams()
-    ps.removeHs = False
-    template = Chem.MolFromSmiles('C(=O)C([H])N([H])C(=O)C([H])N', ps)
-    h_idx = 5
-    atom_map = mapping_by_mcs(template, mol_h)
-
+        template = Chem.MolFromSmiles('CNC=O')
+        mol1 = Chem.MolFromPDBBlock(pdb1)
+        mol2 = Chem.MolFromPDBBlock(pdb2)
+        mol1_coords = mol1.GetConformer().GetPositions()
+        mol2_coords = mol2.GetConformer().GetPositions()
+        idx1 = mol1.GetSubstructMatches(Chem.MolFromSmarts("NCC=O"))
+        idx2 = mol2.GetSubstructMatches(Chem.MolFromSmarts("NCC=O"))
+        assert len(idx1) == 1 and len(idx2) == 1
+        conformer = Chem.Conformer(template.GetNumAtoms())
+        conformer.SetAtomPosition(0, mol2_coords[idx2[0][1]])
+        conformer.SetAtomPosition(1, mol2_coords[idx2[0][0]])
+        conformer.SetAtomPosition(2, mol1_coords[idx1[0][2]])
+        conformer.SetAtomPosition(3, mol1_coords[idx1[0][3]])
+        template.AddConformer(conformer, assignId=True)
+        template_h = Chem.AddHs(template, addCoords=True)
+        for neighbor in template_h.GetAtomWithIdx(1).GetNeighbors():
+            if neighbor.GetAtomicNum() == 1:
+                coords = template_h.GetConformer().GetPositions()
+                return coords[neighbor.GetIdx()]
+    else:
+        mol_h = Chem.AddHs(mol, addCoords=True)
+        ps = Chem.SmilesParserParams()
+        ps.removeHs = False
+        template = Chem.MolFromSmiles('C(=O)C([H])N([H])C(=O)C([H])N', ps)
+        h_idx = 5
+        atom_map = mapping_by_mcs(template, mol_h)
     return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
 
 
