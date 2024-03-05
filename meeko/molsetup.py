@@ -722,6 +722,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
             raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
         if mol.GetNumConformers() == 0: 
             raise ValueError("RDKit molecule does not have a conformer. Need 3D coordinates.")
+        if mol.HasQuery():
+            raise ValueError("RDKit molecules with queries are not supported. The molecule may originate from a SMARTS or a MOL/SDF with non-zero values in query fields of atoms or bonds")
         rdkit_conformer = mol.GetConformer(conformer_id) 
         if not rdkit_conformer.Is3D():
             warnings.warn("RDKit molecule not labeled as 3D. This warning won't show again.")
