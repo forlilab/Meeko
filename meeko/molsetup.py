@@ -16,6 +16,7 @@ from rdkit import Chem
 from rdkit.Chem import rdPartialCharges
 from rdkit.Chem import rdMolInterchange
 
+import meeko
 from .utils import rdkitutils
 from .utils import utils
 from .utils.geomutils import calcDihedral
@@ -38,31 +39,9 @@ else:
     _has_misctools = True
 
 
-# TODO modify so that there are no more dictionaries and only list/arrays (fix me)
-# methods like add_x,del_x,get_x will deal with indexing (fix me)
-# the goal is to remove dictionaries (fix me)
-
-# (fix me)) provide infrastructure to calculate "differential" modifications,
-# like tautomers: the class calculating tautomers will copy and modify the setup
-# to swap protons and change the atom types (and possibly rotations?), then
-# there will e a function to extract only differences (i.e., atom types and coordinates,
-# in the case of tautomers) and store them to make it a switch-state
-
-# TODO use only 1D arrays (C)
-
-
-# TODO update add_atom to not to specify neighbors, which should be defined only when a bond is created?
-# TODO change all attributes_to_copy to have underscore ?
-
 class MoleculeSetup:
-    """ mol: molecule structurally prepared with explicit hydrogens
-
-        the setup provides:
-            - data storage
-            - SMARTS matcher for all atom typers
-
-    Base molecule setup class, providing a way to store information about molecules
-    for a number of purposes.
+    """
+    Base molecule setup class. Provides a way to store data about molecules and a SMARTS matcher for all atom types.
 
     Attributes
     ----------
@@ -70,7 +49,7 @@ class MoleculeSetup:
         should only be an attribute in the RDKitMoleculeSetup subclass, but it is possible that it could get assigned
         in a regular MoleculeSetup
     atom_pseudo: List[]
-        a list of indices of pseudo-atoms?
+        a list of indices of pseudo-atoms
 
     coord: OrderedDict()
         a mapping between atom index and coordinates, where atom indices are stored as ints and coordinates are
@@ -80,8 +59,7 @@ class MoleculeSetup:
     pdbinfo: OrderedDict()
         a mapping between atom index (int) and pdb data (PDBAtomInfo) for that atom
     atom_type: OrderedDict()
-        TODO: if these values are meant to be consistent, then this should be an enum?
-        a mapping from atom index (presumably an int) to atom type (string)
+        a mapping from atom index (int) to atom type (string)
     atom_params: dict()
         a mapping from the name of a parameter (string) to a parameter
 
@@ -140,108 +118,79 @@ class MoleculeSetup:
     """
 
     def __init__(self):
-
-        self.atom_pseudo = []
-        self.coord = OrderedDict()  # FIXME all OrderedDict should be converted to lists?
-        self.charge = OrderedDict()
-        self.pdbinfo = OrderedDict()
-        self.atom_type = OrderedDict()
-        self.atom_params = {}
-        self.dihedral_interactions = list()
-        self.dihedral_partaking_atoms = dict()
-        self.dihedral_labels = dict()
-        self.atom_ignore = OrderedDict()
-        self.chiral = OrderedDict()
+        # Simple attributes defining the molecule setup
         self.atom_true_count = 0
-        self.graph = OrderedDict()
-        self.bond = OrderedDict()
-        self.element = OrderedDict()
-        self.interaction_vector = OrderedDict()
+        self.is_sidechain = False
+        self.name = None
+
+        # Internal lists and keyword dicts.
+        self.atom_pseudo = []
+        self.atom_params = {}
+        self.restraints = []
+        self.rotamers = []
+
+        # Attributes mapping an index of an atom to a property of that atom.
+        self.pdbinfo = {}
+        self.coord = {}
+        self.charge = {}
+        self.element = {}
+        self.atom_type = {}
+        self.atom_ignore = {}
+        self.chiral = {}
+        self.graph = {}
+        self.interaction_vector = {}
+
+        # Matching bond id to bond information
+        self.bond = {}
+
+        # Dihedral information
+        self.dihedral_interactions = []
+        self.dihedral_partaking_atoms = {}
+        self.dihedral_labels = {}
+
+        # Dictionaries needing some sort of cleanup or clarification
         self.flexibility_model = {}
         self.ring_closure_info = {
             "bonds_removed": [],
             "pseudos_by_atom": {},
         }
-        self.restraints = []
-        self.is_sidechain = False
-        self.rmsd_symmetry_indices = ()
+
+        # Ring attributes
         self.rings = {}
         self.rings_aromatic = []
         self.atom_to_ring_id = defaultdict(list)
         self.ring_corners = {}  # used to store corner flexibility
-        self.name = None
-        self.rotamers = []
-
-    def copy(self):
-        newsetup = MoleculeSetup()
-        newsetup.__dict__ = deepcopy(self.__dict__)
-        return newsetup
-
-    @classmethod
-    def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
-                 assign_charges=True):
-        """
-        Creates an instance of a molsetup object and loads data into it from an RDKit mol object?
-
-        Parameters
-        ----------
-        mol: rdkit.Chem.rdchem.Mol
-            RDKit Mol to load data from.
-        keep_chorded_rings: bool
-            needs info
-        keep_equivalent_rings: bool
-            needs info
-        assign_charges: bool
-            needs info
-
-        Returns
-        -------
-        A new molsetup object with data from the provided mol.
-        The following fields would be populated: mol, atom_true_count_, name,
-
-        Note
-        ----
-        Why is this implemented here in this way when all of the methods it calls are methods we want the
-        inheriting classes to override? Its call signatures also seem to be consistent with the way methods are
-        defined in a very specific subclass of this class, so it would behoove us to consider the sublass/superclass
-        structure here.
-        """
-        molsetup = cls()
-        molsetup.mol = mol
-        molsetup.atom_true_count = molsetup.get_num_mol_atoms()
-        molsetup.name = molsetup.get_mol_name()
-        molsetup.init_atom(assign_charges)  # find a way to standardize signature across classes
-        molsetup.init_bond()
-        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
-        return molsetup
 
     @classmethod
     def from_prmtop_inpcrd(cls, prmtop, crd_filename):
         """
-        Creates an instance of a molsetup object and loads data into it from prmtop and a crd file.
+        Creates a MoleculeSetup object populated using input data in a format specifically from Amber molecular
+        dynamics software.
 
         Parameters
         ----------
-        prmtop: unclear, should be renamed
-        crd_filename: presumable the name of a file containing coordinates
+        prmtop:
+        crd_filename: string
 
         Returns
         -------
-        A molsetup populated with data from the input prmtop and crd file.
-
-        Note
-        ____
-        Is this used anywhere or should it be deprecated. Or can it be deprecated.
+        A MoleculeSetup instance populated with data from the input prmtop and crd file.
         """
+        # Constants used while converting file contents to MoleculeSetup fields:
+        amber_charge_conversion_factor = 18.2223
+        # Creates a MoleculeSetup instance.
         molsetup = cls()
+        # Gets coordinates from the input files
         x, y, z = prmtop._coords_from_inpcrd(crd_filename)
+        # Checks for inconsistency in the input data
         all_atom_indices = prmtop.vmdsel("")
         if len(all_atom_indices) != len(x):
             raise RuntimeError("number of prmtop atoms differs from x coordinates")
+        # Pulling data from the input files
         prmtop.upper_atom_types = prmtop._gen_gaff_uppercase()
-        charges = [chrg / 18.2223 for chrg in prmtop.read_flag("CHARGE")]
+        charges = [chrg / amber_charge_conversion_factor for chrg in prmtop.read_flag("CHARGE")]
         atomic_nrs = prmtop.read_flag("ATOMIC_NUMBER")
-        pdbqt_string = ""
+        # Setting up space in atom parameters dict.
         molsetup.atom_params["rmin_half"] = []
         molsetup.atom_params["epsilon"] = []
         vdw_by_atype = {}
@@ -285,106 +234,391 @@ class MoleculeSetup:
                 molsetup.add_bond(i_atom, j_atom, order=bond_order, rotatable=False)
         return molsetup
 
-    @classmethod
-    def from_pdb_and_residue_params(cls, pdb_fname, residue_params_fname=None):
+    # region Adding and Removing Molecule Components
+    def add_atom(self, idx=None, coord=np.array([0.0, 0.0, 0.0], dtype='float'),
+                 element=None, charge=0.0, atom_type=None, pdbinfo=None,
+                 ignore=False, chiral=False, overwrite=False, add_atom_params=None):
         """
-        Creates an instance of a molsetup object and loads data into it from a pdb file and a parameter file.
+        Adds an atom with all of the atom information a user wants to specify to the molsetup. Every property is
+        optional, but possible to set. Properties that are not specified by the user are set to a default value.
 
         Parameters
         ----------
-        pdb_fname: string
-            the filepath for a pdb file to load data from
-        residue_params_fname: string or None
-            the filepath for residue parameters to be used in the molsetup
+        idx: int or None
+            atom index
+        coord: np float array of length 3
+            coordinates indicating the atom's location
+        element: int or None
+            the atomic number of the atom
+        charge: float
+            partial charges to be loaded for the atom
+        atom_type: string or None
+            needs info
+        pdbinfo: string or None:
+            pdb string for the atom
+        ignore: bool
+            ignore flag for the atom
+        chiral: bool
+            chiral flag for the atom
+        overwrite: bool
+            are we overwriting other atoms that may be in the same coordinate position as this one
+        add_atom_params: dict or None
+            needs info
+
         Returns
         -------
-        A molsetup populated with data based off of the pdb, and if it was provided, the input parameters.
-
-        Note
-        ----
-        Are the residue parameters being used at all in this? Also, this does not seem to be used anywhere,
-        is this something we want to consider deprecating. The coordinate part of the atom being added seems to be
-        inconsistent,
+        idx: int
+            False if the index is already occupied and we are not overwriting existing atoms. If the method succeeds,
+            returns the index of the added atom.
         """
-        if residue_params_fname is not None:
-            with open(residue_params_fname) as f:
-                residue_params = json.load(f)
-        with open(pdb_fname) as f:
-            lines = f.readlines()
-        x = []
-        y = []
-        z = []
-        res_list = []
-        atom_names_list = []
-        last_res = None
-        pdbinfos = []
-        for line in lines:
-            if not (line.startswith("ATOM") or line.startswith("HETATM")):
-                continue
-            resn = line[17:20]
-            resi = int(line[22:26])
-            chain = line[21:22]
-            res = (resn, resi, chain)
-            if res != last_res:
-                res_list.append(resn)
-                atom_names_list.append([])
-            last_res = res
-            atom_name = line[12:16].strip()
-            atom_names_list[-1].append(atom_name)
-            x.append(float(line[30:38]))
-            y.append(float(line[38:46]))
-            z.append(float(line[46:54]))
-            pdbinfo = rdkitutils.PDBAtomInfo(
-                name=atom_name,
-                resName=resn,
-                resNum=resi,
-                chain=chain
-            )
-            pdbinfos.append(pdbinfo)
+        # If there is no specified input atom index, will append the atom to the "end" of the list of atom indices.
+        if idx is None:
+            idx = len(self.coord)
+        # Otherwise checks that the specified atom index is not already occupied. If it is, and overwrite is not
+        # specified, will throw an error.
+        if idx in self.coord and not overwrite:
+            print("ADD_ATOM> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
+            return False
+        # sets input values or default values corresponding to atom index
+        self.pdbinfo[idx] = pdbinfo
+        self.coord[idx] = coord
+        self.charge[idx] = charge
+        self.element[idx] = element
+        self.atom_type[idx] = atom_type
+        self.atom_ignore[idx] = ignore
+        self.chiral[idx] = chiral
+        self.graph.setdefault(idx, [])
+        # reads in atom_params if a dictionary of atom_params has been provided
+        for key in self.atom_params:
+            if type(add_atom_params) == dict and key in add_atom_params:
+                value = add_atom_params[key]
+            else:
+                value = None
+            self.atom_params[key].append(value)
+        return idx
 
-        atom_params = {}
-        atom_counter = 0
-        all_ok = True
-        all_err = ""
-        for (res, atom_names) in zip(res_list, atom_names_list):
-            p, ok, err = PDBQTReceptor.get_params_for_residue(res, atom_names)
-            nr_params_to_add = set([len(values) for _, values in p.items()])
-            if len(nr_params_to_add) != 1:
-                raise RuntimeError("inconsistent number of parameters in %s" % p)
-            nr_params_to_add = nr_params_to_add.pop()
-            all_ok &= ok
-            all_err += err
-            for key in p:
-                atom_params.setdefault(key, [None] * atom_counter)
-                atom_params[key].extend(p[key])
-            atom_counter += nr_params_to_add
-            for key in atom_params:
-                if key not in p:
-                    atom_params[key].extend([None] * nr_params_to_add)
+    # pseudo-atoms
+    def add_pseudo_atom(self, coord=np.array([0.0, 0.0, 0.0], dtype='float'), charge=0.0,
+                        anchor_list=None, atom_type=None, rotatable=False,
+                        pdbinfo=None, directional_vectors=None, ignore=False, overwrite=False):
+        """
+        Adds a new pseudoatom to the molsetup. Multiple bonds can be specified in "anchor_list" to support the
+        centroids of aromatic rings. If rotatable, makes the anchor atom rotatable to allow the pseudoatom movement
 
-        if not all_ok:
-            raise RuntimeError(all_err)
+        Parameters
+        ----------
+        coord: numpy float array of length 3
+            pseudoatom coordinates
+        charge: float
+            partial charge for the pseudoatom
+        anchor_list: list[] or None
+            a list of ints indicating multiple bonds that can be specified
+        atom_type: or None
+        rotatable: bool
+        pdbinfo: string or None
+        directional_vectors: or None
+        ignore: bool
+        overwrite: bool
+            indicates whether the pseudo atom can overwrite atoms at a particular atom index
+        Returns
+        -------
 
-        molsetup = cls()
-        charges = atom_params.pop("gasteiger")
-        atypes = atom_params.pop("atom_types")
-        for i in range(len(x)):
-            molsetup.add_atom(
-                i,
-                coord=(x[i], y[i], z[i]),
-                charge=charges[i],
-                atom_type=atypes[i],
-                element=None,
-                pdbinfo=pdbinfo,
-                chiral=False,
-                ignore=False,
-            )
+        """
+        # If there is no specified input atom index, will append the atom to the "end" of the atom lists
+        idx = self.atom_true_count + len(self.atom_pseudo)
+        # Otherwise checks that the specified atom index is not already occupied. If it is, and overwrite is not
+        # specified, will throw an error.
+        if idx in self.coord and not overwrite:
+            print("ADD_PSEUDO> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
+            return False
+        # Adds the atom index to the list of pseudoatom indices so we can track that it is a pseudoatom
+        self.atom_pseudo.append(idx)
+        # Adds the pseudoatom as if it were a regular atom
+        self.add_atom(idx=idx, coord=coord,
+                      element=0,
+                      charge=charge,
+                      atom_type=atom_type,
+                      pdbinfo=pdbinfo,
+                      ignore=ignore,
+                      overwrite=overwrite)
+        # Adds anchor atoms
+        if anchor_list is not None:
+            for anchor in anchor_list:
+                self.add_bond(idx, anchor, order=0, rotatable=rotatable)
+        # Adds directional vectors
+        if directional_vectors is not None:
+            self.add_interaction_vector(idx, directional_vectors)
+        return idx
 
-        molsetup.atom_params = atom_params
+    def add_bond(self, idx1, idx2, order=0, rotatable=False):
+        """
+        Adds a bond to the molsetup graph between the two input indices.
 
-        return molsetup
+        Parameters
+        ----------
+        idx1: int
+            first atom's index
+        idx2: int
+            second atom's index
+        order: int
+            bond order
+        rotatable: bool
+            whether the bond is rotatable
+        """
+        # Checks that
+        if not idx2 in self.graph[idx1]:
+            self.graph[idx1].append(idx2)
+        if not idx1 in self.graph[idx2]:
+            self.graph[idx2].append(idx1)
+        self.set_bond(idx1, idx2, order, rotatable)
 
-    def set_types_from_uniq_atom_params(self, uniq_atom_params, prefix):
+    def set_bond(self, idx1, idx2, order=0, rotatable=False):
+        """
+        Populates the internal bond attribute with the specified bond and its properties, indexed by the bonds canonical
+        tuple bond id.
+
+        Parameters
+        ----------
+        idx1: int
+            the index of one of the atoms in the bond
+        idx2: int
+            the index of the other atom in the bond
+        order: int
+            the bond order
+        rotatable: bool
+            indicates whether the bond is rotatable
+
+        Returns
+        -------
+        None
+        """
+        bond_id = self.get_bond_id(idx1, idx2)
+        self.bond[bond_id] = {
+            'bond_order': order,
+            'rotatable': rotatable,
+        }
+
+    def get_bond(self, idx1, idx2):
+        """
+        Returns all the properties of a bond if one exists between the two atoms in the
+        Parameters
+        ----------
+        idx1: int
+            atom index of one of the atoms in the bond
+        idx2: int
+            atom index of the other atom in the bond
+
+        Returns
+        -------
+        bond_information: dict
+            A dictionary containing two elements, the bond order and whether the bond is rotatable,
+        """
+        bond_idx = self.get_bond_id(idx1, idx2)
+        try:
+            return self.bond[bond_idx]
+        except IndexError:
+            return None
+
+    def del_bond(self, idx1, idx2):
+        """
+        Given two atom indices, removes information about the bond between them from the bond attribute.
+        Parameters
+        ----------
+        idx1: int
+            atom index of one of the atoms in the bond
+        idx2: int
+            atom index of the other atom in the bond
+
+        Returns
+        -------
+        None
+        """
+        bond_id = self.get_bond_id(idx1, idx2)
+        del self.bond[bond_id]
+        self.graph[idx1].remove(idx2)
+        if not self.graph[idx1]:
+            del self.graph[idx1]
+        self.graph[idx2].remove(idx1)
+        if not self.graph[idx2]:
+            del self.graph[idx2]
+
+    @staticmethod
+    def get_bond_id(idx1, idx2):
+        """
+        Generates a consistent, "canonical", bond id from a pair of atoms in the graph.
+
+        Parameters
+        ----------
+        idx1: int
+            atom index of one of the atoms in the bond
+        idx2: int
+            atom index of the other atom in the bond
+
+        Returns
+        -------
+        canon_id: tuple
+            a tuple of the two indices in their canonical order.
+        """
+        idx_min = min(idx1, idx2)
+        idx_max = max(idx1, idx2)
+        return (idx_min, idx_max)
+
+        # replaced by
+
+    def add_rotamer(self, indices_list, angles_list):
+
+        xyz = self.coord
+        rotamer = {}
+        for (i1, i2, i3, i4), angle in zip(indices_list, angles_list):
+            bond_id = self.get_bond_id(i2, i3)
+            if bond_id in rotamer:
+                raise RuntimeError("repeated bond %d-%d" % bond_id)
+            if not self.bond[bond_id]["rotatable"]:
+                raise RuntimeError("trying to add rotamer for non rotatable bond %d-%d" % bond_id)
+            d0 = calcDihedral(xyz[i1], xyz[i2], xyz[i3], xyz[i4])
+            rotamer[bond_id] = angle - d0
+        self.rotamers.append(rotamer)
+
+    # endregion
+
+    # region Original Getters and Setters
+    # Especially as many of these pertain to data structures that will be changed, we should consider the necessity of
+    # having so many basic getters and setters in a python class, especially since we haven't limited access to the
+    # original attributes. These are under strong consideration for deprecation.
+
+    # pdbinfo
+    def get_pdbinfo(self, idx):
+        """
+        Gets the pdb information corresponding to a particular atom index.
+        Parameters
+        ----------
+        idx: int
+            atom index to retrieve pdb info for.
+
+        Returns
+        -------
+        pdbinfo: str
+            a string of pdb data corresponding to the given atom index.
+        """
+        return self.pdbinfo[idx]
+
+    # coordinates
+    def set_coord(self, idx, coord):
+        """
+        Manually sets the coordinates at a particular atom index.
+        Parameters
+        ----------
+        idx: int
+            atom index to set the coordinates
+        coord: numpy array with 3 floats
+            desired coordinates value to set
+
+        Returns
+        -------
+        None
+        """
+        self.coord[idx] = coord
+
+    def get_coord(self, idx):
+        """
+        Returns coordinates at a particular atom index
+
+        Parameters
+        ----------
+        idx: int
+            atom index to retrieve coordinates for
+
+        Returns
+        -------
+        coord: numpy array with 3 floats
+            A numpy array with three floats representing the coordinates
+        """
+        return self.coord[idx]
+
+    # element
+    def set_element(self, idx, elem_num):
+        """
+        Sets the atomic number for an element at a particular atom index.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to set atomic number for
+        elem_num: int
+            atomic number for the atom in question
+
+        Returns
+        -------
+        None
+        """
+        self.element[idx] = elem_num
+
+    def get_element(self, idx):
+        """
+        Gets the atomic number for the element at a particular atom index.
+        Parameters
+        ----------
+        idx: int
+            atom index to retrieve element information for.
+
+        Returns
+        -------
+        element: int
+            atomic number of the element at the specified atom index
+        """
+        return self.element[idx]
+
+    # partial charge
+    def set_charge(self, idx, charge):
+        """
+        Sets partial charge for a particular atom index.
+        Parameters
+        ----------
+        idx: int
+            atom index to set the charge
+        charge: float
+            partial charge to set the
+
+        Returns
+        -------
+
+        """
+        self.charge[idx] = charge
+
+    def get_charge(self, idx):
+        """
+        Returns partial charges for a particular atom index.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to retrieve partial charge for
+
+        Returns
+        -------
+        charge: float
+            partial charge for the particular atom index
+        """
+        return self.charge[idx]
+
+    # atom_type
+    def set_atom_type(self, idx, atom_type):
+        """
+        Sets atom type for a specified atom index.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to modify
+        atom_type: str
+            desired atom type
+        Returns
+        -------
+        None
+        """
+        self.atom_type[idx] = atom_type
+
+    def set_atom_types_from_uniq_atom_params(self, uniq_atom_params, prefix):
         """
         Uses a UniqAtomParams object to set the atom_type attribute in the molsetup object. Adds the specified prefix
         to each of the atom types.
@@ -399,364 +633,172 @@ class MoleculeSetup:
         Returns
         -------
         None
-
-        Note
-        ----
-        Deprecation candidate? What is this being used for/kept around for?
-
         """
-        param_idxs = uniq_atom_params.get_indices_from_atom_params(self.atom_params)
-        if len(param_idxs) != len(self.atom_type):
-            raise RuntimeError("{len(param_idxs)} parameters but {len(self.atom_type)} in molsetup")
-        for i, j in enumerate(param_idxs):
+        # Gets a mapping from parameter indices in atom_params to those in uniq_atom_params
+        parameter_indices = uniq_atom_params.get_indices_from_atom_params(self.atom_params)
+        # Checks that we have the correct number of retrieved indices.
+        if len(parameter_indices) != len(self.atom_type):
+            raise RuntimeError("{len(parameter_indices)} parameters but {len(self.atom_type)} in molsetup")
+        # Loops through the indices in parameter indices and sets atom types with the input prefix
+        for i, j in enumerate(parameter_indices):
             self.atom_type[i] = f"{prefix}{j}"
         return None
 
-    def add_atom(self, idx=None, coord=np.array([0.0, 0.0, 0.0], dtype='float'),
-                 element=None, charge=0.0, atom_type=None, pdbinfo=None,
-                 ignore=False, chiral=False, overwrite=False, add_atom_params=None):
-        """
-        Adds an atom with all of the atom information a user wants to specify to the molsetup. Every property is
-        optional, but possible to set.
-
-        Parameters
-        ----------
-        idx: int or None
-            atom index
-        coord: np float array of length 3
-            coordinates f the atom
-        element: int or None
-            the atomic number of the
-        charge: float
-            partial charges to be loaded for the atom
-        atom_type: string or int or None
-            needs info on exactly what these are
-        pdbinfo: string or None:
-            pdb string for the atom
-        ignore: bool
-            ignore flag for the atom
-        chiral: bool
-            indicates whether the atom should be marked as chiral
-        overwrite: bool
-            are we overwriting other atoms that may be in the same coordinate position as this one
-        add_atom_params: or None
-
-
-        Returns
-        -------
-        False if the index is already occupied and we are not overwriting existing atoms. If the method succeeds,
-        returns the index of the added atom.
-        """
-        """ function to add all atom information at once;
-            every property is optional
-        """
-        if idx is None:
-            idx = len(self.coord)
-        if idx in self.coord and not overwrite:
-            print("ADD_ATOM> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
-            return False
-        self.set_coord(idx, coord)
-        self.set_charge(idx, charge)
-        self.set_element(idx, element)
-        self.set_atom_type(idx, atom_type)
-        self.set_pdbinfo(idx, pdbinfo)
-        self.set_chiral(idx, chiral)
-        self.set_ignore(idx, ignore)
-        self.graph.setdefault(idx, [])
-        for key in self.atom_params:
-            if type(add_atom_params) == dict and key in add_atom_params:
-                value = add_atom_params[key]
-            else:
-                value = None
-            self.atom_params[key].append(value)
-        return idx
-
-    # TODO: are we deprecating/deleting the following or is it functionality we still want to add
-    def del_atom(self, idx):
-        """ remove an atom and update all data associate with it """
-        pass
-        # coords
-        # charge
-        # element
-        # type
-        # neighbor graph
-        # ignore
-        # update bonds bonds (using the neighbor graph)
-        # If pseudo-atom, update other information, too
-
-    # pseudo-atoms
-    def add_pseudo(self, coord=np.array([0.0, 0.0, 0.0], dtype='float'), charge=0.0,
-                   anchor_list=None, atom_type=None, rotatable=False,
-                   pdbinfo=None, directional_vectors=None, ignore=False, overwrite=False):
-        """
-        Adds a new pseudoatom to the molsetup. Multiple bonds can be specified in "anchor_list" to support the
-        centroids of aromatic rings. If rotatable, makes the anchor atom rotatable to allow the pseudoatom movement
-
-        Parameters
-        ----------
-        coord: numpy float array of length 3
-            pseudoatom coordinates
-        charge: float
-            partial charge for the pseudoatom
-        anchor_list: list[] or None
-            a list of ints indicating multiple bonds that can be specified
-        atom_type: or None
-
-        rotatable: bool
-        pdbinfo: string or None
-        directional_vectors: or None
-        ignore: bool
-        overwrite: bool
-            indicates whether the
-        Returns
-        -------
-
-        """
-        """ add a new pseudoatom
-            multiple bonds can be specified in "anchor_list" to support the centroids of aromatic rings
-
-            if rotatable, makes the anchor atom rotatable to allow the pseudoatom movement
-        """
-        idx = self.atom_true_count + len(self.atom_pseudo)
-        if idx in self.coord and not overwrite:
-            print("ADD_PSEUDO> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
-            return False
-        self.atom_pseudo.append(idx)
-        # add the pseudoatom information to the atoms
-        self.add_atom(idx=idx, coord=coord,
-                      element=0,
-                      charge=charge,
-                      atom_type=atom_type,
-                      pdbinfo=pdbinfo,
-                      ignore=ignore,
-                      overwrite=overwrite)
-        # anchor atoms
-        if anchor_list is not None:
-            for anchor in anchor_list:
-                self.add_bond(idx, anchor, order=0, rotatable=rotatable)
-        # directional vectors
-        if directional_vectors is not None:
-            self.add_interaction_vector(idx, directional_vectors)
-        return idx
-
-    def add_bond(self, idx1, idx2, order=0, rotatable=False):
-        """
-        Adds a bond to the molsetup graph between the two indices indicated.
-
-        Parameters
-        ----------
-        idx1: int
-            first atom's index
-        idx2: int
-            second atom's index
-        order: int
-            bond order
-        rotatable: bool
-            whether the bond is rotatable
-
-        """
-
-        if not idx2 in self.graph[idx1]:
-            self.graph[idx1].append(idx2)
-        if not idx1 in self.graph[idx2]:
-            self.graph[idx2].append(idx1)
-        self.set_bond(idx1, idx2, order, rotatable)
-
-    def add_rotamer(self, indices_list, angles_list):
-        xyz = self.coord
-        rotamer = {}
-        for (i1, i2, i3, i4), angle in zip(indices_list, angles_list):
-            bond_id = self.get_bond_id(i2, i3)
-            if bond_id in rotamer:
-                raise RuntimeError("repeated bond %d-%d" % bond_id)
-            if not self.bond[bond_id]["rotatable"]:
-                raise RuntimeError("trying to add rotamer for non rotatable bond %d-%d" % bond_id)
-            d0 = calcDihedral(xyz[i1], xyz[i2], xyz[i3], xyz[i4])
-            rotamer[bond_id] = angle - d0
-        self.rotamers.append(rotamer)
-
-    def set_atom_type(self, idx, atom_type):
-        """ set the atom type for atom index
-        atom_type : int or str?
-        return: void
-        """
-        self.atom_type[idx] = atom_type
-
     def get_atom_type(self, idx):
-        """ return the atom type for atom index in the lookup table
-        idx : int
-        return: str
+        """
+        Returns the atom type for a specific atom index.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to retrieve data for
+
+        Returns
+        -------
+        atom_type: str
+            the atom type present at a particular atom index
+
         """
         return self.atom_type[idx]
 
-    # ignore flag
-    def set_ignore(self, idx, state):
-        """ set the ignore flag (bool) for the atom
-        (used formerged hydrogen)
+    # atom_ignore
+    def set_ignore(self, idx: int, state: bool):
+        """
+        Sets the ignore flag for a specified atom index.
+
+        Parameters
+        ----------
         idx: int
+            atom index to set the ignore flag for
         state: bool
+            ignore flag value to be set
+
+        Returns
+        -------
+        None
         """
         self.atom_ignore[idx] = state
 
-    def get_ignore(self, idx):
+    def get_ignore(self, idx: int):
+        """
+        Returns atom_ignore flag value for a particular atom index.
+
+        Parameters
+        ----------
+        idx: int
+
+        Returns
+        -------
+        atom_ignore: bool
+            a boolean indicating the value of the ignore flag for this atom index
+        """
         """ return if the atom is ignored"""
         return bool(self.atom_ignore[idx])
 
-    def set_charge(self, idx, charge):
-        """ set partial charge"""
-        self.charge[idx] = charge
-
-    # charge
-    def get_charge(self, idx):
-        """ return partial charge for atom index
-        idx: int
-
-        """
-        return self.charge[idx]
-
-    def set_coord(self, idx, coord):
-        """ define coordinates of atom index"""
-        self.coord[idx] = coord
-
-    def get_coord(self, idx):
-        """ return coordinates of atom index"""
-        return self.coord[idx]
-
-    def get_neigh(self, idx):
-        """ return atoms connected to atom index
-        Note
-        ----
-        This should be get_neighbors, just neigh is nowhere near clear enough.
-        """
-        return self.graph[idx]
-
+    # chiral
     def set_chiral(self, idx, chiral):
-        """ set chiral flag for atom """
+        """
+        Sets the chiral flag for a given atom index.
+
+        Parameters
+        ----------
+        idx: int
+            atom index
+        chiral:
+            desired chiral flag value
+
+        Returns
+        -------
+        None
+        """
         self.chiral[idx] = chiral
 
     def get_chiral(self, idx):
-        """ get chiral flag for atom """
+        """
+        Retrieves chiral flag value for a given atom index.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to retrieve chiral flag value for
+
+        Returns
+        -------
+        chiral: bool
+            The value of the chiral flag for the input atom index.
+        """
         return self.chiral[idx]
 
-    def is_aromatic(self, idx):
-        """ check if atom is aromatic """
-        for r in self.rings_aromatic:
-            if idx in r:
-                return True
-        return False
-
-    def set_element(self, idx, elem_num):
-        """ set the atomic number of the atom idx"""
-        self.element[idx] = elem_num
-
-    def get_element(self, idx):
-        """ return the atomic number of the atom idx"""
-        return self.element[idx]
-
-    # def get_atom_ring_count(self, idx):
-    #     """ return the number of rings to which this atom belongs"""
-    #     # FIXME this should be replaced by self.get_atom_rings()
-    #     return len(self.atom_to_ring_id[idx])
-
-    def get_atom_rings(self, idx):
-        # FIXME this should replace self.get_atom_ring_count()
-        """ return the list of rings to which the atom idx belongs"""
-        if idx in self.atom_to_ring_id:
-            return self.atom_to_ring_id[idx]
-        return []
-
-    def get_atom_indices(self, true_atoms_only=False):
-        """ return the indices of the atoms registered in the setup
-            if 'true_atoms_only' are requested, then pseudoatoms are ignored
+    # graph
+    def get_neighbors(self, idx):
         """
-        indices = list(self.coord.keys())
-        if true_atoms_only:
-            return [x for x in indices if not x in self.atom_pseudo]
-        return indices
+        Gets the graph values for a particular atom index, which should show the atom's neighbors.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to check graph values for
+
+        Returns
+        -------
+        graph_list: list
+            a list of indices of neighboring atoms.
+        """
+        return self.graph[idx]
 
     # interaction vectors
-    def add_interaction_vector(self, idx, vector_list):
-        """ add vector list to list of directional interaction vectors for atom idx"""
+    def _add_interaction_vector(self, idx, vector_list):
+        """
+        Adds input vector list to the list of directional interaction vectors for a given atom index.
+
+        Parameters
+        ----------
+        idx: int
+            atom index
+        vector_list: list
+            list of directional interaction vectors
+
+        Returns
+        -------
+        None
+        """
         if idx not in self.interaction_vector:
             self.interaction_vector[idx] = []
         for vec in vector_list:
             self.interaction_vector[idx].append(vec)
 
-    # TODO evaluate if useful
-    def _get_attrib(self, idx, attrib, default=None):
-        """ generic function to provide a default for retrieving properties and returning standard values """
-        return getattr(self, attrib).get(idx, default)
-
-    def get_interaction_vector(self, idx):
-        """ get list of directional interaction vectors for atom idx"""
-        return self.interaction_vector[idx]
-
-    def del_interaction_vector(self, idx):
-        """ delete list of directional interaction vectors for atom idx"""
-        del self.interaction_vector[idx]
-
-    def set_pdbinfo(self, idx, data):
-        """ add PDB data (resname/num, atom name, etc.) to the atom """
-        self.pdbinfo[idx] = data
-
-    def get_pdbinfo(self, idx):
-        """ retrieve PDB data (resname/num, atom name, etc.) to the atom """
-        return self.pdbinfo[idx]
-
-    def set_bond(self, idx1, idx2, order=0, rotatable=False):
-        """ populate bond lookup table with properties
-            bonds are identified by any tuple of atom indices
-            the function generates the canonical bond id
-
-            order      : int
-            rotatable  : bool
+    # rings
+    def get_atom_rings(self, idx):
         """
-        bond_id = self.get_bond_id(idx1, idx2)
-        self.bond[bond_id] = {
-            'bond_order': order,
-            'rotatable': rotatable,
-        }
+        Returns a list of rings that the atom index belongs to.
 
-    def get_bond(self, idx1, idx2):
-        """ return properties of a bond in the lookup table
-            if the bond does not exist, None is returned
+        Parameters
+        ----------
+        idx: int
 
-            idx1, idx2 : int
-
-            return: dict or voidko
+        Returns
+        -------
+        ring_id_list: list
+            A list of the ring ids that the given atom index belongs to.
         """
-        bond_idx = self.get_bond_id(idx1, idx2)
-        try:
-            return self.bond[bond_idx]
-        except IndexError:
-            return None
-
-    def del_bond(self, idx1, idx2):
-        """ remove a bond from the lookup table """
-        bond_id = self.get_bond_id(idx1, idx2)
-        del self.bond[bond_id]
-        self.graph[idx1].remove(idx2)
-        # TODO check if we want to delete nodes that have no connections (we might want to keep them)
-        if not self.graph[idx1]:
-            del self.graph[idx1]
-        self.graph[idx2].remove(idx1)
-        if not self.graph[idx2]:
-            del self.graph[idx2]
+        if idx in self.atom_to_ring_id:
+            return self.atom_to_ring_id[idx]
+        return []
+    # endregion
 
     @staticmethod
-    def get_bond_id(idx1, idx2):
-        """ used to generate canonical bond id from a pair of nodes in the graph"""
-        idx_min = min(idx1, idx2)
-        idx_max = max(idx1, idx2)
-        return (idx_min, idx_max)
+    def get_bonds_in_ring(ring):
+        """
+        Gets the list of bonds in the specified ring, where each bond is a pair of atom indices.
+        Parameters
+        ----------
+        ring: list
+            a list of atom indices
 
-    # replaced by
-    # def ring_atom_to_ring(self, arg):
-    #     return self.atom_to_ring_id[arg]
-
-    def get_bonds_in_ring(self, ring):
-        """ input: 'ring' (list of atom indices)
-            returns list of bonds in ring, each bond is a pair of atom indices
+        Returns
+        -------
+        bonds: list
+            a list of bonds in the ring, where each bond is a pair of atom indices
         """
         n = len(ring)
         bonds = []
@@ -767,12 +809,28 @@ class MoleculeSetup:
         return bonds
 
     def walk_recursive(self, idx, collected=None, exclude=None):
-        """ walk molecular graph and return subgraphs that are bond-connected"""
+        """
+        Recursively walks the molecular graph and returns subgraphs that are bond-connected
+
+        Parameters
+        ----------
+        idx: int
+            atom index of the graph we want to walk
+        collected: list
+            an optional input list of subgraphs
+        exclude: list
+            a list of atom indices to exclude from the walk
+
+        Returns
+        -------
+        collected: list
+            a list of indices corresponding to a subgraph that is bond-connected
+        """
         if collected is None:
             collected = []
         if exclude is None:
             exclude = []
-        for neigh in self.get_neigh(idx):
+        for neigh in self.get_neighbors(idx):
             if neigh in exclude:
                 continue
             collected.append(neigh)
@@ -780,24 +838,20 @@ class MoleculeSetup:
             self.walk_recursive(neigh, collected, exclude)
         return collected
 
-    def copy_attributes_from(self, template):
-        """ copy attributes to duplicate the template setup
-        NOTE: the molecule will always keep the original setup (i.e., template)"""
-        # TODO enable some kind of plugin system here too, to allow other objects to
-        # add attributes?
-        # TODO although, this would make the setup more fragile-> better have attributes
-        # explicitely added here, and that's it
-        for attr in self.attributes_to_copy:
-            attr_copy = deepcopy(getattr(template, attr))
-            setattr(self, attr, attr_copy)
-        # TODO possible BUG? the molecule is shared by the different setups
-        #      if one of them alters the molecule, properties will not be the same
-        self.mol = template.mol
-
     def merge_terminal_atoms(self, indices):
-        """for merging hydrogens, but will merge any atom or pseudo atom
-            that is bonded to only one other atom"""
+        """
+        Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
+        other atom.
 
+        Parameters
+        ----------
+        indices: list
+            A list of indices to merge
+
+        Returns
+        -------
+        None
+        """
         for index in indices:
             if len(self.graph[index]) != 1:
                 msg = "Atempted to merge atom %d with %d neighbors. "
@@ -809,12 +863,23 @@ class MoleculeSetup:
             self.charge[index] = 0.0
             self.set_ignore(index, True)
 
-    def init_atom(self):
-        """ iterate through molecule atoms and build the atoms table """
-        raise NotImplementedError("This method must be overloaded by inheriting class")
-
     def perceive_rings(self, keep_chorded_rings, keep_equivalent_rings):
-        """ populate the rings and aromatic rings tableshe atoms table:
+        """
+        Populate the rings and aromatic rings atom tables.
+
+        Parameters
+        ----------
+        keep_chorded_rings: bool
+            flag indicating whether we want to keep chorded rings in the tables
+        keep_equivalent_rings
+            flag indicating whether we want to keep equivalent rings in the tables
+
+        Returns
+        -------
+        None
+        """
+
+        """ populate the rings and aromatic rings tables he atoms table:
         self.rings_aromatics : list
             contains the list of ring_id items that are aromatic
         self.rings: dict
@@ -828,7 +893,7 @@ class MoleculeSetup:
 
             The atom is built using the `walk_recursive` method
         self.ring_atom_to_ring_id: dict
-            mapping of each atom belonginig to the ring: atom_idx -> ring_id
+            mapping of each atom belonging to the ring: atom_idx -> ring_id
         """
 
         def isRingAromatic(ring_atom_indices):
@@ -852,7 +917,16 @@ class MoleculeSetup:
             self.rings[ring_atom_idxs]['graph'] = graph
 
     def add_dihedral_interaction(self, fourier_series):
-        """ """
+        """
+
+        Parameters
+        ----------
+        fourier_series
+
+        Returns
+        -------
+
+        """
         index = 0
         for existing_fs in self.dihedral_interactions:
             if self.are_fourier_series_identical(existing_fs, fourier_series):
@@ -864,6 +938,17 @@ class MoleculeSetup:
 
     @staticmethod
     def are_fourier_series_identical(fs1, fs2):
+        """
+
+        Parameters
+        ----------
+        fs1
+        fs2
+
+        Returns
+        -------
+
+        """
         index_by_periodicity1 = {fs1[index]["periodicity"]: index for index in range(len(fs1))}
         index_by_periodicity2 = {fs2[index]["periodicity"]: index for index in range(len(fs2))}
         if index_by_periodicity1 != index_by_periodicity2:
@@ -875,6 +960,61 @@ class MoleculeSetup:
                 if fs1[index1][key] != fs2[index2][key]:
                     return False
         return True
+
+    # region Separate Interface Candidates
+    def copy(self):
+        """
+        Creates a new, separate MoleculeSetup object and populates it with the same data as the current MoleculeSetup.
+
+        Returns
+        -------
+        newsetup: MoleculeSetup
+            A new MoleculeSetup object which has the same data as the current MoleculeSetup.
+        """
+        newsetup = MoleculeSetup()
+        newsetup.__dict__ = deepcopy(self.__dict__)
+        return newsetup
+
+    @classmethod
+    def from_mol(cls, mol, keep_chorded_rings=False, keep_equivalent_rings=False,
+                 assign_charges=True):
+        """
+        Creates an instance of a molsetup object and loads data into it from an RDKit mol object?
+
+        Parameters
+        ----------
+        mol: rdkit.Chem.rdchem.Mol
+            RDKit Mol to load data from.
+        keep_chorded_rings: bool
+            needs info
+        keep_equivalent_rings: bool
+            needs info
+        assign_charges: bool
+            needs info
+
+        Returns
+        -------
+        A new molsetup object with data from the provided mol.
+        The following fields would be populated: mol, atom_true_count_, name,
+
+        Note
+        ----
+        Why is this implemented here in this way when all of the methods it calls are methods we want the
+        inheriting classes to override? Its call signatures also seem to be consistent with the way methods are
+        defined in a very specific subclass of this class, so it would behoove us to consider the sublass/superclass
+        structure here.
+        """
+        molsetup = cls()
+        molsetup.mol = mol
+        molsetup.atom_true_count = molsetup.get_num_mol_atoms()
+        molsetup.name = molsetup.get_mol_name()
+        molsetup.init_atom(assign_charges)  # find a way to standardize signature across classes
+        molsetup.init_bond()
+        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
+        return molsetup
+    def init_atom(self):
+        """ iterate through molecule atoms and build the atoms table """
+        raise NotImplementedError("This method must be overloaded by inheriting class")
 
     def init_bond(self):
         """ iterate through molecule bonds and build the bond table (id, table)
@@ -901,7 +1041,17 @@ class MoleculeSetup:
     def get_smiles_and_order(self):
         raise NotImplementedError("This method must be overloaded by inheriting class")
 
+    # endregion
+
+    # region String and JSON encoding
     def write_xyz_string(self):
+        """
+
+        Returns
+        -------
+        output_string: str
+            A string writing out something to do with the coordinates and the elements.
+        """
         n = len(self.element)
         string = "%d\n\n" % n
         for index in range(n):
@@ -914,6 +1064,12 @@ class MoleculeSetup:
         return string
 
     def show(self):
+        """
+
+        Returns
+        -------
+
+        """
         tot_charge = 0
 
         print("Molecule setup\n")
@@ -1052,6 +1208,180 @@ class MoleculeSetup:
                 raise ValueError(f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}")
             molsetup.mol = rdkit_mols[0]
         return molsetup
+
+    # endregion
+
+    # region Deprecated Code and Features
+    ###################################################################################################################
+    #   This section contains code that is deprecated, or that was left in the file despite being completely          #
+    #   commented out or otherwise non-functional. It wil be removed in future updates.                               #
+    ###################################################################################################################
+    @classmethod
+    # This functionality has been replaced by the work in LinkedRDKitChorizo, and therefore is no longer needed
+    # in MoleculeSetup itself.
+    def from_pdb_and_residue_params(cls, pdb_fname, residue_params_fname=None):
+        """
+        Creates an instance of a molsetup object and loads data into it from a pdb file and a parameter file.
+
+        Parameters
+        ----------
+        pdb_fname: string
+            the filepath for a pdb file to load data from
+        residue_params_fname: string or None
+            the filepath for residue parameters to be used in the molsetup
+        Returns
+        -------
+        A molsetup populated with data based off of the pdb, and if it was provided, the input parameters.
+        """
+        if residue_params_fname is not None:
+            with open(residue_params_fname) as f:
+                residue_params = json.load(f)
+        with open(pdb_fname) as f:
+            lines = f.readlines()
+        x = []
+        y = []
+        z = []
+        res_list = []
+        atom_names_list = []
+        last_res = None
+        pdbinfos = []
+        for line in lines:
+            if not (line.startswith("ATOM") or line.startswith("HETATM")):
+                continue
+            resn = line[17:20]
+            resi = int(line[22:26])
+            chain = line[21:22]
+            res = (resn, resi, chain)
+            if res != last_res:
+                res_list.append(resn)
+                atom_names_list.append([])
+            last_res = res
+            atom_name = line[12:16].strip()
+            atom_names_list[-1].append(atom_name)
+            x.append(float(line[30:38]))
+            y.append(float(line[38:46]))
+            z.append(float(line[46:54]))
+            pdbinfo = rdkitutils.PDBAtomInfo(
+                name=atom_name,
+                resName=resn,
+                resNum=resi,
+                chain=chain
+            )
+            pdbinfos.append(pdbinfo)
+
+        atom_params = {}
+        atom_counter = 0
+        all_ok = True
+        all_err = ""
+        for (res, atom_names) in zip(res_list, atom_names_list):
+            p, ok, err = PDBQTReceptor.get_params_for_residue(res, atom_names)
+            nr_params_to_add = set([len(values) for _, values in p.items()])
+            if len(nr_params_to_add) != 1:
+                raise RuntimeError("inconsistent number of parameters in %s" % p)
+            nr_params_to_add = nr_params_to_add.pop()
+            all_ok &= ok
+            all_err += err
+            for key in p:
+                atom_params.setdefault(key, [None] * atom_counter)
+                atom_params[key].extend(p[key])
+            atom_counter += nr_params_to_add
+            for key in atom_params:
+                if key not in p:
+                    atom_params[key].extend([None] * nr_params_to_add)
+
+        if not all_ok:
+            raise RuntimeError(all_err)
+
+        molsetup = cls()
+        charges = atom_params.pop("gasteiger")
+        atypes = atom_params.pop("atom_types")
+        for i in range(len(x)):
+            molsetup.add_atom(
+                i,
+                coord=(x[i], y[i], z[i]),
+                charge=charges[i],
+                atom_type=atypes[i],
+                element=None,
+                pdbinfo=pdbinfo,
+                chiral=False,
+                ignore=False,
+            )
+
+        molsetup.atom_params = atom_params
+
+        return molsetup
+
+    # These functions are not currently in use, evaluate whether they need to stay in molecule setups
+    def del_atom(self, idx):
+        """ remove an atom and update all data associate with it """
+        pass
+        # coords
+        # charge
+        # element
+        # type
+        # neighbor graph
+        # ignore
+        # update bonds bonds (using the neighbor graph)
+        # If pseudo-atom, update other information, too
+
+    def is_aromatic(self, idx):
+        """
+        Checks if an atom at a particular atom index is in an aromatic ring.
+        Parameters
+        ----------
+        idx: int
+            atom index to check
+
+        Returns
+        -------
+        is_aromatic: bool
+            a boolean indicating whether the atom's index is recorded in an aromatic ring.
+        """
+        for r in self.rings_aromatic:
+            if idx in r:
+                return True
+        return False
+
+    def get_atom_indices(self, true_atoms_only=False):
+        """ return the indices of the atoms registered in the setup
+            if 'true_atoms_only' are requested, then pseudoatoms are ignored
+        """
+        indices = list(self.coord.keys())
+        if true_atoms_only:
+            return [x for x in indices if not x in self.atom_pseudo]
+        return indices
+
+    def _get_attrib(self, idx, attrib, default=None):
+        """ generic function to provide a default for retrieving properties and returning standard values """
+        return getattr(self, attrib).get(idx, default)
+
+    def copy_attributes_from(self, template):
+        """ copy attributes to duplicate the template setup
+        NOTE: the molecule will always keep the original setup (i.e., template)"""
+        for attr in self.attributes_to_copy:
+            attr_copy = deepcopy(getattr(template, attr))
+            setattr(self, attr, attr_copy)
+        self.mol = template.mol
+
+    def get_interaction_vector(self, idx):
+        """ get list of directional interaction vectors for atom idx"""
+        return self.interaction_vector[idx]
+
+    def del_interaction_vector(self, idx):
+        """ delete list of directional interaction vectors for atom idx"""
+        del self.interaction_vector[idx]
+
+    def set_pdbinfo(self, idx, data):
+        """ add PDB data (resname/num, atom name, etc.) to the atom """
+        self.pdbinfo[idx] = data
+
+    # def ring_atom_to_ring(self, arg):
+    #     return self.atom_to_ring_id[arg]
+
+    # def get_atom_ring_count(self, idx):
+    #     """ return the number of rings to which this atom belongs"""
+    #     return len(self.atom_to_ring_id[idx])
+    # endregion
 
 
 class RDKitMoleculeSetup(MoleculeSetup):
@@ -1291,7 +1621,6 @@ class RDKitMoleculeSetup(MoleculeSetup):
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
         # perceive chirality
-        # TODO check consistency for chiral model between OB and RDKit
         chiral_info = {}
         for data in Chem.FindMolChiralCenters(self.mol, includeUnassigned=True):
             chiral_info[data[0]] = data[1]
@@ -1411,8 +1740,7 @@ class OBMoleculeSetup(MoleculeSetup):
 
 class UniqAtomParams:
     """
-    This seems to be a helper class used to keep parameters organized in a particular way that lets them be more usable.
-    We should consider whether this is being used/if it is a candidate for deprecation.
+    A helper class used to keep parameters organized in a particular way that lets them be more usable.
 
     Attributes
     ----------
@@ -1449,7 +1777,7 @@ class UniqAtomParams:
 
     def get_indices_from_atom_params(self, atom_params):
         """
-        To retrieve the indices of specific atom parameters in the UniqAtomParams object.
+        Retrieves the indices of specific atom parameters in the UniqAtomParams object.
 
         Parameters
         ----------
@@ -1637,3 +1965,9 @@ class MoleculeSetupEncoder(json.JSONEncoder):
             return output_dict
         # If the input object is not a MoleculeSetup, returns the default JSON encoding for that object
         return json.JSONEncoder.default(self, obj)
+
+
+@dataclass
+class BondProperties:
+    order: int
+    rotatable: bool

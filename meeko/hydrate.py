@@ -304,7 +304,7 @@ class HydrateMoleculeLegacy:
                                                           hb_length)
                 elif n_wat == 2:
                     # Example: C=0 (backbone oxygen)
-                    tmp_neighbors = [x for x in setup.get_neigh(neighbors[0]) if not x == a]
+                    tmp_neighbors = [x for x in setup.get_neighbors(neighbors[0]) if not x == a]
                     neighbor2_xyz =  setup.get_coord(tmp_neighbors[0])
                     positions = self._place_sp2_two_waters(anchor_xyz,
                                                            neighbor1_xyz, neighbor2_xyz,
@@ -337,7 +337,7 @@ class HydrateMoleculeLegacy:
             for water_on_anchor in waters_on_anchor:
                 tmp = setup.pdbinfo[water_anchor]
                 pdbinfo = pdbutils.PDBAtomInfo('WAT', tmp.resName, tmp.resNum, tmp.chain)
-                setup.add_pseudo(
+                setup.add_pseudo_atom(
                         coord=water_on_anchor,
                         charge=self._charge,
                         anchor_list=[water_anchor],

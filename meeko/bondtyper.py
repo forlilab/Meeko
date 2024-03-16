@@ -24,7 +24,7 @@ class BondTyperLegacy:
             """ check if the atom has more than one connection with non-ignored atoms"""
             if setup.get_element(idx) == 1:
                 return True
-            return len([x for x in setup.get_neigh(idx) if not setup.get_ignore(x)]) == 1
+            return len([x for x in setup.get_neighbors(idx) if not setup.get_ignore(x)]) == 1
         amide_bonds = [(x[0], x[1]) for x in setup.find_pattern('[NX3]-[CX3]=[O,N]')] # includes amidines
 
         # tertiary amides with non-identical substituents will be allowed to rotate

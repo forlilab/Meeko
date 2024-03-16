@@ -232,7 +232,7 @@ class FlexibilityBuilder:
             pseudos = self._generate_closure_pseudo(setup, bond, coords_dict)
             for pseudo in pseudos:
                 pseudo['atom_type'] = "%s%d" % (pseudo['atom_type'], i)
-                pseudo_index = setup.add_pseudo(**pseudo)
+                pseudo_index = setup.add_pseudo_atom(**pseudo)
                 atom_index = pseudo['anchor_list'][0]
                 if atom_index in setup.ring_closure_info:
                     raise RuntimeError("did not expect more than one G per atom")
@@ -251,7 +251,7 @@ class FlexibilityBuilder:
         sprouts_buffer = []
         while idx < len(rigid):
             current = rigid[idx]
-            for neigh in self._current_setup.get_neigh(current):
+            for neigh in self._current_setup.get_neighbors(current):
                 bond_id = self._current_setup.get_bond_id(current, neigh)
                 bond_info = self._current_setup.get_bond(current, neigh)
                 if self._visited[neigh]:

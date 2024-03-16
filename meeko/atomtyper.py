@@ -169,7 +169,7 @@ class AtomTyper:
                     'rotatable': False
                     }
             molsetup.charge[atomgeom.parent] = q_parent
-            molsetup.add_pseudo(**pseudo_atom)
+            molsetup.add_pseudo_atom(**pseudo_atom)
         return
 
     @staticmethod

@@ -24,7 +24,7 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     offchrg_by_parent = {}
     for i in molsetup.atom_pseudo:
         if molsetup.atom_type[i] == offchrg_type:
-            neigh = molsetup.get_neigh(i)
+            neigh = molsetup.get_neighbors(i)
             if len(neigh) != 1:
                 raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
                     i, json.dumps(neigh)))
@@ -122,7 +122,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     offchrg_by_parent = {}
     for i in molsetup.atom_pseudo:
         if molsetup.atom_type[i] == offchrg_type:
-            neigh = molsetup.get_neigh(i)
+            neigh = molsetup.get_neighbors(i)
             if len(neigh) != 1:
                 raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
                     i, json.dumps(neigh)))
@@ -519,8 +519,8 @@ class PDBQTWriterLegacy():
                         success = False
                         return pdbqt_string, success, error_msg
                     missing_h.append(key)
-                    parents = setup.get_neigh(key)
-                    parents = [i for i in parents if i < setup.atom_true_count]  # exclude pseudos
+                    parents = setup.get_neighbors(key)
+                    parents = [i for i in parents if i < setup.atom_true_count] # exclude pseudos
                     if len(parents) != 1:
                         error_msg += "expected hydrogen to be bonded to exactly one atom"
                         error_msg += " (mol name: %s)\n" % setup.get_mol_name()
