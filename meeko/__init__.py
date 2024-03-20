@@ -33,7 +33,9 @@ from .atomtyper import AtomTyper
 from .receptor_pdbqt import PDBQTReceptor
 from .linked_rdkit_chorizo import LinkedRDKitChorizo
 from .linked_rdkit_chorizo import ChorizoResidue
-from .linked_rdkit_chorizo import ResidueAdditionalConnection
+from .linked_rdkit_chorizo import ResiduePadder
+from .linked_rdkit_chorizo import ResidueTemplate
+from .linked_rdkit_chorizo import ResidueChemTemplates
 from .linked_rdkit_chorizo import add_rotamers_to_chorizo_molsetups
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
@@ -50,7 +52,7 @@ from .hydrate import Hydrate
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
-        'LinkedRDKitChorizo', 'ChorizoResidue', 'ResidueAdditionalConnection',
+        'LinkedRDKitChorizo', 'ChorizoResidue', 'ResiduePadder', 'ResidueTemplate'
         'add_rotamers_to_chorizo_molsetups',
         'RDKitMolCreate',
         'PDBQTWriterLegacy',

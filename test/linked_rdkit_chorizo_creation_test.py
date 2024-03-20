@@ -1,17 +1,17 @@
-from meeko import (
-    LinkedRDKitChorizo,
-    ChorizoResidue,
-    ResidueAdditionalConnection,
-    PDBQTWriterLegacy,
-    MoleculePreparation
-)
+from meeko import LinkedRDKitChorizo
+from meeko import ChorizoResidue
+from meeko import PDBQTWriterLegacy
+from meeko import MoleculePreparation
+from meeko import ResidueChemTemplates
 
+import json
 import pathlib
 import pytest
 import os
 
 import meeko
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
+meekodir = pathlib.Path(meeko.__file__).parents[0]
 
 # Example Files (should be moved to tests directory eventually)
 ahhy_example         = pkgdir / "example/chorizo/AHHY.pdb"
@@ -24,10 +24,15 @@ disulfide_bridge     = pkgdir / "test/linked_rdkit_chorizo_data/just_a_disulfide
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
 # TODO: clean up tests by pulling repeated test logic into helper functions
 
+with open(meekodir / "data" / "residue_chem_templates.json") as f:
+    t = json.load(f)
+chem_templates = ResidueChemTemplates.from_dict(t)
+mk_prep = MoleculePreparation()
+
 def test_AHHY_all_static_residues():
     f = open(ahhy_example, 'r')
     pdb_string = f.read()
-    chorizo = LinkedRDKitChorizo(pdb_string)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep)
     # Asserts that the residues have been imported in a way that makes sense, and that all the 
     # private functions we expect to have run as expected.
     assert len(chorizo.residues) == 4
@@ -71,11 +76,10 @@ def test_AHHY_all_static_residues():
 def test_AHHY_flexible_residues():
     f = open(ahhy_example, 'r')
     pdb_string = f.read()
-    chorizo = LinkedRDKitChorizo(pdb_string)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep)
     assert len(chorizo.residues) == 4
     assert len(chorizo.get_ignored_residues()) == 0
 
-    mk_prep = MoleculePreparation()
     residue_id = "A:HIS:2"
 
     molsetup, mapidx, is_flexres_atom = chorizo.res_to_molsetup(residue_id, mk_prep)

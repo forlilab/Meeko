@@ -100,23 +100,33 @@ def react_and_map(reactants, rxn):
 
     products_list = rxn.RunReactants(reactants)
 
-    index_map = {"reactant_idx": [], "atom_idx": []}
+    index_map = {"reactant_idx": [], "atom_idx": [], "new_atom_label": []}
     for products in products_list:
         result_reac_map = []
         result_atom_map = []
+        new_atom_label_list = [] # for atoms created by the reaction that are labeled e.g. F in "[O:1]>>[O:1][F:2]"
         for product in products:
             atom_idxmap = [] 
             reac_idxmap = []
+            new_atom_label = []
             for atom in product.GetAtoms():
                 if atom.HasProp("reactant_idx"):
                     reactant_idx = atom.GetIntProp("reactant_idx")
+                    new_atom_label.append(None)
                 elif atom.HasProp("old_mapno"): # this atom matched the reaction SMARTS
-                    reactant_idx = reactive_atoms_idxmap[atom.GetIntProp("old_mapno")]
+                    old_mapno = atom.GetIntProp("old_mapno")
+                    if old_mapno in reactive_atoms_idxmap: 
+                        reactant_idx = reactive_atoms_idxmap[old_mapno]
+                        new_atom_label.append(None)
+                    else:
+                        reactant_idx = None 
+                        new_atom_label.append(old_mapno) # the reaction SMARTS created this atom and it has a label
                     #if atom.HasProp("reactant_idx"):
                     #    raise RuntimeError("did not expect both old_mapno and reactant_idx")
                     #    #print("did not expect both old_mapno and reactant_idx")
                 else:
                     reactant_idx = None # the reaction SMARTS creates new atoms
+                    new_atom_label.append(None)
                 reac_idxmap.append(reactant_idx)
                 if atom.HasProp("react_atom_idx"):
                     atom_idxmap.append(atom.GetIntProp("react_atom_idx"))
@@ -124,7 +134,9 @@ def react_and_map(reactants, rxn):
                     atom_idxmap.append(None)
             result_reac_map.append(reac_idxmap)
             result_atom_map.append(atom_idxmap)
+            new_atom_label_list.append(new_atom_label)
         index_map["reactant_idx"].append(result_reac_map)
         index_map["atom_idx"].append(result_atom_map)
+        index_map["new_atom_label"].append(new_atom_label_list)
 
     return products_list, index_map

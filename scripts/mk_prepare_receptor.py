@@ -15,11 +15,13 @@ from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
 from meeko import MoleculeSetup
+from meeko import ResidueChemTemplates
 from meeko import PDBQTWriterLegacy
 from meeko import LinkedRDKitChorizo
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
+from meeko import __file__ as pkg_init_path
 from rdkit import Chem
 
 path_to_this_script = pathlib.Path(__file__).resolve()
@@ -27,6 +29,11 @@ path_to_this_script = pathlib.Path(__file__).resolve()
 # the following preservers RDKit Atom properties in the chorizo pickle
 Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AtomProps) # |
 #                                Chem.PropertyPickleOptions.PrivateProps)
+
+pkg_dir = pathlib.Path(pkg_init_path).parents[0]
+with open(pkg_dir / "data" / "residue_chem_templates.json") as f:
+    res_chem_templates = json.load(f)
+
 
 def parse_residue_string(string):
     """
@@ -134,18 +141,15 @@ def get_args():
     io_group.add_argument('-p', '--chorizo_pickle') 
 
     config_group = parser.add_argument_group("Receptor perception")
-    config_group.add_argument('-n', '--mutate_residues',
-                                  help="e.g. '{\"A:HIS:323\":\"A:HID:323\"}'")
-    config_group.add_argument(      '--termini',
-                                  help="e.g. '{\"A:GLY:350\":\"C-term\"}'")
-    config_group.add_argument(      '--del_res', help="e.g. '[\"A:GLY:350\", \"B:ALA:17\"]'")
+    config_group.add_argument('-n', '--set_template',
+                                  help="e.g. '{\"A:323\":\"HID\"}'")
+    config_group.add_argument(      '--delete_residues', help="e.g. '[\"A:350\", \"B:17\"]'")
     config_group.add_argument(      '--chorizo_config', help="[.json]")
     config_group.add_argument(      '--mk_config', help="[.json]")
     config_group.add_argument(      '--allow_bad_res', action="store_true",
                                                  help="delete residues with missing atoms instead of raising error")
-    config_group.add_argument(      '--skip_auto_disulfide', action="store_true")
     config_group.add_argument('-f', '--flexres', action="append", default=[],
-                        help="repeat flag for each residue, e.g: -f \" :LYS:42\" -f \"B:TYR:23\" and keep space for empty chain")
+                        help="repeat flag for each residue, e.g: -f \" :42\" -f \"B:23\" and keep space for empty chain")
 
     box_group = parser.add_argument_group("Size and center of grid box")
     #box_group.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
@@ -311,26 +315,20 @@ if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
     sys.exit(2)
 
 if args.pdb is not None:
-    mutate_res_dict = {}
-    termini = {}
+    set_template = {}
     del_res = []
     if args.chorizo_config is not None:
         with open(args.chorizo_config) as f:
             chorizo_config = json.load(f)
-        mutate_res_dict.update(chorizo_config.get("mutate_res_dict", {}))
-        termini.update(chorizo_config.get("termini", {}))
+        set_template.update(chorizo_config.get("set_template", {}))
         del_res.extend(chorizo_config.get("del_res", []))
     # direct command line options override config
-    if args.mutate_residues is not None:
-        mutate_res_dict.update(json.loads(args.mutate_residues))
-    if args.termini is not None:
-        termini.update(json.loads(args.termini))
-    if args.del_res is not None:
-        del_res.update(json.loads(args.del_res))
+    if args.set_template is not None:
+        set_template.update(json.loads(args.set_template))
+    if args.delete_residues is not None:
+        del_res.update(json.loads(args.delete_residues))
     with open(args.pdb) as f:
         pdb_string = f.read()
-    chorizo = LinkedRDKitChorizo(pdb_string, mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
-                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
@@ -339,6 +337,16 @@ if args.pdb is not None:
     else:
         mk_prep = MoleculePreparation()
 
+    
+    templates = ResidueChemTemplates.from_dict(res_chem_templates)
+    print(f"{templates=}")
+    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, templates, #residue_templates, padders, ambiguous,
+                                                 mk_prep, set_template, del_res, args.allow_bad_res)
+
+#  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
+#                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
+
+    
 
     for res_id in all_flexres:
         res = "%s:%s:%d" % res_id
@@ -348,15 +356,15 @@ if args.pdb is not None:
         with open(args.chorizo_pickle, "wb") as f:
             pickle.dump(chorizo, f)
 
-    suggested_config = {}
-    if len(chorizo.suggested_mutations):
-        suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
+    #suggested_config = {}
+    #if len(chorizo.suggested_mutations):
+    #    suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
 
-    if len(chorizo.get_ignored_residues()) > 0:
-        removed_residues = chorizo.get_ignored_residues()
-        print("Automatically deleted %d residues" % len(removed_residues))
-        print(json.dumps(list(removed_residues.keys()), indent=4))
-        suggested_config["deleted_residues"] = removed_residues.copy()
+    #if len(chorizo.get_ignored_residues()) > 0:
+    #    removed_residues = chorizo.get_ignored_residues()
+    #    print("Automatically deleted %d residues" % len(removed_residues))
+    #    print(json.dumps(list(removed_residues.keys()), indent=4))
+    #    suggested_config["deleted_residues"] = removed_residues.copy()
 
     #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
     #ok, err = receptor.assign_types_charges()
@@ -413,13 +421,13 @@ written_files_log["description"].append("static (i.e., rigid) receptor input fil
 with open(rigid_fn, "w") as f:
     f.write(pdbqt["rigid"])
 
-if len(suggested_config):
-    suggested_fn = str(outpath.with_suffix("")) + "_suggested-config.json"
-    written_files_log["filename"].append(suggested_fn)
-    written_files_log["description"].append("log of automated decisions for user inspection")
-    with open(suggested_fn, "w") as f:
-        print(suggested_config)
-        json.dump(list(suggested_config.keys()), f)
+#if len(suggested_config):
+#    suggested_fn = str(outpath.with_suffix("")) + "_suggested-config.json"
+#    written_files_log["filename"].append(suggested_fn)
+#    written_files_log["description"].append("log of automated decisions for user inspection")
+#    with open(suggested_fn, "w") as f:
+#        print(suggested_config)
+#        json.dump(list(suggested_config.keys()), f)
 
 # GPF for autogrid4
 if not args.skip_gpf:

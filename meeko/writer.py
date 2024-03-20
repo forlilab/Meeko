@@ -430,9 +430,10 @@ class PDBQTWriterLegacy():
         flex_atom_count = 0
         for res_id in chorizo.get_valid_residues():
             molsetup = chorizo.residues[res_id].molsetup
-            chain, resname, resnum = res_id.split(":")
+            chain, resnum = res_id.split(":")
             resnum = int(resnum)
-            molsetup_mapidx = {} if chorizo.residues[res_id].molsetup_mapidx is None else chorizo.residues[res_id].molsetup_mapidx
+            resname = chorizo.residues[res_id].input_resname
+            ### molsetup_mapidx = {} if chorizo.residues[res_id].molsetup_mapidx is None else chorizo.residues[res_id].molsetup_mapidx
             is_flexres_atom = chorizo.residues[res_id].is_flexres_atom
             for i, atom_ignore in molsetup.atom_ignore.items():
                 if atom_ignore or is_flexres_atom[i]:
