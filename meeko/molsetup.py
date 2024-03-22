@@ -928,6 +928,11 @@ class RDKitMoleculeSetup(MoleculeSetup):
                 if atom.GetAtomicNum() == 34:
                     atom.SetAtomicNum(16)
             rdPartialCharges.ComputeGasteigerCharges(copy_mol)
+            # zero-out any `nan` or `inf` charges that may arise from unsupported RDKit atom types
+            for a in copy_mol.GetAtoms():
+                charge = a.GetDoubleProp('_GasteigerCharge')
+                if np.isnan(charge).any() or np.isinf(charge).any():
+                    a.SetDoubleProp('_GasteigerCharge', 0.0)
             charges = [a.GetDoubleProp('_GasteigerCharge') for a in copy_mol.GetAtoms()]
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
