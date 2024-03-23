@@ -317,7 +317,7 @@ class PDBQTWriterLegacy():
         return atom_name, res_name, res_num, chain
 
     @classmethod
-    def _make_pdbqt_line_from_molsetup(cls, setup, atom_idx, count):
+    def _make_pdbqt_line_from_molsetup(cls, setup, atom_idx, count, set_bad_charges_to_zero=False):
         """ """
         pdbinfo = setup.pdbinfo[atom_idx]
         if pdbinfo is None:
@@ -326,6 +326,8 @@ class PDBQTWriterLegacy():
         coord = setup.coord[atom_idx]
         atom_type = setup.get_atom_type(atom_idx)
         charge = setup.charge[atom_idx]
+        if set_bad_charges_to_zero and (type(charge) != float and type(charge) != int or math.isnan(charge) or math.isinf(charge)):
+            charge = 0.0
         pdbqt_line = cls._make_pdbqt_line(
                 count, atom_name, res_name, chain, res_num, coord, charge, atom_type)
         return pdbqt_line
@@ -344,7 +346,7 @@ class PDBQTWriterLegacy():
         return pdbqt_line
 
     @classmethod
-    def _walk_graph_recursive(cls, setup, node, data, edge_start=0, first=False):
+    def _walk_graph_recursive(cls, setup, node, data, edge_start=0, set_bad_charges_to_zero=False, first=False):
         """ recursive walk of rigid bodies"""
         
         if first:
@@ -358,7 +360,7 @@ class PDBQTWriterLegacy():
         for member in member_pool:
             if setup.atom_ignore[member] == 1:
                 continue
-            pdbqt_line = cls._make_pdbqt_line_from_molsetup(setup, member, data["count"])
+            pdbqt_line = cls._make_pdbqt_line_from_molsetup(setup, member, data["count"], set_bad_charges_to_zero=set_bad_charges_to_zero)
             data["pdbqt_buffer"].append(pdbqt_line)
             data["numbering"][member] = data["count"] # count starts at 1
             data["count"] += 1
@@ -384,13 +386,13 @@ class PDBQTWriterLegacy():
             end = data["count"]
 
             data["pdbqt_buffer"].append("BRANCH %3d %3d" % (begin, end))
-            data = cls._walk_graph_recursive(setup, neigh, data, edge_start=next_index)
+            data = cls._walk_graph_recursive(setup, neigh, data, edge_start=next_index, set_bad_charges_to_zero=set_bad_charges_to_zero)
             data["pdbqt_buffer"].append("ENDBRANCH %3d %3d" % (begin, end))
         
         return data
 
     @staticmethod
-    def _is_molsetup_ok(setup, bad_charge_ok):
+    def _is_molsetup_ok(setup, set_bad_charges_to_zero=False):
 
         success = True
         error_msg = ""
@@ -406,7 +408,7 @@ class PDBQTWriterLegacy():
                 error_msg += 'atom number %d has None type, mol name: %s\n' % (idx, setup.get_mol_name())
                 success = False
             c = setup.charge[idx]
-            if not bad_charge_ok and (type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)):
+            if not set_bad_charges_to_zero and (type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)):
                 error_msg += 'atom number %d has non finite charge, mol name: %s, charge: %s\n' % (idx, setup.get_mol_name(), str(c))
                 success = False
 
@@ -464,7 +466,7 @@ class PDBQTWriterLegacy():
         return rigid_pdbqt_string, flex_pdbqt_dict 
 
     @classmethod
-    def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
+    def write_string(cls, setup, add_index_map=False, remove_smiles=False, set_bad_charges_to_zero=False):
         """Output a PDBQT file as a string.
 
         Args:
@@ -476,7 +478,7 @@ class PDBQTWriterLegacy():
             str:  error message
         """
     
-        success, error_msg = cls._is_molsetup_ok(setup, bad_charge_ok)
+        success, error_msg = cls._is_molsetup_ok(setup, set_bad_charges_to_zero=set_bad_charges_to_zero)
         if not success:
             pdbqt_string = ""
             return pdbqt_string, success, error_msg
@@ -498,7 +500,7 @@ class PDBQTWriterLegacy():
         else:
             active_tors = torsdof
 
-        data = cls._walk_graph_recursive(setup, setup.flexibility_model["root"], data, first=True)
+        data = cls._walk_graph_recursive(setup, setup.flexibility_model["root"], data, set_bad_charges_to_zero=set_bad_charges_to_zero, first=True)
 
         if add_index_map:
             for i, remark_line in enumerate(cls.remark_index_map(setup, data["numbering"])):
