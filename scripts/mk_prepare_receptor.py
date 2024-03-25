@@ -128,7 +128,7 @@ def get_args():
     parser = TalkativeParser()
 
     io_group = parser.add_argument_group("Input/Output")
-    io_group.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
+    io_group.add_argument('--pdb', help="PDB file name (PDBQT not supported)")
     #parser.add_argument('--pdbqt', help="keeps existing charges and types")
     io_group.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
     io_group.add_argument('-p', '--chorizo_pickle') 
