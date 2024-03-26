@@ -1,7 +1,6 @@
 from rdkit import Chem
 from .utils import mini_periodic_table
 
-
 """
 create new RDKIT residue
 
@@ -15,12 +14,14 @@ source: https://sourceforge.net/p/rdkit/mailman/message/36404394/
 """
 
 from collections import namedtuple
+
 PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
+
 
 def getPdbInfoNoNull(atom):
     """extract information for populating an ATOM/HETATM line
     in the PDB"""
-    minfo = atom.GetMonomerInfo() # same as GetPDBResidueInfo
+    minfo = atom.GetMonomerInfo()  # same as GetPDBResidueInfo
     if minfo is None:
         atomic_number = atom.GetAtomicNum()
         if atomic_number == 0:
@@ -42,11 +43,12 @@ class Mol2MolSupplier():
     """ RDKit Mol2 molecule supplier.
     Parameters
         sanitize: perform RDKit sanitization of Mol2 molecule"""
+
     def __init__(self, filename, sanitize=True, removeHs=False, cleanupSubstructures=True):
         self.fp = open(filename, 'r')
-        self._opts = {'sanitize':sanitize,
-                'removeHs':removeHs,
-                'cleanupSubstructures':cleanupSubstructures }
+        self._opts = {'sanitize': sanitize,
+                      'removeHs': removeHs,
+                      'cleanupSubstructures': cleanupSubstructures}
         self.buff = []
 
     def __iter__(self):
@@ -60,7 +62,7 @@ class Mol2MolSupplier():
             if not line:
                 if len(self.buff):
                     # buffer full, returning last molecule
-                    mol=Chem.MolFromMol2Block("".join(self.buff), **self._opts)
+                    mol = Chem.MolFromMol2Block("".join(self.buff), **self._opts)
                     self.buff = []
                     return mol
                 # buffer empty, stopping the iteration
@@ -68,7 +70,7 @@ class Mol2MolSupplier():
                 raise StopIteration
             if '@<TRIPOS>MOLECULE' in line:
                 # first molecule parsed
-                if len(self.buff)==0:
+                if len(self.buff) == 0:
                     self.buff.append(line)
                 else:
                     # found the next molecule, breaking to return the complete one
@@ -77,9 +79,10 @@ class Mol2MolSupplier():
                 # adding another line in the current molecule
                 self.buff.append(line)
         # found a complete molecule, returning it
-        mol=Chem.MolFromMol2Block("".join(self.buff), **self._opts)
+        mol = Chem.MolFromMol2Block("".join(self.buff), **self._opts)
         self.buff = [line]
         return mol
+
 
 def react_and_map(reactants, rxn):
     """run reaction and keep track of atom indices from reagents to products"""
@@ -104,28 +107,28 @@ def react_and_map(reactants, rxn):
     for products in products_list:
         result_reac_map = []
         result_atom_map = []
-        new_atom_label_list = [] # for atoms created by the reaction that are labeled e.g. F in "[O:1]>>[O:1][F:2]"
+        new_atom_label_list = []  # for atoms created by the reaction that are labeled e.g. F in "[O:1]>>[O:1][F:2]"
         for product in products:
-            atom_idxmap = [] 
+            atom_idxmap = []
             reac_idxmap = []
             new_atom_label = []
             for atom in product.GetAtoms():
                 if atom.HasProp("reactant_idx"):
                     reactant_idx = atom.GetIntProp("reactant_idx")
                     new_atom_label.append(None)
-                elif atom.HasProp("old_mapno"): # this atom matched the reaction SMARTS
+                elif atom.HasProp("old_mapno"):  # this atom matched the reaction SMARTS
                     old_mapno = atom.GetIntProp("old_mapno")
-                    if old_mapno in reactive_atoms_idxmap: 
+                    if old_mapno in reactive_atoms_idxmap:
                         reactant_idx = reactive_atoms_idxmap[old_mapno]
                         new_atom_label.append(None)
                     else:
-                        reactant_idx = None 
-                        new_atom_label.append(old_mapno) # the reaction SMARTS created this atom and it has a label
-                    #if atom.HasProp("reactant_idx"):
+                        reactant_idx = None
+                        new_atom_label.append(old_mapno)  # the reaction SMARTS created this atom and it has a label
+                    # if atom.HasProp("reactant_idx"):
                     #    raise RuntimeError("did not expect both old_mapno and reactant_idx")
                     #    #print("did not expect both old_mapno and reactant_idx")
                 else:
-                    reactant_idx = None # the reaction SMARTS creates new atoms
+                    reactant_idx = None  # the reaction SMARTS creates new atoms
                     new_atom_label.append(None)
                 reac_idxmap.append(reactant_idx)
                 if atom.HasProp("react_atom_idx"):

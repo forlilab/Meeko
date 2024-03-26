@@ -52,7 +52,7 @@ from .hydrate import Hydrate
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup',
         'pdbutils', 'geomutils', 'rdkitutils', 'utils',
         'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
-        'LinkedRDKitChorizo', 'ChorizoResidue', 'ResiduePadder', 'ResidueTemplate'
+        'LinkedRDKitChorizo', 'ChorizoResidue', 'ResiduePadder', 'ResidueTemplate',
         'add_rotamers_to_chorizo_molsetups',
         'RDKitMolCreate',
         'PDBQTWriterLegacy',

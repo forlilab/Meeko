@@ -1,5 +1,6 @@
 import pathlib
 import json
+from os import linesep as os_linesep
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
@@ -12,17 +13,15 @@ from .utils.pdbutils import PDBAtomInfo
 
 import numpy as np
 
-from time import time
-
 
 def find_inter_mols_bonds(mols):
-    covalent_radius = { # from wikipedia
-         1:0.31,  5:0.84,  6:0.76,  7:0.71,  8:0.66,  9:0.57, 12:1.41, 14:1.11,
-        15:1.07, 16:1.05, 17:1.02, 19:2.03, 20:1.76, 24:1.39, 26:1.32, 30:1.22,
-        34:1.20, 35:1.20, 53:1.39,
+    covalent_radius = {  # from wikipedia
+        1: 0.31, 5: 0.84, 6: 0.76, 7: 0.71, 8: 0.66, 9: 0.57, 12: 1.41, 14: 1.11,
+        15: 1.07, 16: 1.05, 17: 1.02, 19: 2.03, 20: 1.76, 24: 1.39, 26: 1.32, 30: 1.22,
+        34: 1.20, 35: 1.20, 53: 1.39,
     }
-    allowance = 1.2 # vina uses 1.1 but covalent radii are shorter here
-    max_possible_covalent_radius = 2*allowance*max([r for k, r in covalent_radius.items()])
+    allowance = 1.2  # vina uses 1.1 but covalent radii are shorter here
+    max_possible_covalent_radius = 2 * allowance * max([r for k, r in covalent_radius.items()])
     cubes_min = []
     cubes_max = []
     for mol in mols:
@@ -32,7 +31,7 @@ def find_inter_mols_bonds(mols):
     tmp = np.array([0, 0, 1, 1])
     pairs_to_consider = []
     for i in range(len(mols)):
-        for j in range(i+1, len(mols)):
+        for j in range(i + 1, len(mols)):
             do_consider = True
             for d in range(3):
                 x = (cubes_min[i][d], cubes_max[i][d], cubes_min[j][d], cubes_max[j][d])
@@ -51,11 +50,11 @@ def find_inter_mols_bonds(mols):
                 vec = p1[a1.GetIdx()] - p2[a2.GetIdx()]
                 distsqr = (np.dot(vec, vec))
                 cov_dist = covalent_radius[a1.GetAtomicNum()] + covalent_radius[a2.GetAtomicNum()]
-                if distsqr < (allowance * cov_dist)**2:
+                if distsqr < (allowance * cov_dist) ** 2:
                     bonds.append((i, j, a1.GetIdx(), a2.GetIdx()))
 
     return len(pairs_to_consider), bonds
-    
+
 
 def mapping_by_mcs(mol, ref):
     mcs_result = rdFMCS.FindMCS([mol, ref], bondCompare=rdFMCS.BondCompare.CompareAny)
@@ -66,7 +65,6 @@ def mapping_by_mcs(mol, ref):
 
     atom_map = {i: j for (i, j) in zip(mol_idxs, ref_idxs)}
     return atom_map
-
 
 
 def _snap_to_int(value, tolerance=0.12):
@@ -168,7 +166,7 @@ class ResidueChemTemplates:
 
     @classmethod
     def from_dict(cls, alldata):
-        #alldata = json.loads(json_string)
+        # alldata = json.loads(json_string)
         ambiguous = alldata["ambiguous"]
         residue_templates = {}
         padders = {}
@@ -186,30 +184,30 @@ class ResidueChemTemplates:
 
     @staticmethod
     def _check_missing_padders(residues, padders):
-    
+
         # can't guarantee full coverage because the topology that is passed
         # to the chorizo may contain bonds between residues that are not
         # anticipated to be bonded, for example, protein N-term bonded to
         # nucleic acid 5 prime.
-    
+
         # collect labels from residues
-        link_labels_in_residues = set() 
+        link_labels_in_residues = set()
         for reskey, res_template in residues.items():
             for _, link_label in res_template.link_labels.items():
                 link_labels_in_residues.add(link_label)
-    
+
         # and check we have padders for all of them
         link_labels_in_padders = set([label for label in padders])
-        #for link_label in padders:
+        # for link_label in padders:
         #    for (link_labels) in padder.link_labels:
         #        print(link_key, link_labels)
         #        for (label, _) in link_labels: # link_labels is a list of pairs
         #            link_labels_in_padders.add(label)
-    
+
         missing = link_labels_in_residues.difference(link_labels_in_padders)
         if missing:
             raise RuntimeError(f"missing padders for {missing}")
-    
+
         return
 
     @staticmethod
@@ -219,12 +217,10 @@ class ResidueChemTemplates:
             for reskey in reskeys:
                 if reskey not in residue_templates:
                     missing.setdefault(input_resname, set())
-                    missing[key].add(reskey)
+                    missing[input_resname].add(reskey)
         if len(missing):
             raise ValueError(f"missing residue templates for ambiguous: {missing}")
         return
-
-
 
 
 class LinkedRDKitChorizo:
@@ -237,7 +233,6 @@ class LinkedRDKitChorizo:
     residues: dict (string -> ChorizoResidue) #TODO: figure out exact SciPy standard for dictionary key/value notation
     """
 
-
     @classmethod
     def from_pdb_string(cls, pdb_string, chem_templates, mk_prep,
                         set_template=None, residues_to_delete=None, allow_bad_res=False):
@@ -246,7 +241,6 @@ class LinkedRDKitChorizo:
         chorizo = cls(raw_input_mols, chem_templates, mk_prep,
                       set_template=None, residues_to_delete=None, allow_bad_res=False)
         return chorizo
-
 
     def __init__(self, raw_input_mols, residue_chem_templates, mk_prep,
                  set_template=None, residues_to_delete=None,
@@ -275,9 +269,8 @@ class LinkedRDKitChorizo:
         print(self.log)  # TODO integrate with mk_prepare_receptor.py (former suggested_mutations)
 
         if residues_to_delete is None:
-            residues_to_delete = () # self._delete_residues expects an iterator
-        self._delete_residues(residues_to_delete, self.residues) # sets ChorizoResidue.user_deleted = True
-
+            residues_to_delete = ()  # self._delete_residues expects an iterator
+        self._delete_residues(residues_to_delete, self.residues)  # sets ChorizoResidue.user_deleted = True
 
         # currently limied to max 1 bonde beteen each pair of residues
         # TODO use raw mol indices rather than rdkit_mol indices to allow external topology
@@ -286,11 +279,11 @@ class LinkedRDKitChorizo:
 
         # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
         padded_mols = self._build_padded_mols(self.residues, bonds, padders)
-        
+
         for residue_id, (padded_mol, mapidx_from_pad) in padded_mols.items():
             molsetups = mk_prep(padded_mol)
             assert len(molsetups) == 1, f"got {len(molsetups)} but can only deal with 1 for now"
-            molsetup = molsetups[0] 
+            molsetup = molsetups[0]
             self.residues[residue_id].molsetup = molsetup
             self.residues[residue_id].molsetup_mapidx = mapidx_from_pad
             self.residues[residue_id].is_flexres_atom = [False for _ in molsetup.atom_ignore]
@@ -309,7 +302,7 @@ class LinkedRDKitChorizo:
             not_ignored_idxs = []
             charges = []
             for i, q in molsetup.charge.items():  # charge is ordered dict
-                if i in mapidx_from_pad: # TODO offsite not in mapidx
+                if i in mapidx_from_pad:  # TODO offsite not in mapidx
                     charges.append(q)
                     not_ignored_idxs.append(i)
             charges = rectify_charges(charges, net_charge, decimals=3)
@@ -326,12 +319,10 @@ class LinkedRDKitChorizo:
 
         return
 
-
-
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
 
-        rdkit_mol = Chem.Mol(template.mol) # making a copy
+        rdkit_mol = Chem.Mol(template.mol)  # making a copy
         conf = Chem.Conformer(rdkit_mol.GetNumAtoms())
         input_conf = raw_mol.GetConformer()
         for i, j in mapping.items():
@@ -360,38 +351,39 @@ class LinkedRDKitChorizo:
             if len(to_del) != nr_missing_H:
                 raise RuntimeError()
             for i in sorted(to_del, reverse=True):
-                #print("Removing ", tmpmol.GetAtomWithIdx(i).GetAtomicNum())
+                # print("Removing ", tmpmol.GetAtomWithIdx(i).GetAtomicNum())
                 tmpmol.RemoveAtom(i)
                 to_del[i].SetNumExplicitHs(to_del[i].GetNumExplicitHs() + 1)
-            to_add_h = list(set([atom.GetIdx() for atom in to_add_h])) # atom.GetIdx() returns new index after deleting Hs
+            to_add_h = list(
+                set([atom.GetIdx() for atom in to_add_h]))  # atom.GetIdx() returns new index after deleting Hs
             tmpmol = tmpmol.GetMol()
             tmpmol.UpdatePropertyCache()
-            #for atom in tmpmol.GetAtoms():
+            # for atom in tmpmol.GetAtoms():
             #    print(atom.GetAtomicNum(), atom.GetNumImplicitHs(), atom.GetNumExplicitHs())
             Chem.SanitizeMol(tmpmol)
             tmpmol = Chem.AddHs(tmpmol, onlyOnAtoms=to_add_h, addCoords=True)
-            #tmpmol = Chem.AddHs(tmpmol, addCoords=True)
-            #print(tmpmol.GetNumAtoms())
+            # tmpmol = Chem.AddHs(tmpmol, addCoords=True)
+            # print(tmpmol.GetNumAtoms())
             tmpconf = tmpmol.GetConformer()
-            #print(tmpconf.GetPositions())
-            used_h = set() # heavy atom may have multiple H that were missing, keep track of Hs that were visited
+            # print(tmpconf.GetPositions())
+            used_h = set()  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
             for h_index, parent in to_del.items():
                 for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
-                    #print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
-                    if atom.GetAtomicNum() == 1 and atom.GetIdx() >= len(mapping): # added H have indices larger than existing atoms
+                    # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
+                    if atom.GetAtomicNum() == 1 and atom.GetIdx() >= len(
+                            mapping):  # added H have indices larger than existing atoms
                         if atom.GetIdx() not in used_h:
-                            #print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
+                            # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
                             conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
                             used_h.add(atom.GetIdx())
                             break  # h_index coords copied, don't look into further H bound to parent
-            
+
             assert len(used_h) == len(to_del), print(len(used_h), len(to_del))
 
             rdkit_mol.RemoveAllConformers()
             rdkit_mol.AddConformer(conf, assignId=True)
 
             return rdkit_mol
-
 
     @staticmethod
     def _find_least_missing_Hs(raw_input_mol, residue_templates):
@@ -410,27 +402,25 @@ class LinkedRDKitChorizo:
                 min_missing_Hs = match_stats["H"]["missing"]
         return best
 
-
     @classmethod
     def _get_residues(cls, raw_input_mols, ambiguous, residue_templates, set_template):
 
         residues = {}
         log = {
-                "chosen_by_fewest_missing_H": {},
-                "chosen_by_default": {},
-                "no_match": [],
-                "no_mol": [],
-              }
+            "chosen_by_fewest_missing_H": {},
+            "chosen_by_default": {},
+            "no_match": [],
+            "no_mol": [],
+        }
         for residue_key, (raw_mol, input_resname) in raw_input_mols.items():
             if raw_mol is None:
                 residues[residue_key] = ChorizoResidue(None, None, None, input_resname, None)
-                residues[residue_key].ignore_residue = True
                 log["no_mol"].append(residue_key)
                 continue
             raw_mol_has_H = sum([a.GetAtomicNum() == 1 for a in raw_mol.GetAtoms()]) > 0
             tolerate_excess_H = False
             if set_template is not None and residue_key in set_template:
-                template_key = set_template[residue_key] # often resname or resname-like, e.g. HID, NALA
+                template_key = set_template[residue_key]  # often resname or resname-like, e.g. HID, NALA
                 match_stats, mapping = template.match(raw_mol)
                 tolerate_excess_H = True  # allows setting LYN from protonated (LYS+) input
             elif raw_mol_has_H and input_resname in ambiguous and len(ambiguous[input_resname]) > 1:
@@ -438,16 +428,17 @@ class LinkedRDKitChorizo:
                 candidate_templates = [residue_templates[key] for key in candidate_template_keys]
                 best_matches = cls._find_least_missing_Hs(raw_mol, candidate_templates)
                 if len(best_matches) > 1:
-                    raise RuntimeError("{len(output)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties")
+                    raise RuntimeError(
+                        "{len(output)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties")
                 elif len(best_matches) == 0:
                     template_key = None
                 else:
                     match_stats = best_matches[0]["match_stats"]
-                    mapping     = best_matches[0]["mapping"]
-                    index       = best_matches[0]["index"]
+                    mapping = best_matches[0]["mapping"]
+                    index = best_matches[0]["index"]
                     template_key = candidate_template_keys[index]
                     log["chosen_by_fewest_missing_H"][residue_key] = template_key
-            elif input_resname in ambiguous: # use default (first) template in ambiguous
+            elif input_resname in ambiguous:  # use default (first) template in ambiguous
                 template_key = ambiguous[input_resname][0]
                 template = residue_templates[template_key]
                 match_stats, mapping = template.match(raw_mol)
@@ -459,7 +450,6 @@ class LinkedRDKitChorizo:
 
             if template_key is None or match_stats["heavy"]["missing"] or match_stats["heavy"]["excess"]:
                 residues[residue_key] = ChorizoResidue(raw_mol, None, None, input_resname, template_key)
-                residues[residue_key].ignore_residue = True
                 log["no_match"].append(residue_key)
                 if residue_key in log["chosen_by_default"]:
                     log["chosen_by_default"].pop(residue_key)
@@ -468,31 +458,30 @@ class LinkedRDKitChorizo:
                 rdkit_mol = cls._build_rdkit_mol(raw_mol, template, mapping, match_stats["H"]["missing"])
                 residues[residue_key] = ChorizoResidue(raw_mol, rdkit_mol, mapping, input_resname, template_key)
                 if template.link_labels is not None:
-                    mapping_inv = residues[residue_key].mapidx_from_raw # {j: i for (i, j) in mapping.items()}
+                    mapping_inv = residues[residue_key].mapidx_from_raw  # {j: i for (i, j) in mapping.items()}
                     link_labels = {i: label for i, label in template.link_labels.items()}
                     residues[residue_key].link_labels = link_labels
 
                 # TODO link atoms connections add to chorizoResidue
         return residues, log
 
-
     @staticmethod
     def _get_bonds(residues):
         mols = [residue.raw_rdkit_mol for key, residue in residues.items() if residue.raw_rdkit_mol is not None]
         keys = [key for key, residue in residues.items() if residue.raw_rdkit_mol is not None]
-        #t0 = time()
+        # t0 = time()
         ### print("Starting find inter mols bonds", f"{len(mols)=}")
         ### print(f"maximum nr of pairs to consider: {len(mols) * (len(mols)-1)}")
         nr_pairs, bonds_ = find_inter_mols_bonds(mols)
         bonds = {}
         for (i, j, k, l) in bonds_:
-            bonds[(keys[i], keys[j])] = (#k, l)
-                    residues[keys[i]].mapidx_from_raw[k],
-                    residues[keys[j]].mapidx_from_raw[l],
-                )
+            bonds[(keys[i], keys[j])] = (  # k, l)
+                residues[keys[i]].mapidx_from_raw[k],
+                residues[keys[j]].mapidx_from_raw[l],
+            )
         assert len(bonds) == len(bonds_), "can add only 1 bond between each pair of residues, for now"
-        #t = time()
-        #print(f"took {t-t0:.4f} seconds")
+        # t = time()
+        # print(f"took {t-t0:.4f} seconds")
         return bonds
 
     @staticmethod
@@ -518,7 +507,7 @@ class LinkedRDKitChorizo:
                         bond_use_count[(r1_id, r2_id)] += 1
                         break
 
-                #print(residue_id, atom_index, link_label, adjacent_mol is not None, adjacent_atom_index)
+                # print(residue_id, atom_index, link_label, adjacent_mol is not None, adjacent_atom_index)
                 padded_mol, mapidx = padders[link_label](padded_mol, adjacent_mol, atom_index, adjacent_atom_index)
 
                 tmp = {}
@@ -529,7 +518,7 @@ class LinkedRDKitChorizo:
                         continue  # padding atom from previous iteration for another link_label
                     tmp[i] = mapidx_pad[j]
                 mapidx_pad = tmp
-                #print(f"{mapidx_pad=}")
+                # print(f"{mapidx_pad=}")
 
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
 
@@ -541,7 +530,6 @@ class LinkedRDKitChorizo:
         if len(err_msg):
             raise RuntimeError(err_msg)
         return padded_mols
-
 
     @staticmethod
     def _delete_residues(query_res, residues):
@@ -578,7 +566,6 @@ class LinkedRDKitChorizo:
             string += " ".join(removed_res) + pathlib.os.linesep
         return string
 
-
     @staticmethod
     def _pdb_to_residue_mols(pdb_string):
         blocks_by_residue = {}
@@ -586,14 +573,16 @@ class LinkedRDKitChorizo:
         reskey = None
         buffered_reskey = None
         buffered_resname = None
-        interrupted_residues = set() # e.g. non-consecutive residue lines due to interruption by TER or another res
+        interrupted_residues = set()  # e.g. non-consecutive residue lines due to interruption by TER or another res
         pdb_block = ""
+
         def _add_if_new(to_dict, key, value, repeat_log):
             if key in to_dict:
                 repeat_log.add(key)
             else:
                 to_dict[key] = value
             return
+
         for line in pdb_string.splitlines(True):
             if line.startswith('TER') and reskey is not None:
                 _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
@@ -612,14 +601,14 @@ class LinkedRDKitChorizo:
                 reskey_to_resname[reskey].add(resname)
 
                 if reskey == buffered_reskey:  # this line continues existing residue
-                    pdb_block += line 
+                    pdb_block += line
                 else:
                     if buffered_reskey is not None:
                         _add_if_new(blocks_by_residue, buffered_reskey, pdb_block, interrupted_residues)
                     buffered_reskey = reskey
                     pdb_block = line
-             
-        if len(pdb_block): # there was not a TER line
+
+        if len(pdb_block):  # there was not a TER line
             _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
 
         # verify that each identifier (e.g. "A:17" has a single resname
@@ -632,12 +621,11 @@ class LinkedRDKitChorizo:
         # create rdkit molecules from PDB strings for each residue
         raw_input_mols = {}
         for reskey, pdb_block in blocks_by_residue.items():
-            pdbmol = Chem.MolFromPDBBlock(pdb_block, removeHs=False) # TODO RDKit ignores AltLoc ?
-            resname = list(reskey_to_resname[reskey])[0] # already verified length of set is 1
+            pdbmol = Chem.MolFromPDBBlock(pdb_block, removeHs=False)  # TODO RDKit ignores AltLoc ?
+            resname = list(reskey_to_resname[reskey])[0]  # already verified length of set is 1
             raw_input_mols[reskey] = (pdbmol, resname)
 
         return raw_input_mols
-
 
     def to_pdb(self, use_modified_coords=False, modified_coords_index=0):
         pdbout = ""
@@ -646,7 +634,7 @@ class LinkedRDKitChorizo:
         pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                       {:2s} "
         pdb_line += pathlib.os.linesep
         for res_id in self.residues:
-            if self.residues[res_id].user_deleted or self.residues[res_id].ignore_residue:
+            if self.residues[res_id].user_deleted or self.residues[res_id].rdkit_mol is None:
                 continue
             resmol = self.residues[res_id].rdkit_mol
             if use_modified_coords and self.residues[res_id].molsetup is not None:
@@ -680,7 +668,7 @@ class LinkedRDKitChorizo:
         atom_params = {}
         counter_atoms = 0
         coords = []
-        dedicated_attribute = ("charge", "atom_type") # molsetup has a dedicated attribute
+        dedicated_attribute = ("charge", "atom_type")  # molsetup has a dedicated attribute
         for res_id in self.get_valid_residues():
             molsetup = self.residues[res_id].molsetup
             wanted_atom_indices = []
@@ -688,20 +676,20 @@ class LinkedRDKitChorizo:
                 if not ignore and not self.residues[res_id].is_flexres_atom[i]:
                     wanted_atom_indices.append(i)
             for key, values in molsetup.atom_params.items():
-                atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
+                atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 for i in wanted_atom_indices:
                     atom_params[key].append(values[i])
             for key in dedicated_attribute:
-                atom_params.setdefault(key, [None]*counter_atoms) # add new "column"
+                atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 values_dict = getattr(molsetup, key)
                 for i in wanted_atom_indices:
                     atom_params[key].append(values_dict[i])
             counter_atoms += len(wanted_atom_indices)
             added_keys = set(molsetup.atom_params).union(dedicated_attribute)
-            for key in set(atom_params).difference(added_keys): # <key> missing in current molsetup
-                atom_params[key].extend([None] * len(wanted_atom_indices)) # fill in incomplete "row"
+            for key in set(atom_params).difference(added_keys):  # <key> missing in current molsetup
+                atom_params[key].extend([None] * len(wanted_atom_indices))  # fill in incomplete "row"
             coords.extend(molsetup.coord[i])
-        if hasattr(self, "param_rename"): # e.g. "gasteiger" -> "q"
+        if hasattr(self, "param_rename"):  # e.g. "gasteiger" -> "q"
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
         return atom_params, coords
@@ -764,7 +752,6 @@ residues_rotamers = {"SER": [("C", "CA", "CB", "OG")],
 
 
 def add_rotamers_to_chorizo_molsetups(rotamer_states_list, chorizo):
-
     rotamer_res_disambiguate = {}
     for primary_res, specific_res_list in chorizo.residue_chem_templates.ambiguous.items():
         for specific_res in specific_res_list:
@@ -794,7 +781,7 @@ def add_rotamers_to_chorizo_molsetups(rotamer_states_list, chorizo):
             molsetup = chorizo.residues[res_with_resname].molsetup
             name_to_molsetup_idx = {}
             for atom_index, pdbinfo in molsetup.pdbinfo.items():
-                atom_name = pdbinfo.name 
+                atom_name = pdbinfo.name
                 name_to_molsetup_idx[atom_name] = atom_index
 
             resname = res_with_resname.split(":")[1]
@@ -823,16 +810,15 @@ class ChorizoResidue:
     A class representing a single residue in the chain of chorizo residues
     """
 
-    ### def __init__(self, residue_id, pdb_text, previous_id=None, next_id=None):
     def __init__(self, raw_input_mol, rdkit_mol, mapidx_to_raw, input_resname=None, template_key=None,
                  link_labels=None, atom_names=None):
 
         self.raw_rdkit_mol = raw_input_mol
         self.rdkit_mol = rdkit_mol
         self.mapidx_to_raw = mapidx_to_raw
-        self.residue_template_key = template_key # same as pdb_resname except NALA, etc
-        self.input_resname = input_resname # even if using openmm topology, there are residues
-        self.atom_names = atom_names # assumes same order and length as atoms in rdkit_mol, used in e.g. rotamers
+        self.residue_template_key = template_key  # same as pdb_resname except NALA, etc
+        self.input_resname = input_resname  # even if using openmm topology, there are residues
+        self.atom_names = atom_names  # assumes same order and length as atoms in rdkit_mol, used in e.g. rotamers
 
         # TODO convert link indices/labels in template to rdkit_mol indices herein
         self.link_labels = {}
@@ -849,14 +835,12 @@ class ChorizoResidue:
 
         self.molsetup = None
         self.molsetup_mapidx = None
-        self.is_flexres_atom = None # Check about these data types/Do we want the default to be None or empty
+        self.is_flexres_atom = None  # Check about these data types/Do we want the default to be None or empty
 
         # flags
         ### self.ignore_residue = False NOTE using rdkit_mol=None instead
         self.is_movable = False
         self.user_deleted = False
-
-        ### self.additional_connections = []
 
     def set_atom_names(self, atom_names_list):
         if self.rdkit_mol is None:
@@ -873,7 +857,8 @@ class ChorizoResidue:
         return json.dumps(self, default=lambda o: o.__dict__)
 
     def is_valid_residue(self):
-        """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to ignore"""
+        """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to
+        ignore"""
         return self.rdkit_mol is not None and not self.user_deleted
 
 
@@ -901,7 +886,7 @@ class ResiduePadder:
     # reaction should not delete atoms, not even Hs
     # reaction should create bonds at non-real Hs (implicit or explicit rdktt H)
 
-    def __init__(self, rxn_smarts, adjacent_res_smarts=None):#, link_labels=None):
+    def __init__(self, rxn_smarts, adjacent_res_smarts=None):  # , link_labels=None):
         rxn = rdChemReactions.ReactionFromSmarts(rxn_smarts)
         if rxn.GetNumReactantTemplates() != 1:
             raise ValueError(f"expected 1 reactants, got {rxn.GetNumReactantTemplates()} in {rxn_smarts}")
@@ -916,7 +901,7 @@ class ResiduePadder:
             assert adjacent_smartsmol is not None
             is_ok, padding_ids, adjacent_ids = self._check_adj_smarts(rxn, adjacent_smartsmol)
             if not is_ok:
-                msg = f"SMARTS labels in adjacent_smartsmol ({adjacent_ids}) differ from unmapped product labels in reaction ({adding_ids})" + os_linesep
+                msg = f"SMARTS labels in adjacent_smartsmol ({adjacent_ids}) differ from unmapped product labels in reaction ({padding_ids})" + os_linesep
                 msg += f"{rxn_smarts=}" + os_linesep
                 msg += f"{adjacent_res_smarts=}" + os_linesep
             self.adjacent_smartsmol = adjacent_smartsmol
@@ -925,8 +910,6 @@ class ResiduePadder:
                 if atom.HasProp("molAtomMapNumber"):
                     j = atom.GetIntProp("molAtomMapNumber")
                     self.adjacent_smartsmol_mapidx[j] = atom.GetIdx()
-
-        #self.link_labels = link_labels
 
     def __call__(self, target_mol,
                  adjacent_mol=None,
@@ -941,7 +924,7 @@ class ResiduePadder:
         if target_required_atom_index is not None:
             passing_products = []
             for product, atomidx in zip(products, idxmap["atom_idx"]):
-                if target_required_atom_index in atomidx[0]: # 1 product template
+                if target_required_atom_index in atomidx[0]:  # 1 product template
                     passing_products.append(product)
             if len(passing_products) > 1:
                 raise RuntimeError("more than 1 padding product has target_required_atom_index")
@@ -953,9 +936,9 @@ class ResiduePadder:
 
         padded_mol = products[0][0]
 
-        #is_pad_atom = [reactant_idx == 0 for reactant_idx in idxmap["reactant_idx"][0][0]]
-        #mapidx = {i: j for (i, j) in enumerate(idxmap["atom_idx"][0][0]) if j is not None}
-        #return padded_mol, is_pad_atom, mapidx
+        # is_pad_atom = [reactant_idx == 0 for reactant_idx in idxmap["reactant_idx"][0][0]]
+        # mapidx = {i: j for (i, j) in enumerate(idxmap["atom_idx"][0][0]) if j is not None}
+        # return padded_mol, is_pad_atom, mapidx
 
         mapidx = idxmap["atom_idx"][0][0]
         padding_heavy_atoms = []
@@ -966,7 +949,7 @@ class ResiduePadder:
 
         if adjacent_mol is None:
             padded_mol.UpdatePropertyCache()  # avoids getNumImplicitHs() called without preceding call to calcImplicitValence()
-            Chem.SanitizeMol(padded_mol) # just in case
+            Chem.SanitizeMol(padded_mol)  # just in case
             padded_h = Chem.AddHs(padded_mol, onlyOnAtoms=padding_heavy_atoms)
             mapidx += [None] * (padded_h.GetNumAtoms() - padded_mol.GetNumAtoms())
         elif self.adjacent_smartsmol is None:
@@ -991,7 +974,6 @@ class ResiduePadder:
             padded_h = Chem.AddHs(padded_mol, onlyOnAtoms=padding_heavy_atoms, addCoords=True)
         return padded_h, mapidx
 
-
     @staticmethod
     def _check_adj_smarts(rxn, adjacent_smartsmol):
         def get_molAtomMapNumbers(mol):
@@ -1000,8 +982,9 @@ class ResiduePadder:
                 if atom.HasProp("molAtomMapNumber"):
                     numbers.add(atom.GetIntProp("molAtomMapNumber"))
             return numbers
+
         reactant_ids = get_molAtomMapNumbers(rxn.GetReactantTemplate(0))
-        product_ids  = get_molAtomMapNumbers(rxn.GetProductTemplate(0))
+        product_ids = get_molAtomMapNumbers(rxn.GetProductTemplate(0))
         adjacent_ids = get_molAtomMapNumbers(adjacent_smartsmol)
         padding_ids = product_ids.difference(reactant_ids)
         is_ok = padding_ids == adjacent_ids
@@ -1014,7 +997,6 @@ class ResiduePadder:
 
     def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)
-
 
 
 class ResidueTemplate:
@@ -1054,14 +1036,14 @@ class ResidueTemplate:
         # atoms "missing" exist in self.mol but not in input_mol
         # "excess" atoms exist in input_mol but not in self.mol
         result = {
-            "H":     {"found": 0, "missing": 0, "excess": 0},
+            "H": {"found": 0, "missing": 0, "excess": 0},
             "heavy": {"found": 0, "missing": 0, "excess": 0},
         }
         for atom in self.mol.GetAtoms():
             element = "H" if atom.GetAtomicNum() == 1 else "heavy"
             key = "found" if atom.GetIdx() in mapping else "missing"
             result[element][key] += 1
-        for atom in input_mol.GetAtoms(): 
+        for atom in input_mol.GetAtoms():
             element = "H" if atom.GetAtomicNum() == 1 else "heavy"
             if atom.GetIdx() not in mapping_inv:
                 result[element]["excess"] += 1

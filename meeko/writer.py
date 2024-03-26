@@ -16,6 +16,7 @@ from .utils.rdkitutils import mini_periodic_table
 
 linesep = pathlib.os.linesep
 
+
 def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     if len(molsetup.restraints):
         raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
@@ -38,13 +39,13 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     elements = []
     n_real_atoms = molsetup.atom_true_count
     n_fake_atoms = len(molsetup.atom_pseudo)
-    indexmap = {} # molsetup: oid
+    indexmap = {}  # molsetup: oid
     count_oids = 0
     for index in range(n_real_atoms):
         if molsetup.atom_ignore[index]:
             continue
         if molsetup.atom_type[index] == offchrg_type:
-            continue # handled by offchrg_by_parent
+            continue  # handled by offchrg_by_parent
         oid_id = count_oids + index_start
         indexmap[index] = count_oids
         x, y, z = molsetup.coord[index]
@@ -63,11 +64,11 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
         count_oids += 1
         element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
         elements.append(element)
-    
+
     tmp = []
     for index in range(len(charges)):
         if index in offchrg_by_oid_parent:
-            tmplist = ["%f" % charges[index], "0.0", "0.0" ,"0.0"] # xyz relative to current elemtn
+            tmplist = ["%f" % charges[index], "0.0", "0.0", "0.0"]  # xyz relative to current elemtn
             tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
             tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
             tmp.append(",".join(tmplist))
@@ -86,7 +87,7 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
             continue
         oid_i = indexmap[i]
         oid_j = indexmap[j]
-        bonds[oid_i].append("%d" % (oid_j+index_start))
+        bonds[oid_i].append("%d" % (oid_j + index_start))
         bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
         if not molsetup.bond[(i, j)]["rotatable"]:
             static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
@@ -95,7 +96,6 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     bond_orders = [",".join(orders) for orders in bond_orders]
     bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
     staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
-
 
     output = ""
     output += "[Group: %s]\n" % name
@@ -137,13 +137,13 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     elements = []
     n_real_atoms = molsetup.atom_true_count
     n_fake_atoms = len(molsetup.atom_pseudo)
-    indexmap = {} # molsetup: oid
+    indexmap = {}  # molsetup: oid
     count_oids = 0
     for index in range(n_real_atoms):
         if molsetup.atom_ignore[index]:
             continue
         if molsetup.atom_type[index] == offchrg_type:
-            continue # handled by offchrg_by_parent
+            continue  # handled by offchrg_by_parent
         oid_id = count_oids + index_start
         indexmap[index] = count_oids
         x, y, z = molsetup.coord[index]
@@ -162,11 +162,11 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
         count_oids += 1
         element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
         elements.append(element)
-    
+
     tmp = []
     for index in range(len(charges)):
         if index in offchrg_by_oid_parent:
-            tmplist = ["%f" % charges[index], "0.0", "0.0" ,"0.0"] # xyz relative to current elemtn
+            tmplist = ["%f" % charges[index], "0.0", "0.0", "0.0"]  # xyz relative to current elemtn
             tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
             tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
             tmp.append(",".join(tmplist))
@@ -185,7 +185,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
             continue
         oid_i = indexmap[i]
         oid_j = indexmap[j]
-        bonds[oid_i].append("%d" % (oid_j+index_start))
+        bonds[oid_i].append("%d" % (oid_j + index_start))
         bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
         if not molsetup.bond[(i, j)]["rotatable"]:
             static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
@@ -194,7 +194,6 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     bond_orders = [",".join(orders) for orders in bond_orders]
     bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
     staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
-
 
     output = ""
     output += "[Group: %s]\n" % name
@@ -213,8 +212,8 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
 
     return output, indexmap
 
-def get_dihedrals_block(molsetup, indexmap, name):
 
+def get_dihedrals_block(molsetup, indexmap, name):
     # molsetup.dihedral_interactions    is a list of unique fourier_series
     # molsetup.dihedral_partaking_atoms has tuples of atom indices as keys, and the values
     #                                   are the indices in molsetup.dihedral_interactions 
@@ -227,9 +226,9 @@ def get_dihedrals_block(molsetup, indexmap, name):
     for atomidx in molsetup.dihedral_partaking_atoms:
         a, b, c, d = atomidx
         if (molsetup.atom_ignore[a] or
-            molsetup.atom_ignore[b] or
-            molsetup.atom_ignore[c] or
-            molsetup.atom_ignore[d]):
+                molsetup.atom_ignore[b] or
+                molsetup.atom_ignore[c] or
+                molsetup.atom_ignore[d]):
             continue
         bond_id = molsetup.get_bond_id(b, c)
         if not molsetup.bond[bond_id]["rotatable"]:
@@ -258,12 +257,13 @@ def get_dihedrals_block(molsetup, indexmap, name):
         text += "type = dihedral\n"
         atomidx_strings = []
         for atomidx in atomidx_by_index[index]:
-            string = ",".join(["%d" % (indexmap[i]+1) for i in atomidx])
+            string = ",".join(["%d" % (indexmap[i] + 1) for i in atomidx])
             atomidx_strings.append(string)
         text += "elements = {%s}\n" % ("|".join(atomidx_strings))
         text += "parameters = %s\n" % _aux_fourier_conversion(molsetup.dihedral_interactions[index])
         text += '\n'
     return text
+
 
 def _aux_fourier_conversion(fourier_series):
     # convert from:
@@ -286,7 +286,7 @@ def _aux_fourier_conversion(fourier_series):
         if phase == 0:
             phase_str = '0'
         else:
-            phase_str = ('%f' % (phase/np.pi)).rstrip('0').rstrip('.') + '*pi'
+            phase_str = ('%f' % (phase / np.pi)).rstrip('0').rstrip('.') + '*pi'
             if phase_str == '1*pi':
                 phase_str = 'pi'
             if phase_str == '-1*pi':
@@ -296,7 +296,6 @@ def _aux_fourier_conversion(fourier_series):
         if k != 0: k_str = '%f*4.184/60.221' % (k)
         strings.append("%s,%s" % (k_str, phase_str))
     return "(" + ";".join(strings) + ")"
-
 
 
 class PDBQTWriterLegacy():
@@ -327,11 +326,11 @@ class PDBQTWriterLegacy():
         atom_type = setup.get_atom_type(atom_idx)
         charge = setup.charge[atom_idx]
         pdbqt_line = cls._make_pdbqt_line(
-                count, atom_name, res_name, chain, res_num, coord, charge, atom_type)
+            count, atom_name, res_name, chain, res_num, coord, charge, atom_type)
         return pdbqt_line
 
     @staticmethod
-    def _make_pdbqt_line(count, atom_name, res_name, chain, res_num, coord, charge, atom_type): 
+    def _make_pdbqt_line(count, atom_name, res_name, chain, res_num, coord, charge, atom_type):
         record_type = "ATOM"
         alt_id = " "
         in_code = ""
@@ -339,14 +338,14 @@ class PDBQTWriterLegacy():
         temp_factor = 0.0
         atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
         pdbqt_line = atom.format(record_type, count, atom_name, alt_id, res_name, chain,
-                           res_num, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
-                           occupancy, temp_factor, charge, atom_type)
+                                 res_num, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
+                                 occupancy, temp_factor, charge, atom_type)
         return pdbqt_line
 
     @classmethod
     def _walk_graph_recursive(cls, setup, node, data, edge_start=0, first=False):
         """ recursive walk of rigid bodies"""
-        
+
         if first:
             data["pdbqt_buffer"].append('ROOT')
             member_pool = sorted(setup.flexibility_model['rigid_body_members'][node])
@@ -360,7 +359,7 @@ class PDBQTWriterLegacy():
                 continue
             pdbqt_line = cls._make_pdbqt_line_from_molsetup(setup, member, data["count"])
             data["pdbqt_buffer"].append(pdbqt_line)
-            data["numbering"][member] = data["count"] # count starts at 1
+            data["numbering"][member] = data["count"]  # count starts at 1
             data["count"] += 1
 
         if first:
@@ -386,7 +385,7 @@ class PDBQTWriterLegacy():
             data["pdbqt_buffer"].append("BRANCH %3d %3d" % (begin, end))
             data = cls._walk_graph_recursive(setup, neigh, data, edge_start=next_index)
             data["pdbqt_buffer"].append("ENDBRANCH %3d %3d" % (begin, end))
-        
+
         return data
 
     @staticmethod
@@ -394,7 +393,7 @@ class PDBQTWriterLegacy():
 
         success = True
         error_msg = ""
-        
+
         if len(setup.restraints):
             error_msg = "molsetup has restraints but these can't be written to PDBQT"
             success = False
@@ -407,11 +406,11 @@ class PDBQTWriterLegacy():
                 success = False
             c = setup.charge[idx]
             if not bad_charge_ok and (type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)):
-                error_msg += 'atom number %d has non finite charge, mol name: %s, charge: %s\n' % (idx, setup.get_mol_name(), str(c))
+                error_msg += 'atom number %d has non finite charge, mol name: %s, charge: %s\n' % (
+                idx, setup.get_mol_name(), str(c))
                 success = False
 
         return success, error_msg
-
 
     @classmethod
     def write_string_from_linked_rdkit_chorizo(cls, chorizo):
@@ -420,7 +419,6 @@ class PDBQTWriterLegacy():
         for res_id, pdbqt_string in flex_pdbqt_dict.items():
             flex_pdbqt_string += pdbqt_string
         return rigid_pdbqt_string, flex_pdbqt_string
-
 
     @classmethod
     def write_from_linked_rdkit_chorizo(cls, chorizo):
@@ -455,14 +453,14 @@ class PDBQTWriterLegacy():
                 if not ok:
                     raise RuntimeError(err)
                 this_flex_pdbqt, flex_atom_count = cls.adapt_pdbqt_for_autodock4_flexres(
-                    this_flex_pdbqt, 
+                    this_flex_pdbqt,
                     resname,
                     chain,
                     resnum,
                     skip_rename_ca_cb=True,
                     atom_count=flex_atom_count)
                 flex_pdbqt_dict[res_id] = this_flex_pdbqt
-        return rigid_pdbqt_string, flex_pdbqt_dict 
+        return rigid_pdbqt_string, flex_pdbqt_dict
 
     @classmethod
     def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
@@ -476,7 +474,7 @@ class PDBQTWriterLegacy():
             bool: success
             str:  error message
         """
-    
+
         success, error_msg = cls._is_molsetup_ok(setup, bad_charge_ok)
         if not success:
             pdbqt_string = ""
@@ -494,7 +492,7 @@ class PDBQTWriterLegacy():
 
         if 'torsions_org' in setup.flexibility_model:
             torsdof_org = setup.flexibility_model['torsions_org']
-            data["pdbqt_buffer"].append('REMARK Flexibility Score: %2.2f' % setup.flexibility_model['score'] )
+            data["pdbqt_buffer"].append('REMARK Flexibility Score: %2.2f' % setup.flexibility_model['score'])
             active_tors = torsdof_org
         else:
             active_tors = torsdof
@@ -509,7 +507,7 @@ class PDBQTWriterLegacy():
 
         if not remove_smiles:
             smiles, order = setup.get_smiles_and_order()
-            missing_h = [] # hydrogens which are not in the smiles
+            missing_h = []  # hydrogens which are not in the smiles
             strings_h_parent = []
             for key in data["numbering"]:
                 if key in setup.atom_pseudo: continue
@@ -522,21 +520,21 @@ class PDBQTWriterLegacy():
                         return pdbqt_string, success, error_msg
                     missing_h.append(key)
                     parents = setup.get_neigh(key)
-                    parents = [i for i in parents if i < setup.atom_true_count] # exclude pseudos
+                    parents = [i for i in parents if i < setup.atom_true_count]  # exclude pseudos
                     if len(parents) != 1:
                         error_msg += "expected hydrogen to be bonded to exactly one atom"
                         error_msg += " (mol name: %s)\n" % setup.get_mol_name()
                         pdbqt_string = ""
                         success = False
                         return pdbqt_string, success, error_msg
-                    parent_idx = order[parents[0]] # already 1-indexed
-                    string = ' %d %d' % (parent_idx, data["numbering"][key]) # key 0-indexed; _numbering[key] 1-indexed
+                    parent_idx = order[parents[0]]  # already 1-indexed
+                    string = ' %d %d' % (parent_idx, data["numbering"][key])  # key 0-indexed; _numbering[key] 1-indexed
                     strings_h_parent.append(string)
             remarks_h_parent = cls.break_long_remark_lines(strings_h_parent, "REMARK H PARENT")
             remark_prefix = "REMARK SMILES IDX"
             remark_idxmap = cls.remark_index_map(setup, data["numbering"], order, remark_prefix, missing_h)
             remarks = []
-            remarks.append("REMARK SMILES %s" % smiles) # break line at 79 chars?
+            remarks.append("REMARK SMILES %s" % smiles)  # break line at 79 chars?
             remarks.extend(remark_idxmap)
             remarks.extend(remarks_h_parent)
 
@@ -548,7 +546,7 @@ class PDBQTWriterLegacy():
         # torsdof is always going to be the one of the rigid, non-macrocyclic one
         data["pdbqt_buffer"].append('TORSDOF %d' % active_tors)
 
-        pdbqt_string =  linesep.join(data["pdbqt_buffer"]) + linesep
+        pdbqt_string = linesep.join(data["pdbqt_buffer"]) + linesep
         return pdbqt_string, success, error_msg
 
     @classmethod
@@ -557,10 +555,10 @@ class PDBQTWriterLegacy():
             order[ob_index(i.e. 'key')] = smiles_index
         """
 
-        if order is None: order = {key: key+1 for key in numbering} # key+1 breaks OB
-        #max_line_length = 79
-        #remark_lines = []
-        #line = prefix
+        if order is None: order = {key: key + 1 for key in numbering}  # key+1 breaks OB
+        # max_line_length = 79
+        # remark_lines = []
+        # line = prefix
         strings = []
         for key in numbering:
             if key in setup.atom_pseudo: continue
@@ -574,8 +572,8 @@ class PDBQTWriterLegacy():
         #    else:
         #        remark_lines.append(line)
         #        line = 'REMARK INDEX MAP' + candidate_text
-        #remark_lines.append(line)
-        #return remark_lines
+        # remark_lines.append(line)
+        # return remark_lines
 
     @staticmethod
     def break_long_remark_lines(strings, prefix, max_line_length=79):
@@ -604,7 +602,7 @@ class PDBQTWriterLegacy():
                 continue
             if line.startswith("ATOM"):
                 if not skip_rename_ca_cb:
-                    atom_number+=1
+                    atom_number += 1
                     if atom_number == 1:
                         line = line[:13] + 'CA' + line[15:]
                     elif atom_number == 2:
@@ -619,6 +617,6 @@ class PDBQTWriterLegacy():
             new_string += line + linesep
         new_string += "END_RES %s %s %s" % (res, chain, num) + linesep
         if atom_count is None:
-            return new_string # just keeping backwards compatibility
+            return new_string  # just keeping backwards compatibility
         else:
             return new_string, atom_count
