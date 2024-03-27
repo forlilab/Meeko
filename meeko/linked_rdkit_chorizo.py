@@ -382,8 +382,7 @@ class LinkedRDKitChorizo:
 
             rdkit_mol.RemoveAllConformers()
             rdkit_mol.AddConformer(conf, assignId=True)
-
-            return rdkit_mol
+        return rdkit_mol
 
     @staticmethod
     def _find_least_missing_Hs(raw_input_mol, residue_templates):
@@ -467,8 +466,8 @@ class LinkedRDKitChorizo:
 
     @staticmethod
     def _get_bonds(residues):
-        mols = [residue.raw_rdkit_mol for key, residue in residues.items() if residue.raw_rdkit_mol is not None]
-        keys = [key for key, residue in residues.items() if residue.raw_rdkit_mol is not None]
+        mols = [residue.raw_rdkit_mol for key, residue in residues.items() if residue.rdkit_mol is not None]
+        keys = [key for key, residue in residues.items() if residue.rdkit_mol is not None]
         # t0 = time()
         ### print("Starting find inter mols bonds", f"{len(mols)=}")
         ### print(f"maximum nr of pairs to consider: {len(mols) * (len(mols)-1)}")
@@ -490,6 +489,8 @@ class LinkedRDKitChorizo:
         padded_mols = {}
         bond_use_count = {key: 0 for key in bonds}
         for residue_id, residue, in residues.items():
+            if residue.rdkit_mol is None:
+                continue
             padded_mol = residue.rdkit_mol
             mapidx_pad = {atom.GetIdx(): atom.GetIdx() for atom in padded_mol.GetAtoms()}
             for atom_index, link_label in residue.link_labels.items():
