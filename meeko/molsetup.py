@@ -56,7 +56,7 @@ class MoleculeSetup:
         numpy arrays of three floats.
     charge: OrderedDict()
         a mapping between atom index (int) and charge (float)
-    pdbinfo: OrderedDict()
+    pdbinfo: list[]
         a mapping between atom index (int) and pdb data (PDBAtomInfo) for that atom
     atom_type: OrderedDict()
         a mapping from atom index (int) to atom type (string)
@@ -130,15 +130,15 @@ class MoleculeSetup:
         self.rotamers = []
 
         # Attributes mapping an index of an atom to a property of that atom.
-        self.pdbinfo = {}
-        self.coord = {}
-        self.charge = {}
-        self.element = {}
-        self.atom_type = {}
-        self.atom_ignore = {}
-        self.chiral = {}
-        self.graph = {}
-        self.interaction_vector = {}
+        self.pdbinfo = []
+        self.coord = []
+        self.charge = []
+        self.element = []
+        self.atom_type = []
+        self.atom_ignore = []
+        self.chiral = []
+        self.graph = []
+        self.interaction_vector = []
 
         # Matching bond id to bond information
         self.bond = {}
@@ -271,30 +271,53 @@ class MoleculeSetup:
             False if the index is already occupied and we are not overwriting existing atoms. If the method succeeds,
             returns the index of the added atom.
         """
-        # If there is no specified input atom index, will append the atom to the "end" of the list of atom indices.
-        if idx is None:
-            idx = len(self.coord)
-        # Otherwise checks that the specified atom index is not already occupied. If it is, and overwrite is not
-        # specified, will throw an error.
-        if idx in self.coord and not overwrite:
-            print("ADD_ATOM> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
-            return False
-        # sets input values or default values corresponding to atom index
-        self.pdbinfo[idx] = pdbinfo
-        self.coord[idx] = coord
-        self.charge[idx] = charge
-        self.element[idx] = element
-        self.atom_type[idx] = atom_type
-        self.atom_ignore[idx] = ignore
-        self.chiral[idx] = chiral
-        self.graph.setdefault(idx, [])
         # reads in atom_params if a dictionary of atom_params has been provided
         for key in self.atom_params:
-            if type(add_atom_params) == dict and key in add_atom_params:
+            if type(add_atom_params) is dict and key in add_atom_params:
                 value = add_atom_params[key]
             else:
                 value = None
             self.atom_params[key].append(value)
+
+        # If atom index is specified checks if we want to insert and overwrite values
+        if idx is not None:
+            # If the specified index already exists, checks that we have permission to overwrite it.
+            if len(self.coord) > idx:
+                if overwrite:
+                    self.pdbinfo[idx] = pdbinfo
+                    self.coord[idx] = coord
+                    self.charge[idx] = charge
+                    self.element[idx] = element
+                    self.atom_type[idx] = atom_type
+                    self.atom_ignore[idx] = ignore
+                    self.chiral[idx] = chiral
+                    self.graph[idx] = []
+                    return idx
+                else:
+                    print("ADD_ATOM Error: the idx [%d] is already occupied (use 'overwrite' to force)")
+                    return False
+            # If the specified index is much greater than self.coord, then extends all lists with None values
+            # until we can append the given index.
+            while idx > len(self.coord):
+                self.pdbinfo.append(None)
+                self.coord.append(np.array([0.0, 0.0, 0.0], dtype='float'))
+                self.charge.append(0.0)
+                self.element.append(None)
+                self.atom_type.append(None)
+                self.atom_ignore.append(False)
+                self.chiral.append(False)
+                self.graph.append([])
+
+        # Otherwise just appends the information to the end of the list.
+        self.pdbinfo.append(pdbinfo)
+        self.coord.append(coord)
+        self.charge.append(charge)
+        self.element.append(element)
+        self.atom_type.append(atom_type)
+        self.atom_ignore.append(ignore)
+        self.chiral.append(chiral)
+        self.graph.append([])
+
         return idx
 
     # pseudo-atoms
@@ -328,7 +351,7 @@ class MoleculeSetup:
         idx = self.atom_true_count + len(self.atom_pseudo)
         # Otherwise checks that the specified atom index is not already occupied. If it is, and overwrite is not
         # specified, will throw an error.
-        if idx in self.coord and not overwrite:
+        if len(self.coord) > idx and not overwrite:
             print("ADD_PSEUDO> Error: the idx [%d] is already occupied (use 'overwrite' to force)")
             return False
         # Adds the atom index to the list of pseudoatom indices so we can track that it is a pseudoatom
@@ -347,7 +370,7 @@ class MoleculeSetup:
                 self.add_bond(idx, anchor, order=0, rotatable=rotatable)
         # Adds directional vectors
         if directional_vectors is not None:
-            self.add_interaction_vector(idx, directional_vectors)
+            self._add_interaction_vector(idx, directional_vectors)
         return idx
 
     def add_bond(self, idx1, idx2, order=0, rotatable=False):
@@ -762,8 +785,8 @@ class MoleculeSetup:
         -------
         None
         """
-        if idx not in self.interaction_vector:
-            self.interaction_vector[idx] = []
+        while idx >= len(self.interaction_vector):
+            self.interaction_vector.append([])
         for vec in vector_list:
             self.interaction_vector[idx].append(vec)
 
@@ -1076,7 +1099,7 @@ class MoleculeSetup:
         print("==============[ ATOMS ]===================================================")
         print("idx  |          coords            | charge |ign| atype    | connections")
         print("-----+----------------------------+--------+---+----------+--------------- . . . ")
-        for k, v in list(self.coord.items()):
+        for k, v in enumerate(self.coord):
             print("% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d" % (k, v[0], v[1], v[2],
                                                                  self.charge[k], self.atom_ignore[k]),
                   "| % -8s |" % self.atom_type[k],
@@ -1086,7 +1109,7 @@ class MoleculeSetup:
         print("  TOT CHARGE: %3.3f" % tot_charge)
 
         print("\n======[ DIRECTIONAL VECTORS ]==========")
-        for k, v in list(self.coord.items()):
+        for k, v in enumerate(self.coord):
             if k in self.interaction_vector:
                 print("% 4d " % k, self.atom_type[k], end=' ')
 
@@ -1346,10 +1369,10 @@ class MoleculeSetup:
         """ return the indices of the atoms registered in the setup
             if 'true_atoms_only' are requested, then pseudoatoms are ignored
         """
-        indices = list(self.coord.keys())
+        indices = range(len(self.coord))
         if true_atoms_only:
-            return [x for x in indices if not x in self.atom_pseudo]
-        return indices
+            return [x for x in indices if x not in self.atom_pseudo]
+        return list(indices)
 
     def _get_attrib(self, idx, attrib, default=None):
         """ generic function to provide a default for retrieving properties and returning standard values """
@@ -1845,7 +1868,7 @@ class UniqAtomParams:
         if atom_params is None:
             atom_params = molsetup.atom_params
         param_idxs = []
-        for atom_index, ignore in molsetup.atom_ignore.items():
+        for atom_index, ignore in enumerate(molsetup.atom_ignore):
             if ignore:
                 param_idx = None
             else:

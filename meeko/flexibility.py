@@ -13,7 +13,8 @@ from .utils import pdbutils
 
 class FlexibilityBuilder:
 
-    def __call__(self, setup, freeze_bonds=None, root_atom_index=None, break_combo_data=None, bonds_in_rigid_rings=None, glue_pseudo_atoms=None):
+    def __call__(self, setup, freeze_bonds=None, root_atom_index=None, break_combo_data=None, bonds_in_rigid_rings=None,
+                 glue_pseudo_atoms=None):
         """ """
         self.setup = setup
         self.flexibility_models = {}
@@ -22,7 +23,7 @@ class FlexibilityBuilder:
             self._frozen_bonds = freeze_bonds[:]
         # build graph for standard molecule (no open macrocycle rings)
         model = self.build_rigid_body_connectivity()
-        model = self.set_graph_root(model, root_atom_index) # finds root if root_atom_index==None
+        model = self.set_graph_root(model, root_atom_index)  # finds root if root_atom_index==None
         self.add_flex_model(model, score=False)
 
         # evaluate possible graphs for various ring openings
@@ -33,9 +34,10 @@ class FlexibilityBuilder:
             for index in range(len(bond_break_combos)):
                 bond_break_combo = bond_break_combos[index]
                 bond_break_score = bond_break_scores[index]
-                broken_rings =     broken_rings_list[index]
-                model = self.build_rigid_body_connectivity(bond_break_combo, broken_rings, bonds_in_rigid_rings, glue_pseudo_atoms)
-                self.set_graph_root(model, root_atom_index) # finds root if root_atom_index==None
+                broken_rings = broken_rings_list[index]
+                model = self.build_rigid_body_connectivity(bond_break_combo, broken_rings, bonds_in_rigid_rings,
+                                                           glue_pseudo_atoms)
+                self.set_graph_root(model, root_atom_index)  # finds root if root_atom_index==None
                 self.add_flex_model(model, score=True, initial_score=bond_break_score)
 
         self.select_best_model()
@@ -45,25 +47,24 @@ class FlexibilityBuilder:
         del self.flexibility_models
         return self.setup
 
-
     def select_best_model(self):
         """
         select flexibility model with best complexity score
         """
-        if len(self.flexibility_models) == 1: # no macrocyle open rings
+        if len(self.flexibility_models) == 1:  # no macrocyle open rings
             best_model = list(self.flexibility_models.values())[0]
         else:
             score_sorted_models = []
             for m_id, model in list(self.flexibility_models.items()):
                 score_sorted_models.append((m_id, model['score']))
-            #print("SORTED", score_sorted_models)
+            # print("SORTED", score_sorted_models)
             score_sorted = sorted(score_sorted_models, key=itemgetter(1), reverse=True)
-            #for model_id, score in score_sorted:
+            # for model_id, score in score_sorted:
             #    print("ModelId[% 3d] score: %2.2f" % (model_id, score))
             # the 0-model is the rigid model used as reference
             best_model_id, best_model_score = score_sorted[1]
             best_model = self.flexibility_models[best_model_id]
-        
+
         setup = best_model['setup']
         del best_model['setup']
         self.setup = setup
@@ -84,7 +85,8 @@ class FlexibilityBuilder:
             model['score'] = initial_score + penalty
         self.flexibility_models[model_id] = model
 
-    def build_rigid_body_connectivity(self, bonds_to_break=None, broken_rings=None, bonds_in_rigid_rings=None, glue_pseudo_atoms=None):
+    def build_rigid_body_connectivity(self, bonds_to_break=None, broken_rings=None, bonds_in_rigid_rings=None,
+                                      glue_pseudo_atoms=None):
         """
         rigid_body_graph is the graph of rigid bodies
         ( rigid_body_id->[rigid_body_id,...] )
@@ -105,7 +107,7 @@ class FlexibilityBuilder:
             self.update_closure_atoms(bonds_to_break, glue_pseudo_atoms)
 
         # walk the mol graph to build the rigid body maps
-        self._visited = defaultdict(lambda:False)
+        self._visited = defaultdict(lambda: False)
         self._rigid_body_members = {}
         self._rigid_body_connectivity = {}
         self._rigid_body_graph = defaultdict(list)
@@ -113,10 +115,10 @@ class FlexibilityBuilder:
         # START VALUE HERE SHOULD BE MADE MODIFIABLE FOR FLEX CHAIN
         self._rigid_body_count = 0
         self.walk_rigid_body_graph(start=0)
-        model = {'rigid_body_graph' : deepcopy(self._rigid_body_graph),
-                'rigid_body_connectivity' : deepcopy(self._rigid_body_connectivity),
-                'rigid_body_members' : deepcopy(self._rigid_body_members),
-                'setup' : self._current_setup}
+        model = {'rigid_body_graph': deepcopy(self._rigid_body_graph),
+                 'rigid_body_connectivity': deepcopy(self._rigid_body_connectivity),
+                 'rigid_body_members': deepcopy(self._rigid_body_members),
+                 'setup': self._current_setup}
         return model
 
     def copy_setup(self, bond_list, broken_rings, bonds_in_rigid_rings):
@@ -130,17 +132,16 @@ class FlexibilityBuilder:
 
         for ring in broken_rings:
             for bond in setup.get_bonds_in_ring(ring):
-                if bond not in bonds_in_rigid_rings: # e.g. bonds in small rings do not rotata
+                if bond not in bonds_in_rigid_rings:  # e.g. bonds in small rings do not rotata
                     if bond in bond_list:
-                        continue # this bond has been deleted
+                        continue  # this bond has been deleted
                     bond_item = setup.get_bond(*bond)
                     if bond_item['bond_order'] == 1:
                         setup.bond[bond]['rotatable'] = True
         return setup
 
-
     def calc_max_depth(self, graph, seed_node, visited=[], depth=0):
-        maxdepth = depth 
+        maxdepth = depth
         visited.append(seed_node)
         for node in graph[seed_node]:
             if node not in visited:
@@ -149,15 +150,14 @@ class FlexibilityBuilder:
                 maxdepth = max(maxdepth, newdepth)
         return maxdepth
 
-
     def set_graph_root(self, model, root_atom_index=None):
         """ TODO this has to be made aware of the weight of the groups left
          (see 1jff:TA1)
         """
 
-        if root_atom_index is None: # find rigid group that minimizes max_depth
+        if root_atom_index is None:  # find rigid group that minimizes max_depth
             graph = deepcopy(model['rigid_body_graph'])
-            while len(graph) > 2: # remove leafs until 1 or 2 rigid groups remain
+            while len(graph) > 2:  # remove leafs until 1 or 2 rigid groups remain
                 leaves = []
                 for vertex, edges in list(graph.items()):
                     if len(edges) == 1:
@@ -182,9 +182,9 @@ class FlexibilityBuilder:
                 else:
                     root_body_index = r2
 
-        else: # find index of rigid group
+        else:  # find index of rigid group
             for body_index in model['rigid_body_members']:
-                if root_atom_index in model['rigid_body_members'][body_index]: # 1-index atoms
+                if root_atom_index in model['rigid_body_members'][body_index]:  # 1-index atoms
                     root_body_index = body_index
 
         model['root'] = root_body_index
@@ -193,18 +193,16 @@ class FlexibilityBuilder:
 
         return model
 
-
     def score_flex_model(self, model):
         """ score a flexibility model basing on the graph properties"""
         base = self.flexibility_models[0]['graph_depth']
-        score = 10 * (base-model['graph_depth'])
+        score = 10 * (base - model['graph_depth'])
         return score
-
 
     def _generate_closure_pseudo(self, setup, bond_id, coords_dict={}):
         """ calculate position and parameters of the pseudoatoms for the closure"""
         closure_pseudo = []
-        for idx in (0,1):
+        for idx in (0, 1):
             target = bond_id[1 - idx]
             anchor = bond_id[0 - idx]
             if coords_dict is None or len(coords_dict) == 0:
@@ -222,13 +220,12 @@ class FlexibilityBuilder:
                 'rotatable': False})
         return closure_pseudo
 
-
     def update_closure_atoms(self, bonds_to_break, coords_dict):
         """ create pseudoatoms required by the flexible model with broken bonds"""
 
         setup = self._current_setup
         for i, bond in enumerate(bonds_to_break):
-            setup.ring_closure_info["bonds_removed"].append(bond) # bond is pair of atom indices
+            setup.ring_closure_info["bonds_removed"].append(bond)  # bond is pair of atom indices
             pseudos = self._generate_closure_pseudo(setup, bond, coords_dict)
             for pseudo in pseudos:
                 pseudo['atom_type'] = "%s%d" % (pseudo['atom_type'], i)
@@ -239,7 +236,6 @@ class FlexibilityBuilder:
                 setup.ring_closure_info["pseudos_by_atom"][atom_index] = pseudo_index
             setup.set_atom_type(bond[0], "CG%d" % i)
             setup.set_atom_type(bond[1], "CG%d" % i)
-
 
     def walk_rigid_body_graph(self, start):
         """ recursive walk to build the graph of rigid bodies"""
@@ -270,10 +266,9 @@ class FlexibilityBuilder:
         self._rigid_body_members[current_rigid_body_count] = rigid
         for current, neigh in sprouts_buffer:
             if self._visited[neigh]: continue
-            self._rigid_body_count+=1
+            self._rigid_body_count += 1
             self._rigid_body_connectivity[current_rigid_body_count, self._rigid_body_count] = current, neigh
             self._rigid_body_connectivity[self._rigid_body_count, current_rigid_body_count] = neigh, current
             self._rigid_body_graph[current_rigid_body_count].append(self._rigid_body_count)
             self._rigid_body_graph[self._rigid_body_count].append(current_rigid_body_count)
             self.walk_rigid_body_graph(neigh)
-

@@ -22,8 +22,7 @@ class AtomTyper:
         # offatoms must be typed after charges, because offsites pull charge
         if offatom_params is not None:
             cached_offatoms = cls._cache_offatoms(molsetup, offatom_params)
-            coords = [x for x in molsetup.coord.values()]
-            cls._set_offatoms(molsetup, cached_offatoms, coords)
+            cls._set_offatoms(molsetup, cached_offatoms, molsetup.coord)
 
         if dihedral_params not in (None, 'espaloma'):
             cls._type_dihedrals(molsetup, dihedral_params)

@@ -831,7 +831,7 @@ class LinkedRDKitChorizo:
         for res_id in self.get_valid_residues():
             molsetup = self.residues[res_id].molsetup
             wanted_atom_indices = []
-            for i, ignore in molsetup.atom_ignore.items():
+            for i, ignore in enumerate(molsetup.atom_ignore):
                 if not ignore and not self.residues[res_id].is_flexres_atom[i]:
                     wanted_atom_indices.append(i)
             for key, values in molsetup.atom_params.items():
@@ -1042,7 +1042,7 @@ class ChorizoResidue:
 
     @classmethod
     def from_json(cls, json_string):
-        residue = json.loads(json_string, object_hook=cls.chorizo_residue_json_decoder) 
+        residue = json.loads(json_string, object_hook=cls.chorizo_residue_json_decoder)
         return residue
 
     def is_valid_residue(self):

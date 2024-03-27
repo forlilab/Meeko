@@ -466,8 +466,8 @@ if not args.skip_gpf:
         for res_id_tuple in reactive_flexres.keys():
             res_id = f"{res_id_tuple[0]}:{res_id_tuple[1]}:{res_id_tuple[2]}"
             molsetup = chorizo.residues[res_id].molsetup
-            calpha_idx = [i for i, pdbinfo in molsetup.pdbinfo.items() if pdbinfo.name == "CA"]
-            cbeta_idx = [i for i, pdbinfo in molsetup.pdbinfo.items() if pdbinfo.name == "CB"]
+            calpha_idx = [i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CA"]
+            cbeta_idx = [i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CB"]
             if len(calpha_idx) != 1:
                 check(success=False, error_msg=f"found {len(calpha_idx)} CA in {res_id} but expected 1")
             if len(cbeta_idx) != 1:
@@ -540,7 +540,7 @@ if not args.skip_gpf:
         for res_id, res in chorizo.residues.items():
             if not res.is_movable:
                 continue
-            for index, coord in res.molsetup.coord.items():
+            for index, coord in enumerate(res.molsetup.coord):
                 if not res.is_flexres_atom[index]:
                     continue
                 if gridbox.is_point_outside_box(coord, box_center, npts):

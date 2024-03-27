@@ -433,7 +433,7 @@ class PDBQTWriterLegacy():
             resname = chorizo.residues[res_id].input_resname
             ### molsetup_mapidx = {} if chorizo.residues[res_id].molsetup_mapidx is None else chorizo.residues[res_id].molsetup_mapidx
             is_flexres_atom = chorizo.residues[res_id].is_flexres_atom
-            for i, atom_ignore in molsetup.atom_ignore.items():
+            for i, atom_ignore in enumerate(molsetup.atom_ignore):
                 if atom_ignore or is_flexres_atom[i]:
                     continue
                 atom_type = molsetup.atom_type[i]
@@ -447,7 +447,7 @@ class PDBQTWriterLegacy():
                 chain, resname, resnum = res_id.split(":")
                 molsetup = chorizo.residues[res_id].molsetup
                 original_ignore = molsetup.atom_ignore.copy()
-                molsetup.atom_ignore = {i: ig or not is_flexres_atom[i] for (i, ig) in molsetup.atom_ignore.items()}
+                molsetup.atom_ignore = [ig or not is_flexres_atom[i] for (i, ig) in enumerate(molsetup.atom_ignore)]
                 this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup, remove_smiles=True)
                 molsetup.atom_ignore = original_ignore
                 if not ok:
