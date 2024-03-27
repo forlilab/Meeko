@@ -23,6 +23,7 @@ from meeko import get_reactive_config
 from meeko import gridbox
 from meeko import __file__ as pkg_init_path
 from rdkit import Chem
+import prody
 
 SUPPORTED_PRODY_FORMATS= { "pdb":prody.parsePDB, "cif":prody.parseMMCIF }
 
@@ -137,9 +138,8 @@ def get_args():
     parser = TalkativeParser()
 
     io_group = parser.add_argument_group("Input/Output")
-    io_group.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
+    io_group.add_argument('--pdb', help="deprecated, use --macromol, still here as non-prody option")
     io_group.add_argument('--macromol', help="PDB/mmCIF input file")
-    #parser.add_argument('--pdbqt', help="keeps existing charges and types")
     io_group.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
     io_group.add_argument('-p', '--chorizo_pickle') 
 
@@ -178,10 +178,8 @@ def get_args():
     reactive_group.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
     args = parser.parse_args()
 
-    #if (args.pdb is None) == (args.pdbqt is None):
-        #msg = "need either --pdb or --pdbqt"
-    if args.pdb is None:
-        msg = "need --pdb"
+    if (args.pdb is None) == (args.macromol is None):
+        msg = "need either --pdb or --macromol, but not both"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
     if (args.box_center is not None) and args.box_center_off_reactive_res:
@@ -317,75 +315,71 @@ if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
     print("Command line error:" + msg, file=sys.stderr)
     sys.exit(2)
 
-if args.pdb is not None:
-    set_template = {}
-    del_res = []
-    if args.chorizo_config is not None:
-        with open(args.chorizo_config) as f:
-            chorizo_config = json.load(f)
-        set_template.update(chorizo_config.get("set_template", {}))
-        del_res.extend(chorizo_config.get("del_res", []))
-    # direct command line options override config
-    if args.set_template is not None:
-        set_template.update(json.loads(args.set_template))
-    if args.delete_residues is not None:
-        del_res.update(json.loads(args.delete_residues))
-    if args.mk_config is not None:
-        with open(args.mk_config) as f:
-            mk_config = json.load(f)
-        mk_prep = MoleculePreparation.from_config(mk_config)
-        chorizo.mk_parameterize_all_residues(mk_prep)
-    else:
-        mk_prep = MoleculePreparation()
-    # load templates for mapping
-    templates = ResidueChemTemplates.from_dict(res_chem_templates)
-    print(f"{templates=}")
-    # create chorizos
-    if hasattr(args, "macromol"):
-        ext = pathlib.Path(args.macromol).suffix[1:].lower()
-        if ext in SUPPORTED_PRODY_FORMATS:
-            parser = SUPPORTED_PRODY_FORMATS[ext]
-            # we should do something with the header...
-            input_obj, header = parser(args.macromol, header=True)
-            chorizo = LinkedRDKitChorizo.from_prody(input_obj, templates,
-                                                    mk_prep, set_template, del_res, args.allow_bad_res)
-        # prody_mol = prody.
-    else:
-        with open(args.pdb) as f:
-            pdb_string = f.read()
-        chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, templates, #residue_templates, padders, ambiguous,
+# if args.pdb is not None:
+set_template = {}
+del_res = []
+if args.chorizo_config is not None:
+    with open(args.chorizo_config) as f:
+        chorizo_config = json.load(f)
+    set_template.update(chorizo_config.get("set_template", {}))
+    del_res.extend(chorizo_config.get("del_res", []))
+# direct command line options override config
+if args.set_template is not None:
+    set_template.update(json.loads(args.set_template))
+if args.delete_residues is not None:
+    del_res.update(json.loads(args.delete_residues))
+if args.mk_config is not None:
+    with open(args.mk_config) as f:
+        mk_config = json.load(f)
+    mk_prep = MoleculePreparation.from_config(mk_config)
+    chorizo.mk_parameterize_all_residues(mk_prep)
+else:
+    mk_prep = MoleculePreparation()
+# load templates for mapping
+templates = ResidueChemTemplates.from_dict(res_chem_templates)
+print(f"{templates=}")
+# create chorizos
+if args.macromol is not None:
+    ext = pathlib.Path(args.macromol).suffix[1:].lower()
+    if ext in SUPPORTED_PRODY_FORMATS:
+        parser = SUPPORTED_PRODY_FORMATS[ext]
+        # we should do something with the header...
+        input_obj, header = parser(args.macromol, header=True)
+        chorizo = LinkedRDKitChorizo.from_prody(input_obj, templates,
+                                                mk_prep, set_template, del_res, args.allow_bad_res)
+    # prody_mol = prody.
+else:
+    with open(args.pdb) as f:
+        pdb_string = f.read()
+    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, templates, #residue_templates, padders, ambiguous,
                                                      mk_prep, set_template, del_res, args.allow_bad_res)
 
 #  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
 #                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
 
-    
+for res_id in all_flexres:
+    print("Ooopsies: we momentarily don't support flexible sidechains")  # TODO
+    sys.exit()
+    res = "%s:%s:%d" % res_id
+    chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)
+rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
+if args.chorizo_pickle is not None:
+    with open(args.chorizo_pickle, "wb") as f:
+        pickle.dump(chorizo, f)
 
-    for res_id in all_flexres:
-        res = "%s:%s:%d" % res_id
-        chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)
-    rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
-    if args.chorizo_pickle is not None:
-        with open(args.chorizo_pickle, "wb") as f:
-            pickle.dump(chorizo, f)
+#suggested_config = {}
+#if len(chorizo.suggested_mutations):
+#    suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
 
-    #suggested_config = {}
-    #if len(chorizo.suggested_mutations):
-    #    suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
+#if len(chorizo.get_ignored_residues()) > 0:
+#    removed_residues = chorizo.get_ignored_residues()
+#    print("Automatically deleted %d residues" % len(removed_residues))
+#    print(json.dumps(list(removed_residues.keys()), indent=4))
+#    suggested_config["deleted_residues"] = removed_residues.copy()
 
-    #if len(chorizo.get_ignored_residues()) > 0:
-    #    removed_residues = chorizo.get_ignored_residues()
-    #    print("Automatically deleted %d residues" % len(removed_residues))
-    #    print(json.dumps(list(removed_residues.keys()), indent=4))
-    #    suggested_config["deleted_residues"] = removed_residues.copy()
-
-    #rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
-    #ok, err = receptor.assign_types_charges()
-    #check(ok, err)
-#else:
-#    receptor = PDBQTReceptor(args.pdbqt)
-#    pdbqt, ok, err = receptor.write_pdbqt_string(flexres=all_flexres)
-#    check(ok, err)
+#rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
+#ok, err = receptor.assign_types_charges()
+#check(ok, err)
 
 pdbqt = {
     "rigid": rigid_pdbqt,
