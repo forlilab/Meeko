@@ -458,7 +458,7 @@ class LinkedRDKitChorizo:
             net_charge = 0
         not_ignored_idxs = []
         charges = []
-        for i, q in molsetup.charge.items():  # charge is ordered dict
+        for i, q in enumerate(molsetup.charge):  # charge is ordered dict
             if i in mapidx:  # TODO offsite not in mapidx
                 charges.append(q)
                 not_ignored_idxs.append(i)
@@ -836,7 +836,7 @@ class LinkedRDKitChorizo:
         for res_id in self.get_valid_residues():
             molsetup = self.residues[res_id].molsetup
             wanted_atom_indices = []
-            for i, ignore in molsetup.atom_ignore.items():
+            for i, ignore in enumerate(molsetup.atom_ignore):
                 if not ignore and not self.residues[res_id].is_flexres_atom[i]:
                     wanted_atom_indices.append(i)
             for key, values in molsetup.atom_params.items():

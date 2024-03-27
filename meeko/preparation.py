@@ -205,7 +205,7 @@ class MoleculePreparation:
             group_keys = list(atom_params.keys())
             if len(group_keys) != 1:
                 msg = "add_atom_types is usable only when there is one group of parameters"
-                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
+                msg += ", but there are %d groups: %s" % (len(group_keys), str(group_keys))
                 raise RuntimeError(msg)
             key = group_keys[0]
             atom_params[key].extend(add_atom_types)
@@ -312,7 +312,7 @@ class MoleculePreparation:
         # merge hydrogens (or any terminal atoms)
         indices = set()
         for atype_to_merge in self.merge_these_atom_types:
-            for index, atype in setup.atom_type.items():
+            for index, atype in enumerate(setup.atom_type):
                 if atype == atype_to_merge:
                     indices.add(index)
         setup.merge_terminal_atoms(indices)
@@ -361,7 +361,13 @@ class MoleculePreparation:
             setups = []
             for r in reactive_types_dicts:
                 new_setup = setup.copy()
-                new_setup.atom_type = r
+                # There is no guarantee that the addition order in the dictionary will be the correct order to
+                # create the list in, so first sorts the keys from the dictionary then extracts the values in order
+                # to construct the new atom type list.
+                sorted_keys = list(r.keys())
+                sorted_keys.sort()
+                new_setup_atom_type = [r[idx] for idx in sorted_keys]
+                new_setup.atom_type = new_setup_atom_type
                 setups.append(new_setup)
 
         self.deprecated_setup_access = setups[0] # for a gentle introduction of the new API

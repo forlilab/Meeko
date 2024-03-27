@@ -39,11 +39,9 @@ OB and RDKit
   2. Ensure that there are the checks mentioned in the original comment in add, delete, and get functions.
   3. Determine if there are additional molsetup-wide checks that we want to do to make sure (for instance) that all
      populated lists are the same length.
-* Create enums for `atom_type`, `atom_params`, `flexibility_model`, where we want only certain defined values to appear
-  (confirm with other people in the lab on what these should be and what variables it would be a good idea to do this 
-   for)
-  * Current observed `atom_type` values in Meeko are as follows: atom_type, rmin_half, epsilon, pull_charge_fraction,
-    gasteiger, atype
+* Note: Current observed `atom_type` values in Meeko are as follows: atom_type, rmin_half, epsilon, pull_charge_fraction,
+  gasteiger, atype
+* Rethink the way that `atom_params` values are stored, consider creating a class for them
 * Clean up the inheritance and interface design
   * More strictly define what is a function that we need the inheriting classes to define and what is a function that is
     fully implemented in the parent MoleculeSetup class.
@@ -51,7 +49,7 @@ OB and RDKit
   * Refine what we're using formal vs informal interfaces for.
 * Variables that are specific to specific subclasses should not be mentioned or initialized in the parent MoleculeSetup 
   class.
-  * Currently the only identified ones are mol and rmsd_symmetry_indices, check if this is incorrect.
+  * Currently the only identified ones are `mol` and `rmsd_symmetry_indices`, check if this is incorrect.
 * Clean up and fully comment `from_prmtop_inpcrd`. Check existing comments for accuracy as they are full of assumptions 
   Parnika made.
 * Organize Molecule Setup class so all the getters and setters are together, and that functionality is generally grouped
@@ -76,6 +74,8 @@ OB and RDKit
 #### Implemented Changes
 * Convert OrderedDict collection to dicts since newer versions of python dictionaries maintain insertion order.
 * Refine existing tasks for Molecule Setups
+* Eliminate dictionaries and add support to checks that make sure the molecule setup is a valid molecule setup.
+  1. Convert all of the dictionaries that used to be ordered dicts mapping from array index to some property to lists.
 
 ### Open Questions
 * Are we deprecating/deleting `del_atom` or is it functionality we still want to add. It currently exists as

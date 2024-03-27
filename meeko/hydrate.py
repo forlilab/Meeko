@@ -110,7 +110,7 @@ class Hydrate:
                     # place water
                     water_center = atomgeom.calc_point(distance, theta, phi, coordinates)
                     watersetup = self.make_water()
-                    watercoords = [watersetup.coord[i] for i in watersetup.coord]
+                    watercoords = watersetup.coord
                     self.orient_water(watercoords, water_center, parent_center, is_donor)
                     for i in range(len(watercoords)):
                         watersetup.coord[i] = watercoords[i]
@@ -273,7 +273,7 @@ class HydrateMoleculeLegacy:
         # It will be the same distance for all of the water molecules
         hb_length = self._distance
 
-        for a, neighbors in setup.graph.items():
+        for a, neighbors in enumerate(setup.graph):
             atom_type = setup.get_atom_type(a)
             anchor_xyz = setup.get_coord(a)
             neighbor1_xyz = setup.get_coord(neighbors[0])
