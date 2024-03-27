@@ -1,14 +1,19 @@
 import pathlib
 import json
 from os import linesep as os_linesep
+from typing import Union
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
 from rdkit.Chem.AllChem import EmbedMolecule, AssignBondOrdersFromTemplate
+import prody
+from prody.atomic.atomgroup import AtomGroup
+from prody.atomic.selection import Selection
 from .writer import PDBQTWriterLegacy
 from .molsetup import MoleculeSetup
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
+from .utils.prodyutils import prody_to_rdkit, ALLOWED_PRODY_TYPES
 from .utils.pdbutils import PDBAtomInfo
 
 import numpy as np
@@ -240,6 +245,27 @@ class LinkedRDKitChorizo:
         raw_input_mols = cls._pdb_to_residue_mols(pdb_string)
         chorizo = cls(raw_input_mols, chem_templates, mk_prep,
                       set_template=None, residues_to_delete=None, allow_bad_res=False)
+        return chorizo
+
+    @classmethod
+    def from_prody(
+        cls,
+        prody_obj: Union[Selection, AtomGroup],
+        chem_templates,
+        mk_prep,
+        set_template=None,
+        residues_to_delete=None,
+        allow_bad_res=False,
+    ):
+        raw_input_mols = cls._prody_to_residue_mols(prody_obj)
+        chorizo = cls(
+            raw_input_mols,
+            chem_templates,
+            mk_prep,
+            set_template=None,
+            residues_to_delete=None,
+            allow_bad_res=False,
+        )
         return chorizo
 
     def __init__(self, raw_input_mols, residue_chem_templates, mk_prep,
@@ -626,6 +652,30 @@ class LinkedRDKitChorizo:
             resname = list(reskey_to_resname[reskey])[0]  # already verified length of set is 1
             raw_input_mols[reskey] = (pdbmol, resname)
 
+        return raw_input_mols
+
+    @staticmethod
+    def _prody_to_residue_mols(prody_obj: ALLOWED_PRODY_TYPES) -> dict:
+        raw_input_mols = {}
+        reskey_to_resname = {}
+        # generate macromolecule hierarchy iterator
+        hierarchy = prody_obj.getHierView()
+        # iterate chains
+        for chain in hierarchy.iterChains():
+            # iterate residues
+            for res in chain.iterResidues():
+                # gather residue info
+                chain_id = str(res.getChid())
+                res_name = str(res.getResname())
+                res_num = int(res.getResnum())
+                res_index = int(res.getResnum())
+                icode = str(res.getIcode())
+                reskey = f"{chain_id}:{res_num}{icode}"
+                reskey_to_resname.setdefault(reskey, set())
+                reskey_to_resname[reskey].add(res_name)
+                mol_name = f"{chain_id}:{res_index}:{res_name}:{res_num}:{icode}"
+                prody_mol = prody_to_rdkit(res, name=mol_name)
+                raw_input_mols[reskey] = (prody_mol, res_name)
         return raw_input_mols
 
     def to_pdb(self, use_modified_coords=False, modified_coords_index=0):

@@ -24,6 +24,8 @@ from meeko import gridbox
 from meeko import __file__ as pkg_init_path
 from rdkit import Chem
 
+SUPPORTED_PRODY_FORMATS= { "pdb":prody.parsePDB, "cif":prody.parseMMCIF }
+
 path_to_this_script = pathlib.Path(__file__).resolve()
 
 # the following preservers RDKit Atom properties in the chorizo pickle
@@ -136,6 +138,7 @@ def get_args():
 
     io_group = parser.add_argument_group("Input/Output")
     io_group.add_argument('--pdb', help="input can be PDBQT but charges and types will be reassigned")
+    io_group.add_argument('--macromol', help="PDB/mmCIF input file")
     #parser.add_argument('--pdbqt', help="keeps existing charges and types")
     io_group.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
     io_group.add_argument('-p', '--chorizo_pickle') 
@@ -327,8 +330,6 @@ if args.pdb is not None:
         set_template.update(json.loads(args.set_template))
     if args.delete_residues is not None:
         del_res.update(json.loads(args.delete_residues))
-    with open(args.pdb) as f:
-        pdb_string = f.read()
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
@@ -336,12 +337,24 @@ if args.pdb is not None:
         chorizo.mk_parameterize_all_residues(mk_prep)
     else:
         mk_prep = MoleculePreparation()
-
-    
+    # load templates for mapping
     templates = ResidueChemTemplates.from_dict(res_chem_templates)
     print(f"{templates=}")
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, templates, #residue_templates, padders, ambiguous,
-                                                 mk_prep, set_template, del_res, args.allow_bad_res)
+    # create chorizos
+    if hasattr(args, "macromol"):
+        ext = pathlib.Path(args.macromol).suffix[1:].lower()
+        if ext in SUPPORTED_PRODY_FORMATS:
+            parser = SUPPORTED_PRODY_FORMATS[ext]
+            # we should do something with the header...
+            input_obj, header = parser(args.macromol, header=True)
+            chorizo = LinkedRDKitChorizo.from_prody(input_obj, templates,
+                                                    mk_prep, set_template, del_res, args.allow_bad_res)
+        # prody_mol = prody.
+    else:
+        with open(args.pdb) as f:
+            pdb_string = f.read()
+        chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, templates, #residue_templates, padders, ambiguous,
+                                                     mk_prep, set_template, del_res, args.allow_bad_res)
 
 #  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
 #                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
