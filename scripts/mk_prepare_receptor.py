@@ -332,7 +332,6 @@ if args.mk_config is not None:
     with open(args.mk_config) as f:
         mk_config = json.load(f)
     mk_prep = MoleculePreparation.from_config(mk_config)
-    chorizo.mk_parameterize_all_residues(mk_prep)
 else:
     mk_prep = MoleculePreparation()
 # load templates for mapping

@@ -674,7 +674,9 @@ class LinkedRDKitChorizo:
                 reskey_to_resname.setdefault(reskey, set())
                 reskey_to_resname[reskey].add(res_name)
                 mol_name = f"{chain_id}:{res_index}:{res_name}:{res_num}:{icode}"
-                prody_mol = prody_to_rdkit(res, name=mol_name)
+                # we are not sanitizing because protonated LYS don't have the
+                # formal charge set on the N and Chem.SanitizeMol raises error
+                prody_mol = prody_to_rdkit(res, name=mol_name, sanitize=False)
                 raw_input_mols[reskey] = (prody_mol, res_name)
         return raw_input_mols
 
