@@ -596,6 +596,7 @@ class PDBQTWriterLegacy():
         """
         new_string = "BEGIN_RES %s %s %s" % (res, chain, num) + linesep
         atom_number = 0
+        offset = atom_count
         for line in pdbqt_string.split(linesep):
             if line == "":
                 continue
@@ -614,6 +615,10 @@ class PDBQTWriterLegacy():
                     n = n[:5]
                     line = line[:6] + n + line[11:]
                 new_string += line + linesep
+                continue
+            elif offset is not None and (line.startswith("BRANCH") or line.startswith("ENDBRANCH")):
+                keyword, i, j = line.split()
+                new_string += f"{keyword} {int(i)+offset:3d} {int(j)+offset:3d}" + linesep
                 continue
             new_string += line + linesep
         new_string += "END_RES %s %s %s" % (res, chain, num) + linesep
