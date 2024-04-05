@@ -162,6 +162,22 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
 
 class ResidueChemTemplates:
 
+    """Holds template data required to initialize LinkedRDKitChorizo
+
+    Attributes
+    ----------
+    residue_templates: dict (string -> ResidueTemplate)
+        keys are the ID of an instance of ResidueTemplate
+    padders: dict
+        instances of ResiduePadder keyed by a link_label (a string)
+        link_labels establish the relationship between ResidueTemplates
+        and ResiduePadders, determining which padder is to be used to
+        pad each atom of an instance of ChorizoResidue that needs padding.
+    ambiguous: dict
+        mapping between input residue names (e.g. the three-letter residue
+        name from PDB files) and IDs (strings) of ResidueTemplates
+    """
+
     def __init__(self, residue_templates, padders, ambiguous):
         self._check_missing_padders(residue_templates, padders)
         self._check_ambiguous_reskeys(residue_templates, ambiguous)
@@ -169,8 +185,16 @@ class ResidueChemTemplates:
         self.padders = padders
         self.ambiguous = ambiguous
 
+
     @classmethod
     def from_dict(cls, alldata):
+        """
+        constructs ResidueTemplates and ResiduePadders from a dictionary
+        with raw data such as that in data/residue_chem_templates.json
+        This is pretty much a JSON deserializer that takes a dictionary
+        as input to allow users to modify the input dict in Python
+        """
+
         # alldata = json.loads(json_string)
         ambiguous = alldata["ambiguous"]
         residue_templates = {}
@@ -229,12 +253,17 @@ class ResidueChemTemplates:
 
 
 class LinkedRDKitChorizo:
-    """
-    This is a class used to represent linked residues and associate them with RDKit and other information
-    and there are most likely many more details that should be included in this little blurb.
+    """Represents polymer with its subunits as individual RDKit molecules.
 
+    Used for proteins and nucleic acids. The key class is ChorizoResidue,
+    which contains, a padded RDKit molecule containing part of the adjacent
+    residues to enable chemically meaningful parameterizaion.
+    Instances of ResidueTemplate make sure that the input, which may originate
+    from a PDB string, matches the RDKit molecule of the template, even if
+    hydrogens are missing.
 
-    TODO: Organize the following in a way that makes sense
+    Attributes
+    ----------
     residues: dict (string -> ChorizoResidue) #TODO: figure out exact SciPy standard for dictionary key/value notation
     """
 
@@ -271,6 +300,25 @@ class LinkedRDKitChorizo:
     def __init__(self, raw_input_mols, residue_chem_templates, mk_prep,
                  set_template=None, residues_to_delete=None,
                  allow_bad_res=False):
+        """
+        Parameters
+        ----------
+        raw_input_mols: dict (string -> RDKit Mol)
+            keys are residue IDs <chain>:<resnum> such as "A:42"
+            values are RDKit Mols that will be matched to instances of ResidueTemplate,
+            and may contain none, all, or some of the hydrogens.
+        residue_chem_templates: ResidueChemTemplates
+            one instance of it
+        mk_prep: MoleculePreparation
+            to parameterize the padded molecules
+        set_template: dict (string -> string)
+            keys are residue IDs <chain>:<resnum> such as "A:42" 
+            values identify ResidueTemplate instances
+        residues_to_delete: list (string)
+            list of residue IDs (e.g.; "A:42") to mark as ignored
+        allow_bad_res: bool
+            mark unmatched residues as ignored instead of raising error
+        """
 
         # TODO allow_bad_res and residues to delete should exist only in wrapper class methods
         # such as cls.from_pdb_string and future cls.from_openmm, cls.from_prody, etc
@@ -859,13 +907,32 @@ def add_rotamers_to_chorizo_molsetups(rotamer_states_list, chorizo):
 
 
 class ChorizoResidue:
-    """
-    A class representing a single residue in the chain of chorizo residues
+    """Individual subunit of a polymer represented by LinkedRDKitChorizo.
+
+    Attributes
+    ----------
+    raw_rdkit_mol: RDKit Mol
+        defines element and connectivity within a residue. Bond orders and
+        formal charges may be incorrect, and hydrogens may be missing.
+        This molecule may originate from a PDB string and it defines also
+        the positions of the atoms.
+    rdkit_mol: RDKit Mol
+        Copy of the molecule from a ResidueTemplate, with positions from
+        raw_rdkit_mol. All hydrogens are real atoms except for those
+        at connections with adjacent residues.
+    mapidx_to_raw: dict (int -> int)
+        indices of atom in rdkit_mol to raw_rdkit_mol
+    input_resname: str
+        usually a three-letter code from a PDB
+    template_key: str
+        identifies instance of ResidueTemplate in ResidueChemTemplates
+    atom_names: list (str)
+        names of the atoms in the same order as rdkit_mol
     """
 
     def __init__(self, raw_input_mol, rdkit_mol, mapidx_to_raw, input_resname=None, template_key=None,
-                 link_labels=None, atom_names=None):
-
+                 atom_names=None): #  link_labels=None,
+                 
         self.raw_rdkit_mol = raw_input_mol
         self.rdkit_mol = rdkit_mol
         self.mapidx_to_raw = mapidx_to_raw
@@ -874,7 +941,7 @@ class ChorizoResidue:
         self.atom_names = atom_names  # assumes same order and length as atoms in rdkit_mol, used in e.g. rotamers
 
         # TODO convert link indices/labels in template to rdkit_mol indices herein
-        self.link_labels = {}
+        #self.link_labels = {}
 
         if mapidx_to_raw is not None:
             self.mapidx_from_raw = {j: i for (i, j) in mapidx_to_raw.items()}
