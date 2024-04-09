@@ -988,15 +988,6 @@ class ResiduePadder:
     """
     Data and methods to pad rdkit molecules of chorizo residues with parts of adjacent residues.
 
-    Attributes
-    ----------
-    rxn_smarts: string
-        reaction SMARTS to generate the padding
-    adjacent_res_smarts: string
-        SMARTS pattern to map coordinates from adjacent
-    link_labels: list
-        list of pairs of labels, the first being the one that is padded,
-        and the second is the one it is bonded to
     """
 
     # Replacing ResidueConnection by ResiduePadding
@@ -1009,6 +1000,22 @@ class ResiduePadder:
     # reaction should create bonds at non-real Hs (implicit or explicit rdktt H)
 
     def __init__(self, rxn_smarts, adjacent_res_smarts=None):  # , link_labels=None):
+        """
+        Parameters
+        ----------
+        rxn_smarts: string
+            Reaction SMARTS to pad a link atom of a ChorizoResidue molecule.
+            Product atoms that are not mapped in the reactants will have
+            their coordinates set from an adjacent residue molecule, given
+            that adjacent_res_smarts is provided and the atom labels match
+            the unmapped product atoms of rxn_smarts.
+        adjacent_res_smarts: string
+            SMARTS pattern to identify atoms in molecule of adjacent residue
+            and copy their positions to padding atoms. The SMARTS atom labels
+            must match those of the product atoms of rxn_smarts that are
+            unmapped in the reagents.
+        """
+
         rxn = rdChemReactions.ReactionFromSmarts(rxn_smarts)
         if rxn.GetNumReactantTemplates() != 1:
             raise ValueError(f"expected 1 reactants, got {rxn.GetNumReactantTemplates()} in {rxn_smarts}")
@@ -1122,6 +1129,22 @@ class ResiduePadder:
 
 
 class ResidueTemplate:
+    """
+    Data and methods to pad rdkit molecules of chorizo residues with parts of adjacent residues.
+
+    Attributes
+    ----------
+    mol: RDKit Mol
+        molecule with the exact atoms that constitute the system.
+        All Hs are explicit, but atoms bonded to adjacent residues miss an H.
+    link_labels: dict (int -> string)
+        Keys are indices of atoms that need padding
+        Values are strings to identify instances of ResiduePadder
+    data: dict
+        this is not thought thoroughly and is not being used currently
+        we will probably need atom names to set rotamers
+    """
+
 
     def __init__(self, smiles, link_labels=None, data=None):
         ps = Chem.SmilesParserParams()
