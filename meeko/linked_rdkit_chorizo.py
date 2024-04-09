@@ -273,7 +273,7 @@ class LinkedRDKitChorizo:
 
         raw_input_mols = cls._pdb_to_residue_mols(pdb_string)
         chorizo = cls(raw_input_mols, chem_templates, mk_prep,
-                      set_template=None, residues_to_delete=None, allow_bad_res=False)
+                      set_template, residues_to_delete, allow_bad_res)
         return chorizo
 
     @classmethod
@@ -291,9 +291,9 @@ class LinkedRDKitChorizo:
             raw_input_mols,
             chem_templates,
             mk_prep,
-            set_template=None,
-            residues_to_delete=None,
-            allow_bad_res=False,
+            set_template,
+            residues_to_delete,
+            allow_bad_res,
         )
         return chorizo
 
@@ -423,7 +423,7 @@ class LinkedRDKitChorizo:
                 to_add_h.append(heavy_neighbors[0])
                 to_del[h_index] = heavy_neighbors[0]
             if len(to_del) != nr_missing_H:
-                raise RuntimeError()
+                raise RuntimeError(f"Trying to delete {len(to_del)} Hs but {nr_missing_H=}")
             for i in sorted(to_del, reverse=True):
                 # print("Removing ", tmpmol.GetAtomWithIdx(i).GetAtomicNum())
                 tmpmol.RemoveAtom(i)
@@ -494,6 +494,7 @@ class LinkedRDKitChorizo:
             tolerate_excess_H = False
             if set_template is not None and residue_key in set_template:
                 template_key = set_template[residue_key]  # often resname or resname-like, e.g. HID, NALA
+                template = residue_templates[template_key]
                 match_stats, mapping = template.match(raw_mol)
                 tolerate_excess_H = True  # allows setting LYN from protonated (LYS+) input
             elif raw_mol_has_H and input_resname in ambiguous and len(ambiguous[input_resname]) > 1:
@@ -505,11 +506,13 @@ class LinkedRDKitChorizo:
                         "{len(output)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties")
                 elif len(best_matches) == 0:
                     template_key = None
+                    template = None
                 else:
                     match_stats = best_matches[0]["match_stats"]
                     mapping = best_matches[0]["mapping"]
                     index = best_matches[0]["index"]
                     template_key = candidate_template_keys[index]
+                    template = residue_templates[template_key]
                     log["chosen_by_fewest_missing_H"][residue_key] = template_key
             elif input_resname in ambiguous:  # use default (first) template in ambiguous
                 template_key = ambiguous[input_resname][0]
@@ -527,7 +530,6 @@ class LinkedRDKitChorizo:
                 if residue_key in log["chosen_by_default"]:
                     log["chosen_by_default"].pop(residue_key)
             else:
-                template = residue_templates[template_key]
                 rdkit_mol = cls._build_rdkit_mol(raw_mol, template, mapping, match_stats["H"]["missing"])
                 residues[residue_key] = ChorizoResidue(raw_mol, rdkit_mol, mapping, input_resname, template_key)
                 if template.link_labels is not None:
