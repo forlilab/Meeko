@@ -8,7 +8,7 @@
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
-from rdkit.six import StringIO
+import io
 import json
 import os
 
@@ -445,7 +445,7 @@ class RDKitMolCreate:
 
     @staticmethod
     def write_sd_string(pdbqt_mol, only_cluster_leads=False):
-        sio = StringIO()
+        sio = io.StringIO()
         f = Chem.SDWriter(sio)
         mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads)
         failures = [i for i, mol in enumerate(mol_list) if mol is None]

@@ -138,7 +138,7 @@ def get_args():
     parser = TalkativeParser()
 
     io_group = parser.add_argument_group("Input/Output")
-    io_group.add_argument('--pdb', help="deprecated, use --macromol, still here as non-prody option")
+    io_group.add_argument('--pdb', help="deprecated, use --macromol, still here as non-prody option, no PDBQT")
     io_group.add_argument('--macromol', help="PDB/mmCIF input file")
     io_group.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
     io_group.add_argument('-p', '--chorizo_pickle') 

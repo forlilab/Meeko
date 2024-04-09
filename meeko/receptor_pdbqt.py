@@ -72,7 +72,7 @@ def _read_receptor_pdbqt_string(pdbqt_string, skip_typing=False):
             resid = int(line[22:26].strip())
             xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=np.float32)
             try:
-                partial_charges = float(line[71:77].strip())
+                partial_charges = float(line[70:76].strip())
             except:
                 partial_charges = None # probably reading a PDB, not PDBQT
             atom_type = line[77:79].strip()
