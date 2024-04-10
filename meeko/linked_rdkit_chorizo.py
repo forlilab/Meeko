@@ -162,6 +162,8 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
 def update_H_positions(mol, indices_to_update):
     """re-calculate positions of some existing hydrogens
 
+    no guarantees that chirality can be preserved
+
     Parameters
     ----------
     mol: RDKitmol
@@ -212,6 +214,7 @@ def update_H_positions(mol, indices_to_update):
                     conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
                     used_h.add(atom.GetIdx())
                     break  # h_index coords copied, don't look into further H bound to parent
+                    # no guarantees about preserving chirality, which we don't need
 
     if len(used_h) != len(to_del):
         raise RuntimeError(f"Updated {len(used_h)} H positions but deleted {len(to_del)}")
