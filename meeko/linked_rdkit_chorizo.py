@@ -159,6 +159,56 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
 
     return charges_dec
 
+def update_H_positions(rdkit_mol, indices_to_update):
+    conf = rdkit_mol.GetConformer()
+    tmpmol = Chem.RWMol(rdkit_mol)
+    to_del = {}
+    to_add_h = []
+    for h_index in indices_to_update:
+        atom = tmpmol.GetAtomWithIdx(h_index)
+        if atom.GetAtomicNum() != 1:
+            raise RuntimeError("only H positions can be updated")
+        heavy_neighbors = []
+        for neigh_atom in atom.GetNeighbors():
+            if neigh_atom.GetAtomicNum() != 1:
+                heavy_neighbors.append(neigh_atom)
+        if len(heavy_neighbors) != 1:
+            raise RuntimeError(f"hydrogens must have 1 non-H neighbor, got {len(heavy_neighbors)}")
+        to_add_h.append(heavy_neighbors[0])
+        to_del[h_index] = heavy_neighbors[0]
+    for i in sorted(to_del, reverse=True):
+        tmpmol.RemoveAtom(i)
+        to_del[i].SetNumExplicitHs(to_del[i].GetNumExplicitHs() + 1)
+    to_add_h = list(
+        set([atom.GetIdx() for atom in to_add_h]))  # atom.GetIdx() returns new index after deleting Hs
+    tmpmol = tmpmol.GetMol()
+    tmpmol.UpdatePropertyCache()
+    # for atom in tmpmol.GetAtoms():
+    #    print(atom.GetAtomicNum(), atom.GetNumImplicitHs(), atom.GetNumExplicitHs())
+    Chem.SanitizeMol(tmpmol)
+    tmpmol = Chem.AddHs(tmpmol, onlyOnAtoms=to_add_h, addCoords=True)
+    # tmpmol = Chem.AddHs(tmpmol, addCoords=True)
+    # print(tmpmol.GetNumAtoms())
+    tmpconf = tmpmol.GetConformer()
+    # print(tmpconf.GetPositions())
+    used_h = set()  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
+    for h_index, parent in to_del.items():
+        for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
+            # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
+            has_new_position = atom.GetIdx() >= rdkit_mol.GetNumAtoms() - len(to_del)
+            if atom.GetAtomicNum() == 1 and has_new_position: 
+                if atom.GetIdx() not in used_h:
+                    # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
+                    conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
+                    used_h.add(atom.GetIdx())
+                    break  # h_index coords copied, don't look into further H bound to parent
+
+    if len(used_h) != len(to_del):
+        raise RuntimeError(f"Updated {len(used_h)} H positions but deleted {len(to_del)}")
+
+    return
+
+
 
 class ResidueChemTemplates:
 
@@ -356,7 +406,8 @@ class LinkedRDKitChorizo:
 
         for residue_id, (padded_mol, mapidx_from_pad) in padded_mols.items():
             molsetups = mk_prep(padded_mol)
-            assert len(molsetups) == 1, f"got {len(molsetups)} but can only deal with 1 for now"
+            if len(molsetups) != 1:
+                raise NotImplementedError(f"need 1 molsetup but got {len(molsetups)}")
             molsetup = molsetups[0]
             self.residues[residue_id].molsetup = molsetup
             self.residues[residue_id].molsetup_mapidx = mapidx_from_pad
@@ -404,59 +455,16 @@ class LinkedRDKitChorizo:
 
         rdkit_mol.AddConformer(conf, assignId=True)
 
-        if nr_missing_H:
-            tmpmol = Chem.RWMol(rdkit_mol)
-            to_del = {}
-            to_add_h = []
-            for atom in tmpmol.GetAtoms():
-                if atom.GetIdx() in mapping:
-                    continue
-                if atom.GetAtomicNum() != 1:
-                    raise RuntimeError("only H can be missing, this should not happen")
-                h_index = atom.GetIdx()
-                heavy_neighbors = []
-                for neigh_atom in atom.GetNeighbors():
-                    if neigh_atom.GetAtomicNum() != 1:
-                        heavy_neighbors.append(neigh_atom)
-                if len(heavy_neighbors) != 1:
-                    raise RuntimeError(f"hydrogens must have 1 non-H neighbor, got {len(heavy_neighbors)}")
-                to_add_h.append(heavy_neighbors[0])
-                to_del[h_index] = heavy_neighbors[0]
-            if len(to_del) != nr_missing_H:
-                raise RuntimeError(f"Trying to delete {len(to_del)} Hs but {nr_missing_H=}")
-            for i in sorted(to_del, reverse=True):
-                # print("Removing ", tmpmol.GetAtomWithIdx(i).GetAtomicNum())
-                tmpmol.RemoveAtom(i)
-                to_del[i].SetNumExplicitHs(to_del[i].GetNumExplicitHs() + 1)
-            to_add_h = list(
-                set([atom.GetIdx() for atom in to_add_h]))  # atom.GetIdx() returns new index after deleting Hs
-            tmpmol = tmpmol.GetMol()
-            tmpmol.UpdatePropertyCache()
-            # for atom in tmpmol.GetAtoms():
-            #    print(atom.GetAtomicNum(), atom.GetNumImplicitHs(), atom.GetNumExplicitHs())
-            Chem.SanitizeMol(tmpmol)
-            tmpmol = Chem.AddHs(tmpmol, onlyOnAtoms=to_add_h, addCoords=True)
-            # tmpmol = Chem.AddHs(tmpmol, addCoords=True)
-            # print(tmpmol.GetNumAtoms())
-            tmpconf = tmpmol.GetConformer()
-            # print(tmpconf.GetPositions())
-            used_h = set()  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
-            for h_index, parent in to_del.items():
-                for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
-                    # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
-                    if atom.GetAtomicNum() == 1 and atom.GetIdx() >= len(
-                            mapping):  # added H have indices larger than existing atoms
-                        if atom.GetIdx() not in used_h:
-                            # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
-                            conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
-                            used_h.add(atom.GetIdx())
-                            break  # h_index coords copied, don't look into further H bound to parent
+        if nr_missing_H:  # add positions to Hs missing in raw_mol
+            if rdkit_mol.GetNumAtoms() != len(mapping) + nr_missing_H:
+                raise RuntimeError(
+                        f"nr of atoms ({rdkit_mol.GetNumAtoms()}) != "\
+                        f"{len(mapping)=} + {nr_missing_H=}")
+            idxs = [i for i in range(rdkit_mol.GetNumAtoms()) if i not in mapping]
+            update_H_positions(rdkit_mol, idxs)
 
-            assert len(used_h) == len(to_del), print(len(used_h), len(to_del))
-
-            rdkit_mol.RemoveAllConformers()
-            rdkit_mol.AddConformer(conf, assignId=True)
         return rdkit_mol
+
 
     @staticmethod
     def _find_least_missing_Hs(raw_input_mol, residue_templates):
@@ -596,6 +604,24 @@ class LinkedRDKitChorizo:
                     tmp[i] = mapidx_pad[j]
                 mapidx_pad = tmp
                 # print(f"{mapidx_pad=}")
+            
+            # update position of hydrogens bonded to link atoms
+            inv = {j: i for (i, j) in mapidx_pad.items()}
+            padded_idxs_to_update = []
+            no_pad_idxs_to_update = []
+            for atom_index in residue.link_labels:
+                heavy_atom = residue.rdkit_mol.GetAtomWithIdx(atom_index)
+                for neighbor in heavy_atom.GetNeighbors():
+                    if neighbor.GetAtomicNum() != 1:
+                        continue
+                    no_pad_idxs_to_update.append(neighbor.GetIdx())
+                    padded_idxs_to_update.append(inv[neighbor.GetIdx()])
+            update_H_positions(padded_mol, padded_idxs_to_update)
+            source = padded_mol.GetConformer()
+            destination = residue.rdkit_mol.GetConformer() 
+            for i, j in zip(no_pad_idxs_to_update, padded_idxs_to_update):
+                destination.SetAtomPosition(i, source.GetAtomPosition(j))
+                # can invert chirality in 3D positions
 
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
 
