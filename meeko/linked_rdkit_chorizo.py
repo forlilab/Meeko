@@ -159,9 +159,19 @@ def rectify_charges(q_list, net_charge=None, decimals=3):
 
     return charges_dec
 
-def update_H_positions(rdkit_mol, indices_to_update):
-    conf = rdkit_mol.GetConformer()
-    tmpmol = Chem.RWMol(rdkit_mol)
+def update_H_positions(mol, indices_to_update):
+    """re-calculate positions of some existing hydrogens
+
+    Parameters
+    ----------
+    mol: RDKitmol
+        molecule with hydrogens
+    indices_to_update: list
+        indices of hydrogens for which positions will be re-calculated
+    """
+        
+    conf = mol.GetConformer()
+    tmpmol = Chem.RWMol(mol)
     to_del = {}
     to_add_h = []
     for h_index in indices_to_update:
@@ -195,7 +205,7 @@ def update_H_positions(rdkit_mol, indices_to_update):
     for h_index, parent in to_del.items():
         for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
             # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
-            has_new_position = atom.GetIdx() >= rdkit_mol.GetNumAtoms() - len(to_del)
+            has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
             if atom.GetAtomicNum() == 1 and has_new_position: 
                 if atom.GetIdx() not in used_h:
                     # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
