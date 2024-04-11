@@ -830,7 +830,7 @@ class LinkedRDKitChorizo:
             added_keys = set(molsetup.atom_params).union(dedicated_attribute)
             for key in set(atom_params).difference(added_keys):  # <key> missing in current molsetup
                 atom_params[key].extend([None] * len(wanted_atom_indices))  # fill in incomplete "row"
-            coords.extend(molsetup.coord[i])
+            coords.append(molsetup.coord[i])
         if hasattr(self, "param_rename"):  # e.g. "gasteiger" -> "q"
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
