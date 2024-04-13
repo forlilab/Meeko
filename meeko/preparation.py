@@ -100,7 +100,7 @@ class MoleculePreparation:
             raise NotImplementedError("load_offatom_params not implemented")
         self.load_offatom_params = load_offatom_params
         
-        allowed_charge_models = ["espaloma", "gasteiger", "zero"]
+        allowed_charge_models = ["espaloma", "gasteiger", "zero", "from_mol2"]
         if charge_model not in allowed_charge_models:
             raise ValueError("unrecognized charge_model: %s, allowed options are: %s" % (charge_model, allowed_charge_models))
 
@@ -296,6 +296,8 @@ class MoleculePreparation:
             self.offatom_params,
             self.dihedral_params,
         )
+
+        # TODO check if offsite atoms need charges to be set beforehand
         
         # Convert molecule to graph and apply trained Espaloma model
         if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
@@ -308,6 +310,9 @@ class MoleculePreparation:
         # Grab charges from graph node and set them to the molsetup
         if self.charge_model == "espaloma":
             self.espaloma_model.set_espaloma_charges(setup, molgraph)
+        elif self.charge_model == "from_mol2":
+            for i, atom in enumerate(mol.GetAtoms()):
+                setup.charge[i] = atom.GetDoubleProp("_TriposPartialCharge")
 
         # merge hydrogens (or any terminal atoms)
         indices = set()

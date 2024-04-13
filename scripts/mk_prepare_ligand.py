@@ -83,6 +83,8 @@ def cmd_lineparser():
                         type=int, help="min nr of atoms in ring for opening")
     config_group.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
+    config_group.add_argument(      "--charge_model", choices=["gasteiger", "zero", "from_mol2"],
+                        default="gasteiger")
     config_group.add_argument("--merge_these_atom_types", dest="merge_these_atom_types", nargs="*",
                         help="list of atom types to merge, default is \"H\"", default=["H"])
     config_group.add_argument("-r", "--rigidify_bonds_smarts", dest="rigidify_bonds_smarts",
