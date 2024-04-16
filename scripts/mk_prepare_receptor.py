@@ -34,7 +34,8 @@ Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AtomProps) # |
 #                                Chem.PropertyPickleOptions.PrivateProps)
 
 pkg_dir = pathlib.Path(pkg_init_path).parents[0]
-with open(pkg_dir / "data" / "residue_chem_templates.json") as f:
+templates_fn = str(pkg_dir / "data" / "residue_chem_templates.json")
+with open(templates_fn) as f:
     res_chem_templates = json.load(f)
 
 
@@ -148,6 +149,7 @@ def get_args():
                                   help="e.g. '{\"A:323\":\"HID\"}'")
     config_group.add_argument(      '--delete_residues', help="e.g. '[\"A:350\", \"B:17\"]'")
     config_group.add_argument(      '--chorizo_config', help="[.json]")
+    config_group.add_argument(      '--add_templates', help="[.json]")
     config_group.add_argument(      '--mk_config', help="[.json]")
     config_group.add_argument(      '--allow_bad_res', action="store_true",
                                                  help="delete residues with missing atoms instead of raising error")
@@ -335,7 +337,24 @@ if args.mk_config is not None:
 else:
     mk_prep = MoleculePreparation()
 # load templates for mapping
+if args.add_templates is not None:
+    with open(args.add_templates) as f:
+        more_templates = json.load(f)
+    bad_keys = set()
+    for key, values in more_templates.items():
+        if key not in res_chem_templates:
+            bad_keys.add(key)
+        else:
+            res_chem_templates[key].update(values)
+    if len(bad_keys):
+        msg = "Unrecognized keys provided in add_templates:" + os_linesep
+        msg += f"{bad_keys=}" + os_linesep
+        msg += f"allowed keys: {res_chem_templates.keys()}" + os_linesep
+        msg += f"see template file: {templates_fn}" + os_linesep
+        print(msg, file=sys.stderr) 
+        sys.exit(2)
 templates = ResidueChemTemplates.from_dict(res_chem_templates)
+
 print(f"{templates=}")
 # create chorizos
 if args.macromol is not None:

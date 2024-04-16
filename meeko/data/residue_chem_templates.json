@@ -72,18 +72,35 @@
 	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=NC3=C2N=C(N([H])[H])N([H])C3=O",
 	    "link_labels": {"1": "5-prime", "11": "3-prime"}
 	},
+	"DG": {
+	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])[H])N2C([H])=NC3=C2N=C(N([H])[H])N([H])C3=O",
+	    "link_labels": {"1": "5-prime", "11": "3-prime"}
+	},
 	"A": {
 	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=NC3=C2N=C([H])N=C3N([H])[H]",
+	    "link_labels": {"1": "5-prime", "11": "3-prime"}
+	},
+	"DA": {
+	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])[H])N2C([H])=NC3=C2N=C([H])N=C3N([H])[H]",
 	    "link_labels": {"1": "5-prime", "11": "3-prime"}
 	},
 	"C": {
 	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=C([H])C(N([H])[H])=NC2=O",
 	    "link_labels": {"1": "5-prime", "11": "3-prime"}
 	},
+	"DC": {
+	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])[H])N2C([H])=C([H])C(N([H])[H])=NC2=O",
+	    "link_labels": {"1": "5-prime", "11": "3-prime"}
+	},
 	"U": {
 	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=C([H])C(=O)N([H])C2=O",
 	    "link_labels": {"1": "5-prime", "11": "3-prime"}
 	},
+	"DT": {
+	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])[H])N2C([H])=C(C([H])([H])[H])C(=O)N([H])C2=O",
+	    "link_labels": {"1": "5-prime", "11": "3-prime"}
+	},
+
 	"G-5endPO4": {
 	    "smiles": "O=P([O-])(O[H])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=NC3=C2N=C(N([H])[H])N([H])C3=O",
 	    "link_labels": {"13": "3-prime"}

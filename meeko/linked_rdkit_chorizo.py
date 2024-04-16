@@ -389,6 +389,7 @@ class LinkedRDKitChorizo:
         # TODO move bonds calculation outta here to from_pdb_string and take bonds as arg here
 
         # TODO integrate bonds with matches to distinguish CYX vs CYX-
+        # and simplify SMARTS for adjacent res in padders
 
         self.residue_chem_templates = residue_chem_templates
         residue_templates = residue_chem_templates.residue_templates
@@ -1127,7 +1128,7 @@ class ResiduePadder:
             if adjacent_required_atom_index is not None:
                 hits = [hit for hit in hits if adjacent_required_atom_index in hit]
             if len(hits) != 1:
-                raise RuntimeError(f"length of hits must be 1, but it's {len(hits)}")
+                raise RuntimeError(f"length of hits must be 1, but it's {len(hits)}") # TODO use required_atom_idx from bonds
             hit = hits[0]
             adjacent_coords = adjacent_mol.GetConformer().GetPositions()
             for atom in self.adjacent_smartsmol.GetAtoms():
