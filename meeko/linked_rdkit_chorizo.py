@@ -266,7 +266,7 @@ class ResidueChemTemplates:
             link_labels = None
             if "link_labels" in data:
                 link_labels = {int(key): value for key, value in data["link_labels"].items()}
-            res_template = ResidueTemplate(data["smiles"], link_labels)
+            res_template = ResidueTemplate(data["smiles"], link_labels, data.get("atom_name", None))
             residue_templates[key] = res_template
         for link_label, data in alldata["padders"].items():
             rxn_smarts = data["rxn_smarts"]
@@ -553,7 +553,7 @@ class LinkedRDKitChorizo:
                     log["chosen_by_default"].pop(residue_key)
             else:
                 rdkit_mol = cls._build_rdkit_mol(raw_mol, template, mapping, match_stats["H"]["missing"])
-                residues[residue_key] = ChorizoResidue(raw_mol, rdkit_mol, mapping, input_resname, template_key)
+                residues[residue_key] = ChorizoResidue(raw_mol, rdkit_mol, mapping, input_resname, template_key, template.atom_names)
                 if template.link_labels is not None:
                     mapping_inv = residues[residue_key].mapidx_from_raw  # {j: i for (i, j) in mapping.items()}
                     link_labels = {i: label for i, label in template.link_labels.items()}
@@ -1180,37 +1180,36 @@ class ResidueTemplate:
     link_labels: dict (int -> string)
         Keys are indices of atoms that need padding
         Values are strings to identify instances of ResiduePadder
-    data: dict
-        this is not thought thoroughly and is not being used currently
-        we will probably need atom names to set rotamers
+    atom_names: list (string)
+        list of atom names, matching order of atoms in rdkit mol
     """
 
 
-    def __init__(self, smiles, link_labels=None, data=None):
+    def __init__(self, smiles, link_labels=None, atom_names=None):
         ps = Chem.SmilesParserParams()
         ps.removeHs = False
         mol = Chem.MolFromSmiles(smiles, ps)
-        self.check(mol, link_labels, data)
+        self.check(mol, link_labels, atom_names)
         self.mol = mol
         self.link_labels = link_labels
-        self.data = data
+        self.atom_names = atom_names
         return
 
-    def check(self, mol, link_labels, data):
+    def check(self, mol, link_labels, atom_names):
         have_implicit_hs = set()
         for atom in mol.GetAtoms():
             if atom.GetTotalNumHs() > 0:
                 have_implicit_hs.add(atom.GetIdx())
         if link_labels is not None and set(link_labels) != have_implicit_hs:
             raise ValueError(f"expected any atom with non-real Hs ({have_implicit_hs}) to be in {link_labels=}")
-        if data is None or len(data) == 0:
+        if atom_names is None:
             return
-        data_lengths = set([len(values) for (_, values) in data.items()])
-        if len(data_lengths) != 1:
-            raise ValueError(f"each array in data must have the same length, but got {data_lengths=}")
-        data_length = data_lengths.pop()
-        if data_length != mol.GetNumAtoms():
-            raise ValueError(f"length of arrays in data ({data_length}) differs from {mol.GetNumAtoms()=}")
+        #data_lengths = set([len(values) for (_, values) in data.items()])
+        #if len(data_lengths) != 1:
+        #    raise ValueError(f"each array in data must have the same length, but got {data_lengths=}")
+        #data_length = data_lengths.pop()
+        if len(atom_names) != mol.GetNumAtoms():
+            raise ValueError(f"{len(atom_names)=} differs from {mol.GetNumAtoms()=}")
         return
 
     def match(self, input_mol):
