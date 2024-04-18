@@ -118,13 +118,13 @@ class MoleculeSetup:
     """
 
     def __init__(self):
-        # Simple attributes defining the molecule setup
+        # Simple attributes defining core properties of the molecule setup
         self.atom_true_count = 0
         self.is_sidechain = False
         self.name = None
 
         # Internal lists and keyword dicts.
-        self.atom_pseudo = []
+        self.atom_pseudo = [] # List of pseudoatom indices
         self.atom_params = {}
         self.restraints = []
         self.rotamers = []
@@ -388,38 +388,18 @@ class MoleculeSetup:
         rotatable: bool
             whether the bond is rotatable
         """
-        # Checks that
-        if not idx2 in self.graph[idx1]:
+        # Checks that the bond is represented in the graph property
+        if idx2 not in self.graph[idx1]:
             self.graph[idx1].append(idx2)
-        if not idx1 in self.graph[idx2]:
+        if idx1 not in self.graph[idx2]:
             self.graph[idx2].append(idx1)
-        self.set_bond(idx1, idx2, order, rotatable)
-
-    def set_bond(self, idx1, idx2, order=0, rotatable=False):
-        """
-        Populates the internal bond attribute with the specified bond and its properties, indexed by the bonds canonical
-        tuple bond id.
-
-        Parameters
-        ----------
-        idx1: int
-            the index of one of the atoms in the bond
-        idx2: int
-            the index of the other atom in the bond
-        order: int
-            the bond order
-        rotatable: bool
-            indicates whether the bond is rotatable
-
-        Returns
-        -------
-        None
-        """
+        # Gets the canonical bond id and ads the bond infommration to the bond dictionary.
         bond_id = self.get_bond_id(idx1, idx2)
         self.bond[bond_id] = {
             'bond_order': order,
             'rotatable': rotatable,
         }
+        self.set_bond(idx1, idx2, order, rotatable)
 
     def get_bond(self, idx1, idx2):
         """
@@ -484,12 +464,11 @@ class MoleculeSetup:
         """
         idx_min = min(idx1, idx2)
         idx_max = max(idx1, idx2)
-        return (idx_min, idx_max)
+        return idx_min, idx_max
 
         # replaced by
 
     def add_rotamer(self, indices_list, angles_list):
-
         xyz = self.coord
         rotamer = {}
         for (i1, i2, i3, i4), angle in zip(indices_list, angles_list):
@@ -807,6 +786,7 @@ class MoleculeSetup:
         if idx in self.atom_to_ring_id:
             return self.atom_to_ring_id[idx]
         return []
+
     # endregion
 
     @staticmethod
@@ -1035,6 +1015,7 @@ class MoleculeSetup:
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         return molsetup
+
     def init_atom(self):
         """ iterate through molecule atoms and build the atoms table """
         raise NotImplementedError("This method must be overloaded by inheriting class")
@@ -1397,6 +1378,32 @@ class MoleculeSetup:
     def set_pdbinfo(self, idx, data):
         """ add PDB data (resname/num, atom name, etc.) to the atom """
         self.pdbinfo[idx] = data
+
+    def set_bond(self, idx1, idx2, order=0, rotatable=False):
+        """
+        Populates the internal bond attribute with the specified bond and its properties, indexed by the bonds canonical
+        tuple bond id.
+
+        Parameters
+        ----------
+        idx1: int
+            the index of one of the atoms in the bond
+        idx2: int
+            the index of the other atom in the bond
+        order: int
+            the bond order
+        rotatable: bool
+            indicates whether the bond is rotatable
+
+        Returns
+        -------
+        None
+        """
+        bond_id = self.get_bond_id(idx1, idx2)
+        self.bond[bond_id] = {
+            'bond_order': order,
+            'rotatable': rotatable,
+        }
 
     # def ring_atom_to_ring(self, arg):
     #     return self.atom_to_ring_id[arg]

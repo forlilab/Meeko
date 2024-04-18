@@ -70,6 +70,7 @@ OB and RDKit
   * Make sure all variable names make sense and that there is less room for ambiguity/interpretation
   * Get rid of magic numbers (typically int or float literals that are in places in code)
   * Make sure all loops are clear and well-documented
+* Add functions to get true atom indices and pseudoatom indices for external purposes
 
 #### Implemented Changes
 * Convert OrderedDict collection to dicts since newer versions of python dictionaries maintain insertion order.
