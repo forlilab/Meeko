@@ -1,16 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
-# Meeko atom typer
-#
 
-# import os
-# import json
-# import pathlib
+import warnings
 
 import numpy as np
 
-# from .utils import utils
 from .utils import pdbutils
 
 class AtomTyper:
@@ -73,8 +67,8 @@ class AtomTyper:
         # guarantee that each atompar is exclusive of a single group
         for atompar in ensure:
             if len(set(ensure[atompar])) > 1:
-                msg = 'WARNING: %s is modified in multiple smartsgroups: %s' % (atompar, set(ensure[atompar]))
-                print(msg)
+                msg = '%s is modified in multiple smartsgroups: %s' % (atompar, set(ensure[atompar]))
+                warnings.warn(msg)
         return
 
 
