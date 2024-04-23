@@ -266,6 +266,7 @@ class ResidueChemTemplates:
             link_labels = None
             if "link_labels" in data:
                 link_labels = {int(key): value for key, value in data["link_labels"].items()}
+            # print(key)
             res_template = ResidueTemplate(data["smiles"], link_labels, data.get("atom_name", None))
             residue_templates[key] = res_template
         for link_label, data in alldata["padders"].items():
@@ -360,7 +361,7 @@ class LinkedRDKitChorizo:
         )
         return chorizo
 
-    def __init__(self, raw_input_mols, residue_chem_templates, mk_prep,
+    def __init__(self, raw_input_mols, residue_chem_templates, mk_prep=None,
                  set_template=None, residues_to_delete=None,
                  allow_bad_res=False):
         """
@@ -417,19 +418,31 @@ class LinkedRDKitChorizo:
 
         # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
         padded_mols = self._build_padded_mols(self.residues, bonds, padders)
-
         for residue_id, (padded_mol, mapidx_from_pad) in padded_mols.items():
-            molsetups = mk_prep(padded_mol)
+            residue = self.residues[residue_id]
+            residue.padded_mol = padded_mol
+            residue.molsetup_mapidx = mapidx_from_pad
+
+        if mk_prep is not None:
+            self.parameterize(mk_prep)
+
+        return
+
+
+    def parameterize(self, mk_prep):
+
+        for residue_id in self.get_valid_residues():
+            residue = self.residues[residue_id]
+            molsetups = mk_prep(residue.padded_mol)
             if len(molsetups) != 1:
                 raise NotImplementedError(f"need 1 molsetup but got {len(molsetups)}")
             molsetup = molsetups[0]
             self.residues[residue_id].molsetup = molsetup
-            self.residues[residue_id].molsetup_mapidx = mapidx_from_pad
             self.residues[residue_id].is_flexres_atom = [False for _ in molsetup.atom_ignore]
 
             # set ignore to True for atoms that are padding
             for index in range(len(molsetup.atom_ignore)):
-                if index not in mapidx_from_pad:
+                if index not in residue.molsetup_mapidx:
                     molsetup.atom_ignore[index] = True
 
             # rectify charges to sum to integer (because of padding)
@@ -441,7 +454,7 @@ class LinkedRDKitChorizo:
             not_ignored_idxs = []
             charges = []
             for i, q in molsetup.charge.items():  # charge is ordered dict
-                if i in mapidx_from_pad:  # TODO offsite not in mapidx
+                if i in residue.molsetup_mapidx:  # TODO offsite not in mapidx
                     charges.append(q)
                     not_ignored_idxs.append(i)
             charges = rectify_charges(charges, net_charge, decimals=3)
@@ -453,9 +466,8 @@ class LinkedRDKitChorizo:
                 atom_names = self.residues[residue_id].atom_names
             for i, j in enumerate(not_ignored_idxs):
                 molsetup.charge[j] = charges[i]
-                atom_name = atom_names[mapidx_from_pad[j]]
+                atom_name = atom_names[residue.molsetup_mapidx[j]]
                 molsetup.pdbinfo[j] = PDBAtomInfo(atom_name, resname, int(resnum), chain)
-
         return
 
     @staticmethod
@@ -587,6 +599,7 @@ class LinkedRDKitChorizo:
         padded_mols = {}
         bond_use_count = {key: 0 for key in bonds}
         for residue_id, residue, in residues.items():
+            # print(residue_id, residue.rdkit_mol is not None)
             if residue.rdkit_mol is None:
                 continue
             padded_mol = residue.rdkit_mol
@@ -970,6 +983,11 @@ class ChorizoResidue:
         identifies instance of ResidueTemplate in ResidueChemTemplates
     atom_names: list (str)
         names of the atoms in the same order as rdkit_mol
+    padded_mol: RDKit Mol
+        molecule padded with ResiduePadder
+    molsetup_mapidx: dict (int -> int)
+        key: index of atom in padded_mol
+        value: index of atom in rdkit_mol
     """
 
     def __init__(self, raw_input_mol, rdkit_mol, mapidx_to_raw, input_resname=None, template_key=None,
@@ -995,6 +1013,7 @@ class ChorizoResidue:
         ### self.previous_id = previous_id
         ### self.next_id = next_id
 
+        self.padded_mol = None
         self.molsetup = None
         self.molsetup_mapidx = None
         self.is_flexres_atom = None  # Check about these data types/Do we want the default to be None or empty
