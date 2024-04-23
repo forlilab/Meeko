@@ -16,6 +16,70 @@ pkg_dir = pathlib.Path(__file__).parents[0]
 with open(pkg_dir / "data" / "prot_res_params.json") as f:
     chorizo_params = json.load(f)
 
+def update_H_positions(mol, indices_to_update, positions=None):
+    """re-calculate positions of some existing hydrogens
+
+    no guarantees that chirality can be preserved
+
+    Parameters
+    ----------
+    mol: RDKitmol
+        molecule with hydrogens
+    indices_to_update: list
+        indices of hydrogens for which positions will be re-calculated
+    """
+    new_positions = dict()
+    if positions is not None:
+        mol = Chem.Mol(mol)
+        
+    conf = mol.GetConformer()
+    tmpmol = Chem.RWMol(mol)
+    to_del = {}
+    to_add_h = []
+    for h_index in indices_to_update:
+        atom = tmpmol.GetAtomWithIdx(h_index)
+        if atom.GetAtomicNum() != 1:
+            raise RuntimeError("only H positions can be updated")
+        heavy_neighbors = []
+        for neigh_atom in atom.GetNeighbors():
+            if neigh_atom.GetAtomicNum() != 1:
+                heavy_neighbors.append(neigh_atom)
+        if len(heavy_neighbors) != 1:
+            raise RuntimeError(f"hydrogens must have 1 non-H neighbor, got {len(heavy_neighbors)}")
+        to_add_h.append(heavy_neighbors[0])
+        to_del[h_index] = heavy_neighbors[0]
+    for i in sorted(to_del, reverse=True):
+        tmpmol.RemoveAtom(i)
+        to_del[i].SetNumExplicitHs(to_del[i].GetNumExplicitHs() + 1)
+    to_add_h = list(
+        set([atom.GetIdx() for atom in to_add_h]))  # atom.GetIdx() returns new index after deleting Hs
+    tmpmol = tmpmol.GetMol()
+    tmpmol.UpdatePropertyCache()
+    # for atom in tmpmol.GetAtoms():
+    #    print(atom.GetAtomicNum(), atom.GetNumImplicitHs(), atom.GetNumExplicitHs())
+    Chem.SanitizeMol(tmpmol)
+    tmpmol = Chem.AddHs(tmpmol, onlyOnAtoms=to_add_h, addCoords=True)
+    # tmpmol = Chem.AddHs(tmpmol, addCoords=True)
+    # print(tmpmol.GetNumAtoms())
+    tmpconf = tmpmol.GetConformer()
+    # print(tmpconf.GetPositions())
+    used_h = set()  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
+    for h_index, parent in to_del.items():
+        for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
+            # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
+            has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
+            if atom.GetAtomicNum() == 1 and has_new_position: 
+                if atom.GetIdx() not in used_h:
+                    # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
+                    # conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
+                    positions = tmpconf.GetAtomPosition(atom.GetIdx())
+                    new_positions[h_index] = np.array([positions.x,
+                                                       positions.y,
+                                                       positions.z])
+                    used_h.add(atom.GetIdx())
+                    break  # h_index coords copied, don't look into further H bound to parent
+                    # no guarantees about preserving chirality, which we don't need
+    return new_positions
 
 def mapping_by_mcs(mol, ref):
     mcs_result = rdFMCS.FindMCS([mol, ref], bondCompare=rdFMCS.BondCompare.CompareAny)
@@ -816,30 +880,26 @@ class LinkedRDKitChorizo:
         self.residues[res].is_flexres_atom = is_flexres_atom
         return
 
-    def to_pdb(self, use_modified_coords=False, modified_coords_index=0):
+    # Niccolo - PDB with coordinates passed as distinct arrays  
+    def to_pdb(self, coords, resmapping):
         pdbout = ""
         atom_count = 0
         icode = ""
         pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                       {:2s} "
         pdb_line += pathlib.os.linesep
-        for res_id in self.residues:
+        for res_id in resmapping:
             if self.residues[res_id].user_deleted or self.residues[res_id].ignore_residue:
                 continue
             resmol = self.residues[res_id].rdkit_mol
-            if use_modified_coords and self.residues[res_id].molsetup is not None:
-                molsetup = self.residues[res_id].molsetup
-                if len(molsetup.modified_atom_positions) <= modified_coords_index:
-                    errmsg = "Requesting pose %d but only got %d in molsetup of %s" % (
-                        modified_coords_index, len(molsetup.modified_atom_positions), res_id)
-                    raise RuntimeError(errmsg)
-                p = molsetup.modified_atom_positions[modified_coords_index]
-                modified_positions = molsetup.get_conformer_with_modified_positions(p).GetPositions()
-                positions = {}
-                for i, j in self.residues[res_id].molsetup_mapidx.items():
-                    positions[j] = modified_positions[i]
-            else:
-                positions = {i: xyz for (i, xyz) in enumerate(resmol.GetConformer().GetPositions())}
-
+            start, end = resmapping[res_id]
+            positions = {i: xyz for (i, xyz) in enumerate(coords[start:end+1])}
+            
+            # extract hydrogens indices
+            hydrogen_indices = [i for i, x in enumerate(resmol.GetAtoms()) if x.GetAtomicNum() == 1]
+            new_positions = update_H_positions(resmol, hydrogen_indices,  positions)
+            for index in new_positions:
+                positions[index] = new_positions[index]
+            
             chain, resname, resnum = res_id.split(":")
             resnum = int(resnum)
 
