@@ -1,6 +1,6 @@
 {
     "ambiguous": {
-	"G": ["G", "G-5endPO4"],
+	"G": ["G", "G-5endPO4", "G-3endOH"],
 	"A": ["A", "A-5endPO4"],
 	"C": ["C", "C-5endPO4"],
 	"U": ["U", "U-5endPO4"],
@@ -121,6 +121,11 @@
 	    "smiles": "O=P([O-])(O[H])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=NC3=C2N=C(N([H])[H])N([H])C3=O",
 	    "link_labels": {"13": "3-prime"}
 	},
+	"G-3endOH": {
+	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O[H])OC([H])(C1([H])O([H]))N2C([H])=NC3=C2N=C(N([H])[H])N([H])C3=O",
+	    "link_labels": {"1": "5-prime"}
+	},
+
 	"A-5endPO4": {
 	    "smiles": "O=P([O-])(O[H])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=NC3=C2N=C([H])N=C3N([H])[H]",
 	    "link_labels": {"13": "3-prime"}
