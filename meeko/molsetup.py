@@ -7,7 +7,7 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import sys
 import warnings
@@ -24,8 +24,6 @@ DEFAULT_ELEMENT = None
 DEFAULT_ATOM_TYPE = None
 DEFAULT_IS_IGNORE = False
 DEFAULT_IS_CHIRAL = False
-DEFAULT_GRAPH = field(default_factory=list)
-DEFAULT_INTERACTION_VECTORS = field(default_factory=list)
 
 DEFAULT_BOND_ORDER = 0
 DEFAULT_BOND_ROTATABLE = False
@@ -66,13 +64,13 @@ class MoleculeSetup:
         self,
         atom_index: int = None,
         overwrite: bool = False,
-        pdbinfo: string = DEFAULT_PDBINFO,
+        pdbinfo: str = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
         element: int = DEFAULT_ELEMENT,
-        atom_type: str = DEFAULT_TYPE,
+        atom_type: str = DEFAULT_ATOM_TYPE,
         is_ignore: bool = DEFAULT_IS_IGNORE,
         is_chiral: bool = DEFAULT_IS_CHIRAL,
-        graph: list[int] = DEFAULT_GRAPH,
+        graph: list[int] = field(default_factory=list),
     ):
         """
         Adds an atom with all the specified attributes to the MoleculeSetup, either at the specified atom index, or by
@@ -122,7 +120,7 @@ class MoleculeSetup:
             atom_index, pdbinfo, charge, element, atom_type, is_ignore, is_chiral, graph
         )
         if atom_index < len(self.atoms):
-            atoms[atom_index] = new_atom
+            self.atoms[atom_index] = new_atom
             return
         self.atoms.append(new_atom)
         return
@@ -160,7 +158,7 @@ class MoleculeSetup:
             pseudoatom_index,
             pdbinfo=pdbinfo,
             charge=charge,
-            element=PSEUDOATOM_ELEMENT,
+            element=self.PSEUDOATOM_ELEMENT,
             atom_type=atom_type,
             is_ignore=is_ignore,
             is_pseudo_atom=True,
@@ -196,7 +194,7 @@ class MoleculeSetup:
         atom_index_1: int,
         atom_index_2: int,
         order: int = DEFAULT_BOND_ORDER,
-        rotatable: bool = DEFAULT_BOND_ROTABLE,
+        rotatable: bool = DEFAULT_BOND_ROTATABLE,
     ):
         """
 
@@ -914,8 +912,8 @@ class Atom:
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
     is_chiral: bool = DEFAULT_IS_CHIRAL
-    graph: list[int] = DEFAULT_GRAPH
-    interaction_vectors: list[np.array] = DEFAULT_INTERACTION_VECTORS
+    graph: list[int] = field(default_factory=list)
+    interaction_vectors: list[np.array] = field(default_factory=list)
 
     is_dummy: bool = False
     is_pseudo_atom: bool = False
