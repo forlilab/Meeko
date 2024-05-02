@@ -13,7 +13,7 @@ from prody.atomic.selection import Selection
 
 from .writer import PDBQTWriterLegacy
 from .molsetup import MoleculeSetup
-from .molsetup import MoleculeSetupEncoder
+# from .molsetup import MoleculeSetupEncoder
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.prodyutils import prody_to_rdkit, ALLOWED_PRODY_TYPES
