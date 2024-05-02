@@ -21,7 +21,7 @@ from .utils import rdkitutils
 # region DEFAULT VALUES
 DEFAULT_PDBINFO = None
 DEFAULT_CHARGE = 0.0
-DEFAULT_ELEMENT = None
+DEFAULT_ATOMIC_NUM = None
 DEFAULT_ATOM_TYPE = None
 DEFAULT_IS_IGNORE = False
 DEFAULT_IS_CHIRAL = False
@@ -156,7 +156,7 @@ class UniqAtomParams:
                         raise RuntimeError(
                             "trying to add atomic_nr but it's already in atom_params"
                         )
-                    p["atomic_nr"] = molsetup.element[atom_index]
+                    p["atomic_nr"] = molsetup.atomic_num[atom_index]
                 if add_atom_type:
                     if "atom_type" in p:
                         raise RuntimeError(
@@ -171,7 +171,7 @@ class UniqAtomParams:
 class MoleculeSetup:
 
     # region CLASS CONSTANTS
-    PSEUDOATOM_ELEMENT = 0
+    PSEUDOATOM_ATOMIC_NUM = 0
     # endregion
 
     def __init__(self, name: str = None, is_sidechain: bool = False):
@@ -200,7 +200,7 @@ class MoleculeSetup:
         overwrite: bool = False,
         pdbinfo: str = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
-        element: int = DEFAULT_ELEMENT,
+        atomic_num: int = DEFAULT_ATOMIC_NUM,
         atom_type: str = DEFAULT_ATOM_TYPE,
         is_ignore: bool = DEFAULT_IS_IGNORE,
         is_chiral: bool = DEFAULT_IS_CHIRAL,
@@ -217,7 +217,7 @@ class MoleculeSetup:
         overwrite: bool
         pdbinfo: str
         charge: float
-        element: int
+        atomic_num: int
         atom_type: str
         is_ignore: bool
         is_chiral: bool
@@ -251,7 +251,7 @@ class MoleculeSetup:
 
         # Creates and adds new atom to the atom list
         new_atom = Atom(
-            atom_index, pdbinfo, charge, element, atom_type, is_ignore, is_chiral, graph
+            atom_index, pdbinfo, charge, atomic_num, atom_type, is_ignore, is_chiral, graph
         )
         if atom_index < len(self.atoms):
             self.atoms[atom_index] = new_atom
@@ -292,7 +292,7 @@ class MoleculeSetup:
             pseudoatom_index,
             pdbinfo=pdbinfo,
             charge=charge,
-            element=self.PSEUDOATOM_ELEMENT,
+            atomic_num=self.PSEUDOATOM_ATOMIC_NUM,
             atom_type=atom_type,
             is_ignore=is_ignore,
             is_pseudo_atom=True,
@@ -440,12 +440,12 @@ class MoleculeSetup:
             )
         return self.atoms[atom_index].charge
 
-    def get_element(self, atom_index: int):
+    def get_atomic_num(self, atom_index: int):
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
-                "GET_ELEMENT: provided atom index is out of range or is a dummy atom"
+                "GET_ATOMIC_NUM: provided atom index is out of range or is a dummy atom"
             )
-        return self.atoms[atom_index].element
+        return self.atoms[atom_index].atomic_num
 
     def get_atom_type(self, atom_index: int):
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
@@ -923,7 +923,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolBuild):
             self.add_atom(
                 idx,
                 coord=coords[idx],
-                element=a.GetAtomicNum(),
+                atomic_num=a.GetAtomicNum(),
                 charge=charges[idx],
                 atom_type=None,
                 pdbinfo=rdkitutils.getPdbInfoNoNull(a),
@@ -1013,7 +1013,7 @@ class OBMoleculeSetup(MoleculeSetup):
             self.add_atom(
                 a.GetIdx() - 1,
                 coord=np.asarray(obutils.getAtomCoords(a), dtype="float"),
-                element=a.GetAtomicNum(),
+                atomic_num=a.GetAtomicNum(),
                 charge=partial_charge,
                 atom_type=None,
                 pdbinfo=obutils.getPdbInfoNoNull(a),
@@ -1042,7 +1042,7 @@ class Atom:
     index: int
     pdbinfo: str = DEFAULT_PDBINFO
     charge: float = DEFAULT_CHARGE
-    element: int = DEFAULT_ELEMENT
+    atomic_num: int = DEFAULT_ATOMIC_NUM
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
     is_chiral: bool = DEFAULT_IS_CHIRAL
