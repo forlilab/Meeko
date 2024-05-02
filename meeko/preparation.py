@@ -58,6 +58,7 @@ class MoleculePreparation:
             keep_chorded_rings=False,
             keep_equivalent_rings=False,
             double_bond_penalty=50,
+            macrocycle_allow_A=False,
             rigidify_bonds_smarts=[],
             rigidify_bonds_indices=[],
             input_atom_params=None,
@@ -83,6 +84,7 @@ class MoleculePreparation:
         self.keep_chorded_rings = keep_chorded_rings
         self.keep_equivalent_rings = keep_equivalent_rings
         self.double_bond_penalty = double_bond_penalty
+        self.macrocycle_allow_A = macrocycle_allow_A
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
         self.rigidify_bonds_indices = rigidify_bonds_indices
 
@@ -126,8 +128,10 @@ class MoleculePreparation:
         self.remove_smiles = remove_smiles
 
         self._bond_typer = BondTyperLegacy()
+
         self._macrocycle_typer = FlexMacrocycle(
-                self.min_ring_size, self.max_ring_size, self.double_bond_penalty)
+                self.min_ring_size, self.max_ring_size, self.double_bond_penalty,
+                allow_A=self.macrocycle_allow_A)
         self._flex_builder = FlexibilityBuilder()
         self._water_builder = HydrateMoleculeLegacy()
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}

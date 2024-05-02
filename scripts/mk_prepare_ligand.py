@@ -81,6 +81,8 @@ def cmd_lineparser():
                         action="store_true", help="equivalent rings have the same size and neighbors")
     config_group.add_argument("--min_ring_size", dest="min_ring_size",
                         type=int, help="min nr of atoms in ring for opening")
+    config_group.add_argument("--macrocycle_allow_A", action="store_true",
+                        help="allow bond break with atom type A, retyped as C")
     config_group.add_argument("-w", "--hydrate", dest="hydrate",
                         action="store_true", help="add water molecules for hydrated docking")
     config_group.add_argument(      "--charge_model", choices=["gasteiger", "zero", "from_mol2"],

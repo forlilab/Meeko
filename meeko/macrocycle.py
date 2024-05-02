@@ -11,7 +11,7 @@ from operator import itemgetter
 
 
 class FlexMacrocycle:
-    def __init__(self, min_ring_size=7, max_ring_size=33, double_bond_penalty=50, max_breaks=4):
+    def __init__(self, min_ring_size=7, max_ring_size=33, double_bond_penalty=50, max_breaks=4, allow_A=False):
         """Initialize macrocycle typer.
 
         Args:
@@ -25,6 +25,7 @@ class FlexMacrocycle:
         # accept also double bonds (if nothing better is found)
         self._double_bond_penalty = double_bond_penalty
         self.max_breaks = max_breaks
+        self.allow_A = allow_A
 
         self.setup = None
         self.breakable_rings = None
@@ -81,10 +82,12 @@ class FlexMacrocycle:
         bond_order = self.setup.bond[bond]['bond_order']
         if bond_order not in [1, 2, 3]: # aromatic, double, made rigid explicitly (order=1.1 from --rigidify)
             return -1
-        if self.setup.atom_type[atom_idx1] != "C":
-            return -1
-        if self.setup.atom_type[atom_idx2] != "C":
-            return -1
+        for i in (atom_idx1, atom_idx2):
+            if self.setup.atom_type[i] != "C":
+                if self.allow_A and self.setup.atom_type[i] == "A":
+                    score -= 10
+                else:
+                    return -1
         # triple bond tolerated but not preferred (TODO true?)
         if bond_order == 3:
             score -= 30
