@@ -344,7 +344,7 @@ if __name__ == '__main__':
                 res, chain, num = cov_lig.res_id
                 suffixes = output.get_suffixes(molsetups)
                 for molsetup, suffix in zip(molsetups, suffixes):
-                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok, add_index_map=args.add_index_map)
                     if success:
                         pdbqt_string = PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num)
                         name = molsetup.name
@@ -358,7 +358,7 @@ if __name__ == '__main__':
             molsetups = preparator.prepare(mol)
             suffixes = output.get_suffixes(molsetups) 
             for molsetup, suffix in zip(molsetups, suffixes):
-                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok)
+                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup, bad_charge_ok=args.bad_charge_ok, add_index_map=args.add_index_map)
                 if success:
                     name = molsetup.name
                     output(pdbqt_string, name, (suffix,))
