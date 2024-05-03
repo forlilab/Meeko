@@ -28,7 +28,6 @@ class FlexMacrocycle:
 
         self.setup = None
         self.breakable_rings = None
-        self._conj_bond_list = None
 
     def collect_rings(self, setup):
         """ get non-aromatic rings of desired size and
@@ -57,20 +56,6 @@ class FlexMacrocycle:
                 bonds_in_rigid_cycles.add(bond)
 
         return breakable_rings, bonds_in_rigid_cycles 
-
-    def _detect_conj_bonds(self):
-        """ detect bonds in conjugated systems
-        """
-        # TODO this should be removed once atom typing will be done
-        conj_bond_list = []
-        # pattern = "[R0]=[R0]-[R0]=[R0]" # Does not match conjugated bonds inside  the macrocycle?
-        pattern = '*=*[*]=,#,:[*]' # from SMARTS_InteLigand.txt
-        found = self.setup.find_pattern(pattern)
-        for f in found:
-            bond = (f[1], f[2])
-            bond = (min(bond), max(bond))
-            conj_bond_list.append(bond)
-        return conj_bond_list
 
     def _score_bond(self, bond):
         """ provide a score for the likeness of the bond to be broken"""
@@ -120,7 +105,6 @@ class FlexMacrocycle:
         self.setup = setup
 
         self.breakable_rings, bonds_in_rigid_rings = self.collect_rings(setup)
-        self._conj_bond_list = self._detect_conj_bonds()
         if len(delete_these_bonds) == 0:
             breakable_bonds = self.get_breakable_bonds(bonds_in_rigid_rings)
         else:
