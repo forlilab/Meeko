@@ -1398,7 +1398,9 @@ class ChorizoResidue:
         """
         rdkit_mols = rdMolInterchange.JSONToMols(json_str)
         if len(rdkit_mols) != 1:
-            raise ValueError(f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}")
+            raise ValueError(
+                f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
+            )
         return rdkit_mols[0]
 
 

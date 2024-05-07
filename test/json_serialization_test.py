@@ -14,10 +14,10 @@ from meeko import (
     MoleculeSetupEncoder,
     RDKitMoleculeSetup,
     ResidueChemTemplates,
-    Restraint
+    Restraint,
 )
 
-#from ..meeko.utils.pdbutils import PDBAtomInfo
+# from ..meeko.utils.pdbutils import PDBAtomInfo
 
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
 meekodir = pathlib.Path(meeko.__file__).parents[0]
@@ -52,7 +52,9 @@ def test_rdkit_molsetup_encoding_decoding():
     # Encode and decode molsetup from json
     starting_molsetup = populated_rdkit_molsetup()
     json_str = json.dumps(starting_molsetup, cls=MoleculeSetupEncoder)
-    decoded_molsetup = json.loads(json_str, object_hook=MoleculeSetup.molsetup_json_decoder)
+    decoded_molsetup = json.loads(
+        json_str, object_hook=MoleculeSetup.molsetup_json_decoder
+    )
 
     # First asserts that all types are as expected
     assert isinstance(starting_molsetup, RDKitMoleculeSetup)
@@ -72,7 +74,9 @@ def test_rdkit_molsetup_encoding_decoding():
     assert isinstance(decoded_molsetup.coord, collections.OrderedDict)
     assert decoded_molsetup.coord.keys() == starting_molsetup.coord.keys()
     for key in decoded_molsetup.coord:
-        correct_val_type = correct_val_type & isinstance(decoded_molsetup.coord[key], numpy.ndarray)
+        correct_val_type = correct_val_type & isinstance(
+            decoded_molsetup.coord[key], numpy.ndarray
+        )
         assert set(decoded_molsetup.coord[key]) == set(starting_molsetup.coord[key])
     assert correct_val_type
     assert decoded_molsetup.charge == starting_molsetup.charge
@@ -82,10 +86,20 @@ def test_rdkit_molsetup_encoding_decoding():
     #    correct_val_type = correct_val_type & isinstance(decoded_molsetup.pdbinfo[key], PDBAtomInfo)
     assert correct_val_type
     assert decoded_molsetup.atom_type == starting_molsetup.atom_type
-    assert decoded_molsetup.atom_params == starting_molsetup.atom_params  # WILL THERE BE CONVERSIONS NEEDED FOR PARAMS?
-    assert decoded_molsetup.dihedral_interactions == starting_molsetup.dihedral_interactions  # EMPTY
-    assert decoded_molsetup.dihedral_partaking_atoms == starting_molsetup.dihedral_partaking_atoms  # EMPTY
-    assert decoded_molsetup.dihedral_labels == starting_molsetup.dihedral_labels  # EMPTY
+    assert (
+        decoded_molsetup.atom_params == starting_molsetup.atom_params
+    )  # WILL THERE BE CONVERSIONS NEEDED FOR PARAMS?
+    assert (
+        decoded_molsetup.dihedral_interactions
+        == starting_molsetup.dihedral_interactions
+    )  # EMPTY
+    assert (
+        decoded_molsetup.dihedral_partaking_atoms
+        == starting_molsetup.dihedral_partaking_atoms
+    )  # EMPTY
+    assert (
+        decoded_molsetup.dihedral_labels == starting_molsetup.dihedral_labels
+    )  # EMPTY
     assert decoded_molsetup.atom_ignore == starting_molsetup.atom_ignore
     assert decoded_molsetup.chiral == starting_molsetup.chiral
     assert decoded_molsetup.atom_true_count == starting_molsetup.atom_true_count
@@ -96,16 +110,33 @@ def test_rdkit_molsetup_encoding_decoding():
     assert isinstance(list(decoded_molsetup.bond.keys())[0], tuple)
     assert decoded_molsetup.bond == starting_molsetup.bond
     assert decoded_molsetup.element == starting_molsetup.element
-    assert decoded_molsetup.interaction_vector == starting_molsetup.interaction_vector  # EMPTY
+    assert (
+        decoded_molsetup.interaction_vector == starting_molsetup.interaction_vector
+    )  # EMPTY
     # Assert that both the starting and final objects have keys that are the expected type
-    if 'rigid_body_connectivity' in starting_molsetup.flexibility_model:
-        assert isinstance(list(starting_molsetup.flexibility_model['rigid_body_connectivity'].keys())[0], tuple)
-        assert isinstance(list(decoded_molsetup.flexibility_model['rigid_body_connectivity'].keys())[0], tuple)
+    if "rigid_body_connectivity" in starting_molsetup.flexibility_model:
+        assert isinstance(
+            list(starting_molsetup.flexibility_model["rigid_body_connectivity"].keys())[
+                0
+            ],
+            tuple,
+        )
+        assert isinstance(
+            list(decoded_molsetup.flexibility_model["rigid_body_connectivity"].keys())[
+                0
+            ],
+            tuple,
+        )
     assert decoded_molsetup.flexibility_model == starting_molsetup.flexibility_model
-    assert decoded_molsetup.ring_closure_info == starting_molsetup.ring_closure_info  # EMPTY
+    assert (
+        decoded_molsetup.ring_closure_info == starting_molsetup.ring_closure_info
+    )  # EMPTY
     assert decoded_molsetup.restraints == starting_molsetup.restraints  # EMPTY
     assert decoded_molsetup.is_sidechain == starting_molsetup.is_sidechain
-    assert decoded_molsetup.rmsd_symmetry_indices == starting_molsetup.rmsd_symmetry_indices
+    assert (
+        decoded_molsetup.rmsd_symmetry_indices
+        == starting_molsetup.rmsd_symmetry_indices
+    )
     # Assert that the starting object's bond attribute was not compromised in the serialization process:
     assert isinstance(list(starting_molsetup.bond.keys())[0], tuple)
     # Assert that the final object's bond attribute had the expected key type:
