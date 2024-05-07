@@ -16,11 +16,12 @@ import numpy as np
 import rdkit.Chem
 from rdkit import Chem
 from rdkit.Chem import rdPartialCharges
+from .utils import rdkitutils
 
 # region DEFAULT VALUES
 DEFAULT_PDBINFO = None
 DEFAULT_CHARGE = 0.0
-DEFAULT_ELEMENT = None
+DEFAULT_ATOMIC_NUM = None
 DEFAULT_ATOM_TYPE = None
 DEFAULT_IS_IGNORE = False
 DEFAULT_IS_CHIRAL = False
@@ -34,10 +35,143 @@ DEFAULT_RING_IS_AROMATIC = False
 # endregion
 
 
+class UniqAtomParams:
+    """
+    A helper class used to keep parameters organized in a particular way that lets them be more usable.
+
+    Attributes
+    ----------
+    params: list[]
+        can be thought of as rows
+    param_names: list[]
+        can be thought of as columns
+    """
+
+    def __init__(self):
+        self.params = []  # aka rows
+        self.param_names = []  # aka column names
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        """
+        Creates an UniqAtomParams object, populates it with information from the input dictionary, then returns
+        the new object.
+
+        Parameters
+        ----------
+        dictionary: dict()
+            A dictionary containing the keys "params" and "param_names", where the value for "params" is parseable as
+            rows and the value for "param_names" contains the corresponding column data.
+
+        Returns
+        -------
+        A populated UniqAtomParams object
+        """
+        uap = UniqAtomParams()
+        uap.params = [row.copy() for row in dictionary["params"]]
+        uap.param_names = dictionary["param_names"].copy()
+        return uap
+
+    def get_indices_from_atom_params(self, atom_params):
+        """
+        Retrieves the indices of specific atom parameters in the UniqAtomParams object.
+
+        Parameters
+        ----------
+        atom_params: dict()
+            A dict with keys that correspond to the param names already in the UniqAtomParams object. The values are
+            lists that should all be the same size, and
+
+        Returns
+        -------
+        A list of indices corresponding to the order of parameters in the atom_params value lists that indicates the
+        index of that "row" of parameters in UniqAtomParams params.
+        """
+        nr_items = set([len(values) for key, values in atom_params.items()])
+        if len(nr_items) != 1:
+            raise RuntimeError(
+                f"all lists in atom_params must have same length, got {nr_items}"
+            )
+        if set(atom_params) != set(self.param_names):
+            msg = f"parameter names in atom_params differ from internal ones\n"
+            msg += f"  - in atom_params: {set(atom_params)}"
+            msg += f"  - internal: {set(self.param_names)}"
+            raise RuntimeError(msg)
+        nr_items = nr_items.pop()
+        param_idxs = []
+        for i in range(nr_items):
+            row = [atom_params[key][i] for key in self.param_names]
+            param_index = None
+            for j, existing_row in enumerate(self.params):
+                if row == existing_row:
+                    param_index = j
+                    break
+            param_idxs.append(param_index)
+        return param_idxs
+
+    def add_parameter(self, new_param_dict):
+        # remove None values to avoid a column with only Nones
+        new_param_dict = {k: v for k, v in new_param_dict.items() if v is not None}
+        incoming_keys = set(new_param_dict.keys())
+        existing_keys = set(self.param_names)
+        new_keys = incoming_keys.difference(existing_keys)
+        for new_key in new_keys:
+            self.param_names.append(new_key)
+            for row in self.params:
+                row.append(None)  # fill in empty "cell" in new "column"
+
+        new_row = []
+        for key in self.param_names:
+            value = new_param_dict.get(key, None)
+            new_row.append(value)
+
+        if len(new_keys) == 0:  # try to match with existing row
+            for index, row in enumerate(self.params):
+                if row == new_row:
+                    return index
+
+        # if we are here, we didn't match
+        new_row_index = len(self.params)
+        self.params.append(new_row)
+        return new_row_index
+
+    def add_molsetup(
+        self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False
+    ):
+        if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
+            msg = '"q" and "atom_type" found in molsetup.atom_params'
+            msg += " but are hard-coded to store molsetup.charge and"
+            msg += " molsetup.atom_type in the internal data structure"
+            raise RuntimeError(msg)
+        if atom_params is None:
+            atom_params = molsetup.atom_params
+        param_idxs = []
+        for atom_index, ignore in enumerate(molsetup.atom_ignore):
+            if ignore:
+                param_idx = None
+            else:
+                p = {k: v[atom_index] for (k, v) in molsetup.atom_params.items()}
+                if add_atomic_nr:
+                    if "atomic_nr" in p:
+                        raise RuntimeError(
+                            "trying to add atomic_nr but it's already in atom_params"
+                        )
+                    p["atomic_nr"] = molsetup.atomic_num[atom_index]
+                if add_atom_type:
+                    if "atom_type" in p:
+                        raise RuntimeError(
+                            "trying to add atom_type but it's already in atom_params"
+                        )
+                    p["atom_type"] = molsetup.atom_type[atom_index]
+                param_idx = self.add_parameter(p)
+            param_idxs.append(param_idx)
+        return param_idxs
+
+
 class MoleculeSetup:
 
     # region CLASS CONSTANTS
-    PSEUDOATOM_ELEMENT = 0
+    PSEUDOATOM_ATOMIC_NUM = 0
     # endregion
 
     def __init__(self, name: str = None, is_sidechain: bool = False):
@@ -66,7 +200,7 @@ class MoleculeSetup:
         overwrite: bool = False,
         pdbinfo: str = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
-        element: int = DEFAULT_ELEMENT,
+        atomic_num: int = DEFAULT_ATOMIC_NUM,
         atom_type: str = DEFAULT_ATOM_TYPE,
         is_ignore: bool = DEFAULT_IS_IGNORE,
         is_chiral: bool = DEFAULT_IS_CHIRAL,
@@ -83,7 +217,7 @@ class MoleculeSetup:
         overwrite: bool
         pdbinfo: str
         charge: float
-        element: int
+        atomic_num: int
         atom_type: str
         is_ignore: bool
         is_chiral: bool
@@ -117,7 +251,7 @@ class MoleculeSetup:
 
         # Creates and adds new atom to the atom list
         new_atom = Atom(
-            atom_index, pdbinfo, charge, element, atom_type, is_ignore, is_chiral, graph
+            atom_index, pdbinfo, charge, atomic_num, atom_type, is_ignore, is_chiral, graph
         )
         if atom_index < len(self.atoms):
             self.atoms[atom_index] = new_atom
@@ -158,7 +292,7 @@ class MoleculeSetup:
             pseudoatom_index,
             pdbinfo=pdbinfo,
             charge=charge,
-            element=self.PSEUDOATOM_ELEMENT,
+            atomic_num=self.PSEUDOATOM_ATOMIC_NUM,
             atom_type=atom_type,
             is_ignore=is_ignore,
             is_pseudo_atom=True,
@@ -306,12 +440,12 @@ class MoleculeSetup:
             )
         return self.atoms[atom_index].charge
 
-    def get_element(self, atom_index: int):
+    def get_atomic_num(self, atom_index: int):
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
-                "GET_ELEMENT: provided atom index is out of range or is a dummy atom"
+                "GET_ATOMIC_NUM: provided atom index is out of range or is a dummy atom"
             )
-        return self.atoms[atom_index].element
+        return self.atoms[atom_index].atomic_num
 
     def get_atom_type(self, atom_index: int):
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
@@ -789,7 +923,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolBuild):
             self.add_atom(
                 idx,
                 coord=coords[idx],
-                element=a.GetAtomicNum(),
+                atomic_num=a.GetAtomicNum(),
                 charge=charges[idx],
                 atom_type=None,
                 pdbinfo=rdkitutils.getPdbInfoNoNull(a),
@@ -879,7 +1013,7 @@ class OBMoleculeSetup(MoleculeSetup):
             self.add_atom(
                 a.GetIdx() - 1,
                 coord=np.asarray(obutils.getAtomCoords(a), dtype="float"),
-                element=a.GetAtomicNum(),
+                atomic_num=a.GetAtomicNum(),
                 charge=partial_charge,
                 atom_type=None,
                 pdbinfo=obutils.getPdbInfoNoNull(a),
@@ -908,7 +1042,7 @@ class Atom:
     index: int
     pdbinfo: str = DEFAULT_PDBINFO
     charge: float = DEFAULT_CHARGE
-    element: int = DEFAULT_ELEMENT
+    atomic_num: int = DEFAULT_ATOMIC_NUM
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
     is_chiral: bool = DEFAULT_IS_CHIRAL
@@ -969,139 +1103,6 @@ class Ring:
     corner_flip: bool = DEFAULT_RING_CORNER_FLIP
     graph: dict = DEFAULT_RING_GRAPH
     is_aromatic: bool = DEFAULT_RING_IS_AROMATIC
-
-
-class UniqAtomParams:
-    """
-    A helper class used to keep parameters organized in a particular way that lets them be more usable.
-
-    Attributes
-    ----------
-    params: list[]
-        can be thought of as rows
-    param_names: list[]
-        can be thought of as columns
-    """
-
-    def __init__(self):
-        self.params = []  # aka rows
-        self.param_names = []  # aka column names
-
-    @classmethod
-    def from_dict(cls, dictionary):
-        """
-        Creates an UniqAtomParams object, populates it with information from the input dictionary, then returns
-        the new object.
-
-        Parameters
-        ----------
-        dictionary: dict()
-            A dictionary containing the keys "params" and "param_names", where the value for "params" is parseable as
-            rows and the value for "param_names" contains the corresponding column data.
-
-        Returns
-        -------
-        A populated UniqAtomParams object
-        """
-        uap = UniqAtomParams()
-        uap.params = [row.copy() for row in dictionary["params"]]
-        uap.param_names = dictionary["param_names"].copy()
-        return uap
-
-    def get_indices_from_atom_params(self, atom_params):
-        """
-        Retrieves the indices of specific atom parameters in the UniqAtomParams object.
-
-        Parameters
-        ----------
-        atom_params: dict()
-            A dict with keys that correspond to the param names already in the UniqAtomParams object. The values are
-            lists that should all be the same size, and
-
-        Returns
-        -------
-        A list of indices corresponding to the order of parameters in the atom_params value lists that indicates the
-        index of that "row" of parameters in UniqAtomParams params.
-        """
-        nr_items = set([len(values) for key, values in atom_params.items()])
-        if len(nr_items) != 1:
-            raise RuntimeError(
-                f"all lists in atom_params must have same length, got {nr_items}"
-            )
-        if set(atom_params) != set(self.param_names):
-            msg = f"parameter names in atom_params differ from internal ones\n"
-            msg += f"  - in atom_params: {set(atom_params)}"
-            msg += f"  - internal: {set(self.param_names)}"
-            raise RuntimeError(msg)
-        nr_items = nr_items.pop()
-        param_idxs = []
-        for i in range(nr_items):
-            row = [atom_params[key][i] for key in self.param_names]
-            param_index = None
-            for j, existing_row in enumerate(self.params):
-                if row == existing_row:
-                    param_index = j
-                    break
-            param_idxs.append(param_index)
-        return param_idxs
-
-    def add_parameter(self, new_param_dict):
-        # remove None values to avoid a column with only Nones
-        new_param_dict = {k: v for k, v in new_param_dict.items() if v is not None}
-        incoming_keys = set(new_param_dict.keys())
-        existing_keys = set(self.param_names)
-        new_keys = incoming_keys.difference(existing_keys)
-        for new_key in new_keys:
-            self.param_names.append(new_key)
-            for row in self.params:
-                row.append(None)  # fill in empty "cell" in new "column"
-
-        new_row = []
-        for key in self.param_names:
-            value = new_param_dict.get(key, None)
-            new_row.append(value)
-
-        if len(new_keys) == 0:  # try to match with existing row
-            for index, row in enumerate(self.params):
-                if row == new_row:
-                    return index
-
-        # if we are here, we didn't match
-        new_row_index = len(self.params)
-        self.params.append(new_row)
-        return new_row_index
-
-    def add_molsetup(
-        self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False
-    ):
-        if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
-            msg = '"q" and "atom_type" found in molsetup.atom_params'
-            msg += " but are hard-coded to store molsetup.charge and"
-            msg += " molsetup.atom_type in the internal data structure"
-            raise RuntimeError(msg)
-        if atom_params is None:
-            atom_params = molsetup.atom_params
-        param_idxs = []
-        for atom_index, ignore in enumerate(molsetup.atom_ignore):
-            if ignore:
-                param_idx = None
-            else:
-                p = {k: v[atom_index] for (k, v) in molsetup.atom_params.items()}
-                if add_atomic_nr:
-                    if "atomic_nr" in p:
-                        raise RuntimeError(
-                            "trying to add atomic_nr but it's already in atom_params"
-                        )
-                    p["atomic_nr"] = molsetup.element[atom_index]
-                if add_atom_type:
-                    if "atom_type" in p:
-                        raise RuntimeError(
-                            "trying to add atom_type but it's already in atom_params"
-                        )
-                    p["atom_type"] = molsetup.atom_type[atom_index]
-                param_idx = self.add_parameter(p)
-            param_idxs.append(param_idx)
-        return param_idxs
 
 
 @dataclass

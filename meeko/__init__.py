@@ -23,7 +23,7 @@ else:
 from .preparation import MoleculePreparation
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetup
-from .molsetup import MoleculeSetupEncoder
+# from .molsetup import MoleculeSetupEncoder
 from .molsetup import Restraint
 from .molsetup import UniqAtomParams
 from .utils import rdkitutils

@@ -28,7 +28,6 @@ class FlexMacrocycle:
 
         self.setup = None
         self.breakable_rings = None
-        self._conj_bond_list = None
 
     def collect_rings(self, setup):
         """ get non-aromatic rings of desired size and
@@ -58,44 +57,22 @@ class FlexMacrocycle:
 
         return breakable_rings, bonds_in_rigid_cycles 
 
-    def _detect_conj_bonds(self):
-        """ detect bonds in conjugated systems
-        """
-        # TODO this should be removed once atom typing will be done
-        conj_bond_list = []
-        # pattern = "[R0]=[R0]-[R0]=[R0]" # Does not match conjugated bonds inside  the macrocycle?
-        pattern = '*=*[*]=,#,:[*]' # from SMARTS_InteLigand.txt
-        found = self.setup.find_pattern(pattern)
-        for f in found:
-            bond = (f[1], f[2])
-            bond = (min(bond), max(bond))
-            conj_bond_list.append(bond)
-        return conj_bond_list
-
     def _score_bond(self, bond):
         """ provide a score for the likeness of the bond to be broken"""
         bond = self.setup.get_bond_id(bond[0], bond[1])
-        atom_idx1, atom_idx2 = bond
-        score = 100
-
-        bond_order = self.setup.bond[bond]['bond_order']
-        if bond_order not in [1, 2, 3]: # aromatic, double, made rigid explicitly (order=1.1 from --rigidify)
+        if not self.setup.bond[bond]['rotatable']:
             return -1
+        atom_idx1, atom_idx2 = bond
         if self.setup.atom_type[atom_idx1] != "C":
             return -1
         if self.setup.atom_type[atom_idx2] != "C":
             return -1
-        # triple bond tolerated but not preferred (TODO true?)
-        if bond_order == 3:
-            score -= 30
-        elif (bond_order == 2):
-            score -= self._double_bond_penalty
-        if bond in self._conj_bond_list:
-            score -= 30
-        # discourage chiral atoms
-        if self.setup.get_chiral(atom_idx1) or self.setup.get_chiral(atom_idx2):
-            score -= 20
-        return score
+        # historically we returned a score <= 100, that was lower for triple
+        # bonds, chiral atoms, conjugated bonds, and double bonds. This score
+        # gets combined with the graph depth score in flexibility.py that
+        # is lower when more consecutive torsions exist in a single "branch"
+        # of the torsion tree. Any positive number can be returned here.
+        return 100
 
     def get_breakable_bonds(self, bonds_in_rigid_rings):
         """ find breaking points for rings
@@ -128,7 +105,6 @@ class FlexMacrocycle:
         self.setup = setup
 
         self.breakable_rings, bonds_in_rigid_rings = self.collect_rings(setup)
-        self._conj_bond_list = self._detect_conj_bonds()
         if len(delete_these_bonds) == 0:
             breakable_bonds = self.get_breakable_bonds(bonds_in_rigid_rings)
         else:
