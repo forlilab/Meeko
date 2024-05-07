@@ -13,24 +13,31 @@ from meeko import (
     MoleculeSetup,
     MoleculeSetupEncoder,
     RDKitMoleculeSetup,
-    ResidueAdditionalConnection,
+    ResidueChemTemplates,
     Restraint
 )
 
 #from ..meeko.utils.pdbutils import PDBAtomInfo
 
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
+meekodir = pathlib.Path(meeko.__file__).parents[0]
 
 # Test Data
 ahhy_example = pkgdir / "example/chorizo/AHHY.pdb"
 
+# Chorizo creation data
+with open(meekodir / "data" / "residue_chem_templates.json") as f:
+    t = json.load(f)
+chem_templates = ResidueChemTemplates.from_dict(t)
+mk_prep = MoleculePreparation()
+
 
 # Fixtures
-#@pytest.fixture
+# @pytest.fixture
 def populated_rdkit_molsetup():
     file = open(ahhy_example)
     pdb_str = file.read()
-    chorizo = LinkedRDKitChorizo(pdb_str)
+    chorizo = LinkedRDKitChorizo(pdb_str, chem_templates, mk_prep)
     molecule_prep = MoleculePreparation()
     # To add RDKit Mol to molecule setup
     chorizo.flexibilize_protein_sidechain("A:TYR:4", molecule_prep)
