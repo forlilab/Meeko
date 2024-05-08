@@ -37,7 +37,7 @@ mk_prep = MoleculePreparation()
 def populated_rdkit_molsetup():
     file = open(ahhy_example)
     pdb_str = file.read()
-    chorizo = LinkedRDKitChorizo(pdb_str, chem_templates, mk_prep)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_str, chem_templates, mk_prep)
     molecule_prep = MoleculePreparation()
     # To add RDKit Mol to molecule setup
     chorizo.flexibilize_protein_sidechain("A:TYR:4", molecule_prep)
