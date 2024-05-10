@@ -1779,6 +1779,7 @@ class MoleculeSetupEncoder(json.JSONEncoder):
                 "atom_params": obj.atom_params,
                 "flexibility_model": obj.flexibility_model,
                 "ring_closure_info": obj.ring_closure_info,
+                "ring_corners": obj.ring_corners,
                 # Lists
                 "atom_pseudo": obj.atom_pseudo,
                 "restraints": [asdict(restraint) for restraint in obj.restraints],
