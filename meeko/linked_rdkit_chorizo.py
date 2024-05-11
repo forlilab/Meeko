@@ -1354,10 +1354,10 @@ class ChorizoResidue:
 
         if set(obj.keys()) != expected_residue_keys:
             return obj
-        # Extracts init properties for ChorizoResidue:
+        # Extracts init mols for ChorizoResidue:
         raw_rdkit_mol = ChorizoResidue.rdkit_mol_from_json(obj["raw_rdkit_mol"])
         rdkit_mol = ChorizoResidue.rdkit_mol_from_json(obj["rdkit_mol"])
-        mapidx_to_raw = obj["mapidx_to_raw"]
+        mapidx_to_raw = {int(k): v for k, v in obj["mapidx_to_raw"].items()}
 
         residue = ChorizoResidue(raw_rdkit_mol, rdkit_mol, mapidx_to_raw)
 
@@ -1365,7 +1365,8 @@ class ChorizoResidue:
         residue.residue_template_key = obj["residue_template_key"]
         residue.input_resname = obj["input_resname"]
         residue.atom_names = obj["atom_names"]
-        residue.mapidx_from_raw = obj["mapidx_from_raw"]
+
+        residue.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
         residue.padded_mol = ChorizoResidue.rdkit_mol_from_json(obj["padded_mol"])
         residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
         residue.is_flexres_atom = obj["is_flexres_atom"]

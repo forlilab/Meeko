@@ -17,6 +17,8 @@ from meeko import (
     Restraint,
 )
 
+from rdkit import Chem
+
 # from ..meeko.utils.pdbutils import PDBAtomInfo
 
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
@@ -42,6 +44,13 @@ def populated_rdkit_molsetup():
     return residue.molsetup
 
 
+def populated_rdkit_chorizo_residue():
+    file = open(ahhy_example)
+    pdb_str = file.read()
+    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_str, chem_templates, mk_prep)
+    return chorizo.residues["A:1"]
+
+
 # Test Cases
 def test_rdkit_molsetup_encoding_decoding():
     # TODO: Certain fields are empty in this example, and if we want to make sure that json is working in all scenarios
@@ -57,16 +66,63 @@ def test_rdkit_molsetup_encoding_decoding():
     assert isinstance(starting_molsetup, RDKitMoleculeSetup)
     assert isinstance(decoded_molsetup, RDKitMoleculeSetup)
 
+    # Go through molsetup attributes and check that they are the expected type and match the molsetup object
+    # before serialization.
+    check_molsetup_equality(starting_molsetup, decoded_molsetup)
+
+
+def test_chorizo_residue_encoding_decoding():
+    # Starts by getting a chorizo residue object, converting it to a json string, and then decoding the string into
+    # a new chorizo residue object
+    starting_residue = populated_rdkit_chorizo_residue()
+    json_str = json.dumps(starting_residue, cls=ChorizoResidueEncoder)
+    decoded_residue = json.loads(json_str, object_hook=ChorizoResidue.chorizo_residue_json_decoder)
+
+    # Asserts that the starting and ending objects have the expected ChorizoResidue type
+    assert isinstance(starting_residue, ChorizoResidue)
+    assert isinstance(decoded_residue, ChorizoResidue)
+
+    # Goes through the Chorizo Residue's fields and checks that they are the expected type and match the ChorizoResidue
+    # object before serialization (that we have effectively rebuilt the ChorizoResidue)
+
+    # RDKit Mols - Check whether we can test for equality with RDKit Mols
+    # assert decoded_residue.raw_rdkit_mol == starting_residue.raw_rdkit_mol
+    assert isinstance(decoded_residue.raw_rdkit_mol, Chem.rdchem.Mol)
+    # assert decoded_residue.rdkit_mol == starting_residue.rdkit_mol
+    assert isinstance(decoded_residue.rdkit_mol, Chem.rdchem.Mol)
+    # assert decoded_residue.padded_mol == starting_residue.padded_mol
+    assert isinstance(decoded_residue.padded_mol, Chem.rdchem.Mol)
+
+    # MapIDX
+    assert decoded_residue.mapidx_to_raw == starting_residue.mapidx_to_raw
+    assert decoded_residue.mapidx_from_raw == starting_residue.mapidx_from_raw
+
+    # Non-Bool vars
+    assert decoded_residue.residue_template_key == starting_residue.residue_template_key
+    assert decoded_residue.input_resname == starting_residue.input_resname
+    assert decoded_residue.atom_names == starting_residue.atom_names
+    check_molsetup_equality(starting_residue.molsetup, decoded_residue.molsetup)
+    assert isinstance(decoded_residue.molsetup, RDKitMoleculeSetup)
+
+    # Bools
+    assert decoded_residue.is_flexres_atom == starting_residue.is_flexres_atom
+    assert decoded_residue.is_movable == starting_residue.is_movable
+    assert decoded_residue.user_deleted == starting_residue.user_deleted
+
+
+def check_molsetup_equality(
+    starting_molsetup: MoleculeSetup, decoded_molsetup: MoleculeSetup
+):
+
+    # Bool used while looping through values to check whether all values in a data structure have the expected type
+    correct_val_type = True
+
     # First checks the attributes that we are not doing any type conversion on
 
     # Next checks attributes that needed minimal type conversion
 
     # Finally goes through attributes that needed complex interventions
 
-    # Bool used while looping through values to check whether all values in a data structure have the expected type
-    correct_val_type = True
-    # Go through molsetup attributes and check that they are the expected type and match the molsetup object
-    # before serialization.
     assert decoded_molsetup.atom_pseudo == starting_molsetup.atom_pseudo  # EMPTY
     assert isinstance(decoded_molsetup.coord, collections.OrderedDict)
     assert decoded_molsetup.coord.keys() == starting_molsetup.coord.keys()
@@ -144,3 +200,4 @@ def test_rdkit_molsetup_encoding_decoding():
     assert decoded_molsetup.ring_corners == starting_molsetup.ring_corners  # EMPTY
     assert decoded_molsetup.name == starting_molsetup.name  # EMPTY
     assert decoded_molsetup.rotamers == starting_molsetup.rotamers  # EMPTY
+    return
