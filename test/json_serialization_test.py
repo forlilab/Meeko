@@ -9,6 +9,7 @@ from meeko import (
     ChorizoResidue,
     ChorizoResidueEncoder,
     LinkedRDKitChorizo,
+    LinkedRDKitChorizoEncoder,
     MoleculePreparation,
     MoleculeSetup,
     MoleculeSetupEncoder,
@@ -68,7 +69,8 @@ def test_rdkit_molsetup_encoding_decoding():
 
     # Go through molsetup attributes and check that they are the expected type and match the molsetup object
     # before serialization.
-    check_molsetup_equality(starting_molsetup, decoded_molsetup)
+    check_molsetup_equality(decoded_molsetup, starting_molsetup)
+    return
 
 
 def test_chorizo_residue_encoding_decoding():
@@ -76,42 +78,20 @@ def test_chorizo_residue_encoding_decoding():
     # a new chorizo residue object
     starting_residue = populated_rdkit_chorizo_residue()
     json_str = json.dumps(starting_residue, cls=ChorizoResidueEncoder)
-    decoded_residue = json.loads(json_str, object_hook=ChorizoResidue.chorizo_residue_json_decoder)
+    decoded_residue = json.loads(
+        json_str, object_hook=ChorizoResidue.chorizo_residue_json_decoder
+    )
 
     # Asserts that the starting and ending objects have the expected ChorizoResidue type
     assert isinstance(starting_residue, ChorizoResidue)
     assert isinstance(decoded_residue, ChorizoResidue)
 
-    # Goes through the Chorizo Residue's fields and checks that they are the expected type and match the ChorizoResidue
-    # object before serialization (that we have effectively rebuilt the ChorizoResidue)
-
-    # RDKit Mols - Check whether we can test for equality with RDKit Mols
-    # assert decoded_residue.raw_rdkit_mol == starting_residue.raw_rdkit_mol
-    assert isinstance(decoded_residue.raw_rdkit_mol, Chem.rdchem.Mol)
-    # assert decoded_residue.rdkit_mol == starting_residue.rdkit_mol
-    assert isinstance(decoded_residue.rdkit_mol, Chem.rdchem.Mol)
-    # assert decoded_residue.padded_mol == starting_residue.padded_mol
-    assert isinstance(decoded_residue.padded_mol, Chem.rdchem.Mol)
-
-    # MapIDX
-    assert decoded_residue.mapidx_to_raw == starting_residue.mapidx_to_raw
-    assert decoded_residue.mapidx_from_raw == starting_residue.mapidx_from_raw
-
-    # Non-Bool vars
-    assert decoded_residue.residue_template_key == starting_residue.residue_template_key
-    assert decoded_residue.input_resname == starting_residue.input_resname
-    assert decoded_residue.atom_names == starting_residue.atom_names
-    check_molsetup_equality(starting_residue.molsetup, decoded_residue.molsetup)
-    assert isinstance(decoded_residue.molsetup, RDKitMoleculeSetup)
-
-    # Bools
-    assert decoded_residue.is_flexres_atom == starting_residue.is_flexres_atom
-    assert decoded_residue.is_movable == starting_residue.is_movable
-    assert decoded_residue.user_deleted == starting_residue.user_deleted
+    check_residue_equality(decoded_residue, starting_residue)
+    return
 
 
 def check_molsetup_equality(
-    starting_molsetup: MoleculeSetup, decoded_molsetup: MoleculeSetup
+    decoded_molsetup: MoleculeSetup, starting_molsetup: MoleculeSetup
 ):
 
     # Bool used while looping through values to check whether all values in a data structure have the expected type
@@ -201,3 +181,34 @@ def check_molsetup_equality(
     assert decoded_molsetup.name == starting_molsetup.name  # EMPTY
     assert decoded_molsetup.rotamers == starting_molsetup.rotamers  # EMPTY
     return
+
+
+def check_residue_equality(
+    decoded_residue: ChorizoResidue, starting_residue: ChorizoResidue
+):
+    # Goes through the Chorizo Residue's fields and checks that they are the expected type and match the ChorizoResidue
+    # object before serialization (that we have effectively rebuilt the ChorizoResidue)
+
+    # RDKit Mols - Check whether we can test for equality with RDKit Mols
+    # assert decoded_residue.raw_rdkit_mol == starting_residue.raw_rdkit_mol
+    assert isinstance(decoded_residue.raw_rdkit_mol, Chem.rdchem.Mol)
+    # assert decoded_residue.rdkit_mol == starting_residue.rdkit_mol
+    assert isinstance(decoded_residue.rdkit_mol, Chem.rdchem.Mol)
+    # assert decoded_residue.padded_mol == starting_residue.padded_mol
+    assert isinstance(decoded_residue.padded_mol, Chem.rdchem.Mol)
+
+    # MapIDX
+    assert decoded_residue.mapidx_to_raw == starting_residue.mapidx_to_raw
+    assert decoded_residue.mapidx_from_raw == starting_residue.mapidx_from_raw
+
+    # Non-Bool vars
+    assert decoded_residue.residue_template_key == starting_residue.residue_template_key
+    assert decoded_residue.input_resname == starting_residue.input_resname
+    assert decoded_residue.atom_names == starting_residue.atom_names
+    check_molsetup_equality(decoded_residue.molsetup, starting_residue.molsetup)
+    assert isinstance(decoded_residue.molsetup, RDKitMoleculeSetup)
+
+    # Bools
+    assert decoded_residue.is_flexres_atom == starting_residue.is_flexres_atom
+    assert decoded_residue.is_movable == starting_residue.is_movable
+    assert decoded_residue.user_deleted == starting_residue.user_deleted

@@ -2,6 +2,8 @@ import pathlib
 import json
 from os import linesep as os_linesep
 from typing import Union
+
+import rdkit.Chem
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
@@ -1111,6 +1113,9 @@ class LinkedRDKitChorizo:
     def get_valid_residues(self):
         return {k: v for k, v in self.residues.items() if v.is_valid_residue()}
 
+    def to_json(self):
+        pass
+
 
 residues_rotamers = {
     "SER": [("C", "CA", "CB", "OG")],
@@ -1314,95 +1319,6 @@ class ChorizoResidue:
         """Returns true if the residue is not marked as deleted by a user and has not been marked as a residue to
         ignore"""
         return self.rdkit_mol is not None and not self.user_deleted
-
-    @staticmethod
-    def chorizo_residue_json_decoder(obj: dict):
-        """
-        Takes an object and attempts to decode it into a ChorizoResidue object.
-
-        Parameters
-        ----------
-        obj: Object
-            This can be any object, but it should be a dictionary from deserializing a JSON of a chorizo residue object.
-
-        Returns
-        -------
-        If the input is a dictionary corresponding to a molecule setup, will return a Chorizo Residue with data
-        populated from the dictionary. Otherwise, returns the input object.
-
-        """
-        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
-        # safe data, so we should ignore it.
-        if type(obj) is not dict:
-            return obj
-
-        # check that all the keys we expect are in the object dictionary as a safety measure
-        expected_residue_keys = {
-            "raw_rdkit_mol",
-            "rdkit_mol",
-            "mapidx_to_raw",
-            "residue_template_key",
-            "input_resname",
-            "atom_names",
-            "mapidx_from_raw",
-            "padded_mol",
-            "molsetup",
-            "is_flexres_atom",
-            "is_movable",
-            "user_deleted",
-        }
-
-        if set(obj.keys()) != expected_residue_keys:
-            return obj
-        # Extracts init mols for ChorizoResidue:
-        raw_rdkit_mol = ChorizoResidue.rdkit_mol_from_json(obj["raw_rdkit_mol"])
-        rdkit_mol = ChorizoResidue.rdkit_mol_from_json(obj["rdkit_mol"])
-        mapidx_to_raw = {int(k): v for k, v in obj["mapidx_to_raw"].items()}
-
-        residue = ChorizoResidue(raw_rdkit_mol, rdkit_mol, mapidx_to_raw)
-
-        # sets remaining properties from JSON
-        residue.residue_template_key = obj["residue_template_key"]
-        residue.input_resname = obj["input_resname"]
-        residue.atom_names = obj["atom_names"]
-
-        residue.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
-        residue.padded_mol = ChorizoResidue.rdkit_mol_from_json(obj["padded_mol"])
-        residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
-        residue.is_flexres_atom = obj["is_flexres_atom"]
-        residue.is_movable = obj["is_movable"]
-        residue.user_deleted = obj["user_deleted"]
-
-        return residue
-
-    # SHOULD BE MOVED TO A UTILS FILE OR SOMETHING SIMILAR
-    @staticmethod
-    def rdkit_mol_from_json(json_str: str):
-        """
-        Takes in a JSON string and attempts to use RDKit's JSON to Mols utility to extract just one RDKitMol from the
-        json string. If none or more than one Mols are returned, raises an error.
-
-        Parameters
-        ----------
-        json_str: str
-            A JSON string representing an RDKit Mol.
-
-        Returns
-        -------
-        rdkit_mol: rdkit.Chem.rdchem.Mol
-            An RDKit Mol object corresponding to the input JSON string
-
-        Raises
-        ------
-        ValueError
-            If no RDKitMol objects are returned, or if more than one is returned.
-        """
-        rdkit_mols = rdMolInterchange.JSONToMols(json_str)
-        if len(rdkit_mols) != 1:
-            raise ValueError(
-                f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
-            )
-        return rdkit_mols[0]
 
 
 class ResiduePadder:
@@ -1639,6 +1555,7 @@ class ResidueTemplate:
         return result, mapping
 
 
+# region JSON Encoders
 class ChorizoResidueEncoder(json.JSONEncoder):
     """
     JSON Encoder class for Chorizo Residue objects.
@@ -1648,17 +1565,17 @@ class ChorizoResidueEncoder(json.JSONEncoder):
 
     def default(self, obj):
         """
-        Overrides the default JSON encoder for data structures for Chorizo Residue objects.
+        Overrides the default JSON encoder for data structures for ChorizoResidue objects.
 
         Parameters
         ----------
         obj: object
-            Can take any object as input, but will only create the Chorizo Residue JSON format for Molsetup objects.
+            Can take any object as input, but will only create the ChorizoResidue JSON format for ChorizoResidue objects.
             For all other objects will return the default json encoding.
 
         Returns
         -------
-        A JSON serializable object that represents the Chorizo Residue class or the default JSONEncoder output for an
+        A JSON serializable object that represents the ChorizoResidue class or the default JSONEncoder output for an
         object.
         """
         if isinstance(obj, ChorizoResidue):
@@ -1677,3 +1594,395 @@ class ChorizoResidueEncoder(json.JSONEncoder):
                 "user_deleted": obj.user_deleted,
             }
         return json.JSONEncoder.default(self, obj)
+
+
+class ResidueTemplateEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for ResidueTemplate objects.
+    """
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for ResidueTemplate objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the ResidueTemplate JSON format for ResidueTemplate
+            objects. For all other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the ResidueTemplate class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, ResidueTemplate):
+            output_dict = {
+                "mol": rdMolInterchange.MolToJSON(obj.mol),
+                "link_labels": obj.link_labels,
+                "atom_names": obj.atom_names,
+            }
+            return output_dict
+        return json.JSONEncoder.default(self, obj)
+
+
+class ResiduePadderEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for ResiduePadder objects.
+    """
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for ResiduePadder objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the ResiduePadder JSON format for ResiduePadder
+            objects. For all other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the ResiduePadder class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, ResiduePadder):
+            output_dict = {
+                "rxn_smarts": rdChemReactions.ReactionToSmarts(obj.rxn),
+                "adjacent_smartsmol": rdMolInterchange.MolToJSON(
+                    obj.adjacent_smartsmol
+                ),
+                "adjacent_smartsmol_mapidx": obj.adjacent_smartsmol_mapidx,
+            }
+            return output_dict
+        return json.JSONEncoder.default(self, obj)
+
+
+class ResidueChemTemplatesEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for ResidueChemTemplates objects.
+    """
+
+    residue_padder_encoder = ResiduePadderEncoder()
+    residue_template_encoder = ResidueTemplateEncoder()
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for ResidueChemTemplates objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the ResidueChemTemplates JSON format for
+            ResidueChemTemplates objects. For all other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the ResidueChemTemplates class or the default JSONEncoder output for
+        an object.
+        """
+        if isinstance(obj, ResidueChemTemplates):
+            output_dict = {
+                "residue_templates": {
+                    k: self.residue_template_encoder.default(v)
+                    for k, v in obj.residue_templates.items()
+                },
+                "ambiguous": obj.ambiguous,
+                "padders": {
+                    k: self.residue_padder_encoder.default(v)
+                    for k, v in obj.padders.items()
+                },
+            }
+            return output_dict
+        return json.JSONEncoder.default(self, obj)
+
+
+class LinkedRDKitChorizoEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for LinkedRDKitChorizo objects.
+    """
+
+    residue_chem_templates_encoder = ResidueTemplateEncoder()
+    chorizo_residue_encoder = ChorizoResidueEncoder()
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for LinkedRDKitChorizo objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the LinkedRDKitChorizo JSON format for LinkedRDKitChorizo
+            objects. For all other objects will return the default json encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the LinkedRDKitChorizo class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, LinkedRDKitChorizo):
+            output_dict = {
+                "residue_chem_templates": self.residue_chem_templates_encoder.default(
+                    obj.residue_chem_templates
+                ),
+                "residues": {
+                    k: self.chorizo_residue_encoder.default(v)
+                    for k, v in obj.residues.items()
+                },
+                "log": obj.log,
+            }
+            return output_dict
+        return json.JSONEncoder.default(self, obj)
+
+
+# endregion
+
+# region JSON Decoders
+
+
+def chorizo_residue_json_decoder(obj: dict):
+    """
+    Takes an object and attempts to decode it into a ChorizoResidue object.
+
+    Parameters
+    ----------
+    obj: Object
+        This can be any object, but it should be a dictionary from deserializing a JSON of a ChorizoResidue object.
+
+    Returns
+    -------
+    If the input is a dictionary corresponding to a ChorizoResidue, will return a ChorizoResidue with data
+    populated from the dictionary. Otherwise, returns the input object.
+
+    """
+    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+    # safe data, so we should ignore it.
+    if type(obj) is not dict:
+        return obj
+
+    # check that all the keys we expect are in the object dictionary as a safety measure
+    expected_residue_keys = {
+        "raw_rdkit_mol",
+        "rdkit_mol",
+        "mapidx_to_raw",
+        "residue_template_key",
+        "input_resname",
+        "atom_names",
+        "mapidx_from_raw",
+        "padded_mol",
+        "molsetup",
+        "is_flexres_atom",
+        "is_movable",
+        "user_deleted",
+    }
+
+    if set(obj.keys()) != expected_residue_keys:
+        return obj
+    # Extracts init mols for ChorizoResidue:
+    raw_rdkit_mol = rdkit_mol_from_json(obj["raw_rdkit_mol"])
+    rdkit_mol = rdkit_mol_from_json(obj["rdkit_mol"])
+    mapidx_to_raw = {int(k): v for k, v in obj["mapidx_to_raw"].items()}
+
+    residue = ChorizoResidue(raw_rdkit_mol, rdkit_mol, mapidx_to_raw)
+
+    # sets remaining properties from JSON
+    residue.residue_template_key = obj["residue_template_key"]
+    residue.input_resname = obj["input_resname"]
+    residue.atom_names = obj["atom_names"]
+
+    residue.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
+    residue.padded_mol = rdkit_mol_from_json(obj["padded_mol"])
+    residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
+
+    # boolean values
+    residue.is_flexres_atom = obj["is_flexres_atom"]
+    residue.is_movable = obj["is_movable"]
+    residue.user_deleted = obj["user_deleted"]
+
+    return residue
+
+
+def residue_template_json_decoder(obj: dict):
+    """
+    Takes an object and attempts to decode it into a ResidueTemplate object.
+
+    Parameters
+    ----------
+    obj: Object
+        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
+        ResidueTemplate object.
+
+    Returns
+    -------
+    If the input is a dictionary corresponding to a ResidueTemplate, will return a ResidueTemplate with data populated
+    from the dictionary. Otherwise, returns the input object.
+    """
+    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+    # safe data, so we should ignore it.
+    if type(obj) is not dict:
+        return obj
+
+    # check that all the keys we expect are in the object dictionary as a safety measure
+    expected_residue_keys = {"mol", "link_labels", "atom_names"}
+    if set(obj.keys()) != expected_residue_keys:
+        return obj
+
+    # Converting ResidueTemplate init values that need conversion
+    deserialized_mol = rdkit_mol_from_json(obj["mol"])
+    mol_smiles = rdkit.Chem.MolToSmiles(deserialized_mol)
+    link_labels = {int(k): v for k, v in obj["link_labels"].items()}
+
+    residue_template = ResidueTemplate(mol_smiles, link_labels, obj["atom_names"])
+
+    return residue_template
+
+
+def residue_padder_json_decoder(obj: dict):
+    """
+    Takes an object and attempts to decode it into a ResiduePadder object.
+
+    Parameters
+    ----------
+    obj: Object
+        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
+        ResiduePadder object.
+
+    Returns
+    -------
+    If the input is a dictionary corresponding to a ResiduePadder, will return a ResiduePadder with data populated
+    from the dictionary. Otherwise, returns the input object.
+    """
+    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+    # safe data, so we should ignore it.
+    if type(obj) is not dict:
+        return obj
+
+    # check that all the keys we expect are in the object dictionary as a safety measure
+    expected_residue_keys = {
+        "rxn_smarts",
+        "adjacent_smartsmol",
+        "adjacent_smartsmol_mapidx",
+    }
+    if set(obj.keys()) != expected_residue_keys:
+        return obj
+
+    # Constructs a ResiduePadder object and restores the expected attributes
+    residue_padder = ResiduePadder(obj["rxn_smarts"])
+    residue_padder.adjacent_smartsmol = rdkit_mol_from_json(obj["adjacent_smartsmol"])
+    residue_padder.adjacent_smartsmol_mapidx = {
+        int(k): v for k, v in obj["adjacent_smartsmol_mapidx"].items()
+    }
+
+    return residue_padder
+
+
+def residue_chem_templates_json_decoder(obj: dict):
+    """
+    Takes an object and attempts to decode it into a ResiduePadder object.
+
+    Parameters
+    ----------
+    obj: Object
+        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
+        ResiduePadder object.
+
+    Returns
+    -------
+    If the input is a dictionary corresponding to a ResiduePadder, will return a ResiduePadder with data populated
+    from the dictionary. Otherwise, returns the input object.
+    """
+    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+    # safe data, so we should ignore it.
+    if type(obj) is not dict:
+        return obj
+
+    # Check that all the keys we expect are in the object dictionary as a safety measure
+    expected_residue_keys = {
+        "residue_templates",
+        "ambiguous",
+        "padders",
+    }
+    if set(obj.keys()) != expected_residue_keys:
+        return obj
+
+    # Extracting the constructor args from the json representation and creating a ResidueChemTemplates instance
+    templates = {
+        k: residue_template_json_decoder(v) for k, v in obj["residue_templates"]
+    }
+    padders = {k: residue_padder_json_decoder(v) for k, v in obj["padders"]}
+
+    residue_chem_templates = ResidueChemTemplates(templates, padders, obj["ambiguous"])
+
+    return residue_chem_templates
+
+
+def linked_rdkit_chorizo_json_decoder(obj: dict):
+    """
+    Takes an object and attempts to deserialize it into a LinkedRDKitChorizo object.
+
+    Parameters
+    ----------
+    obj: Object
+        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
+        LinkedRDKitChorizo object.
+
+    Returns
+    -------
+    If the input is a dictionary corresponding to a LinkedRDKitChorizo, will return a LinkedRDKitChorizo with data
+    populated from the dictionary. Otherwise, returns the input object.
+    """
+    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+    # safe data, so we should ignore it.
+    if type(obj) is not dict:
+        return obj
+
+    # Check that all the keys we expect are in the object dictionary as a safety measure
+    expected_json_keys = {
+        "residue_chem_templates",
+        "residues",
+        "log",
+    }
+    if set(obj.keys()) != expected_json_keys:
+        return obj
+
+    # Deserializes ResidueChemTemplates from the dict to use as an input, then constructs a LinkedRDKit Chorizo object
+    # and sets its values using deserialized JSON values.
+    residue_chem_templates = residue_chem_templates_json_decoder(obj["residue_chem_templates"])
+
+    linked_rdkit_chorizo = LinkedRDKitChorizo(None, residue_chem_templates)
+    linked_rdkit_chorizo.residues = {k: chorizo_residue_json_decoder(v) for k, v in obj["residues"]}
+    linked_rdkit_chorizo.log = obj["log"]
+
+    return linked_rdkit_chorizo
+
+
+# SHOULD BE MOVED TO A UTILS FILE OR SOMETHING SIMILAR
+def rdkit_mol_from_json(json_str: str):
+    """
+    Takes in a JSON string and attempts to use RDKit's JSON to Mols utility to extract just one RDKitMol from the
+    json string. If none or more than one Mols are returned, raises an error.
+
+    Parameters
+    ----------
+    json_str: str
+        A JSON string representing an RDKit Mol.
+
+    Returns
+    -------
+    rdkit_mol: rdkit.Chem.rdchem.Mol
+        An RDKit Mol object corresponding to the input JSON string
+
+    Raises
+    ------
+    ValueError
+        If no RDKitMol objects are returned, or if more than one is returned.
+    """
+    rdkit_mols = rdMolInterchange.JSONToMols(json_str)
+    if len(rdkit_mols) != 1:
+        raise ValueError(
+            f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
+        )
+    return rdkit_mols[0]
+
+
+# endregion
