@@ -699,7 +699,7 @@ class LinkedRDKitChorizo:
                 best_matches = cls._find_least_missing_Hs(raw_mol, candidate_templates)
                 if len(best_matches) > 1:
                     raise RuntimeError(
-                        "{len(output)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties"
+                        f"{len(best_matches)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties"
                     )
                 elif len(best_matches) == 0:
                     template_key = None
@@ -856,7 +856,7 @@ class LinkedRDKitChorizo:
         for key, count in bond_use_count.items():
             if count != 2:
                 err_msg += (
-                    "expected two paddings for {key} {bonds[key]}, padded {count}"
+                    f"expected two paddings for {key} {bonds[key]}, padded {count}"
                     + os_linesep
                 )
         if len(err_msg):
