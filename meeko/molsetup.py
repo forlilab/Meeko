@@ -729,6 +729,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
         if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one." 
             print(msg, file=sys.stderr)
+        if len(Chem.GetMolFrags(mol)) != 1:
+            raise ValueError(f"RDKit molecule has {len(Chem.GetMolFrags(mol))} fragments. Must have 1.")
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
