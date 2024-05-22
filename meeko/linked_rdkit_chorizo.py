@@ -1702,7 +1702,7 @@ class LinkedRDKitChorizoEncoder(json.JSONEncoder):
     JSON Encoder class for LinkedRDKitChorizo objects.
     """
 
-    residue_chem_templates_encoder = ResidueTemplateEncoder()
+    residue_chem_templates_encoder = ResidueChemTemplatesEncoder()
     chorizo_residue_encoder = ChorizoResidueEncoder()
 
     def default(self, obj):
@@ -1832,7 +1832,11 @@ def residue_template_json_decoder(obj: dict):
     mol_smiles = rdkit.Chem.MolToSmiles(deserialized_mol)
     link_labels = {int(k): v for k, v in obj["link_labels"].items()}
 
-    residue_template = ResidueTemplate(mol_smiles, link_labels, obj["atom_names"])
+    # Construct a ResidueTemplate object
+    residue_template = ResidueTemplate(mol_smiles, None, obj["atom_names"])
+    # Separately ensure that link_labels is restored to the value we expect it to be so there are not errors in
+    # the constructor
+    residue_template.link_labels = link_labels
 
     return residue_template
 
@@ -1907,9 +1911,9 @@ def residue_chem_templates_json_decoder(obj: dict):
 
     # Extracting the constructor args from the json representation and creating a ResidueChemTemplates instance
     templates = {
-        k: residue_template_json_decoder(v) for k, v in obj["residue_templates"]
+        k: residue_template_json_decoder(v) for k, v in obj["residue_templates"].items()
     }
-    padders = {k: residue_padder_json_decoder(v) for k, v in obj["padders"]}
+    padders = {k: residue_padder_json_decoder(v) for k, v in obj["padders"].items()}
 
     residue_chem_templates = ResidueChemTemplates(templates, padders, obj["ambiguous"])
 
@@ -1949,8 +1953,8 @@ def linked_rdkit_chorizo_json_decoder(obj: dict):
     # and sets its values using deserialized JSON values.
     residue_chem_templates = residue_chem_templates_json_decoder(obj["residue_chem_templates"])
 
-    linked_rdkit_chorizo = LinkedRDKitChorizo(None, residue_chem_templates)
-    linked_rdkit_chorizo.residues = {k: chorizo_residue_json_decoder(v) for k, v in obj["residues"]}
+    linked_rdkit_chorizo = LinkedRDKitChorizo({}, residue_chem_templates)
+    linked_rdkit_chorizo.residues = {k: chorizo_residue_json_decoder(v) for k, v in obj["residues"].items()}
     linked_rdkit_chorizo.log = obj["log"]
 
     return linked_rdkit_chorizo
