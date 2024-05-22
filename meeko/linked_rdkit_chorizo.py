@@ -1951,10 +1951,14 @@ def linked_rdkit_chorizo_json_decoder(obj: dict):
 
     # Deserializes ResidueChemTemplates from the dict to use as an input, then constructs a LinkedRDKit Chorizo object
     # and sets its values using deserialized JSON values.
-    residue_chem_templates = residue_chem_templates_json_decoder(obj["residue_chem_templates"])
+    residue_chem_templates = residue_chem_templates_json_decoder(
+        obj["residue_chem_templates"]
+    )
 
     linked_rdkit_chorizo = LinkedRDKitChorizo({}, residue_chem_templates)
-    linked_rdkit_chorizo.residues = {k: chorizo_residue_json_decoder(v) for k, v in obj["residues"].items()}
+    linked_rdkit_chorizo.residues = {
+        k: chorizo_residue_json_decoder(v) for k, v in obj["residues"].items()
+    }
     linked_rdkit_chorizo.log = obj["log"]
 
     return linked_rdkit_chorizo
