@@ -8,7 +8,7 @@
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
-from rdkit.six import StringIO
+from io import StringIO
 import json
 import os
 

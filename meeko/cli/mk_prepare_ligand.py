@@ -269,9 +269,7 @@ class Output:
         else:
             return tuple("mk%d" % (i + 1) for i in range(len(molsetups)))
 
-
-if __name__ == '__main__':
-
+def main():
     args, config, backend, is_covalent = cmd_lineparser()
     input_molecule_filename = args.input_molecule_filename
 
@@ -373,3 +371,8 @@ if __name__ == '__main__':
         print("PDBQT files not written due to error: %d" % (nr_failures))
         print("Input molecules with errors: %d" % (input_mol_with_failure))
         print(output.get_duplicates_info_string())
+    return
+
+if __name__ == '__main__':
+    sys.exit(main())
+    

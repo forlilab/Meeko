@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+include test/*
+include example/*
+include meeko/data/*
+include meeko/tmp/*
+include meeko/utils/*
