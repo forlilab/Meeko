@@ -69,6 +69,8 @@ def cmd_lineparser():
                         action="store", help="replace internal molecule name in multi-molecule input by specified prefix. Incompatible with -o/--out and -/--.")
     io_group.add_argument('-', '--',  dest='redirect_stdout', action='store_true',
                         help='do not write file, redirect output to STDOUT. Argument -o/--out is ignored. Single molecule input only.')
+    io_group.add_argument("--number_of_mols_per_subdirectory", dest="number_of_mols_per_subdirectory", type=int, help="number of pdbqts per subdirectory")
+
 
     config_group = parser.add_argument_group("Molecule preparation")
     config_group.add_argument('-c', '--config_file',
@@ -193,13 +195,14 @@ def cmd_lineparser():
 
 
 class Output:
-    def __init__(self, multimol_output_dir, multimol_prefix, redirect_stdout, output_filename):
+    def __init__(self, multimol_output_dir, number_of_mols_per_subdirectory, multimol_prefix, redirect_stdout, output_filename):
         is_multimol = (multimol_prefix is not None) or (multimol_output_dir is not None)
         self._mkdir(multimol_output_dir)
 
         if multimol_output_dir is None:
             multimol_output_dir = '.'
         self.multimol_output_dir = multimol_output_dir
+        self.number_of_mols_per_subdirectory = number_of_mols_per_subdirectory###
         self.multimol_prefix = multimol_prefix
         self.redirect_stdout = redirect_stdout
         self.output_filename = output_filename
@@ -221,7 +224,9 @@ class Output:
         for suffix in suffixes:
             if suffix is not None and len(suffix) > 0:
                 name += "_" + suffix
-        if self.is_multimol:
+
+                
+        if self.is_multimol and self.number_of_mols_per_subdirectory is None:
             if name in self.visited_filenames:
                 self.duplicate_filenames.add(name)
                 repeat_id = 1
@@ -232,9 +237,39 @@ class Output:
                 print("Renaming %s to %s to disambiguate filename" % (name, newname), file=sys.stderr)
                 name = newname
             self.visited_filenames.add(name)
-            fpath = os.path.join(self.multimol_output_dir, name + '.pdbqt')
+            fpath = os.path.join(self.multimol_output_dir, name + '.pdbqt') 
             print(pdbqt_string, end='', file=open(fpath, 'w'))
             self.num_files_written += 1
+
+
+        if self.is_multimol and self.number_of_mols_per_subdirectory is not None:
+
+            if name in self.visited_filenames:
+                self.duplicate_filenames.add(name)
+                repeat_id = 1
+                newname = name + "-again%d" % repeat_id
+                while newname in self.visited_filenames:
+                    repeat_id += 1
+                    newname = name + "-again%d" % repeat_id
+                print("Renaming %s to %s to disambiguate filename" % (name, newname), file=sys.stderr)
+                name = newname
+            self.visited_filenames.add(name)
+            if self.multimol_prefix is not None and self.multimol_output_dir == '.':
+                subdir_name = self.multimol_prefix + '_' + str((self.counter - 1)// self.number_of_mols_per_subdirectory)
+                subdir_path = os.path.join(subdir_name)
+            elif self.multimol_prefix is not None:
+                subdir_name = self.multimol_prefix + '_' + str((self.counter - 1)// self.number_of_mols_per_subdirectory)
+                subdir_path = os.path.join(self.multimol_output_dir, subdir_name)
+            else:
+                subdir_name = self.multimol_output_dir + '_' + str((self.counter - 1)// self.number_of_mols_per_subdirectory)
+                subdir_path = os.path.join(self.multimol_output_dir, subdir_name)
+
+            
+            self._mkdir(subdir_path)
+            fpath = os.path.join(subdir_path, name + '.pdbqt')
+            print(pdbqt_string, end='', file=open(fpath, 'w'))
+            self.num_files_written += 1
+
         elif self.redirect_stdout:
             print(pdbqt_string, end='')
         else:
@@ -288,17 +323,22 @@ if __name__ == '__main__':
             print("*ERROR* Format [%s] not in supported formats [%s]" % (ext, '/'.join(list(parsers.keys()))))
             sys.exit(1)
         mol_supplier = parsers[ext](input_molecule_filename, removeHs=False) # input must have explicit H
+
+
     elif backend == 'ob':
         print("Using openbabel instead of rdkit")
         mol_supplier = obutils.OBMolSupplier(input_molecule_filename, ext)
-
+    
     # configure output writer
     if args.output_pdbqt_filename is None:
         output_filename = input_fname + '.pdbqt'
     else:
         output_filename = args.output_pdbqt_filename
+
+
     output = Output(
             args.multimol_output_dir,
+            args.number_of_mols_per_subdirectory,###
             args.multimol_prefix,
             args.redirect_stdout,
             output_filename,
