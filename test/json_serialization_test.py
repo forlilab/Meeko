@@ -44,8 +44,6 @@ mk_prep = MoleculePreparation()
 
 
 # region Fixtures
-
-
 @pytest.fixture
 def populated_rdkit_chorizo():
     file = open(ahhy_example)
@@ -89,6 +87,20 @@ def populated_residue_padder(populated_residue_chem_templates):
 
 # region Test Cases
 def test_rdkit_molsetup_encoding_decoding(populated_rdkit_molsetup):
+    """
+    Takes a fully populated RDKitMoleculeSetup, checks that it can be serialized to JSON and deserialized back into an
+    object without any errors, then checks that the deserialized object matches the starting object and that the
+    attribute types, values, and structure of the deserialized object are as expected for an RDKitMoleculeSetup.
+
+    Parameters
+    ----------
+    populated_rdkit_molsetup: RDKitMoleculeSetup
+        Takes as input a populated RDKitMoleculeSetup object.
+
+    Returns
+    -------
+    None
+    """
     # TODO: Certain fields are empty in this example, and if we want to make sure that json is working in all scenarios
     # we will need to make other tests for those empty fields.
     # Encode and decode MoleculeSetup from json
@@ -109,8 +121,22 @@ def test_rdkit_molsetup_encoding_decoding(populated_rdkit_molsetup):
 
 
 def test_chorizo_residue_encoding_decoding(populated_rdkit_chorizo_residue):
-    # Starts by getting a chorizo residue object, converting it to a json string, and then decoding the string into
-    # a new chorizo residue object
+    """
+    Takes a fully populated ChorizoResidue, checks that it can be serialized to JSON and deserialized back into an
+    object without any errors, then checks that the deserialized object matches the starting object and that the
+    attribute types, values, and structure of the deserialized object are as expected for an ChorizoResidue.
+
+    Parameters
+    ----------
+    populated_rdkit_chorizo_residue: ChorizoResidue
+        Takes as input a populated ChorizoResidue object.
+
+    Returns
+    -------
+    None
+    """
+    # Starts by getting a ChorizoResidue object, converting it to a json string, and then decoding the string into
+    # a new ChorizoResidue object
     starting_residue = populated_rdkit_chorizo_residue
     json_str = json.dumps(starting_residue, cls=ChorizoResidueEncoder)
     decoded_residue = json.loads(
@@ -126,6 +152,20 @@ def test_chorizo_residue_encoding_decoding(populated_rdkit_chorizo_residue):
 
 
 def test_residue_template_encoding_decoding(populated_residue_template):
+    """
+    Takes a fully populated ResidueTemplate, checks that it can be serialized to JSON and deserialized back into an
+    object without any errors, then checks that the deserialized object matches the starting object and that the
+    attribute types, values, and structure of the deserialized object are as expected for an ResidueTemplate.
+
+    Parameters
+    ----------
+    populated_residue_template: ResidueTemplate
+        Takes as input a populated ResidueTemplate object.
+
+    Returns
+    -------
+    None
+    """
     # Starts by getting a ResidueTemplate object, converting it to a json string, and then decoding the string into
     # a new ResidueTemplate object
     starting_template = populated_residue_template
@@ -144,6 +184,20 @@ def test_residue_template_encoding_decoding(populated_residue_template):
 
 
 def test_residue_padder_encoding_decoding(populated_residue_padder):
+    """
+    Takes a fully populated ResiduePadder, checks that it can be serialized to JSON and deserialized back into an
+    object without any errors, then checks that the deserialized object matches the starting object and that the
+    attribute types, values, and structure of the deserialized object are as expected for an ResiduePadder.
+
+    Parameters
+    ----------
+    populated_residue_padder: ResiduePadder
+        Takes as input a populated ResiduePadder object.
+
+    Returns
+    -------
+    None
+    """
     # Starts by getting a ResiduePadder object, converting it to a json string, and then decoding the string into
     # a new ResiduePadder object
     starting_padder = populated_residue_padder
@@ -162,6 +216,20 @@ def test_residue_padder_encoding_decoding(populated_residue_padder):
 
 
 def test_residue_chem_templates_encoding_decoding(populated_residue_chem_templates):
+    """
+    Takes a fully populated ResidueChemTemplates, checks that it can be serialized to JSON and deserialized back into an
+    object without any errors, then checks that the deserialized object matches the starting object and that the
+    attribute types, values, and structure of the deserialized object are as expected for an ResidueChemTemplates.
+
+    Parameters
+    ----------
+    populated_residue_chem_templates: ResidueChemTemplates
+        Takes as input a populated ResidueChemTemplates object.
+
+    Returns
+    -------
+    None
+    """
     # Starts by getting a ResidueChemTemplates object, converting it to a json string, and then decoding the string into
     # a new ResidueChemTemplates object
     starting_templates = populated_residue_chem_templates
@@ -180,6 +248,20 @@ def test_residue_chem_templates_encoding_decoding(populated_residue_chem_templat
 
 
 def test_linked_rdkit_chorizo_encoding_decoding(populated_rdkit_chorizo):
+    """
+    Takes a fully populated LinkedRDKitChorizo, checks that it can be serialized to JSON and deserialized back into an
+    object without any errors, then checks that the deserialized object matches the starting object and that the
+    attribute types, values, and structure of the deserialized object are as expected for an LinkedRDKitChorizo.
+
+    Parameters
+    ----------
+    populated_rdkit_chorizo: LinkedRDKitChorizo
+        Takes as input a populated LinkedRDKitChorizo object.
+
+    Returns
+    -------
+    None
+    """
     # Starts by getting a LinkedRDKitChorizo object, converting it to a json string, and then decoding the string into
     # a new LinkedRDKitChorizo object
     starting_chorizo = populated_rdkit_chorizo
@@ -202,7 +284,21 @@ def test_linked_rdkit_chorizo_encoding_decoding(populated_rdkit_chorizo):
 
 # region Object Equality Checks
 def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSetup):
+    """
+    Asserts that two MoleculeSetup objects are equal, and that the decoded_obj input has fields contain correctly typed
+    data.
 
+    Parameters
+    ----------
+    decoded_obj: MoleculeSetup
+        A MoleculeSetup object that we want to check is correctly typed and contains the correct data.
+    starting_obj: MoleculeSetup
+        A MoleculeSetup object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
     # Bool used while looping through values to check whether all values in a data structure have the expected type
     correct_val_type = True
 
@@ -278,6 +374,21 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
 
 
 def check_residue_equality(decoded_obj: ChorizoResidue, starting_obj: ChorizoResidue):
+    """
+    Asserts that two ChorizoResidue objects are equal, and that the decoded_obj input has fields contain correctly typed
+    data.
+
+    Parameters
+    ----------
+    decoded_obj: ChorizoResidue
+        A ChorizoResidue object that we want to check is correctly typed and contains the correct data.
+    starting_obj: ChorizoResidue
+        A ChorizoResidue object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
     # Goes through the Chorizo Residue's fields and checks that they are the expected type and match the ChorizoResidue
     # object before serialization (that we have effectively rebuilt the ChorizoResidue)
 
@@ -310,6 +421,21 @@ def check_residue_equality(decoded_obj: ChorizoResidue, starting_obj: ChorizoRes
 def check_residue_chem_templates_equality(
     decoded_obj: ResidueChemTemplates, starting_obj: ResidueChemTemplates
 ):
+    """
+    Asserts that two ResidueChemTemplates objects are equal, and that the decoded_obj input has fields contain correctly
+    typed data.
+
+    Parameters
+    ----------
+    decoded_obj: ResidueChemTemplates
+        A ResidueChemTemplates object that we want to check is correctly typed and contains the correct data.
+    starting_obj: ResidueChemTemplates
+        A ResidueChemTemplates object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
     # correct_val_type is used to check that all type conversions for nested data have happened correctly
     correct_val_type = True
     # Checks residue_templates by ensuring it has the same members as the starting object, that each value in the
@@ -345,6 +471,21 @@ def check_residue_chem_templates_equality(
 def check_residue_template_equality(
     decoded_obj: ResidueTemplate, starting_obj: ResidueTemplate
 ):
+    """
+    Asserts that two ResidueTemplate objects are equal, and that the decoded_obj input has fields contain correctly typed
+    data.
+
+    Parameters
+    ----------
+    decoded_obj: ResidueTemplate
+        A ResidueTemplate object that we want to check is correctly typed and contains the correct data.
+    starting_obj: ResidueTemplate
+        A ResidueTemplate object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
     # Goes through the ResidueTemplate's fields and checks that they have the expected type and that they match the
     # ResidueTemplate object before serialization
     assert isinstance(decoded_obj.mol, Chem.rdchem.Mol)
@@ -365,12 +506,12 @@ def check_residue_padder_equality(
     ----------
     decoded_obj: ResiduePadder
         A ResiduePadder object that we want to check is correctly typed and contains the correct data.
-    starting_obj
+    starting_obj: ResiduePadder
         A ResiduePadder object with the desired values to check the decoded object against.
+
     Returns
     -------
     None
-
     """
     assert isinstance(decoded_obj.rxn, rdChemReactions.ChemicalReaction)
     decoded_obj_rxn_smarts = rdChemReactions.ReactionToSmarts(decoded_obj.rxn)
@@ -387,10 +528,27 @@ def check_residue_padder_equality(
 def check_linked_rdkit_chorizo_equality(
     decoded_obj: LinkedRDKitChorizo, starting_obj: LinkedRDKitChorizo
 ):
+    """
+    Asserts that two LinkedRDKitChorizo objects are equal, and that the decoded_obj input has fields contain correctly
+    typed data.
+
+    Parameters
+    ----------
+    decoded_obj: LinkedRDKitChorizo
+        A LinkedRDKitChorizo object that we want to check is correctly typed and contains the correct data.
+    starting_obj: LinkedRDKitChorizo
+        A LinkedRDKitChorizo object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
     # correct_val_type is used to check that all type conversions for nested data have happened correctly
     correct_val_type = True
     # Checks residue_chem_templates equality
-    check_residue_chem_templates_equality(decoded_obj.residue_chem_templates, starting_obj.residue_chem_templates)
+    check_residue_chem_templates_equality(
+        decoded_obj.residue_chem_templates, starting_obj.residue_chem_templates
+    )
 
     # Loops through residues, checks that the decoded and starting obj share the same set of keys, that all the residues
     # are represented as ChorizoResidue objects, and that the decoding and starting obj ChorizoResidues are equal.
