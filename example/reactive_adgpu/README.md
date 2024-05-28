@@ -1,7 +1,7 @@
 This is a draft
 
 # 1. Prepare protein with waterkit
-Follow `wk_prepare_receptor.py` instructions and run with `--pdb`.
+Follow `mk_prepare_receptor.py` instructions and run with `--pdb`.
 The goal of this step is to perform essential fixes to the protein
 (such as missing atoms), to add hydrogens, and to follow the Amber
 naming scheme for atoms and residues, e.g., `HIE` or `HID`
