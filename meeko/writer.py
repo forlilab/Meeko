@@ -492,7 +492,7 @@ class PDBQTWriterLegacy():
 
         if 'torsions_org' in setup.flexibility_model:
             torsdof_org = setup.flexibility_model['torsions_org']
-            data["pdbqt_buffer"].append('REMARK Flexibility Score: %2.2f' % setup.flexibility_model['score'])
+            data["pdbqt_buffer"].append('REMARK Flexibility Score: %8.3f' % setup.flexibility_model['score'])
             active_tors = torsdof_org
         else:
             active_tors = torsdof

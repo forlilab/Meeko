@@ -152,25 +152,27 @@ class FlexMacrocycle:
         break_combos = self._recursive_break(self.breakable_rings, max_breaks, breakable_bonds, set(), [])
         break_combos = list(break_combos) # convert from set
         max_broken_bonds = 0
-        output_break_combos = [] # found new max, discard prior data
+        output_break_combos = []  # found new max, discard prior data
         output_bond_scores = []
-        output_broken_rings = []
+        output_unbroken_rings = []
         for broken_bonds in break_combos:
             n_broken_bonds = len(broken_bonds)
             bond_score = sum([breakable_bonds[bond]['score'] for bond in broken_bonds])
-            broken_rings = self.get_broken_rings(self.breakable_rings, broken_bonds)
             if n_broken_bonds > max_broken_bonds:
                 max_broken_bonds = n_broken_bonds
-                output_break_combos = [] # found new max, discard prior data
+                output_break_combos = []  # found new max, discard prior data
                 output_bond_scores = []
-                output_broken_rings = []
+                output_unbroken_rings = []
             if n_broken_bonds == max_broken_bonds:
                 output_break_combos.append(broken_bonds)
                 output_bond_scores.append(bond_score)
-                output_broken_rings.append(broken_rings)
+                u = self.get_unbroken_rings(self.breakable_rings, broken_bonds)
+                output_unbroken_rings.append(u)
+
         break_combo_data = {"bond_break_combos": output_break_combos,
                             "bond_break_scores": output_bond_scores,
-                            "broken_rings": output_broken_rings}
+                            "unbroken_rings": output_unbroken_rings,
+                           }
         return break_combo_data
 
 

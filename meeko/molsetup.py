@@ -572,6 +572,19 @@ class MoleculeSetup:
         # directional vectors
         if directional_vectors is not None:
             self.add_interaction_vector(idx, directional_vectors)
+
+        if len(self.flexibility_model) and anchor_list is not None:
+            # add pseudo atoms to rigid groups in the flexibility model
+            rigid_groups_indices = []
+            for anchor in anchor_list:
+                for rigid_index, members in self.flexibility_model["rigid_body_members"].items():
+                    if anchor in members:
+                        rigid_groups_indices.append(rigid_index)
+            n = len(rigid_groups_indices)
+            if n != 1:
+                raise RuntimeError(f"anchors of pseudo atom found in {n} rigid_groups (must be 1)")
+            rigid_index = rigid_groups_indices[0]
+            self.flexibility_model["rigid_body_members"][rigid_index].append(idx)
         return idx
 
     def add_bond(self, idx1, idx2, order=0, rotatable=False):
