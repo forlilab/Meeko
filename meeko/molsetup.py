@@ -731,6 +731,8 @@ class RDKitMoleculeSetup(MoleculeSetup):
             print(msg, file=sys.stderr)
         if len(Chem.GetMolFrags(mol)) != 1:
             raise ValueError(f"RDKit molecule has {len(Chem.GetMolFrags(mol))} fragments. Must have 1.")
+        if mol.HasQuery():
+            raise ValueError(f"RDKit molecule has query. Check exotic fields (atom or bond) in SDF.")
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
