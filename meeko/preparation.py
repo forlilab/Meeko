@@ -375,6 +375,12 @@ class MoleculePreparation:
             break_combo_data, bonds_in_rigid_rings = (
                 self._macrocycle_typer.search_macrocycle(setup, delete_ring_bonds)
             )
+            for ring_atoms, ring_info in setup.rings.items():
+                s = "".join([f"{i}" for i in ring_atoms])
+                if s.find("0139") >= 0 or s.find("9310") >= 0: 
+                    print(ring_atoms)
+                    print(ring_info)
+                    print()
 
         # This must be done before calling get_flexibility_model
         for bond in bonds_in_rigid_rings:
@@ -385,7 +391,11 @@ class MoleculePreparation:
         )
 
         # disasble rotatable bonds that rotate nothing (e.g. -CH3 without H)
-        merge_terminal_atoms(flex_model, not_terminal_atoms)
+        glue_atoms = []
+        for pair in bonds_to_break:
+            for index in pair:
+                glue_atoms.append(index)
+        merge_terminal_atoms(flex_model, not_terminal_atoms + glue_atoms) 
 
         # bond to a terminal atom, or in a ring that isn't flexible
         actual_rotatable = [v for k, v in flex_model["rigid_body_connectivity"].items()]
