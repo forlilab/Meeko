@@ -5,6 +5,8 @@ from rdkit import Chem
 from meeko import MoleculePreparation
 
 
+workdir = pathlib.Path(__file__).parents[0]
+
 def run(
     folder,
     fn,
@@ -13,7 +15,7 @@ def run(
     expected_members=None,
 ):
 
-    path = pathlib.Path(folder) / fn
+    path = workdir / pathlib.Path(folder) / fn
     mol = Chem.MolFromMolFile(str(path), removeHs=False)
     mk_prep = MoleculePreparation()
     molsetup = mk_prep(mol)[0]
@@ -40,6 +42,7 @@ def run(
             actual_members.add(tuple(sorted(members)))
         assert actual_members == expected_members
     return
+
 
 
 def test_non_sequential_atom_ordering_01():

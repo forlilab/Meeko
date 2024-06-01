@@ -375,12 +375,6 @@ class MoleculePreparation:
             break_combo_data, bonds_in_rigid_rings = (
                 self._macrocycle_typer.search_macrocycle(setup, delete_ring_bonds)
             )
-            for ring_atoms, ring_info in setup.rings.items():
-                s = "".join([f"{i}" for i in ring_atoms])
-                if s.find("0139") >= 0 or s.find("9310") >= 0: 
-                    print(ring_atoms)
-                    print(ring_info)
-                    print()
 
         # This must be done before calling get_flexibility_model
         for bond in bonds_in_rigid_rings:
@@ -391,6 +385,9 @@ class MoleculePreparation:
         )
 
         # disasble rotatable bonds that rotate nothing (e.g. -CH3 without H)
+        # but glue atoms (i.e. CG) are manually marked as non terminal (by
+        # passing them in the `glue_atoms` list) to guarantee that the bond
+        # to a CG atom is rotatable and the G pseudo rotates
         glue_atoms = []
         for pair in bonds_to_break:
             for index in pair:
@@ -417,7 +414,8 @@ class MoleculePreparation:
 
         setup.flexibility_model = flex_model
 
-        update_closure_atoms(setup, bonds_to_break, glue_pseudo_atoms)  # CG/G types
+        # add G pseudo atoms and set CG types
+        update_closure_atoms(setup, bonds_to_break, glue_pseudo_atoms)
 
         if self.reactive_smarts is None:
             setups = [setup]

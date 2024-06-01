@@ -100,7 +100,7 @@ def get_flexibility_model(
         bond_break_score = bond_break_scores[index]
         unbroken_rings_bonds = []
         for ring in unbroken_rings_list[index]:
-            for bond in ring:
+            for bond in molsetup.get_bonds_in_ring(ring):
                 unbroken_rings_bonds.append(bond)
 
         model = walk_rigid_body_graph(molsetup, bond_break_combo, unbroken_rings_bonds)
