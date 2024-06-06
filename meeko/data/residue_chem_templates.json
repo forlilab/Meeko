@@ -68,6 +68,26 @@
     },
 
     "residue_templates": {
+	"MG": {
+	    "smiles": "[Mg+2]",
+	    "link_labels": {},
+	    "atom_name": ["MG"]
+	},
+	"MN": {
+	    "smiles": "[Mn+2]",
+	    "link_labels": {},
+	    "atom_name": ["MN"]
+	},
+	"ZN": {
+	    "smiles": "[Zn+2]",
+	    "link_labels": {},
+	    "atom_name": ["ZN"]
+	},
+	"HOH": {
+	    "smiles": "O([H])[H]",
+	    "link_labels": {},
+	    "atom_name": ["OW", "HW1", "HW2"]
+	},
 	"G": {
 	    "smiles": "O=P([O-])OC([H])([H])C([H])(C1([H])O)OC([H])(C1([H])O([H]))N2C([H])=NC3=C2N=C(N([H])[H])N([H])C3=O",
 	    "link_labels": {"1": "5-prime", "11": "3-prime"},

@@ -39,6 +39,55 @@ with open(templates_fn) as f:
     res_chem_templates = json.load(f)
 
 
+def parse_cmdline_res(string):
+    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C"
+    """
+    blocks = ("," + string).split(":")
+    nr_blocks = len(blocks) - 1
+    keys = []
+    for i in range(nr_blocks):
+        chain = blocks[i].split(",")[-1]
+        if i + 1 == nr_blocks:
+            resnums = blocks[i+1].split(",")
+        else:
+            resnums = blocks[i+1].split(",")[:-1]
+        if len(resnums) == 0:
+            raise ValueError(f"missing residue in {resnums}")
+        for resnum in resnums:
+            keys.append(f"{chain}:{resnum}")
+    return keys
+
+
+def parse_cmdline_res_assign(string):
+    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}
+    """
+    
+    output = {}
+    nr_assignments = string.count("=")
+    string = "," + string # enables `residues =` below to work in first iteraton
+    tmp = string.split("=")
+    for i in range(nr_assignments):
+        residues = tmp[i].split(',')[1:] 
+        assigned_name = tmp[i+1].split(',')[0]
+        chain = ""
+        for residue in residues:
+            fields = residue.split(":")
+            if len(fields) == 1:
+                resnum = fields[0]
+            elif len(fields) == 2:
+                chain = fields[0]
+                resnum = fields[1]
+            else:
+                raise ValueError(f"too many : in {residue}")
+            if len(resnum) == 0:
+                raise ValueError(f"missing residue in {residues}")
+            key = f"{chain}:{resnum}"
+            if key in output:
+                raise ValueError(f"repeated {key} in {residue}")
+            output[key] = assigned_name
+    return output
+
+
 def parse_residue_string(string):
     """
     Args:
@@ -279,15 +328,23 @@ if len(reactive_flexres) > 8:
 
 all_flexres = set()
 for resid_string in args.flexres:
-    res_id, ok, err = parse_residue_string(resid_string)
-    all_ok &= ok
-    all_err += err
-    if ok:
-        if res_id in reactive_flexres:
-            all_err += "Command line error: can't determine if %s is reactive or not." % str(res_id) + os_linesep
-            all_err += "Do not pass %s to --flexres if it is reactive." % str(res_id) + os_linesep
-            all_ok = False
+    keys = []
+    for string in args.flexres:
+        more_keys = parse_cmdline_res(string)
+        keys.extend(more_keys)
+    print(f"flexibile sidechains: {keys}")
+    for res_id in keys:
         all_flexres.add(res_id)
+
+    #res_id, ok, err = parse_residue_string(resid_string)
+    #all_ok &= ok
+    #all_err += err
+    #if ok:
+    #    if res_id in reactive_flexres:
+    #        all_err += "Command line error: can't determine if %s is reactive or not." % str(res_id) + os_linesep
+    #        all_err += "Do not pass %s to --flexres if it is reactive." % str(res_id) + os_linesep
+    #        all_ok = False
+    #    all_flexres.add(res_id)
 
 if all_ok:
     all_flexres = all_flexres.union(reactive_flexres)
@@ -299,16 +356,18 @@ else:
 if len(all_flexres) > 0:
     print()
     print("Flexible residues:")
-    print("chain resname resnum is_reactive reactive_atom")
-    string = "%5s%8s%7d%12s%14s"
+    print("chain resnum is_reactive reactive_atom")
+    string = "%5s%7s%12s%14s"
     for res_id in all_flexres:
-        chain, resname, resnum = res_id
+        chain, resnum = res_id.split(":")
         is_react = res_id in reactive_flexres
         if is_react:
+            print("OOOPPSSIES not supporting reactive flexres at this time")
+            sys.exit(42)
             react_atom = reactive_flexres[res_id]
         else:
             react_atom = ""
-        print(string % (chain, resname, resnum, is_react, react_atom))
+        print(string % (chain, resnum, is_react, react_atom))
     print()
 
 if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
@@ -316,6 +375,7 @@ if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
     msg += "residue, but %d reactive residues are set" % len(reactive_flexres)
     print("Command line error:" + msg, file=sys.stderr)
     sys.exit(2)
+
 
 # if args.pdb is not None:
 set_template = {}
@@ -327,7 +387,9 @@ if args.chorizo_config is not None:
     del_res.extend(chorizo_config.get("del_res", []))
 # direct command line options override config
 if args.set_template is not None:
-    set_template.update(json.loads(args.set_template))
+    j = parse_cmdline_res_assign(args.set_template)
+    print(j)
+    set_template.update(j)
 if args.delete_residues is not None:
     del_res.update(json.loads(args.delete_residues))
 if args.mk_config is not None:
@@ -376,10 +438,9 @@ else:
 #                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
 
 for res_id in all_flexres:
-    print("Ooopsies: we momentarily don't support flexible sidechains")  # TODO
-    sys.exit()
-    res = "%s:%s:%d" % res_id
-    chorizo.flexibilize_protein_sidechain(res, mk_prep, cut_at_calpha=True)
+    #print("Ooopsies: we momentarily don't support flexible sidechains")  # TODO
+    #sys.exit()
+    chorizo.flexibilize_protein_sidechain(res_id)  #, mk_prep, cut_at_calpha=True)
 rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
 if args.chorizo_pickle is not None:
     with open(args.chorizo_pickle, "wb") as f:

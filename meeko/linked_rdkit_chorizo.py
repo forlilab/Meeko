@@ -24,6 +24,21 @@ from .utils.pdbutils import PDBAtomInfo
 import numpy as np
 
 
+def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=()):
+    """recursively find all paths between start and end nodes
+    """
+    current_path = current_path + (start_node,)
+    paths_found = list(paths_found)
+    for node in graph[start_node]:
+        if node in current_path:
+            continue
+        if node in end_nodes:
+            paths_found.append(list(current_path) + [node])
+        more_paths = find_graph_paths(graph, node, end_nodes, current_path)
+        paths_found.extend(more_paths)
+    return paths_found
+            
+
 def find_inter_mols_bonds(mols):
     covalent_radius = {  # from wikipedia
         1: 0.31,
@@ -32,17 +47,18 @@ def find_inter_mols_bonds(mols):
         7: 0.71,
         8: 0.66,
         9: 0.57,
-        12: 1.41,
+        12: 0.00,  # hack to avoid bonds with metals
         14: 1.11,
         15: 1.07,
         16: 1.05,
         17: 1.02,
-        19: 2.03,
-        20: 1.76,
-        24: 1.39,
-        26: 1.32,
-        30: 1.22,
-        34: 1.20,
+        # 19: 2.03,
+        # 20: 1.76,
+        # 24: 1.39,
+        25: 0.00,  # hack to avoid bonds with metals
+        # 26: 1.32,
+        30: 0.00,  # hack to avoid bonds with metals
+        # 34: 1.20,
         35: 1.20,
         53: 1.39,
     }
@@ -587,6 +603,9 @@ class LinkedRDKitChorizo:
                 if index not in residue.molsetup_mapidx:
                     molsetup.atom_ignore[index] = True
 
+            # recalculate flexibility tree after setting ignored atoms
+            mk_prep.calc_flex(molsetup)
+
             # rectify charges to sum to integer (because of padding)
             if mk_prep.charge_model == "zero":
                 net_charge = 0
@@ -746,6 +765,7 @@ class LinkedRDKitChorizo:
                     template_key,
                     template.atom_names,
                 )
+                residues[residue_key].template = template
                 if template.link_labels is not None:
                     mapping_inv = residues[
                         residue_key
@@ -755,7 +775,6 @@ class LinkedRDKitChorizo:
                     }
                     residues[residue_key].link_labels = link_labels
 
-                # TODO link atoms connections add to chorizoResidue
         return residues, log
 
     @staticmethod
@@ -773,14 +792,23 @@ class LinkedRDKitChorizo:
         ### print(f"maximum nr of pairs to consider: {len(mols) * (len(mols)-1)}")
         nr_pairs, bonds_ = find_inter_mols_bonds(mols)
         bonds = {}
+        repeated = {}
         for i, j, k, l in bonds_:
-            bonds[(keys[i], keys[j])] = (  # k, l)
+            key = (keys[i], keys[j])
+            bond = (
                 residues[keys[i]].mapidx_from_raw[k],
                 residues[keys[j]].mapidx_from_raw[l],
             )
-        assert len(bonds) == len(
-            bonds_
-        ), "can add only 1 bond between each pair of residues, for now"
+            if key in bonds:
+                repeated.setdefault(key, [bonds[key]])
+                repeated[key].append(bond)
+            else:
+                bonds[key] = bond
+        if len(repeated):
+            msg = "got more than one bond between some residue pairs:" + os_linesep
+            for key, value in repeated.items():
+                msg += f"{key}: {value}" + os_linesep
+            raise ValueError(msg)
         # t = time()
         # print(f"took {t-t0:.4f} seconds")
         return bonds
@@ -817,6 +845,7 @@ class LinkedRDKitChorizo:
                         break
 
                 # print(residue_id, atom_index, link_label, adjacent_mol is not None, adjacent_atom_index)
+                print(residue_id, link_label)
                 padded_mol, mapidx = padders[link_label](
                     padded_mol, adjacent_mol, atom_index, adjacent_atom_index
                 )
@@ -877,14 +906,45 @@ class LinkedRDKitChorizo:
             msg = "can't find the following residues to delete: " + " ".join(missing)
             raise ValueError(msg)
 
-    def flexibilize_protein_sidechain(self, res, mk_prep, cut_at_calpha=False):
-        molsetup, mapidx, is_flexres_atom = self.res_to_molsetup(
-            res, mk_prep, is_protein_sidechain=True, cut_at_calpha=cut_at_calpha
-        )
-        self.residues[res].molsetup = molsetup
-        self.residues[res].molsetup_mapidx = mapidx
-        self.residues[res].is_flexres_atom = is_flexres_atom
-        self.residues[res].is_movable = True
+    def flexibilize_protein_sidechain(self, residue_id):
+        # TODO test disulfide raises error
+        print(f"FLEXIBILIZING {residue_id}")
+        residue = self.residues[residue_id] 
+        inv = {j: i for i, j in residue.molsetup_mapidx.items()}
+        link_atoms = [inv[i] for i in residue.template.link_labels]
+        if len(link_atoms) == 0:
+            raise RuntimeError("can't define a sidechain without bonds to other residues")
+        elif len(link_atoms) == 1:
+            raise NotImplementedError("residue bonded to only one other residue")
+        else:
+            print(f"flexibilizing {residue_id} {link_atoms=}")
+            graph = residue.molsetup.graph
+            print("nr rot bonds", sum([b["rotatable"] for _, b in residue.molsetup.bond.items()]))
+            for i in range(len(link_atoms)-1):
+                start_node = link_atoms[i]
+                end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
+                backbone_paths = find_graph_paths(graph, start_node, end_nodes)
+                for path in backbone_paths:
+                    for i in range(len(path) - 1):
+                        idx1 = min(path[i], path[i + 1])
+                        idx2 = max(path[i], path[i + 1])
+                        residue.molsetup.bond[(idx1, idx2)]["rotatable"] = False
+            print("nr rot bonds", sum([b["rotatable"] for _, b in residue.molsetup.bond.items()]))
+            for (i, j), b in residue.molsetup.bond.items():
+                if b["rotatable"]:
+                    print("rotatable bond:", i, j)
+        print(dir(residue))
+        print(residue.molsetup_mapidx)
+
+                # new_setup = flex_builder(residue.molsetup, root_atom_index="?")
+        
+        #molsetup, mapidx, is_flexres_atom = self.res_to_molsetup(res, mk_prep,
+        #                                                         is_protein_sidechain=True,
+        #                                                         cut_at_calpha=cut_at_calpha)
+        #self.residues[res].molsetup = molsetup
+        #self.residues[res].molsetup_mapidx = mapidx
+        #self.residues[res].is_flexres_atom = is_flexres_atom
+        #self.residues[res].is_movable = True
         return
 
     @staticmethod
@@ -1250,6 +1310,8 @@ class ChorizoResidue:
     molsetup_mapidx: dict (int -> int)
         key: index of atom in padded_mol
         value: index of atom in rdkit_mol
+    template: ResidueTemplate
+        provides access to link_labels in the template
     """
 
     def __init__(
@@ -1266,17 +1328,17 @@ class ChorizoResidue:
         self.rdkit_mol = rdkit_mol
         self.mapidx_to_raw = mapidx_to_raw
         self.residue_template_key = template_key  # same as pdb_resname except NALA, etc
-        self.input_resname = (
-            input_resname  # even if using openmm topology, there are residues
-        )
-        self.atom_names = atom_names  # assumes same order and length as atoms in rdkit_mol, used in e.g. rotamers
+        self.input_resname = input_resname  # exists even in openmm topology
+        self.atom_names = atom_names  # same order as atoms in rdkit_mol, used in rotamers
 
         # TODO convert link indices/labels in template to rdkit_mol indices herein
         # self.link_labels = {}
+        self.template = None
 
         if mapidx_to_raw is not None:
             self.mapidx_from_raw = {j: i for (i, j) in mapidx_to_raw.items()}
-            assert len(self.mapidx_from_raw) == len(self.mapidx_to_raw)
+            if len(self.mapidx_from_raw) != len(self.mapidx_to_raw):
+                raise RuntimeError(f"index mapping not invertable {mapidx_to_raw=}")
         else:
             self.mapidx_from_raw = None
 

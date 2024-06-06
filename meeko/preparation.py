@@ -44,6 +44,7 @@ else:
 warnings.filterwarnings("default", category=DeprecationWarning)
 
 
+
 class MoleculePreparation:
 
     packaged_params = {}
@@ -156,6 +157,71 @@ class MoleculePreparation:
             raise ValueError(
                 "reactive_smarts and reactive_smarts_idx require each other"
             )
+
+    def calc_flex(self, setup, root_atom_index=None, not_terminal_atoms=None, delete_ring_bonds=None, glue_pseudo_atoms=None):
+
+        if not_terminal_atoms is None:
+            not_terminal_atoms = []
+        if delete_ring_bonds is None:
+            delete_ring_bonds = []
+        if glue_pseudo_atoms is None:
+            glue_pseudo_atoms = {}
+        # 5.  break macrocycles into open/linear form
+        if self.rigid_macrocycles:
+            break_combo_data = None
+            bonds_in_rigid_rings = set()
+            # every ring is rigid without macrocycle option
+            for ring in setup.rings:
+                for bond in setup.get_bonds_in_ring(ring):
+                    bonds_in_rigid_rings.add(bond)
+        else:
+            break_combo_data, bonds_in_rigid_rings = (
+                self._macrocycle_typer.search_macrocycle(setup, delete_ring_bonds)
+            )
+
+        # This must be done before calling get_flexibility_model
+        for bond in bonds_in_rigid_rings:
+            setup.bond[bond]["rotatable"] = False
+
+        flex_model, bonds_to_break = get_flexibility_model(
+            setup, root_atom_index, break_combo_data, glue_pseudo_atoms
+        )
+
+        # disasble rotatable bonds that rotate nothing (e.g. -CH3 without H)
+        # but glue atoms (i.e. CG) are manually marked as non terminal (by
+        # passing them in the `glue_atoms` list) to guarantee that the bond
+        # to a CG atom is rotatable and the G pseudo rotates
+        glue_atoms = []
+        for pair in bonds_to_break:
+            for index in pair:
+                glue_atoms.append(index)
+        merge_terminal_atoms(flex_model, not_terminal_atoms + glue_atoms) 
+
+        # bond to a terminal atom, or in a ring that isn't flexible
+        actual_rotatable = [v for k, v in flex_model["rigid_body_connectivity"].items()]
+        actual_rotatable.extend(bonds_to_break)
+        for bond in setup.bond:
+            if bond not in actual_rotatable:
+                setup.bond[bond]["rotatable"] = False
+
+        # calculate torsions that would be rotatable without macrocycle breaking
+        if break_combo_data is not None and len(break_combo_data["bond_break_combos"]):
+            ring_bonds = []
+            for ring in setup.rings:
+                for bond in setup.get_bonds_in_ring(ring):
+                    ring_bonds.append(bond)
+            flex_model["torsions_org"] = 0
+            for bond in setup.bond:
+                if setup.bond[bond]["rotatable"] and bond not in ring_bonds:
+                    flex_model["torsions_org"] += 1
+
+        setup.flexibility_model = flex_model
+
+        # add G pseudo atoms and set CG types
+        update_closure_atoms(setup, bonds_to_break, glue_pseudo_atoms)
+
+        return
+
 
     @staticmethod
     def get_atom_params(
@@ -286,9 +352,9 @@ class MoleculePreparation:
         self,
         mol,
         root_atom_index=None,
-        not_terminal_atoms=[],
-        delete_ring_bonds=[],
-        glue_pseudo_atoms={},
+        not_terminal_atoms=None,
+        delete_ring_bonds=None,
+        glue_pseudo_atoms=None,
         conformer_id=-1,
     ):
         """
@@ -303,6 +369,12 @@ class MoleculePreparation:
                                       each bond is a tuple of two ints (atom 0-indices)
             glue_pseudo_atoms (dict): keys are parent atom indices, values are (x, y, z)
         """
+        if not_terminal_atoms is None:
+            not_terminal_atoms = []
+        if delete_ring_bonds is None:
+            delete_ring_bonds = []
+        if glue_pseudo_atoms is None:
+            glue_pseudo_atoms = {}
         mol_type = type(mol)
         if not mol_type in self._classes_setup:
             raise TypeError(
@@ -363,59 +435,7 @@ class MoleculePreparation:
         if self.hydrate:
             self._water_builder.hydrate(setup)
 
-        # 5.  break macrocycles into open/linear form
-        if self.rigid_macrocycles:
-            break_combo_data = None
-            bonds_in_rigid_rings = set()
-            # every ring is rigid without macrocycle option
-            for ring in setup.rings:
-                for bond in setup.get_bonds_in_ring(ring):
-                    bonds_in_rigid_rings.add(bond)
-        else:
-            break_combo_data, bonds_in_rigid_rings = (
-                self._macrocycle_typer.search_macrocycle(setup, delete_ring_bonds)
-            )
-
-        # This must be done before calling get_flexibility_model
-        for bond in bonds_in_rigid_rings:
-            setup.bond[bond]["rotatable"] = False
-
-        flex_model, bonds_to_break = get_flexibility_model(
-            setup, root_atom_index, break_combo_data, glue_pseudo_atoms
-        )
-
-        # disasble rotatable bonds that rotate nothing (e.g. -CH3 without H)
-        # but glue atoms (i.e. CG) are manually marked as non terminal (by
-        # passing them in the `glue_atoms` list) to guarantee that the bond
-        # to a CG atom is rotatable and the G pseudo rotates
-        glue_atoms = []
-        for pair in bonds_to_break:
-            for index in pair:
-                glue_atoms.append(index)
-        merge_terminal_atoms(flex_model, not_terminal_atoms + glue_atoms) 
-
-        # bond to a terminal atom, or in a ring that isn't flexible
-        actual_rotatable = [v for k, v in flex_model["rigid_body_connectivity"].items()]
-        actual_rotatable.extend(bonds_to_break)
-        for bond in setup.bond:
-            if bond not in actual_rotatable:
-                setup.bond[bond]["rotatable"] = False
-
-        # calculate torsions that would be rotatable without macrocycle breaking
-        if break_combo_data is not None and len(break_combo_data["bond_break_combos"]):
-            ring_bonds = []
-            for ring in setup.rings:
-                for bond in setup.get_bonds_in_ring(ring):
-                    ring_bonds.append(bond)
-            flex_model["torsions_org"] = 0
-            for bond in setup.bond:
-                if setup.bond[bond]["rotatable"] and bond not in ring_bonds:
-                    flex_model["torsions_org"] += 1
-
-        setup.flexibility_model = flex_model
-
-        # add G pseudo atoms and set CG types
-        update_closure_atoms(setup, bonds_to_break, glue_pseudo_atoms)
+        self.calc_flex(setup, root_atom_index, not_terminal_atoms, delete_ring_bonds, glue_pseudo_atoms)
 
         if self.reactive_smarts is None:
             setups = [setup]
@@ -473,3 +493,4 @@ class MoleculePreparation:
         )
         with open(pdbqt_filename, "w") as w:
             w.write(self.write_pdbqt_string(add_index_map, remove_smiles))
+
