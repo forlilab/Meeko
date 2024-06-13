@@ -555,7 +555,7 @@ class LinkedRDKitChorizo:
                 raise ValueError(f"Residue IDs in set_template not found: {missing}")
 
         self.residues, self.log = self._get_residues(
-            raw_input_mols, ambiguous, residue_templates, set_template
+            raw_input_mols, ambiguous, residue_templates, set_template,  # bonds
         )
 
         print(
@@ -679,7 +679,7 @@ class LinkedRDKitChorizo:
         return best
 
     @classmethod
-    def _get_residues(cls, raw_input_mols, ambiguous, residue_templates, set_template):
+    def _get_residues(cls, raw_input_mols, ambiguous, residue_templates, set_template):  #, bonds):
 
         residues = {}
         log = {
@@ -845,7 +845,6 @@ class LinkedRDKitChorizo:
                         break
 
                 # print(residue_id, atom_index, link_label, adjacent_mol is not None, adjacent_atom_index)
-                print(residue_id, link_label)
                 padded_mol, mapidx = padders[link_label](
                     padded_mol, adjacent_mol, atom_index, adjacent_atom_index
                 )
@@ -906,45 +905,30 @@ class LinkedRDKitChorizo:
             msg = "can't find the following residues to delete: " + " ".join(missing)
             raise ValueError(msg)
 
-    def flexibilize_protein_sidechain(self, residue_id):
-        # TODO test disulfide raises error
-        print(f"FLEXIBILIZING {residue_id}")
+    def flexibilize_sidechain(self, residue_id, mk_prep):
         residue = self.residues[residue_id] 
         inv = {j: i for i, j in residue.molsetup_mapidx.items()}
         link_atoms = [inv[i] for i in residue.template.link_labels]
         if len(link_atoms) == 0:
             raise RuntimeError("can't define a sidechain without bonds to other residues")
-        elif len(link_atoms) == 1:
-            raise NotImplementedError("residue bonded to only one other residue")
-        else:
-            print(f"flexibilizing {residue_id} {link_atoms=}")
-            graph = residue.molsetup.graph
-            print("nr rot bonds", sum([b["rotatable"] for _, b in residue.molsetup.bond.items()]))
-            for i in range(len(link_atoms)-1):
-                start_node = link_atoms[i]
-                end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
-                backbone_paths = find_graph_paths(graph, start_node, end_nodes)
-                for path in backbone_paths:
-                    for i in range(len(path) - 1):
-                        idx1 = min(path[i], path[i + 1])
-                        idx2 = max(path[i], path[i + 1])
-                        residue.molsetup.bond[(idx1, idx2)]["rotatable"] = False
-            print("nr rot bonds", sum([b["rotatable"] for _, b in residue.molsetup.bond.items()]))
-            for (i, j), b in residue.molsetup.bond.items():
-                if b["rotatable"]:
-                    print("rotatable bond:", i, j)
-        print(dir(residue))
-        print(residue.molsetup_mapidx)
+        #elif len(link_atoms) == 1:
+        #    raise NotImplementedError("residue bonded to only one other residue")
+        graph = residue.molsetup.graph
+        for i in range(len(link_atoms)-1):
+            start_node = link_atoms[i]
+            end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
+            backbone_paths = find_graph_paths(graph, start_node, end_nodes)
+            for path in backbone_paths:
+                for i in range(len(path) - 1):
+                    idx1 = min(path[i], path[i + 1])
+                    idx2 = max(path[i], path[i + 1])
+                    residue.molsetup.bond[(idx1, idx2)]["rotatable"] = False
+        residue.is_movable = True
 
-                # new_setup = flex_builder(residue.molsetup, root_atom_index="?")
-        
-        #molsetup, mapidx, is_flexres_atom = self.res_to_molsetup(res, mk_prep,
-        #                                                         is_protein_sidechain=True,
-        #                                                         cut_at_calpha=cut_at_calpha)
-        #self.residues[res].molsetup = molsetup
-        #self.residues[res].molsetup_mapidx = mapidx
-        #self.residues[res].is_flexres_atom = is_flexres_atom
-        #self.residues[res].is_movable = True
+        mk_prep.calc_flex(
+            residue.molsetup,
+            root_atom_index=link_atoms[0],
+        )
         return
 
     @staticmethod

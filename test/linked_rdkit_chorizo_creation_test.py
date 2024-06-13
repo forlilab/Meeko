@@ -20,6 +20,7 @@ just_one_ALA_missing = pkgdir / "example/chorizo/just-one-ALA-missing-CB.pdb"
 just_one_ALA = pkgdir / "example/chorizo/just-one-ALA.pdb"
 just_three_residues = pkgdir / "example/chorizo/just-three-residues.pdb"
 disulfide_bridge = pkgdir / "test/linked_rdkit_chorizo_data/just_a_disulfide_bridge.pdb"
+loop_with_disulfide = pkgdir / "test/linked_rdkit_chorizo_data/loop_with_disulfide.pdb"
 
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
@@ -30,6 +31,20 @@ with open(meekodir / "data" / "residue_chem_templates.json") as f:
 chem_templates = ResidueChemTemplates.from_dict(t)
 mk_prep = MoleculePreparation()
 
+
+def test_flexres_pdbqt():
+    with open(loop_with_disulfide) as f:
+        pdb_string = f.read()
+    set_templates = {":6": "CYX", ":17": "CYX"} # TODO remove this to test use of bonds to set templates
+    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep, set_templates)
+    chorizo.flexibilize_sidechain(":11", mk_prep)
+    rigid, flex_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
+    nr_rigid_atoms = len(rigid.splitlines())
+    assert nr_rigid_atoms == 124
+    nr_flex_atoms = 0
+    for line in flex_dict[":11"].splitlines():
+        nr_flex_atoms += int(line.startswith("ATOM"))
+    assert nr_flex_atoms == 9
 
 def test_AHHY_all_static_residues():
     f = open(ahhy_example, "r")

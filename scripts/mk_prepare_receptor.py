@@ -438,9 +438,7 @@ else:
 #                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
 
 for res_id in all_flexres:
-    #print("Ooopsies: we momentarily don't support flexible sidechains")  # TODO
-    #sys.exit()
-    chorizo.flexibilize_protein_sidechain(res_id)  #, mk_prep, cut_at_calpha=True)
+    chorizo.flexibilize_sidechain(res_id, mk_prep)
 rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
 if args.chorizo_pickle is not None:
     with open(args.chorizo_pickle, "wb") as f:
@@ -482,7 +480,7 @@ else:
     reactive_flexres_count = 0
     for res_id, flexres_pdbqt in pdbqt["flex"].items():
         res_id = tuple(res_id.split(":"))
-        res_id = res_id[:2] + (int(res_id[2]),)
+        res_id = res_id[:1] + (int(res_id[1]),)
         if res_id in reactive_flexres:
             reactive_flexres_count += 1
             prefix_atype = "%d" % reactive_flexres_count

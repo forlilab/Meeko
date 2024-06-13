@@ -427,27 +427,26 @@ class PDBQTWriterLegacy():
         atom_count = 0
         flex_atom_count = 0
         for res_id in chorizo.get_valid_residues():
-            molsetup = chorizo.residues[res_id].molsetup
             chain, resnum = res_id.split(":")
+            molsetup = chorizo.residues[res_id].molsetup
             resnum = int(resnum)
             resname = chorizo.residues[res_id].input_resname
-            ### molsetup_mapidx = {} if chorizo.residues[res_id].molsetup_mapidx is None else chorizo.residues[res_id].molsetup_mapidx
-            is_flexres_atom = chorizo.residues[res_id].is_flexres_atom
-            for i, atom_ignore in molsetup.atom_ignore.items():
-                if atom_ignore or is_flexres_atom[i]:
-                    continue
-                atom_type = molsetup.atom_type[i]
-                coord = molsetup.coord[i]
-                atom_name = molsetup.pdbinfo[i].name
-                charge = molsetup.charge[i]
-                atom_count += 1
-                rigid_pdbqt_string += cls._make_pdbqt_line(
-                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type) + linesep
+            is_rigid_atom = [True for _ in molsetup.atom_ignore]
             if chorizo.residues[res_id].is_movable:
-                chain, resname, resnum = res_id.split(":")
-                molsetup = chorizo.residues[res_id].molsetup
+                is_rigid_atom = [False for _ in molsetup.atom_ignore]
                 original_ignore = molsetup.atom_ignore.copy()
-                molsetup.atom_ignore = {i: ig or not is_flexres_atom[i] for (i, ig) in molsetup.atom_ignore.items()}
+                graph = molsetup.flexibility_model["rigid_body_graph"]
+                root = molsetup.flexibility_model["root"]
+                if len(graph[root]) != 1:
+                    raise RuntimeError(f"flexible residue {res_id} has {len(graph[root])} rotatable bonds from root, must have 1")
+                conn = molsetup.flexibility_model["rigid_body_connectivity"]
+                rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
+                # from the root, use only the atom that is bonded to the only rotatable bond
+                root_link_idx = conn[(root, graph[root][0])][0]
+                for atom_idx, body_idx in rigid_index_by_atom.items():
+                    if body_idx == root and atom_idx != root_link_idx:
+                        is_rigid_atom[atom_idx] = True
+                        molsetup.atom_ignore[atom_idx] = True
                 this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup, remove_smiles=True)
                 molsetup.atom_ignore = original_ignore
                 if not ok:
@@ -456,10 +455,21 @@ class PDBQTWriterLegacy():
                     this_flex_pdbqt,
                     resname,
                     chain,
-                    resnum,
+                    int(resnum),
                     skip_rename_ca_cb=True,
                     atom_count=flex_atom_count)
                 flex_pdbqt_dict[res_id] = this_flex_pdbqt
+
+            for i, atom_ignore in molsetup.atom_ignore.items():
+                if atom_ignore or not is_rigid_atom[i]:
+                    continue
+                atom_type = molsetup.atom_type[i]
+                coord = molsetup.coord[i]
+                atom_name = molsetup.pdbinfo[i].name
+                charge = molsetup.charge[i]
+                atom_count += 1
+                rigid_pdbqt_string += cls._make_pdbqt_line(
+                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type) + linesep
         return rigid_pdbqt_string, flex_pdbqt_dict
 
     @classmethod
