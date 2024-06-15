@@ -1142,6 +1142,11 @@ class MoleculeSetup:
                 int(k): v
                 for k, v in molsetup.flexibility_model["rigid_body_members"].items()
             }
+        if "rigid_index_by_atom" in molsetup.flexibility_model:
+            molsetup.flexibility_model["rigid_index_by_atom"] = {
+                int(k): v
+                for k, v in molsetup.flexibility_model["rigid_index_by_atom"].items()
+            }
 
         molsetup.ring_closure_info = obj["ring_closure_info"]
         molsetup.restraints = [

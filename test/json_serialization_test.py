@@ -34,7 +34,7 @@ pkgdir = pathlib.Path(meeko.__file__).parents[1]
 meekodir = pathlib.Path(meeko.__file__).parents[0]
 
 # Test Data
-ahhy_example = pkgdir / "example/chorizo/AHHY.pdb"
+ahhy_example = pkgdir / "test/linked_rdkit_chorizo_data/AHHY.pdb"
 
 # Chorizo creation data
 with open(meekodir / "data" / "residue_chem_templates.json") as f:

@@ -537,6 +537,12 @@ class LinkedRDKitChorizo:
         # TODO integrate bonds with matches to distinguish CYX vs CYX-
         # and simplify SMARTS for adjacent res in padders
 
+        if type(raw_input_mols) != dict:
+            msg = f"expected raw_input_mols to be dict, got {type(raw_input_mols)}"
+            if type(raw_input_mols) == str:
+                msg += os_linesep
+                msg += "consider LinkedRDKitChorizo.from_pdb_string(pdbstr)" + os_linesep
+            raise ValueError(msg)
         self.residue_chem_templates = residue_chem_templates
         residue_templates = residue_chem_templates.residue_templates
         padders = residue_chem_templates.padders
@@ -552,7 +558,7 @@ class LinkedRDKitChorizo:
                 ]
             )
             if len(missing):
-                raise ValueError(f"Residue IDs in set_template not found: {missing}")
+                raise ValueError(f"Residue IDs in set_template not found: {missing} {raw_input_mols.keys()}")
 
         self.residues, self.log = self._get_residues(
             raw_input_mols, ambiguous, residue_templates, set_template,  # bonds
@@ -1741,7 +1747,6 @@ class ResidueChemTemplatesEncoder(json.JSONEncoder):
             }
             return output_dict
         return json.JSONEncoder.default(self, obj)
-
 
 class LinkedRDKitChorizoEncoder(json.JSONEncoder):
     """
