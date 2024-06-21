@@ -39,7 +39,7 @@ def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=
     return paths_found
             
 
-def find_inter_mols_bonds(mols):
+def find_inter_mols_bonds(mols_dict):
     covalent_radius = {  # from wikipedia
         1: 0.31,
         5: 0.84,
@@ -68,14 +68,15 @@ def find_inter_mols_bonds(mols):
     )
     cubes_min = []
     cubes_max = []
-    for mol in mols:
+    for key, (mol, _) in mols_dict.items():
         positions = mol.GetConformer().GetPositions()
         cubes_min.append(np.min(positions, axis=0))
         cubes_max.append(np.max(positions, axis=0))
     tmp = np.array([0, 0, 1, 1])
     pairs_to_consider = []
-    for i in range(len(mols)):
-        for j in range(i + 1, len(mols)):
+    keys = list(mols_dict)
+    for i in range(len(mols_dict)):
+        for j in range(i + 1, len(mols_dict)):
             do_consider = True
             for d in range(3):
                 x = (cubes_min[i][d], cubes_max[i][d], cubes_min[j][d], cubes_max[j][d])
@@ -85,12 +86,13 @@ def find_inter_mols_bonds(mols):
                 do_consider &= close_enough or has_overlap
             if do_consider:
                 pairs_to_consider.append((i, j))
-    bonds = []
+
+    bonds = {}  # key is pair mol indices, valuei is list of pairs of atom indices
     for i, j in pairs_to_consider:
-        p1 = mols[i].GetConformer().GetPositions()
-        p2 = mols[j].GetConformer().GetPositions()
-        for a1 in mols[i].GetAtoms():
-            for a2 in mols[j].GetAtoms():
+        p1 = mols_dict[keys[i]][0].GetConformer().GetPositions()
+        p2 = mols_dict[keys[j]][0].GetConformer().GetPositions()
+        for a1 in mols_dict[keys[i]][0].GetAtoms():
+            for a2 in mols_dict[keys[j]][0].GetAtoms():
                 vec = p1[a1.GetIdx()] - p2[a2.GetIdx()]
                 distsqr = np.dot(vec, vec)
                 cov_dist = (
@@ -98,9 +100,11 @@ def find_inter_mols_bonds(mols):
                     + covalent_radius[a2.GetAtomicNum()]
                 )
                 if distsqr < (allowance * cov_dist) ** 2:
-                    bonds.append((i, j, a1.GetIdx(), a2.GetIdx()))
-
-    return len(pairs_to_consider), bonds
+                    key = (keys[i], keys[j])
+                    value = (a1.GetIdx(), a2.GetIdx())
+                    bonds.setdefault(key, [])
+                    bonds[key].append(value)
+    return bonds
 
 
 def mapping_by_mcs(mol, ref):
@@ -469,8 +473,10 @@ class LinkedRDKitChorizo:
     ):
 
         raw_input_mols = cls._pdb_to_residue_mols(pdb_string)
+        bonds = find_inter_mols_bonds(raw_input_mols)
         chorizo = cls(
             raw_input_mols,
+            bonds,
             chem_templates,
             mk_prep,
             set_template,
@@ -490,8 +496,10 @@ class LinkedRDKitChorizo:
         allow_bad_res=False,
     ):
         raw_input_mols = cls._prody_to_residue_mols(prody_obj)
+        bonds = find_inter_mols_bonds(raw_input_mols)
         chorizo = cls(
             raw_input_mols,
+            bonds,
             chem_templates,
             mk_prep,
             set_template,
@@ -503,6 +511,7 @@ class LinkedRDKitChorizo:
     def __init__(
         self,
         raw_input_mols,
+        bonds,
         residue_chem_templates,
         mk_prep=None,
         set_template=None,
@@ -512,10 +521,12 @@ class LinkedRDKitChorizo:
         """
         Parameters
         ----------
-        raw_input_mols: dict (string -> RDKit Mol)
+        raw_input_mols: dict (string -> (RDKit Mol, string))
             keys are residue IDs <chain>:<resnum> such as "A:42"
-            values are RDKit Mols that will be matched to instances of ResidueTemplate,
+            values are tuples of an RDKit Mols and input resname.
+            RDKit mols will be matched to instances of ResidueTemplate,
             and may contain none, all, or some of the hydrogens.
+        bonds: dict ((string, string) -> (int, int))
         residue_chem_templates: ResidueChemTemplates
             one instance of it
         mk_prep: MoleculePreparation
@@ -531,8 +542,6 @@ class LinkedRDKitChorizo:
 
         # TODO allow_bad_res and residues to delete should exist only in wrapper class methods
         # such as cls.from_pdb_string and future cls.from_openmm, cls.from_prody, etc
-
-        # TODO move bonds calculation outta here to from_pdb_string and take bonds as arg here
 
         # TODO integrate bonds with matches to distinguish CYX vs CYX-
         # and simplify SMARTS for adjacent res in padders
@@ -560,8 +569,16 @@ class LinkedRDKitChorizo:
             if len(missing):
                 raise ValueError(f"Residue IDs in set_template not found: {missing} {raw_input_mols.keys()}")
 
+        # currently allowing only one bond per residue pair
+        if any([len(v) > 1 for k, v in bonds.items()]):
+            msg = "got more than one bond between some residue pairs:" + os_linesep
+            for key, value in repeated.items():
+                msg += f"{key}: {value}" + os_linesep
+            raise ValueError(msg)
+        bonds = {k: v[0] for k, v in bonds.items()}
+
         self.residues, self.log = self._get_residues(
-            raw_input_mols, ambiguous, residue_templates, set_template,  # bonds
+            raw_input_mols, ambiguous, residue_templates, set_template, bonds,
         )
 
         print(
@@ -574,10 +591,12 @@ class LinkedRDKitChorizo:
             residues_to_delete, self.residues
         )  # sets ChorizoResidue.user_deleted = True
 
-        # currently limied to max 1 bonde beteen each pair of residues
-        # TODO use raw mol indices rather than rdkit_mol indices to allow external topology
-        # TODO move _get_bonds call to cls.from_pdb_string and pass bonds as argument here
-        bonds = self._get_bonds(self.residues)
+        _bonds = {}
+        for key, bond in bonds.items():
+            invmap1 = {j: i for i, j in self.residues[key[0]].mapidx_to_raw.items()}
+            invmap2 = {j: i for i, j in self.residues[key[1]].mapidx_to_raw.items()}
+            _bonds[key] = (invmap1[bond[0]], invmap2[bond[1]])
+        bonds = _bonds
 
         # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
         padded_mols = self._build_padded_mols(self.residues, bonds, padders)
@@ -685,7 +704,7 @@ class LinkedRDKitChorizo:
         return best
 
     @classmethod
-    def _get_residues(cls, raw_input_mols, ambiguous, residue_templates, set_template):  #, bonds):
+    def _get_residues(cls, raw_input_mols, ambiguous, residue_templates, set_template, bonds):
 
         residues = {}
         log = {
@@ -783,41 +802,6 @@ class LinkedRDKitChorizo:
 
         return residues, log
 
-    @staticmethod
-    def _get_bonds(residues):
-        mols = [
-            residue.raw_rdkit_mol
-            for key, residue in residues.items()
-            if residue.rdkit_mol is not None
-        ]
-        keys = [
-            key for key, residue in residues.items() if residue.rdkit_mol is not None
-        ]
-        # t0 = time()
-        ### print("Starting find inter mols bonds", f"{len(mols)=}")
-        ### print(f"maximum nr of pairs to consider: {len(mols) * (len(mols)-1)}")
-        nr_pairs, bonds_ = find_inter_mols_bonds(mols)
-        bonds = {}
-        repeated = {}
-        for i, j, k, l in bonds_:
-            key = (keys[i], keys[j])
-            bond = (
-                residues[keys[i]].mapidx_from_raw[k],
-                residues[keys[j]].mapidx_from_raw[l],
-            )
-            if key in bonds:
-                repeated.setdefault(key, [bonds[key]])
-                repeated[key].append(bond)
-            else:
-                bonds[key] = bond
-        if len(repeated):
-            msg = "got more than one bond between some residue pairs:" + os_linesep
-            for key, value in repeated.items():
-                msg += f"{key}: {value}" + os_linesep
-            raise ValueError(msg)
-        # t = time()
-        # print(f"took {t-t0:.4f} seconds")
-        return bonds
 
     @staticmethod
     def _build_padded_mols(residues, bonds, padders):
@@ -2007,7 +1991,7 @@ def linked_rdkit_chorizo_json_decoder(obj: dict):
         obj["residue_chem_templates"]
     )
 
-    linked_rdkit_chorizo = LinkedRDKitChorizo({}, residue_chem_templates)
+    linked_rdkit_chorizo = LinkedRDKitChorizo({}, {}, residue_chem_templates)
     linked_rdkit_chorizo.residues = {
         k: chorizo_residue_json_decoder(v) for k, v in obj["residues"].items()
     }
