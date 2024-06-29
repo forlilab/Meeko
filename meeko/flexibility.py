@@ -9,6 +9,9 @@ from .utils import pdbutils
 
 
 def _calc_max_weighted_depth(model, seed_node, bonds_to_break, visited=None, depth=0):
+    # score a flexibility model based on the depth of the nesting. The number
+    # of atoms in a rigid group increases the weight of bonds.
+
     glue_atoms = []
     for (i, j) in bonds_to_break:
         glue_atoms.append(i)
@@ -33,6 +36,12 @@ def _calc_max_weighted_depth(model, seed_node, bonds_to_break, visited=None, dep
 
 
 def merge_terminal_atoms(flex_model, not_terminal_atoms=()):
+    # Rotatable bonds that link to a rigid body group that contains one atom
+    # are removed because that one atom lies on the bond axis and rotating
+    # the bond does not result in any movement of the atom. The atom after
+    # the removed rotatable bond is merged with the rigid body group that is
+    # upstream of the removed bond.
+
     members_dict = flex_model["rigid_body_members"]
     graph = flex_model["rigid_body_graph"]
     remove = {}
@@ -44,7 +53,6 @@ def merge_terminal_atoms(flex_model, not_terminal_atoms=()):
             and group_index != flex_model["root"]
         ):
             remove[group_index] = members[0]
-    flex_model["rigid_body_count"] -= len(remove)
     for group_index, atom_index in remove.items():
         host_index = graph[group_index][0]
         flex_model["rigid_body_members"].pop(group_index)
@@ -54,6 +62,7 @@ def merge_terminal_atoms(flex_model, not_terminal_atoms=()):
         flex_model["rigid_body_connectivity"].pop((host_index, group_index))
         flex_model["rigid_body_connectivity"].pop((group_index, host_index))
         flex_model["rigid_index_by_atom"][atom_index] = host_index
+    flex_model["rigid_body_count"] -= len(remove)
     return
 
 
@@ -61,7 +70,6 @@ def get_flexibility_model(
     molsetup,
     root_atom_index=None,
     break_combo_data=None,
-    glue_pseudo_atoms=None,
 ):
     # No macrocyclic rings are to be broken. We simply build the flexibility model.
     if break_combo_data is None or len(break_combo_data["bond_break_combos"]) == 0:
@@ -128,7 +136,8 @@ def get_flexibility_model(
 
 def get_root_body_index(model, root_atom_index=None):
 
-    if root_atom_index is not None:  # find rigid group that minimizes max_depth
+    # find and return index of rigid body group that contains root_atom_index
+    if root_atom_index is not None:
         for body_index in model["rigid_body_members"]:
             if (
                 root_atom_index in model["rigid_body_members"][body_index]
@@ -136,6 +145,7 @@ def get_root_body_index(model, root_atom_index=None):
                 root_body_index = body_index
                 return body_index
 
+    # find rigid group that minimizes weighted graph depth
     graph = deepcopy(model["rigid_body_graph"])
     while len(graph) > 2:  # remove leafs until 1 or 2 rigid groups remain
         leaves = []
@@ -163,7 +173,7 @@ def get_root_body_index(model, root_atom_index=None):
     return root_body_index
 
 
-def update_closure_atoms(molsetup, bonds_to_break, coords_dict):
+def update_closure_atoms(molsetup, bonds_to_break, glue_pseudo_atoms):
     """create pseudoatoms required by the flexible model with broken bonds"""
 
     for i, bond in enumerate(bonds_to_break):
@@ -175,10 +185,10 @@ def update_closure_atoms(molsetup, bonds_to_break, coords_dict):
         for idx in (0, 1):
             target = bond[1 - idx]
             anchor = bond[0 - idx]
-            if coords_dict is None or len(coords_dict) == 0:
+            if glue_pseudo_atoms is None or len(glue_pseudo_atoms) == 0:
                 coord = molsetup.get_coord(target)
             else:
-                coord = coords_dict[anchor]
+                coord = glue_pseudo_atoms[anchor]
             anchor_info = molsetup.pdbinfo[anchor]
             pdbinfo = pdbutils.PDBAtomInfo(
                 "G", anchor_info.resName, anchor_info.resNum, anchor_info.chain
