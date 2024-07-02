@@ -1,5 +1,6 @@
 import pathlib
 import json
+import logging
 from os import linesep as os_linesep
 from typing import Union
 
@@ -22,6 +23,9 @@ from .utils.prodyutils import prody_to_rdkit, ALLOWED_PRODY_TYPES
 from .utils.pdbutils import PDBAtomInfo
 
 import numpy as np
+
+
+logger = logging.getLogger("meeko.chorizo")
 
 
 def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=()):
@@ -470,10 +474,18 @@ class LinkedRDKitChorizo:
         set_template=None,
         residues_to_delete=None,
         allow_bad_res=False,
+        bonds_to_delete=None,
+        blunt_ends=None,
     ):
 
         raw_input_mols = cls._pdb_to_residue_mols(pdb_string)
         bonds = find_inter_mols_bonds(raw_input_mols)
+        if bonds_to_delete is not None:
+            for res1, res2 in bonds_to_delete:
+                if (res1, res2) in bonds:
+                    bonds.pop((res1, res2))
+                elif (res2, res1) in bonds:
+                    bonds.pop((res2, res1))
         chorizo = cls(
             raw_input_mols,
             bonds,
@@ -481,8 +493,10 @@ class LinkedRDKitChorizo:
             mk_prep,
             set_template,
             residues_to_delete,
-            allow_bad_res,
+            blunt_ends,
         )
+        if not allow_bad_res and len(chorizo.get_ignored_residues()):
+            raise RuntimeError("got unmatched residues")
         return chorizo
 
     @classmethod
@@ -494,9 +508,17 @@ class LinkedRDKitChorizo:
         set_template=None,
         residues_to_delete=None,
         allow_bad_res=False,
+        bonds_to_delete=None,
+        blunt_ends=None,
     ):
         raw_input_mols = cls._prody_to_residue_mols(prody_obj)
         bonds = find_inter_mols_bonds(raw_input_mols)
+        if bonds_to_delete is not None:
+            for res1, res2 in bonds_to_delete:
+                if (res1, res2) in bonds:
+                    bonds.pop((res1, res2))
+                elif (res2, res1) in bonds:
+                    bonds.pop((res2, res1))
         chorizo = cls(
             raw_input_mols,
             bonds,
@@ -504,8 +526,10 @@ class LinkedRDKitChorizo:
             mk_prep,
             set_template,
             residues_to_delete,
-            allow_bad_res,
+            blunt_ends,
         )
+        if not allow_bad_res and len(chorizo.get_ignored_residues()):
+            raise RuntimeError("got unmatched residues")
         return chorizo
 
     def __init__(
@@ -516,7 +540,7 @@ class LinkedRDKitChorizo:
         mk_prep=None,
         set_template=None,
         residues_to_delete=None,
-        allow_bad_res=False,
+        blunt_ends=None,
     ):
         """
         Parameters
@@ -536,15 +560,12 @@ class LinkedRDKitChorizo:
             values identify ResidueTemplate instances
         residues_to_delete: list (string)
             list of residue IDs (e.g.; "A:42") to mark as ignored
-        allow_bad_res: bool
-            mark unmatched residues as ignored instead of raising error
+        blunt_ends: list (tuple (string, int))
+            each tuple is residue IDs and 0-based atom index, e.g.; ("A:42", 0)
         """
 
-        # TODO allow_bad_res and residues to delete should exist only in wrapper class methods
-        # such as cls.from_pdb_string and future cls.from_openmm, cls.from_prody, etc
-
-        # TODO integrate bonds with matches to distinguish CYX vs CYX-
-        # and simplify SMARTS for adjacent res in padders
+        # TODO simplify SMARTS for adjacent res in padders
+        # TODO deleted residues up from init into classmethod constructors
 
         if type(raw_input_mols) != dict:
             msg = f"expected raw_input_mols to be dict, got {type(raw_input_mols)}"
@@ -578,23 +599,29 @@ class LinkedRDKitChorizo:
         bonds = {k: v[0] for k, v in bonds.items()}
 
         self.residues, self.log = self._get_residues(
-            raw_input_mols, ambiguous, residue_templates, set_template, bonds,
+            raw_input_mols, ambiguous, residue_templates, set_template, bonds, blunt_ends,
         )
-
-        print(
-            self.log
-        )  # TODO integrate with mk_prepare_receptor.py (former suggested_mutations)
-
+        
+        ## TODO integrate with mk_prepare_receptor.py (former suggested_mutations)
+        #failed = []
+        #for rid, res in self.residues.items():
+        #    if res.rdkit_mol is None:
+        #        failed.append(rid)
+        #if len(failed):
+        #    raise RuntimeError(f"no match for {failed}")
         if residues_to_delete is None:
             residues_to_delete = ()  # self._delete_residues expects an iterator
-        self._delete_residues(
-            residues_to_delete, self.residues
-        )  # sets ChorizoResidue.user_deleted = True
+        self._delete_residues(residues_to_delete, self.residues)
+
 
         _bonds = {}
         for key, bond in bonds.items():
-            invmap1 = {j: i for i, j in self.residues[key[0]].mapidx_to_raw.items()}
-            invmap2 = {j: i for i, j in self.residues[key[1]].mapidx_to_raw.items()}
+            res1 = self.residues[key[0]] 
+            res2 = self.residues[key[1]] 
+            if res1.rdkit_mol is None or res2.rdkit_mol is None:
+                continue
+            invmap1 = {j: i for i, j in res1.mapidx_to_raw.items()}
+            invmap2 = {j: i for i, j in res2.mapidx_to_raw.items()}
             _bonds[key] = (invmap1[bond[0]], invmap2[bond[1]])
         bonds = _bonds
 
@@ -682,36 +709,91 @@ class LinkedRDKitChorizo:
 
         return rdkit_mol
 
+    ### @staticmethod
+    ### def _match_bonds(raw_input_mol, residue_template, mapping, raw_atoms_with_bonds):
+    ###     """match between bonds a residue is involved and the link labels
+    ###     """
+    ###     to_raw = mapping
+    ###     from_raw = {value: key for (key, value) in to_raw.items()}
+    ###     return result
+
     @staticmethod
-    def _find_least_missing_Hs(raw_input_mol, residue_templates):
-        min_missing_Hs = float("+inf")
-        best = []
+    def _run_matching(raw_input_mol, residue_templates, bonds, residue_key, blunt_ends):
+        if blunt_ends is None:
+            blunt_ends = []
+        raw_atoms_with_bonds = []
+        for (r1, r2), (i, j) in bonds.items():
+            if r1 == residue_key:
+                raw_atoms_with_bonds.append(i)
+            if r2 == residue_key:
+                raw_atoms_with_bonds.append(j)
+        results = []
         for index, template in enumerate(residue_templates):
+
+            # match intra-residue graph
             match_stats, mapping = template.match(raw_input_mol)
-            if match_stats["heavy"]["missing"] or match_stats["heavy"]["excess"]:
+            from_raw = {value: key for (key, value) in mapping.items()}
+            
+            # match inter-residue bonds
+            gotten = set()
+            for raw_index in raw_atoms_with_bonds:
+                index = from_raw[raw_index]
+                gotten.add(index)
+
+            # blunt ends are treated like fake bonds
+            for res_id, atom_idx in blunt_ends:
+                if res_id == residue_key:
+                    index = from_raw[atom_idx]
+                    gotten.add(index)
+            if blunt_ends is not None:
+                print(f"{gotten=}")      
+            expected = set(template.link_labels)
+            result = {
+                "found": gotten.intersection(expected),
+                "missing": expected.difference(gotten),
+                "excess": gotten.difference(expected),
+            }
+            match_stats["bonds"] = result
+            match_stats["mapping"] = mapping
+
+            results.append(match_stats)
+        return results
+
+    @staticmethod
+    def _get_best_missing_Hs(results):
+        min_missing_H = 999999
+        best_idxs = []
+        fail_log = []
+        for i, result in enumerate(results):
+            fail_log.append([])
+            if result["heavy"]["missing"] > 0:
+                fail_log[-1].append("heavy missing")
+            if result["heavy"]["excess"] > 0:
+                fail_log[-1].append("heavy excess")
+            if result["H"]["excess"] > 0:
+                fail_log[-1].append("H excess")
+            if len(result["bonds"]["excess"]) > 0:
+                fail_log[-1].append("bonds excess")
+            if len(result["bonds"]["missing"]) > 0:
+                fail_log[-1].append(f"bonds missing at {result['bonds']['missing']}")
+            if len(fail_log[-1]):
                 continue
-            if match_stats["H"]["excess"]:
-                continue
-            if match_stats["H"]["missing"] == min_missing_Hs:
-                best.append(
-                    {"index": index, "match_stats": match_stats, "mapping": mapping}
-                )
-            elif match_stats["H"]["missing"] < min_missing_Hs:
-                best = [
-                    {"index": index, "match_stats": match_stats, "mapping": mapping}
-                ]
-                min_missing_Hs = match_stats["H"]["missing"]
-        return best
+            if result["H"]["missing"] < min_missing_H:
+                best_idxs = []
+                min_missing_H = result["H"]["missing"]
+            if result["H"]["missing"] == min_missing_H:
+                best_idxs.append(i)
+        return best_idxs, fail_log
 
     @classmethod
-    def _get_residues(cls, raw_input_mols, ambiguous, residue_templates, set_template, bonds):
-
+    def _get_residues(cls, raw_input_mols, ambiguous, residue_templates, set_template, bonds, blunt_ends):
         residues = {}
         log = {
             "chosen_by_fewest_missing_H": {},
             "chosen_by_default": {},
             "no_match": [],
             "no_mol": [],
+            "msg": "",
         }
         for residue_key, (raw_mol, input_resname) in raw_input_mols.items():
             if raw_mol is None:
@@ -719,89 +801,207 @@ class LinkedRDKitChorizo:
                     None, None, None, input_resname, None
                 )
                 log["no_mol"].append(residue_key)
+                logger.warning(f"molecule for {residue_key=} is None")
                 continue
+
             raw_mol_has_H = sum([a.GetAtomicNum() == 1 for a in raw_mol.GetAtoms()]) > 0
-            tolerate_excess_H = False
+            excess_H_ok = False
             if set_template is not None and residue_key in set_template:
-                template_key = set_template[
-                    residue_key
-                ]  # often resname or resname-like, e.g. HID, NALA
+                #match_stats, mapping = template.match(raw_mol)
+                excess_H_ok = True  # e.g. allow set LYN (NH2) from LYS (NH3+)
+                template_key = set_template[residue_key]  # e.g. HID, NALA
                 template = residue_templates[template_key]
-                match_stats, mapping = template.match(raw_mol)
-                tolerate_excess_H = (
-                    True  # allows setting LYN from protonated (LYS+) input
-                )
-            elif (
-                raw_mol_has_H
-                and input_resname in ambiguous
-                and len(ambiguous[input_resname]) > 1
-            ):
-                candidate_template_keys = ambiguous[input_resname]
-                candidate_templates = [
-                    residue_templates[key] for key in candidate_template_keys
-                ]
-                best_matches = cls._find_least_missing_Hs(raw_mol, candidate_templates)
-                if len(best_matches) > 1:
-                    raise RuntimeError(
-                        f"{len(best_matches)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties"
-                    )
-                elif len(best_matches) == 0:
-                    template_key = None
-                    template = None
-                else:
-                    match_stats = best_matches[0]["match_stats"]
-                    mapping = best_matches[0]["mapping"]
-                    index = best_matches[0]["index"]
-                    template_key = candidate_template_keys[index]
-                    template = residue_templates[template_key]
-                    log["chosen_by_fewest_missing_H"][residue_key] = template_key
-            elif (
-                input_resname in ambiguous
-            ):  # use default (first) template in ambiguous
-                template_key = ambiguous[input_resname][0]
-                template = residue_templates[template_key]
-                match_stats, mapping = template.match(raw_mol)
-                log["chosen_by_default"][residue_key] = template_key
-            else:
+                candidate_template_keys = [set_template[residue_key]]
+                candidate_templates = [template]
+            
+            elif input_resname not in ambiguous:
                 template_key = input_resname
                 template = residue_templates[template_key]
-                match_stats, mapping = template.match(raw_mol)
-
-            if (
-                template_key is None
-                or match_stats["heavy"]["missing"]
-                or match_stats["heavy"]["excess"]
-            ):
-                residues[residue_key] = ChorizoResidue(
-                    raw_mol, None, None, input_resname, template_key
-                )
-                log["no_match"].append(residue_key)
-                if residue_key in log["chosen_by_default"]:
-                    log["chosen_by_default"].pop(residue_key)
+                #match_stats, mapping = template.match(raw_mol)
+                candidate_template_keys = [template_key]
+                candidate_templates = [template]
+            elif len(ambiguous[input_resname]) == 1:
+                template_key = ambiguous[input_resname][0]
+                template = residue_templates[template_key]
+                #match_stats, mapping = template.match(raw_mol)
+                #log["chosen_by_default"][residue_key] = template_key
             else:
+                candidate_template_keys = []
+                candidate_templates = []
+                for key in ambiguous[input_resname]:
+                    template = residue_templates[key]
+                    candidate_templates.append(template)
+                    candidate_template_keys.append(key)
+            
+            # gather raw_mol atoms that have bonds or blunt ends
+            if blunt_ends is None:
+                blunt_ends = []
+            raw_atoms_with_bonds = []
+            for (r1, r2), (i, j) in bonds.items():
+                if r1 == residue_key:
+                    raw_atoms_with_bonds.append(i)
+                if r2 == residue_key:
+                    raw_atoms_with_bonds.append(j)
+
+            # compute matching
+            #passed = []
+            #passed_stats = []
+            #passed_mapping = []
+            all_stats = {
+                "heavy_missing": [],
+                "heavy_excess": [],
+                "H_excess": [],
+                "H_missing": [],
+                "bonded_atoms_missing": [],
+                "bonded_atoms_excess": [],
+            } 
+            mappings = []
+            for index, template in enumerate(candidate_templates):
+
+                # match intra-residue graph
+                match_stats, mapping = template.match(raw_mol)
+                mappings.append(mapping)
+
+                ### print(residue_key, candidate_template_keys[index])
+                ### print(match_stats)
+                ### if match_stats["heavy"]["missing"] > 0:
+                ###     continue
+                ### if match_stats["heavy"]["excess"] > 0:
+                ###     continue
+                ### if match_stats["H"]["excess"] and not excess_H_ok:
+                ###     continue
+
+                # match inter-residue bonds
+                atoms_with_bonds = set()
+                from_raw = {value: key for (key, value) in mapping.items()}
+                for raw_index in raw_atoms_with_bonds:
+                    atom_index = from_raw[raw_index]
+                    atoms_with_bonds.add(atom_index)
+                # we treat blunt ends like bonds
+                for res_id, atom_idx in blunt_ends:
+                    if res_id == residue_key:
+                        atoms_with_bonds.add(from_raw[atom_idx])
+                expected = set(template.link_labels)
+                bonded_atoms_found = atoms_with_bonds.intersection(expected)
+                bonded_atoms_missing = expected.difference(atoms_with_bonds)
+                bonded_atoms_excess = atoms_with_bonds.difference(expected)
+
+                all_stats["heavy_missing"].append(match_stats["heavy"]["missing"])
+                all_stats["heavy_excess"].append(match_stats["heavy"]["excess"])
+                all_stats["H_excess"].append(match_stats["H"]["excess"])
+                all_stats["H_missing"].append(match_stats["H"]["missing"])
+                all_stats["bonded_atoms_missing"].append(bonded_atoms_missing)
+                all_stats["bonded_atoms_excess"].append(bonded_atoms_excess)
+
+                #print(residue_key, candidate_template_keys[index])
+                #print(len(bonded_atoms_missing), len(bonded_atoms_excess), "<<<<<")
+
+                #if len(bonded_atoms_missing) > 0:
+                #    continue
+                #if len(bonded_atoms_excess) > 0:
+                #    continue
+
+                ## passed.append(index)  
+                ## passed_stats.append(match_stats)
+                ## passed_mapping.append(mapping)
+
+            passed = []
+            for i in range(len(all_stats["H_excess"])):
+                if (
+                    all_stats["heavy_missing"][i] or
+                    all_stats["heavy_excess"][i] or
+                    (all_stats["H_excess"][i] and not excess_H_ok) or
+                    len(all_stats["bonded_atoms_missing"][i]) or
+                    len(all_stats["bonded_atoms_excess"][i])
+                ):
+                    continue
+                passed.append(i)
+
+            #print(residue_key, len(passed), len(candidate_templates), "<--")
+
+            if len(passed) == 0:
+                #residues[residue_key] = ChorizoResidue(
+                #    raw_mol, None, None, input_resname, None,
+                #)
+                template_key = None
+                template = None
+                mapping = None
+                m = f"No template matched for {residue_key=}" + os_linesep
+                m += f"tried {len(candidate_templates)} templates for {residue_key=}"
+                m += f"{excess_H_ok=}"
+                m += os_linesep
+                for i in range(len(all_stats["H_excess"])):
+                    heavy_miss = all_stats["heavy_missing"][i]
+                    heavy_excess = all_stats["heavy_excess"][i]
+                    H_excess = all_stats["H_excess"][i]
+                    bond_miss = all_stats["bonded_atoms_missing"][i]
+                    bond_excess = all_stats["bonded_atoms_excess"][i]
+                    tkey = candidate_template_keys[i]
+                    m += f"{tkey:10} {heavy_miss=} {heavy_excess=} {H_excess=} {bond_miss=} {bond_excess=}" + os_linesep
+                logger.warn(m)
+            elif len(passed) == 1 or not raw_mol_has_H:
+                index = passed[0]
+                template_key = candidate_template_keys[index]
+                template = candidate_templates[index]
+                mapping = mappings[index] 
+                H_miss = all_stats["H_missing"][index]
+                #stats = all_stats[index]
+            else:
+                min_missing_H = 999999
+                for i, index in enumerate(passed):
+                    H_missed = all_stats["H_missing"][index]
+                    if H_missed < min_missing_H:
+                        best_idxs = [] 
+                        min_missing_H = H_missed
+                    if H_missed == min_missing_H:
+                        best_idxs.append(index)
+                
+                if len(best_idxs) > 1:
+                    m = f"for {residue_key=}, {len(passed)} have passed" + os_linesep
+                    tkeys = [candidate_template_keys[i] for i in passed]
+                    m += f"these are: {tkeys}" + os_linesep
+                    m += "and were evaluated for the number of missing H" 
+                    m += "however there was a tie between" # TODO
+                    logger.error(m)
+                        #f"{len(best_idxs)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties"
+                elif len(best_idxs) == 0:
+                    raise RuntimeError("unexpected situation")
+                else:
+                    index = best_idxs[0]
+                    template_key = candidate_template_keys[index]
+                    template = residue_templates[template_key]
+                    mapping = mappings[index]
+                    H_miss = all_stats["H_missing"][index]
+                    log["chosen_by_fewest_missing_H"][residue_key] = template_key
+            if template is None:
+                rdkit_mol = None
+                atom_names = None
+                mapping = None
+            else:
+                print(template_key, input_resname)
                 rdkit_mol = cls._build_rdkit_mol(
-                    raw_mol, template, mapping, match_stats["H"]["missing"]
+                    raw_mol, template, mapping, H_miss, # stats["H"]["missing"]
                 )
-                residues[residue_key] = ChorizoResidue(
-                    raw_mol,
-                    rdkit_mol,
-                    mapping,
-                    input_resname,
-                    template_key,
-                    template.atom_names,
-                )
-                residues[residue_key].template = template
-                if template.link_labels is not None:
-                    mapping_inv = residues[
-                        residue_key
-                    ].mapidx_from_raw  # {j: i for (i, j) in mapping.items()}
-                    link_labels = {
-                        i: label for i, label in template.link_labels.items()
-                    }
-                    residues[residue_key].link_labels = link_labels
+                atom_names = template.atom_names
+            residues[residue_key] = ChorizoResidue(
+                raw_mol,
+                rdkit_mol,
+                mapping,
+                input_resname,
+                template_key,
+                atom_names,
+            )
+            residues[residue_key].template = template
+            if template is not None and template.link_labels is not None:
+                mapping_inv = residues[
+                    residue_key
+                ].mapidx_from_raw  # {j: i for (i, j) in mapping.items()}
+                link_labels = {
+                    i: label for i, label in template.link_labels.items()
+                }
+                residues[residue_key].link_labels = link_labels
 
         return residues, log
-
 
     @staticmethod
     def _build_padded_mols(residues, bonds, padders):

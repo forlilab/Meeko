@@ -56,7 +56,10 @@ def test_flexres_pdbqt():
     with open(loop_with_disulfide) as f:
         pdb_string = f.read()
     set_templates = {":6": "CYX", ":17": "CYX"} # TODO remove this to test use of bonds to set templates
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep, set_templates)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_string, chem_templates, mk_prep, set_templates,
+        blunt_ends=[(":5", 0), (":18", 2)],
+    )
     chorizo.flexibilize_sidechain(":11", mk_prep)
     rigid, flex_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
     nr_rigid_atoms = len(rigid.splitlines())
@@ -69,7 +72,10 @@ def test_flexres_pdbqt():
 def test_AHHY_all_static_residues():
     f = open(ahhy_example, "r")
     pdb_string = f.read()
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_string, chem_templates, mk_prep,
+        blunt_ends=[("A:1", 0)],
+    )
     # Asserts that the residues have been imported in a way that makes sense, and that all the
     # private functions we expect to have run as expected.
     assert len(chorizo.residues) == 4
@@ -99,7 +105,10 @@ def test_AHHY_all_static_residues():
 def test_AHHY_padding():
     with open(ahhy_example, "r") as f:
         pdb_string = f.read()
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_string, chem_templates, mk_prep,
+        blunt_ends=[("A:1", 0)],
+    )
     assert len(chorizo.residues) == 4
     assert len(chorizo.get_ignored_residues()) == 0
 
@@ -111,7 +120,10 @@ def test_just_three_padded_mol():
     with open(just_three_residues, "r") as f:
         pdb_string = f.read()
     set_template = {":15": "NMET"}
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep, set_template=set_template)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_string, chem_templates, mk_prep, set_template=set_template,
+        blunt_ends=[(":17", 17)],
+    )
     assert len(chorizo.residues) == 3
     assert len(chorizo.get_ignored_residues()) == 0
     assert len(chorizo.get_valid_residues()) == 3
@@ -146,7 +158,9 @@ def test_AHHY_mutate_residues():
     with open(ahhy_example, "r") as f:
         pdb_string = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string, chem_templates, mk_prep, residues_to_delete=delete_residues, set_template=set_template
+        pdb_string, chem_templates, mk_prep,
+        residues_to_delete=delete_residues, set_template=set_template,
+        blunt_ends=[("A:1", 0)], 
     )
     assert len(chorizo.residues) == 4
     assert len(chorizo.get_ignored_residues()) == 0
@@ -174,15 +188,20 @@ def test_residue_missing_atoms():
     with open(just_one_ALA_missing, "r") as f:
         pdb_string = f.read()
 
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep, allow_bad_res=False)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_string, chem_templates, mk_prep, allow_bad_res=True,
+        blunt_ends=[("A:1", 0), ("A:1", 2)],    
+    )
     assert len(chorizo.get_valid_residues()) == 0
     assert len(chorizo.get_user_deleted_residues()) == 0
     assert len(chorizo.residues) == 1
     assert len(chorizo.get_ignored_residues()) == 1
 
     with pytest.raises(RuntimeError):
-        chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, chem_templates, mk_prep, allow_bad_res=False)
-
+        chorizo = LinkedRDKitChorizo.from_pdb_string(
+            pdb_string, chem_templates, mk_prep, allow_bad_res=False,
+            blunt_ends=[("A:1", 0), ("A:1", 2)],    
+        )
     return
 
 def test_AHHY_mk_prep_and_export():
@@ -191,7 +210,10 @@ def test_AHHY_mk_prep_and_export():
     mk_prep2 = MoleculePreparation(
         add_atom_types=[{"smarts": "[CH2,CH3]", "new_param": 42.0}]
     )
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_text, chem_templates, mk_prep2)
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_text, chem_templates, mk_prep2,
+        blunt_ends=[("A:1", 0)], 
+    )
     ap, xyz = chorizo.export_static_atom_params()
     # all parameters musthave same size
     assert len(set([len(values) for (key, values) in ap.items()])) == 1
@@ -201,46 +223,35 @@ def test_AHHY_mk_prep_and_export():
 def test_disulfides():
     with open(disulfide_bridge, "r") as f:
         pdb_text = f.read()
-
     # auto disulfide detection is enabled by default
-    chorizo_disulfide = LinkedRDKitChorizo(pdb_text)
+    chorizo_disulfide = LinkedRDKitChorizo.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("B:22", 0), ("B:22", 2), ("B:95", 0), ("B:95", 2)],
+    )
+    # the disulfide bond is detected, and it expects two paddings,
+    # but forcing CYS not CYX disables the padding, so error expected
+    with pytest.raises(RuntimeError):
+        chorizo_thiols = LinkedRDKitChorizo.from_pdb_string(
+            pdb_text,
+            chem_templates,
+            mk_prep,
+            set_template={"B:22": "CYS"},
+            blunt_ends=[("B:22", 0), ("B:22", 2), ("B:95", 0), ("B:95", 2)],
+        )
 
-    # no disulfides by forcing CYS22 to remain CYS (not CYX) and by disabling global disulfide detection
-    no_CYX_for_CYS22 = {"B:CYS:22": "B:CYS:22"}
-    chorizo_thiols = LinkedRDKitChorizo(pdb_text, mutate_res_dict=no_CYX_for_CYS22)
-    chorizo_thiols2 = LinkedRDKitChorizo(pdb_text, skip_auto_disulfide=True)
+    # remove bond and expect CYS between residues (currently, max one bond between each pair of residues)
+    chorizo_thiols = LinkedRDKitChorizo.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+        bonds_to_delete=[("B:22", "B:95")],
+        blunt_ends=[("B:22", 0), ("B:22", 2), ("B:95", 0), ("B:95", 2)],
+    )
 
     # check residue names
-    assert "B:CYS:22" in chorizo_thiols.residues
-    assert "B:CYS:95" in chorizo_thiols.residues
-    assert "B:CYS:22" in chorizo_thiols2.residues
-    assert "B:CYS:95" in chorizo_thiols2.residues
-    assert "B:CYX:22" in chorizo_disulfide.residues
-    assert "B:CYX:95" in chorizo_disulfide.residues
-    assert "B:CYX:22" not in chorizo_thiols.residues
-    assert "B:CYX:95" not in chorizo_thiols.residues
-    assert "B:CYX:22" not in chorizo_thiols2.residues
-    assert "B:CYX:95" not in chorizo_thiols2.residues
-    assert "B:CYS:22" not in chorizo_disulfide.residues
-    assert "B:CYS:95" not in chorizo_disulfide.residues
-
-    # check number of atoms
-    nr_CYS_atoms = 11
-    nr_CYX_atoms = 10
-    assert chorizo_thiols.residues["B:CYS:22"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
-    assert chorizo_thiols.residues["B:CYS:95"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
-    assert chorizo_thiols2.residues["B:CYS:22"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
-    assert chorizo_thiols2.residues["B:CYS:95"].rdkit_mol.GetNumAtoms() == nr_CYS_atoms
-    assert (
-        chorizo_disulfide.residues["B:CYX:22"].rdkit_mol.GetNumAtoms() == nr_CYX_atoms
-    )
-    assert (
-        chorizo_disulfide.residues["B:CYX:95"].rdkit_mol.GetNumAtoms() == nr_CYX_atoms
-    )
-
-    assert len(chorizo_thiols.residues["B:CYS:22"].molsetup.coord) == nr_CYS_atoms
-    assert len(chorizo_thiols.residues["B:CYS:95"].molsetup.coord) == nr_CYS_atoms
-    assert len(chorizo_thiols2.residues["B:CYS:22"].molsetup.coord) == nr_CYS_atoms
-    assert len(chorizo_thiols2.residues["B:CYS:95"].molsetup.coord) == nr_CYS_atoms
-    assert len(chorizo_disulfide.residues["B:CYX:22"].molsetup.coord) == nr_CYX_atoms
-    assert len(chorizo_disulfide.residues["B:CYX:95"].molsetup.coord) == nr_CYX_atoms
+    assert chorizo_disulfide.residues["B:22"].residue_template_key == "CYX"
+    assert chorizo_disulfide.residues["B:95"].residue_template_key == "CYX"
+    assert chorizo_thiols.residues["B:22"].residue_template_key == "CYS"
+    assert chorizo_thiols.residues["B:95"].residue_template_key == "CYS"

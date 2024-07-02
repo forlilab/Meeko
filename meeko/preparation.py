@@ -184,7 +184,7 @@ class MoleculePreparation:
             setup.bond[bond]["rotatable"] = False
 
         flex_model, bonds_to_break = get_flexibility_model(
-            setup, root_atom_index, break_combo_data, glue_pseudo_atoms
+            setup, root_atom_index, break_combo_data
         )
 
         # disasble rotatable bonds that rotate nothing (e.g. -CH3 without H)
