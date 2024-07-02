@@ -84,8 +84,6 @@ def get_flexibility_model(
         )
         if len(flex_model["visited"]) != nr_not_ignored:
             molsetup.show()
-            for key, value in flex_model.items():
-                print(key, value)
             msg = f"{len(flex_model['visited'])=} differs from not-ignored atoms {nr_not_ignored}"
             raise RuntimeError(msg)
         root_body_index = get_root_body_index(flex_model, root_atom_index)
@@ -111,22 +109,22 @@ def get_flexibility_model(
             for bond in molsetup.get_bonds_in_ring(ring):
                 unbroken_rings_bonds.append(bond)
 
-        model = walk_rigid_body_graph(molsetup, bond_break_combo, unbroken_rings_bonds)
+        flex_model = walk_rigid_body_graph(molsetup, bond_break_combo, unbroken_rings_bonds)
         nr_not_ignored = sum(
             [not molsetup.atom_ignore[i] for i in range(len(molsetup.atom_ignore))]
         )
-        if len(model["visited"]) != nr_not_ignored:
-            msg = f"{len(model['visited'])=} differs from not-ignored atoms {nr_not_ignored}"
+        if len(flex_model["visited"]) != nr_not_ignored:
+            msg = f"{len(flex_model['visited'])=} differs from not-ignored atoms {nr_not_ignored}"
             raise RuntimeError(msg)
-        root_body_index = get_root_body_index(model, root_atom_index)
-        model["root"] = root_body_index
-        depth_weighted = _calc_max_weighted_depth(model, model["root"], bond_break_combo)
+        root_body_index = get_root_body_index(flex_model, root_atom_index)
+        flex_model["root"] = root_body_index
+        depth_weighted = _calc_max_weighted_depth(flex_model, flex_model["root"], bond_break_combo)
         # larger bond_break_score is better, larget depth is worse
         # bond break score kinda disapeared in another branch (bonds are either breakable or not)
         score = depth_weighted - 0.001 * bond_break_score
         if score < best_score:
             best_score = score
-            best_model = model
+            best_model = flex_model
             best_index = index
 
     best_model["score"] = best_score
