@@ -189,7 +189,7 @@ def update_closure_atoms(molsetup, bonds_to_break, glue_pseudo_atoms):
                 coord = glue_pseudo_atoms[anchor]
             anchor_info = molsetup.pdbinfo[anchor]
             pdbinfo = pdbutils.PDBAtomInfo(
-                "G", anchor_info.resName, anchor_info.resNum, anchor_info.chain
+                "G", anchor_info.resName, anchor_info.resNum, anchor_info.icode, anchor_info.chain
             )
             pseudo_index = molsetup.add_pseudo(
                 coord=coord,

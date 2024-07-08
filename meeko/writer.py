@@ -321,7 +321,7 @@ class PDBQTWriterLegacy():
         pdbinfo = setup.pdbinfo[atom_idx]
         if pdbinfo is None:
             pdbinfo = pdbutils.PDBAtomInfo('', '', 0, '')
-        atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo)
+        atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo) # TODO icode
         coord = setup.coord[atom_idx]
         atom_type = setup.get_atom_type(atom_idx)
         charge = setup.charge[atom_idx]
@@ -330,15 +330,14 @@ class PDBQTWriterLegacy():
         return pdbqt_line
 
     @staticmethod
-    def _make_pdbqt_line(count, atom_name, res_name, chain, res_num, coord, charge, atom_type):
+    def _make_pdbqt_line(count, atom_name, res_name, chain, res_num, coord, charge, atom_type, icode=""):
         record_type = "ATOM"
         alt_id = " "
-        in_code = ""
         occupancy = 1.0
         temp_factor = 0.0
         atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
         pdbqt_line = atom.format(record_type, count, atom_name, alt_id, res_name, chain,
-                                 res_num, in_code, float(coord[0]), float(coord[1]), float(coord[2]),
+                                 res_num, icode, float(coord[0]), float(coord[1]), float(coord[2]),
                                  occupancy, temp_factor, charge, atom_type)
         return pdbqt_line
 
@@ -428,8 +427,13 @@ class PDBQTWriterLegacy():
         flex_atom_count = 0
         for res_id in chorizo.get_valid_residues():
             chain, resnum = res_id.split(":")
+            if resnum[-1].isalpha():
+                icode = resnum[-1]
+                resnum = int(resnum[:-1])
+            else:
+                icode = ""
+                resnum = int(resnum)
             molsetup = chorizo.residues[res_id].molsetup
-            resnum = int(resnum)
             resname = chorizo.residues[res_id].input_resname
             is_rigid_atom = [True for _ in molsetup.atom_ignore]
             if chorizo.residues[res_id].is_movable:
@@ -469,7 +473,7 @@ class PDBQTWriterLegacy():
                 charge = molsetup.charge[i]
                 atom_count += 1
                 rigid_pdbqt_string += cls._make_pdbqt_line(
-                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type) + linesep
+                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type, icode) + linesep
         return rigid_pdbqt_string, flex_pdbqt_dict
 
     @classmethod

@@ -1,5 +1,7 @@
 from rdkit import Chem
 from .utils import mini_periodic_table
+from .pdbutils import PDBAtomInfo
+
 
 """
 create new RDKIT residue
@@ -13,9 +15,6 @@ mi.SetTempFactor(0.0)
 source: https://sourceforge.net/p/rdkit/mailman/message/36404394/
 """
 
-from collections import namedtuple
-
-PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
 
 
 def getPdbInfoNoNull(atom):
@@ -30,13 +29,15 @@ def getPdbInfoNoNull(atom):
             name = '%-2s' % mini_periodic_table[atomic_number]
         chain = ' '
         resNum = 1
+        icode = ''
         resName = 'UNL'
     else:
         name = minfo.GetName()
         chain = minfo.GetChainId()
         resNum = minfo.GetResidueNumber()
+        icode = minfo.GetInsertionCode()
         resName = minfo.GetResidueName()
-    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, chain=chain)
+    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, icode=icode, chain=chain)
 
 
 class Mol2MolSupplier():

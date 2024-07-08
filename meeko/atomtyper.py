@@ -157,7 +157,7 @@ class AtomTyper:
             (atom_type, dist, theta, phi, pull_charge_fraction) = args
             offatom_coords = atomgeom.calc_point(dist, theta, phi, coords)
             tmp = molsetup.get_pdbinfo(atomgeom.parent+1)
-            pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.chain)
+            pdbinfo = pdbutils.PDBAtomInfo('G', tmp.resName, tmp.resNum, tmp.icode, tmp.chain)
             q_parent = (1 - pull_charge_fraction) * molsetup.charge[atomgeom.parent] 
             q_offsite = pull_charge_fraction * molsetup.charge[atomgeom.parent]
             pseudo_atom = {

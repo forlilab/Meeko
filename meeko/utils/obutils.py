@@ -15,10 +15,6 @@ from . import utils
 from . import pdbutils
 from .utils import mini_periodic_table
 
-# named tuple to contain information about an atom
-# PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
-# PDBResInfo  = namedtuple('PDBResInfo',       "resName resNum chain")
-
 
 def getAtomIdxCoords(obmol, atom_idx):
     """return coordinates of atom idx """

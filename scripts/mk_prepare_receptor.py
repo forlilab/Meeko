@@ -195,8 +195,9 @@ def get_args():
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument('-n', '--set_template',
-                                  help="e.g. '{\"A:323\":\"HID\"}'")
+                                  help="e.g. A:5,7=CYX,B:17=HID")
     config_group.add_argument(      '--delete_residues', help="e.g. '[\"A:350\", \"B:17\"]'")
+    config_group.add_argument(      '--blunt_ends', help="e.g. A:123,200=2,A:1=0")
     config_group.add_argument(      '--chorizo_config', help="[.json]")
     config_group.add_argument(      '--add_templates', help="[.json]")
     config_group.add_argument(      '--mk_config', help="[.json]")
@@ -380,16 +381,21 @@ if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
 # if args.pdb is not None:
 set_template = {}
 del_res = []
+blunt_ends = []
 if args.chorizo_config is not None:
     with open(args.chorizo_config) as f:
         chorizo_config = json.load(f)
     set_template.update(chorizo_config.get("set_template", {}))
     del_res.extend(chorizo_config.get("del_res", []))
+    blunt_ends.extend(chorizo_config.get("blunt_ends", []))
 # direct command line options override config
 if args.set_template is not None:
     j = parse_cmdline_res_assign(args.set_template)
-    print(j)
     set_template.update(j)
+if args.blunt_ends is not None:
+    j = parse_cmdline_res_assign(args.blunt_ends)
+    j = [(k, int(v)) for k,v in j.items()]
+    blunt_ends.extend(j) 
 if args.delete_residues is not None:
     del_res.update(json.loads(args.delete_residues))
 if args.mk_config is not None:
@@ -426,13 +432,17 @@ if args.macromol is not None:
         # we should do something with the header...
         input_obj, header = parser(args.macromol, header=True)
         chorizo = LinkedRDKitChorizo.from_prody(input_obj, templates,
-                                                mk_prep, set_template, del_res, args.allow_bad_res)
+                                                mk_prep, set_template, del_res, args.allow_bad_res,
+                                                blunt_ends=blunt_ends,
+        )
     # prody_mol = prody.
 else:
     with open(args.pdb) as f:
         pdb_string = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, templates, #residue_templates, padders, ambiguous,
-                                                     mk_prep, set_template, del_res, args.allow_bad_res)
+                                                     mk_prep, set_template, del_res, args.allow_bad_res,
+                                                     blunt_ends=blunt_ends,
+    )
 
 #  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
 #                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)

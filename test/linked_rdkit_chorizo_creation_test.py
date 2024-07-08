@@ -20,6 +20,7 @@ just_one_ALA = pkgdir / "test/linked_rdkit_chorizo_data/just-one-ALA.pdb"
 just_three_residues = pkgdir / "test/linked_rdkit_chorizo_data/just-three-residues.pdb"
 disulfide_bridge = pkgdir / "test/linked_rdkit_chorizo_data/just_a_disulfide_bridge.pdb"
 loop_with_disulfide = pkgdir / "test/linked_rdkit_chorizo_data/loop_with_disulfide.pdb"
+insertion_code = pkgdir / "test/linked_rdkit_chorizo_data/1igy_B_82-83_has-icode.pdb"
 
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
@@ -255,3 +256,17 @@ def test_disulfides():
     assert chorizo_disulfide.residues["B:95"].residue_template_key == "CYX"
     assert chorizo_thiols.residues["B:22"].residue_template_key == "CYS"
     assert chorizo_thiols.residues["B:95"].residue_template_key == "CYS"
+
+def test_insertion_code():
+    with open(insertion_code, "r") as f:
+        pdb_text = f.read()
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+            pdb_text,
+            chem_templates,
+            mk_prep,
+            blunt_ends=[("B:82", 0), ("B:83", 2)],
+    )
+
+    expected_res = set(("B:82", "B:82A", "B:82B", "B:82C", "B:83"))
+    res = set(chorizo.residues)
+    assert res == expected_res

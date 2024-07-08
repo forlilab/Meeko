@@ -122,72 +122,6 @@ def mapping_by_mcs(mol, ref):
     return atom_map
 
 
-def reassign_formal_charge(mol, ref, mapping):
-    # TODO this could be optimized
-    # TODO ref charges could be precalculated to speed up large structures
-    mol_charged_atoms = []
-    for idx, atom in enumerate(mol.GetAtoms()):
-        if atom.GetFormalCharge() != 0:
-            mol_charged_atoms.append(idx)
-
-    ref_charged_atoms = []
-    for idx, atom in enumerate(ref.GetAtoms()):
-        if atom.GetFormalCharge() != 0:
-            ref_charged_atoms.append(idx)
-
-    for k, v in mapping.items():
-        if k in ref_charged_atoms or v in mol_charged_atoms:
-            mol.GetAtomWithIdx(v).SetFormalCharge(
-                ref.GetAtomWithIdx(k).GetFormalCharge()
-            )
-
-    return mol
-
-
-def reassign_bond_orders(mol, ref, mapping):
-    # TODO this could be optimized
-    for i in mapping.keys():
-        for ref_bond in ref.GetAtomWithIdx(i).GetBonds():
-            j = ref_bond.GetOtherAtomIdx(i)
-            if j in mapping.keys():
-                mol_bond = mol.GetBondBetweenAtoms(mapping[i], mapping[j])
-                mol_bond.SetBondType(ref_bond.GetBondType())
-    return mol
-
-
-def h_coord_from_dipeptide(pdb1, pdb2):
-    mol = Chem.MolFromPDBBlock(pdb1 + pdb2)
-    if mol is None:
-        print(pdb1)
-        print(pdb2)
-        raise RuntimeError
-    mol_h = Chem.AddHs(mol, addCoords=True)
-    ps = Chem.SmilesParserParams()
-    ps.removeHs = False
-    template = Chem.MolFromSmiles("C(=O)C([H])N([H])C(=O)C([H])N", ps)
-    h_idx = 5
-    atom_map = mapping_by_mcs(template, mol_h)
-
-    return mol_h.GetConformer().GetAtomPosition(atom_map[h_idx])
-
-
-def h_coord_random_n_terminal(mol, debug=False):
-    idx = mol.GetSubstructMatches(Chem.MolFromSmarts("[Nh1H2X3+0][CX4]"))
-    assert len(idx) == 1, f"expected 1 backbone match got {len(idx)}"
-    nitrogen = mol.GetAtomWithIdx(idx[0][0])
-    nitrogen.SetBoolProp("this_N", True)
-    mol_no_h = Chem.RemoveHs(mol)
-    for atom in mol_no_h.GetAtoms():
-        if atom.HasProp("this_N") and atom.GetBoolProp("this_N"):
-            bb_n_idx = atom.GetIdx()
-    mol_h = Chem.AddHs(mol_no_h, addCoords=True)
-    # positions = mol_h.GetConformer().GetPositions()
-    bb_n = mol_h.GetAtomWithIdx(bb_n_idx)
-    for neighbor in bb_n.GetNeighbors():
-        if neighbor.GetAtomicNum() == 1:
-            return mol_h.GetConformer().GetAtomPosition(neighbor.GetIdx())
-
-
 def _snap_to_int(value, tolerance=0.12):
     for inc in [-1, 0, 1]:
         if abs(value - int(value) - inc) <= tolerance:
@@ -682,8 +616,13 @@ class LinkedRDKitChorizo:
             for i, j in enumerate(not_ignored_idxs):
                 molsetup.charge[j] = charges[i]
                 atom_name = atom_names[residue.molsetup_mapidx[j]]
+                if resnum[-1].isalpha():
+                    icode = resnum[-1]
+                    resnum = resnum[:-1]
+                else:
+                    icode = ""
                 molsetup.pdbinfo[j] = PDBAtomInfo(
-                    atom_name, resname, int(resnum), chain
+                    atom_name, resname, int(resnum), icode, chain
                 )
         return
 
@@ -708,14 +647,6 @@ class LinkedRDKitChorizo:
             update_H_positions(rdkit_mol, idxs)
 
         return rdkit_mol
-
-    ### @staticmethod
-    ### def _match_bonds(raw_input_mol, residue_template, mapping, raw_atoms_with_bonds):
-    ###     """match between bonds a residue is involved and the link labels
-    ###     """
-    ###     to_raw = mapping
-    ###     from_raw = {value: key for (key, value) in to_raw.items()}
-    ###     return result
 
     @staticmethod
     def _run_matching(raw_input_mol, residue_templates, bonds, residue_key, blunt_ends):
@@ -807,7 +738,6 @@ class LinkedRDKitChorizo:
             raw_mol_has_H = sum([a.GetAtomicNum() == 1 for a in raw_mol.GetAtoms()]) > 0
             excess_H_ok = False
             if set_template is not None and residue_key in set_template:
-                #match_stats, mapping = template.match(raw_mol)
                 excess_H_ok = True  # e.g. allow set LYN (NH2) from LYS (NH3+)
                 template_key = set_template[residue_key]  # e.g. HID, NALA
                 template = residue_templates[template_key]
@@ -817,14 +747,11 @@ class LinkedRDKitChorizo:
             elif input_resname not in ambiguous:
                 template_key = input_resname
                 template = residue_templates[template_key]
-                #match_stats, mapping = template.match(raw_mol)
                 candidate_template_keys = [template_key]
                 candidate_templates = [template]
             elif len(ambiguous[input_resname]) == 1:
                 template_key = ambiguous[input_resname][0]
                 template = residue_templates[template_key]
-                #match_stats, mapping = template.match(raw_mol)
-                #log["chosen_by_default"][residue_key] = template_key
             else:
                 candidate_template_keys = []
                 candidate_templates = []
@@ -843,10 +770,6 @@ class LinkedRDKitChorizo:
                 if r2 == residue_key:
                     raw_atoms_with_bonds.append(j)
 
-            # compute matching
-            #passed = []
-            #passed_stats = []
-            #passed_mapping = []
             all_stats = {
                 "heavy_missing": [],
                 "heavy_excess": [],
@@ -861,15 +784,6 @@ class LinkedRDKitChorizo:
                 # match intra-residue graph
                 match_stats, mapping = template.match(raw_mol)
                 mappings.append(mapping)
-
-                ### print(residue_key, candidate_template_keys[index])
-                ### print(match_stats)
-                ### if match_stats["heavy"]["missing"] > 0:
-                ###     continue
-                ### if match_stats["heavy"]["excess"] > 0:
-                ###     continue
-                ### if match_stats["H"]["excess"] and not excess_H_ok:
-                ###     continue
 
                 # match inter-residue bonds
                 atoms_with_bonds = set()
@@ -893,18 +807,6 @@ class LinkedRDKitChorizo:
                 all_stats["bonded_atoms_missing"].append(bonded_atoms_missing)
                 all_stats["bonded_atoms_excess"].append(bonded_atoms_excess)
 
-                #print(residue_key, candidate_template_keys[index])
-                #print(len(bonded_atoms_missing), len(bonded_atoms_excess), "<<<<<")
-
-                #if len(bonded_atoms_missing) > 0:
-                #    continue
-                #if len(bonded_atoms_excess) > 0:
-                #    continue
-
-                ## passed.append(index)  
-                ## passed_stats.append(match_stats)
-                ## passed_mapping.append(mapping)
-
             passed = []
             for i in range(len(all_stats["H_excess"])):
                 if (
@@ -917,12 +819,7 @@ class LinkedRDKitChorizo:
                     continue
                 passed.append(i)
 
-            #print(residue_key, len(passed), len(candidate_templates), "<--")
-
             if len(passed) == 0:
-                #residues[residue_key] = ChorizoResidue(
-                #    raw_mol, None, None, input_resname, None,
-                #)
                 template_key = None
                 template = None
                 mapping = None
@@ -945,7 +842,6 @@ class LinkedRDKitChorizo:
                 template = candidate_templates[index]
                 mapping = mappings[index] 
                 H_miss = all_stats["H_missing"][index]
-                #stats = all_stats[index]
             else:
                 min_missing_H = 999999
                 for i, index in enumerate(passed):
@@ -963,7 +859,6 @@ class LinkedRDKitChorizo:
                     m += "and were evaluated for the number of missing H" 
                     m += "however there was a tie between" # TODO
                     logger.error(m)
-                        #f"{len(best_idxs)} templates have fewest missing Hs to {residue_key} please change templates or input to avoid ties"
                 elif len(best_idxs) == 0:
                     raise RuntimeError("unexpected situation")
                 else:
@@ -978,9 +873,8 @@ class LinkedRDKitChorizo:
                 atom_names = None
                 mapping = None
             else:
-                print(template_key, input_resname)
                 rdkit_mol = cls._build_rdkit_mol(
-                    raw_mol, template, mapping, H_miss, # stats["H"]["missing"]
+                    raw_mol, template, mapping, H_miss,
                 )
                 atom_names = template.atom_names
             residues[residue_key] = ChorizoResidue(
@@ -996,6 +890,7 @@ class LinkedRDKitChorizo:
                 mapping_inv = residues[
                     residue_key
                 ].mapidx_from_raw  # {j: i for (i, j) in mapping.items()}
+                # TODO check here mapping_inv unnused
                 link_labels = {
                     i: label for i, label in template.link_labels.items()
                 }
@@ -1012,7 +907,6 @@ class LinkedRDKitChorizo:
             residue_id,
             residue,
         ) in residues.items():
-            # print(residue_id, residue.rdkit_mol is not None)
             if residue.rdkit_mol is None:
                 continue
             padded_mol = residue.rdkit_mol
@@ -1034,7 +928,6 @@ class LinkedRDKitChorizo:
                         bond_use_count[(r1_id, r2_id)] += 1
                         break
 
-                # print(residue_id, atom_index, link_label, adjacent_mol is not None, adjacent_atom_index)
                 padded_mol, mapidx = padders[link_label](
                     padded_mol, adjacent_mol, atom_index, adjacent_atom_index
                 )
@@ -1047,7 +940,6 @@ class LinkedRDKitChorizo:
                         continue  # padding atom from previous iteration for another link_label
                     tmp[i] = mapidx_pad[j]
                 mapidx_pad = tmp
-                # print(f"{mapidx_pad=}")
 
             # update position of hydrogens bonded to link atoms
             inv = {j: i for (i, j) in mapidx_pad.items()}

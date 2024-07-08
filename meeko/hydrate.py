@@ -336,7 +336,7 @@ class HydrateMoleculeLegacy:
         for water_anchor, waters_on_anchor in zip(water_anchors, water_positions):
             for water_on_anchor in waters_on_anchor:
                 tmp = setup.pdbinfo[water_anchor]
-                pdbinfo = pdbutils.PDBAtomInfo('WAT', tmp.resName, tmp.resNum, tmp.chain)
+                pdbinfo = pdbutils.PDBAtomInfo('WAT', tmp.resName, tmp.resNum, tmp.icode, tmp.chain)
                 setup.add_pseudo(
                         coord=water_on_anchor,
                         charge=self._charge,
