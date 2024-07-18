@@ -689,9 +689,10 @@ class LinkedRDKitChorizo:
 
         # currently allowing only one bond per residue pair
         if any([len(v) > 1 for k, v in bonds.items()]):
-            msg = "got more than one bond between some residue pairs:" + os_linesep
-            for key, value in repeated.items():
-                msg += f"{key}: {value}" + os_linesep
+            msg = "got more than one bond between some residue pairs:"
+            for key, value in bonds.items():
+                if len(value) > 1:
+                    msg += f" {key}"
             raise ValueError(msg)
         bonds = {k: v[0] for k, v in bonds.items()}
 
