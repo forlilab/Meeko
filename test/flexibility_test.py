@@ -7,6 +7,7 @@ from meeko import MoleculePreparation
 
 workdir = pathlib.Path(__file__).parents[0]
 
+
 def run(
     folder,
     fn,
@@ -42,7 +43,6 @@ def run(
             actual_members.add(tuple(sorted(members)))
         assert actual_members == expected_members
     return
-
 
 
 def test_non_sequential_atom_ordering_01():
@@ -86,6 +86,7 @@ def test_non_sequential_atom_ordering_03():
         ],
     )
 
+
 def test_non_sequential_atom_ordering_04():
     """this one lacks aliphatic C-C bond and can't break under CG/G typing"""
     run(
@@ -94,6 +95,7 @@ def test_non_sequential_atom_ordering_04():
         expected_rot_bonds=set(),
         expected_sizes_of_rigid_bodies=[19],
     )
+
 
 def test_non_sequential_atom_ordering_05():
     """two rings, one breakable, and one lacking an aliphatic C-C bond

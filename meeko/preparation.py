@@ -8,12 +8,11 @@ from inspect import signature
 import json
 import os
 import pathlib
-import sys
-from collections import OrderedDict
 import warnings
 
 from rdkit import Chem
 
+import meeko.macrocycle
 from .molsetup import OBMoleculeSetup
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
@@ -44,8 +43,29 @@ else:
 warnings.filterwarnings("default", category=DeprecationWarning)
 
 
-
 class MoleculePreparation:
+    """
+    Attributes
+    ----------
+    deprecated_setup_access:
+    merge_these_atom_types: tuple
+    hydrate: bool
+    flexible_amides: bool
+    rigid_macrocycles: bool
+    min_ring_size: int
+    max_ring_size: int
+    keep_chorded_rings: bool
+    keep_equivalent_rings: bool
+    double_bond_penalty: float
+    rigidify_bonds_smarts: list
+    rigidify_bonds_indices: list
+
+    input_atom_params:
+    load_atom_params:
+    add_atom_types:
+
+    atom_params:
+    """
 
     packaged_params = {}
     for path in params_dir.glob("*.json"):  # e.g. data/params/ad4_types.json
@@ -58,11 +78,11 @@ class MoleculePreparation:
         hydrate=False,
         flexible_amides=False,
         rigid_macrocycles=False,
-        min_ring_size=7,
-        max_ring_size=33,
+        min_ring_size=meeko.macrocycle.DEFAULT_MIN_RING_SIZE,
+        max_ring_size=meeko.macrocycle.DEFAULT_MAX_RING_SIZE,
         keep_chorded_rings=False,
         keep_equivalent_rings=False,
-        double_bond_penalty=50,
+        double_bond_penalty=meeko.macrocycle.DEFAULT_DOUBLE_BOND_PENALTY,
         rigidify_bonds_smarts=[],
         rigidify_bonds_indices=[],
         input_atom_params=None,
@@ -77,6 +97,33 @@ class MoleculePreparation:
         add_index_map=False,
         remove_smiles=False,
     ):
+        """
+
+        Parameters
+        ----------
+        merge_these_atom_types
+        hydrate
+        flexible_amides
+        rigid_macrocycles
+        min_ring_size
+        max_ring_size
+        keep_chorded_rings
+        keep_equivalent_rings
+        double_bond_penalty
+        rigidify_bonds_smarts
+        rigidify_bonds_indices
+        input_atom_params
+        load_atom_params
+        add_atom_types
+        input_offatom_params
+        load_offatom_params
+        charge_model
+        dihedral_model
+        reactive_smarts
+        reactive_smarts_idx
+        add_index_map
+        remove_smiles
+        """
 
         self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
@@ -158,14 +205,56 @@ class MoleculePreparation:
                 "reactive_smarts and reactive_smarts_idx require each other"
             )
 
-    def calc_flex(self, setup, root_atom_index=None, not_terminal_atoms=None, delete_ring_bonds=None, glue_pseudo_atoms=None):
+    @classmethod
+    def from_config(cls, config):
+        """
 
+        Parameters
+        ----------
+        config
+
+        Returns
+        -------
+
+        """
+        expected_keys = cls.get_defaults_dict().keys()
+        bad_keys = [k for k in config if k not in expected_keys]
+        if len(bad_keys) > 0:
+            err_msg = (
+                "unexpected keys in MoleculePreparation.from_config():" + os.linesep
+            )
+            for key in bad_keys:
+                err_msg += "  - %s" % key + os.linesep
+            raise ValueError(err_msg)
+        p = cls(**config)
+        return p
+
+    def calc_flex(
+        self,
+        setup,
+        root_atom_index=None,
+        not_terminal_atoms=None,
+        delete_ring_bonds=None,
+        glue_pseudo_atoms=None,
+    ):
+        """
+
+        Parameters
+        ----------
+        setup
+        root_atom_index
+        not_terminal_atoms
+        delete_ring_bonds
+        glue_pseudo_atoms
+
+        Returns
+        -------
+
+        """
         if not_terminal_atoms is None:
             not_terminal_atoms = []
         if delete_ring_bonds is None:
             delete_ring_bonds = []
-        if glue_pseudo_atoms is None:
-            glue_pseudo_atoms = {}
         # 5.  break macrocycles into open/linear form
         if self.rigid_macrocycles:
             break_combo_data = None
@@ -195,7 +284,7 @@ class MoleculePreparation:
         for pair in bonds_to_break:
             for index in pair:
                 glue_atoms.append(index)
-        merge_terminal_atoms(flex_model, not_terminal_atoms + glue_atoms) 
+        merge_terminal_atoms(flex_model, not_terminal_atoms + glue_atoms)
 
         # bond to a terminal atom, or in a ring that isn't flexible
         actual_rotatable = [v for k, v in flex_model["rigid_body_connectivity"].items()]
@@ -222,11 +311,23 @@ class MoleculePreparation:
 
         return
 
-
     @staticmethod
     def get_atom_params(
         input_atom_params, load_atom_params, add_atom_types, packaged_params
     ):
+        """
+
+        Parameters
+        ----------
+        input_atom_params
+        load_atom_params
+        add_atom_types
+        packaged_params
+
+        Returns
+        -------
+
+        """
         atom_params = {}
         if type(load_atom_params) == str:
             load_atom_params = [load_atom_params]
@@ -296,26 +397,24 @@ class MoleculePreparation:
             group_keys = list(atom_params.keys())
             if len(group_keys) != 1:
                 msg = "add_atom_types is usable only when there is one group of parameters"
-                msg += ", but there are %d groups: %s" % (len(keys), str(keys))
+                msg += ", but there are %d groups: %s" % (
+                    len(group_keys),
+                    str(group_keys),
+                )
                 raise RuntimeError(msg)
             key = group_keys[0]
             atom_params[key].extend(add_atom_types)
 
         return atom_params
 
-        ### else:
-        ###     msg = "When atom_params is a list, it must consist of either:" + os.linesep
-        ###     msg += "  - strings (to look up default JSON files in the data dir)" + os.linesep
-        ###     msg += "  - or dictionaries (to be used directly). For example:" + os.linesep
-        ###     msg += "                  {\"SMARTS\": \"[B]\", \"atype\": \"C\"}" + os.linesep
-        ###     msg += "A total of %d types were found in atom_params:" % (len(types)) + os.linesep
-        ###     msg += str(types) + os.linesep
-        ###     raise ValueError(msg)
-        ###
-        ### #for value in atom_params:
-
     @property
     def setup(self):
+        """
+
+        Returns
+        -------
+
+        """
         msg = "MoleculePreparation.setup is deprecated in Meeko v0.5."
         msg += (
             " MoleculePreparation.prepare() returns a list of MoleculeSetup instances."
@@ -325,25 +424,17 @@ class MoleculePreparation:
 
     @classmethod
     def get_defaults_dict(cls):
+        """
+
+        Returns
+        -------
+
+        """
         defaults = {}
         sig = signature(cls)
         for key in sig.parameters:
             defaults[key] = sig.parameters[key].default
         return defaults
-
-    @classmethod
-    def from_config(cls, config):
-        expected_keys = cls.get_defaults_dict().keys()
-        bad_keys = [k for k in config if k not in expected_keys]
-        if len(bad_keys) > 0:
-            err_msg = (
-                "unexpected keys in MoleculePreparation.from_config():" + os.linesep
-            )
-            for key in bad_keys:
-                err_msg += "  - %s" % key + os.linesep
-            raise ValueError(err_msg)
-        p = cls(**config)
-        return p
 
     def __call__(self, *args):
         return self.prepare(*args)
@@ -358,17 +449,28 @@ class MoleculePreparation:
         conformer_id=-1,
     ):
         """
-        Create molecule setup from RDKit molecule
+        Create an RDKitMoleculeSetup from an RDKit Mol object.
 
-        Args:
-            mol (rdkit.Chem.rdchem.Mol): with explicit hydrogens and 3D coordinates
-            root_atom_index (int): to set ROOT of torsion tree instead of searching
-            not_terminal_atoms (list): make bonds with terminal atoms rotatable
-                                       (e.g. C-Alpha carbon in flexres)
-            delete_ring_bonds (list): bonds deleted for macrocycle flexibility
-                                      each bond is a tuple of two ints (atom 0-indices)
-            glue_pseudo_atoms (dict): keys are parent atom indices, values are (x, y, z)
+        Parameters
+        ----------
+        mol: rdkit.Chem.rdchem.Mol
+            An RDKit Mol with explicit hydrogens and 3D coordinates.
+        root_atom_index: int
+            Used to set ROOT of torsion tree instead of searching.
+        not_terminal_atoms: list
+            Makes bonds with terminal atoms rotatable (e.g. C-Alpha carbon in flexres).
+        delete_ring_bonds: list[tuple[int, int]]
+            Bonds deleted for macrocycle flexibility. Each bond is a tuple of two ints (atom 0-indices).
+        glue_pseudo_atoms: dict
+            Mapping from parent atom indices to coordinates.
+        conformer_id: int
+
+        Returns
+        -------
+        setups: list[RDKitMoleculeSetup]
+            Returns a list of generated RDKitMoleculeSetups
         """
+
         if not_terminal_atoms is None:
             not_terminal_atoms = []
         if delete_ring_bonds is None:
@@ -435,7 +537,13 @@ class MoleculePreparation:
         if self.hydrate:
             self._water_builder.hydrate(setup)
 
-        self.calc_flex(setup, root_atom_index, not_terminal_atoms, delete_ring_bonds, glue_pseudo_atoms)
+        self.calc_flex(
+            setup,
+            root_atom_index,
+            not_terminal_atoms,
+            delete_ring_bonds,
+            glue_pseudo_atoms,
+        )
 
         if self.reactive_smarts is None:
             setups = [setup]
@@ -458,6 +566,24 @@ class MoleculePreparation:
 
     @staticmethod
     def check_external_ring_break(molsetup, break_ring_bonds, glue_pseudo_atoms):
+        """
+
+        Parameters
+        ----------
+        molsetup: RDKitMoleculeSetup
+        break_ring_bonds:
+        glue_pseudo_atoms: dict
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError:
+            If bonds are missing from the MoleculeSetup, if glue_pseudo_atoms is missing certain atom indices, and if
+            there is an incorrect number of coordinates in glue_pseudo_atoms.
+        """
         for index1, index2 in break_ring_bonds:
             has_bond = molsetup.get_bond_id(index1, index2) in molsetup.bond
             if not has_bond:
@@ -471,8 +597,16 @@ class MoleculePreparation:
                         "expected 3 coordinates (got %d) for glue pseudo of atom %d"
                         % (len(xyz), index)
                     )
+        return
 
-    def write_pdbqt_string(self, add_index_map=None, remove_smiles=None):
+    def write_pdbqt_string(self):
+        """
+        Writes a PDBQT string. Deprecated in Meeko v0.5.
+
+        Returns
+        -------
+
+        """
         msg = "MoleculePreparation.write_pdbqt_string() is deprecated in Meeko v0.5."
         msg += " Pass the MoleculeSetup instance to PDBQTWriterLegacy.write_string()."
         msg += (
@@ -486,11 +620,22 @@ class MoleculePreparation:
             raise RuntimeError(msg)
         return pdbqt_string
 
-    def write_pdbqt_file(self, pdbqt_filename, add_index_map=None, remove_smiles=None):
+    def write_pdbqt_file(self, pdbqt_filename):
+        """
+        Writes out a pdbqt file. Deprecated in Meeko v0.5
+
+        Parameters
+        ----------
+        pdbqt_filename: str
+            PDBQT filename to write to
+
+        Returns
+        -------
+        None
+        """
         warnings.warn(
             "MoleculePreparation.write_pdbqt_file() is deprecated since Meeko v0.5",
             DeprecationWarning,
         )
         with open(pdbqt_filename, "w") as w:
-            w.write(self.write_pdbqt_string(add_index_map, remove_smiles))
-
+            w.write(self.write_pdbqt_string())

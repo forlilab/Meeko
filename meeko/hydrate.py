@@ -15,12 +15,13 @@ from .molsetup import RDKitMoleculeSetup
 from .utils import geomutils
 from .utils import pdbutils
 
+
 class Waters:
 
     @staticmethod
     def make_molsetup_OPC():
         """build a molsetup for an OPC water"""
-    
+
         raise NotImplementedError
         rdmol = Chem.MolFromSmiles("O")
         conformer = Chem.Conformer(rdmol.GetNumAtoms())
@@ -28,11 +29,11 @@ class Waters:
         rdmol.AddConformer(conformer)
         molsetup = RDKitMoleculeSetup(rdmol)
         return molsetup
-    
+
     @staticmethod
     def make_molsetup_TIP3P_AA():
         """build a molsetup for an all atom (AA) TIP3P water, i.e. explicit Hs"""
-    
+
         rdmol = Chem.MolFromSmiles("O")
         rdmol = Chem.AddHs(rdmol)
         conformer = Chem.Conformer(rdmol.GetNumAtoms())
@@ -40,7 +41,9 @@ class Waters:
         ang_hoh = np.radians(104.52)
         conformer.SetAtomPosition(0, Point3D(0, 0, 0))
         conformer.SetAtomPosition(1, Point3D(dist_oh, 0, 0))
-        conformer.SetAtomPosition(2, Point3D(np.cos(ang_hoh)*dist_oh, np.sin(ang_hoh)*dist_oh, 0))
+        conformer.SetAtomPosition(
+            2, Point3D(np.cos(ang_hoh) * dist_oh, np.sin(ang_hoh) * dist_oh, 0)
+        )
         rdmol.AddConformer(conformer)
         molsetup = RDKitMoleculeSetup(rdmol)
         molsetup.bond[(0, 1)]["rotatable"] = False
@@ -49,23 +52,42 @@ class Waters:
         molsetup.atom_type[1] = "n-tip3p-H"
         molsetup.atom_type[2] = "n-tip3p-H"
         molsetup.charge[0] = -0.834
-        molsetup.charge[1] =  0.417
-        molsetup.charge[2] =  0.417
+        molsetup.charge[1] = 0.417
+        molsetup.charge[2] = 0.417
         return molsetup
 
 
 class Hydrate:
     defaults = [
-        {"smarts": "[#7X2;v3;!+](=,:[*])[*]", "IDX": 1, "z": [2, 3], "is_donor": False, "geometries": [
+        {
+            "smarts": "[#7X2;v3;!+](=,:[*])[*]",
+            "IDX": 1,
+            "z": [2, 3],
+            "is_donor": False,
+            "geometries": [
                 {"phi": 0.0, "distance": 3.0},
-            ]},
-        {"smarts": "[#1][#7,#8,#9]", "IDX": 1, "z": [2], "is_donor": True, "geometries": [
+            ],
+        },
+        {
+            "smarts": "[#1][#7,#8,#9]",
+            "IDX": 1,
+            "z": [2],
+            "is_donor": True,
+            "geometries": [
                 {"phi": 0.0, "distance": 2.0},
-            ]},
-        {"smarts": "[#8X1]=[X3][*]", "IDX": 1, "z": [2], "x": [3], "is_donor": False, "geometries": [
-                {"phi": 60.0, "theta":   0, "distance": 3.0},
+            ],
+        },
+        {
+            "smarts": "[#8X1]=[X3][*]",
+            "IDX": 1,
+            "z": [2],
+            "x": [3],
+            "is_donor": False,
+            "geometries": [
+                {"phi": 60.0, "theta": 0, "distance": 3.0},
                 {"phi": 60.0, "theta": 180, "distance": 3.0},
-            ]},
+            ],
+        },
     ]
 
     def __init__(self, water_model="tip3p", planar_tol=0.05):
@@ -84,20 +106,23 @@ class Hydrate:
             if len(hits) == 0:
                 continue
             matched_idxs = set()
-            smarts_idx = rule.get("IDX", 1) - 1 # default to first atom in SMARTS
+            smarts_idx = rule.get("IDX", 1) - 1  # default to first atom in SMARTS
             for hit in hits:
                 parent_index = hit[smarts_idx]
                 parent_center = coordinates[parent_index]
-                if parent_index in matched_idxs: 
-                    warnings.warn("SMARTS <%s> matches same target atom more than once, ignoring" % rule["smarts"])
+                if parent_index in matched_idxs:
+                    warnings.warn(
+                        "SMARTS <%s> matches same target atom more than once, ignoring"
+                        % rule["smarts"]
+                    )
                     continue
                 matched_idxs.add(parent_index)
                 # required settings
-                z = [hit[i-1] for i in rule["z"]]
+                z = [hit[i - 1] for i in rule["z"]]
                 is_donor = rule["is_donor"]
                 # optional settings
                 x = rule.get("x", [])
-                x = [hit[i-1] for i in x]
+                x = [hit[i - 1] for i in x]
                 x90 = rule.get("x90", False)
                 atomgeom = AtomicGeometry(parent_index, z, x, x90, self.planar_tol)
                 for geometry in rule["geometries"]:
@@ -108,32 +133,35 @@ class Hydrate:
                     theta = geometry.get("theta", 0)
                     theta = np.radians(theta)
                     # place water
-                    water_center = atomgeom.calc_point(distance, theta, phi, coordinates)
+                    water_center = atomgeom.calc_point(
+                        distance, theta, phi, coordinates
+                    )
                     watersetup = self.make_water()
                     watercoords = [watersetup.coord[i] for i in watersetup.coord]
-                    self.orient_water(watercoords, water_center, parent_center, is_donor)
+                    self.orient_water(
+                        watercoords, water_center, parent_center, is_donor
+                    )
                     for i in range(len(watercoords)):
                         watersetup.coord[i] = watercoords[i]
                     water_molsetup_list.append(watersetup)
         return water_molsetup_list
 
-    
     @staticmethod
     def orient_water(coords, target_xyz, anchor_xyz, anchor_is_donor):
-        """ coords will be changed in place
-            target_xyz is where the water oxygen will be
-            anchor_xyz is the atom to which this molecule belongs
-            anchor_is_donor is True for H, and False for O, N, S
-    
-            expects starting O to be at (0, 0, 0) and an H along x-axis
+        """coords will be changed in place
+        target_xyz is where the water oxygen will be
+        anchor_xyz is the atom to which this molecule belongs
+        anchor_is_donor is True for H, and False for O, N, S
+
+        expects starting O to be at (0, 0, 0) and an H along x-axis
         """
-    
+
         if anchor_is_donor:
             ang_hoh = np.radians(104.52)
-            ang_lp = np.radians(109.5) # probably good enough for lone pairs
-            x =  np.cos(np.pi-ang_hoh/2) * np.cos(ang_lp/2)
-            y = -np.sin(np.pi-ang_hoh/2) * np.cos(ang_lp/2)
-            z = np.sin(ang_lp/2)
+            ang_lp = np.radians(109.5)  # probably good enough for lone pairs
+            x = np.cos(np.pi - ang_hoh / 2) * np.cos(ang_lp / 2)
+            y = -np.sin(np.pi - ang_hoh / 2) * np.cos(ang_lp / 2)
+            z = np.sin(ang_lp / 2)
             axis = (x, y, z)
         else:
             axis = (1, 0, 0)
@@ -143,12 +171,14 @@ class Hydrate:
         rotaxis = np.cross(axis, v)
         magnitude = np.sqrt(np.dot(rotaxis, rotaxis))
         if magnitude > 1e-6:
-            #rotangle = np.arccos(np.dot(axis, v))
+            # rotangle = np.arccos(np.dot(axis, v))
             rotangle = np.arcsin(magnitude)
             for i in range(len(coords)):
-                coords_tuple = AtomicGeometry.rot3D(coords[i], rotaxis, rotangle) # normalizes rotaxis
+                coords_tuple = AtomicGeometry.rot3D(
+                    coords[i], rotaxis, rotangle
+                )  # normalizes rotaxis
                 coords[i] = list(coords_tuple)
-                
+
         # translate
         for i in range(len(coords)):
             for j in range(3):
@@ -170,21 +200,22 @@ class HydrateMoleculeLegacy:
         self._atom_type = atom_type
         self._bond_type = 1
         self._rotatable = False
-        self._hb_config = {'HD': {1: (1, 1)},    # neigh: 1, wat: 1, sp1
-                           'OA': {
-                                      1: (2, 2), # neigh: 1, wat: 2, sp2
-                                      2: (2, 3)  # neigh: 2, wat: 2, sp3
-                                  },
-                           'SA': {
-                                      1: (2, 2), # neigh: 1, wat: 2, sp2
-                                      2: (2, 3)  # neigh: 2, wat: 2, sp3
-                                  },
-                           'NA': {
-                                      1: (1, 1), # neigh: 1, wat: 3, sp1
-                                      2: (1, 2), # neigh: 2, wat: 1, sp2
-                                      3: (1, 3)  # neigh: 3, wat: 1, sp3
-                                  }
-                           }
+        self._hb_config = {
+            "HD": {1: (1, 1)},  # neigh: 1, wat: 1, sp1
+            "OA": {
+                1: (2, 2),  # neigh: 1, wat: 2, sp2
+                2: (2, 3),  # neigh: 2, wat: 2, sp3
+            },
+            "SA": {
+                1: (2, 2),  # neigh: 1, wat: 2, sp2
+                2: (2, 3),  # neigh: 2, wat: 2, sp3
+            },
+            "NA": {
+                1: (1, 1),  # neigh: 1, wat: 3, sp1
+                2: (1, 2),  # neigh: 2, wat: 1, sp2
+                3: (1, 3),  # neigh: 3, wat: 1, sp3
+            },
+        }
 
     def _place_sp1_one_water(self, anchor_xyz, neighbor_xyz, hb_length=3.0):
         position = anchor_xyz + geomutils.vector(neighbor_xyz, anchor_xyz)
@@ -193,14 +224,18 @@ class HydrateMoleculeLegacy:
 
         return positions
 
-    def _place_sp2_one_water(self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_length=3.0):
+    def _place_sp2_one_water(
+        self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_length=3.0
+    ):
         position = geomutils.atom_to_move(anchor_xyz, [neighbor1_xyz, neighbor2_xyz])
         position = geomutils.resize_vector(position, hb_length, anchor_xyz)
         positions = np.array([position])
 
         return positions
 
-    def _place_sp2_two_waters(self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_lengths, angles):
+    def _place_sp2_two_waters(
+        self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_lengths, angles
+    ):
         if len(hb_lengths) != 2:
             raise ValueError()
         if len(angles) != 2:
@@ -208,13 +243,15 @@ class HydrateMoleculeLegacy:
 
         positions = []
 
-        r = geomutils.rotation_axis(neighbor1_xyz, anchor_xyz, neighbor2_xyz, origin=anchor_xyz)
+        r = geomutils.rotation_axis(
+            neighbor1_xyz, anchor_xyz, neighbor2_xyz, origin=anchor_xyz
+        )
         p = neighbor1_xyz
 
         # We rotate p to get each vectors if necessary
         for hb_length, angle in zip(hb_lengths, angles):
             vector = p
-            if angle != 0.:
+            if angle != 0.0:
                 position = geomutils.rotate_point(vector, anchor_xyz, r, angle)
             position = geomutils.resize_vector(position, hb_length, anchor_xyz)
             positions.append(position)
@@ -223,11 +260,19 @@ class HydrateMoleculeLegacy:
 
         return positions
 
-    def _place_sp3_one_water(self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, neighbor3_xyz, hb_length):
+    def _place_sp3_one_water(
+        self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, neighbor3_xyz, hb_length
+    ):
         # We have to normalize bonds, otherwise the water molecule is not well placed
-        v1 = anchor_xyz + geomutils.normalize(geomutils.vector(anchor_xyz, neighbor1_xyz))
-        v2 = anchor_xyz + geomutils.normalize(geomutils.vector(anchor_xyz, neighbor2_xyz))
-        v3 = anchor_xyz + geomutils.normalize(geomutils.vector(anchor_xyz, neighbor3_xyz))
+        v1 = anchor_xyz + geomutils.normalize(
+            geomutils.vector(anchor_xyz, neighbor1_xyz)
+        )
+        v2 = anchor_xyz + geomutils.normalize(
+            geomutils.vector(anchor_xyz, neighbor2_xyz)
+        )
+        v3 = anchor_xyz + geomutils.normalize(
+            geomutils.vector(anchor_xyz, neighbor3_xyz)
+        )
 
         position = geomutils.atom_to_move(anchor_xyz, [v1, v2, v3])
         position = geomutils.resize_vector(position, hb_length, anchor_xyz)
@@ -235,7 +280,9 @@ class HydrateMoleculeLegacy:
 
         return positions
 
-    def _place_sp3_two_waters(self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_lengths, angles):
+    def _place_sp3_two_waters(
+        self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_lengths, angles
+    ):
         if len(hb_lengths) != 2:
             raise ValueError()
         if len(angles) != 2:
@@ -243,8 +290,12 @@ class HydrateMoleculeLegacy:
 
         positions = []
 
-        v1 = anchor_xyz + geomutils.normalize(geomutils.vector(anchor_xyz, neighbor1_xyz))
-        v2 = anchor_xyz + geomutils.normalize(geomutils.vector(anchor_xyz, neighbor2_xyz))
+        v1 = anchor_xyz + geomutils.normalize(
+            geomutils.vector(anchor_xyz, neighbor1_xyz)
+        )
+        v2 = anchor_xyz + geomutils.normalize(
+            geomutils.vector(anchor_xyz, neighbor2_xyz)
+        )
 
         r = anchor_xyz + geomutils.normalize(geomutils.vector(v1, v2))
         p = geomutils.atom_to_move(anchor_xyz, [v1, v2])
@@ -252,7 +303,7 @@ class HydrateMoleculeLegacy:
         # We rotate p to get each vectors if necessary
         for hb_length, angle in zip(hb_lengths, angles):
             vector = p
-            if angle != 0.:
+            if angle != 0.0:
                 position = geomutils.rotate_point(vector, anchor_xyz, r, angle)
             position = geomutils.resize_vector(position, hb_length, anchor_xyz)
             positions.append(position)
@@ -285,31 +336,39 @@ class HydrateMoleculeLegacy:
                 try:
                     n_wat, hyb = self._hb_config[atom_type][len(neighbors)]
                 except KeyError:
-                    raise RuntimeError('Cannot place water molecules on atom %d of type %s with %d neighbors.' % (a, atom_type, len(neighbors)))
+                    raise RuntimeError(
+                        "Cannot place water molecules on atom %d of type %s with %d neighbors."
+                        % (a, atom_type, len(neighbors))
+                    )
 
                 water_anchors.append(a)
 
             if hyb == 1:
                 if n_wat == 1:
                     # Example: X-HD
-                    positions = self._place_sp1_one_water(anchor_xyz,
-                                                          neighbor1_xyz,
-                                                          hb_length - 1.0)
+                    positions = self._place_sp1_one_water(
+                        anchor_xyz, neighbor1_xyz, hb_length - 1.0
+                    )
             elif hyb == 2:
                 if n_wat == 1:
                     # Example: X-Nitrogen-X
                     neighbor2_xyz = setup.get_coord(neighbors[1])
-                    positions = self._place_sp2_one_water(anchor_xyz,
-                                                          neighbor1_xyz, neighbor2_xyz,
-                                                          hb_length)
+                    positions = self._place_sp2_one_water(
+                        anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_length
+                    )
                 elif n_wat == 2:
                     # Example: C=0 (backbone oxygen)
-                    tmp_neighbors = [x for x in setup.get_neigh(neighbors[0]) if not x == a]
-                    neighbor2_xyz =  setup.get_coord(tmp_neighbors[0])
-                    positions = self._place_sp2_two_waters(anchor_xyz,
-                                                           neighbor1_xyz, neighbor2_xyz,
-                                                           [hb_length, hb_length],
-                                                           [-np.radians(120), np.radians(120)])
+                    tmp_neighbors = [
+                        x for x in setup.get_neigh(neighbors[0]) if not x == a
+                    ]
+                    neighbor2_xyz = setup.get_coord(tmp_neighbors[0])
+                    positions = self._place_sp2_two_waters(
+                        anchor_xyz,
+                        neighbor1_xyz,
+                        neighbor2_xyz,
+                        [hb_length, hb_length],
+                        [-np.radians(120), np.radians(120)],
+                    )
                 elif n_wat == 3:
                     hyb = 3
             elif hyb == 3:
@@ -317,16 +376,23 @@ class HydrateMoleculeLegacy:
                     # Example: Ammonia
                     neighbor2_xyz = setup.get_coord(neighbors[1])
                     neighbor3_xyz = setup.get_coord(neighbors[2])
-                    positions = self._place_sp3_one_water(anchor_xyz,
-                                                          neighbor1_xyz, neighbor2_xyz, neighbor3_xyz,
-                                                          hb_length)
+                    positions = self._place_sp3_one_water(
+                        anchor_xyz,
+                        neighbor1_xyz,
+                        neighbor2_xyz,
+                        neighbor3_xyz,
+                        hb_length,
+                    )
                 elif n_wat == 2:
                     # Example: O-HD (Oxygen in hydroxyl group)
                     neighbor2_xyz = setup.get_coord(neighbors[1])
-                    positions = self._place_sp3_two_waters(anchor_xyz,
-                                                           neighbor1_xyz, neighbor2_xyz,
-                                                           [hb_length, hb_length],
-                                                           [-np.radians(60), np.radians(60)])
+                    positions = self._place_sp3_two_waters(
+                        anchor_xyz,
+                        neighbor1_xyz,
+                        neighbor2_xyz,
+                        [hb_length, hb_length],
+                        [-np.radians(60), np.radians(60)],
+                    )
                 elif n_wat == 3:
                     positions = np.array([])
 
@@ -336,11 +402,14 @@ class HydrateMoleculeLegacy:
         for water_anchor, waters_on_anchor in zip(water_anchors, water_positions):
             for water_on_anchor in waters_on_anchor:
                 tmp = setup.pdbinfo[water_anchor]
-                pdbinfo = pdbutils.PDBAtomInfo('WAT', tmp.resName, tmp.resNum, tmp.icode, tmp.chain)
+                pdbinfo = pdbutils.PDBAtomInfo(
+                    "WAT", tmp.resName, tmp.resNum, tmp.icode, tmp.chain
+                )
                 setup.add_pseudo(
-                        coord=water_on_anchor,
-                        charge=self._charge,
-                        anchor_list=[water_anchor],
-                        atom_type=self._atom_type,
-                        rotatable=self._rotatable,
-                        pdbinfo=pdbinfo)
+                    coord=water_on_anchor,
+                    charge=self._charge,
+                    anchor_list=[water_anchor],
+                    atom_type=self._atom_type,
+                    rotatable=self._rotatable,
+                    pdbinfo=pdbinfo,
+                )

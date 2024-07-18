@@ -19,17 +19,23 @@ linesep = pathlib.os.linesep
 
 def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     if len(molsetup.restraints):
-        raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
+        raise NotImplementedError(
+            "molsetup has restraints but these aren't written to oids block yet"
+        )
     offchrg_type = "OFFCHRG"
     offchrg_by_parent = {}
     for i in molsetup.atom_pseudo:
         if molsetup.atom_type[i] == offchrg_type:
             neigh = molsetup.get_neigh(i)
             if len(neigh) != 1:
-                raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
-                    i, json.dumps(neigh)))
+                raise RuntimeError(
+                    "offsite charge %s is bonded to: %s which has len() != 1"
+                    % (i, json.dumps(neigh))
+                )
             if neigh[0] in offchrg_by_parent:
-                raise RuntimeError("atom %d has more than one offsite charge" % neigh[0])
+                raise RuntimeError(
+                    "atom %d has more than one offsite charge" % neigh[0]
+                )
             offchrg_by_parent[neigh[0]] = i
     output_indices_start_at_one = True
     index_start = int(output_indices_start_at_one)
@@ -68,7 +74,12 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     tmp = []
     for index in range(len(charges)):
         if index in offchrg_by_oid_parent:
-            tmplist = ["%f" % charges[index], "0.0", "0.0", "0.0"]  # xyz relative to current elemtn
+            tmplist = [
+                "%f" % charges[index],
+                "0.0",
+                "0.0",
+                "0.0",
+            ]  # xyz relative to current elemtn
             tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
             tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
             tmp.append(",".join(tmplist))
@@ -83,7 +94,10 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     for i, j in molsetup.bond.keys():
         if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
             continue
-        if molsetup.atom_type[i] == offchrg_type or molsetup.atom_type[j] == offchrg_type:
+        if (
+            molsetup.atom_type[i] == offchrg_type
+            or molsetup.atom_type[j] == offchrg_type
+        ):
             continue
         oid_i = indexmap[i]
         oid_j = indexmap[j]
@@ -117,17 +131,23 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
 
 def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     if len(molsetup.restraints):
-        raise NotImplementedError("molsetup has restraints but these aren't written to oids block yet")
+        raise NotImplementedError(
+            "molsetup has restraints but these aren't written to oids block yet"
+        )
     offchrg_type = "OFFCHRG"
     offchrg_by_parent = {}
     for i in molsetup.atom_pseudo:
         if molsetup.atom_type[i] == offchrg_type:
             neigh = molsetup.get_neigh(i)
             if len(neigh) != 1:
-                raise RuntimeError("offsite charge %s is bonded to: %s which has len() != 1" % (
-                    i, json.dumps(neigh)))
+                raise RuntimeError(
+                    "offsite charge %s is bonded to: %s which has len() != 1"
+                    % (i, json.dumps(neigh))
+                )
             if neigh[0] in offchrg_by_parent:
-                raise RuntimeError("atom %d has more than one offsite charge" % neigh[0])
+                raise RuntimeError(
+                    "atom %d has more than one offsite charge" % neigh[0]
+                )
             offchrg_by_parent[neigh[0]] = i
     output_indices_start_at_one = True
     index_start = int(output_indices_start_at_one)
@@ -166,7 +186,12 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     tmp = []
     for index in range(len(charges)):
         if index in offchrg_by_oid_parent:
-            tmplist = ["%f" % charges[index], "0.0", "0.0", "0.0"]  # xyz relative to current elemtn
+            tmplist = [
+                "%f" % charges[index],
+                "0.0",
+                "0.0",
+                "0.0",
+            ]  # xyz relative to current elemtn
             tmplist.append("%f" % offchrg_by_oid_parent[index]["q"])
             tmplist.append("%f,%f,%f" % offchrg_by_oid_parent[index]["xyz"])
             tmp.append(",".join(tmplist))
@@ -181,7 +206,10 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     for i, j in molsetup.bond.keys():
         if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
             continue
-        if molsetup.atom_type[i] == offchrg_type or molsetup.atom_type[j] == offchrg_type:
+        if (
+            molsetup.atom_type[i] == offchrg_type
+            or molsetup.atom_type[j] == offchrg_type
+        ):
             continue
         oid_i = indexmap[i]
         oid_j = indexmap[j]
@@ -216,7 +244,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
 def get_dihedrals_block(molsetup, indexmap, name):
     # molsetup.dihedral_interactions    is a list of unique fourier_series
     # molsetup.dihedral_partaking_atoms has tuples of atom indices as keys, and the values
-    #                                   are the indices in molsetup.dihedral_interactions 
+    #                                   are the indices in molsetup.dihedral_interactions
     # molsetup.dihedral_labels          also has tuples of atom indices as keys, but the
     #                                   values are not guaranteed to be unique
 
@@ -225,10 +253,12 @@ def get_dihedrals_block(molsetup, indexmap, name):
     atomidx_by_index = {}
     for atomidx in molsetup.dihedral_partaking_atoms:
         a, b, c, d = atomidx
-        if (molsetup.atom_ignore[a] or
-                molsetup.atom_ignore[b] or
-                molsetup.atom_ignore[c] or
-                molsetup.atom_ignore[d]):
+        if (
+            molsetup.atom_ignore[a]
+            or molsetup.atom_ignore[b]
+            or molsetup.atom_ignore[c]
+            or molsetup.atom_ignore[d]
+        ):
             continue
         bond_id = molsetup.get_bond_id(b, c)
         if not molsetup.bond[bond_id]["rotatable"]:
@@ -236,7 +266,11 @@ def get_dihedrals_block(molsetup, indexmap, name):
         index = molsetup.dihedral_partaking_atoms[atomidx]
         atomidx_by_index.setdefault(index, set())
         atomidx_by_index[index].add(atomidx)
-        label = molsetup.dihedral_labels[atomidx] if atomidx in molsetup.dihedral_labels else None
+        label = (
+            molsetup.dihedral_labels[atomidx]
+            if atomidx in molsetup.dihedral_labels
+            else None
+        )
         if label is None:
             label = "from_meeko_%d" % index
         label_by_index.setdefault(index, set())
@@ -260,8 +294,10 @@ def get_dihedrals_block(molsetup, indexmap, name):
             string = ",".join(["%d" % (indexmap[i] + 1) for i in atomidx])
             atomidx_strings.append(string)
         text += "elements = {%s}\n" % ("|".join(atomidx_strings))
-        text += "parameters = %s\n" % _aux_fourier_conversion(molsetup.dihedral_interactions[index])
-        text += '\n'
+        text += "parameters = %s\n" % _aux_fourier_conversion(
+            molsetup.dihedral_interactions[index]
+        )
+        text += "\n"
     return text
 
 
@@ -271,48 +307,53 @@ def _aux_fourier_conversion(fourier_series):
     # to:
     #   (k/2)*(1+cos(n*(theta+phase)))
     # where n = periodicity
-    max_periodicity = max([fs['periodicity'] for fs in fourier_series])
+    max_periodicity = max([fs["periodicity"] for fs in fourier_series])
     tmp = [(0, 0)] * max_periodicity
     for fs in fourier_series:
-        i = fs['periodicity'] - 1
-        k = 2.0 * fs['k']
-        phase = -1 * fs['phase']
+        i = fs["periodicity"] - 1
+        k = 2.0 * fs["k"]
+        phase = -1 * fs["phase"]
         tmp[i] = (k, phase)
     strings = []
     periodicity = 0
-    for (k, phase) in tmp:
+    for k, phase in tmp:
         periodicity += 1
-        k_str = '0'
+        k_str = "0"
         if phase == 0:
-            phase_str = '0'
+            phase_str = "0"
         else:
-            phase_str = ('%f' % (phase / np.pi)).rstrip('0').rstrip('.') + '*pi'
-            if phase_str == '1*pi':
-                phase_str = 'pi'
-            if phase_str == '-1*pi':
-                phase_str = '-pi'
+            phase_str = ("%f" % (phase / np.pi)).rstrip("0").rstrip(".") + "*pi"
+            if phase_str == "1*pi":
+                phase_str = "pi"
+            if phase_str == "-1*pi":
+                phase_str = "-pi"
             if periodicity != 1:
                 phase_str += "/%d" % periodicity
-        if k != 0: k_str = '%f*4.184/60.221' % (k)
+        if k != 0:
+            k_str = "%f*4.184/60.221" % (k)
         strings.append("%s,%s" % (k_str, phase_str))
     return "(" + ";".join(strings) + ")"
 
 
-class PDBQTWriterLegacy():
+class PDBQTWriterLegacy:
 
     @staticmethod
     def _get_pdbinfo_fitting_pdb_chars(pdbinfo):
-        """ return strings and integers that are guaranteed
-            to fit within the designated chars of the PDB format """
+        """return strings and integers that are guaranteed
+        to fit within the designated chars of the PDB format"""
 
         atom_name = pdbinfo.name
         res_name = pdbinfo.resName
         res_num = pdbinfo.resNum
         chain = pdbinfo.chain
-        if len(atom_name) > 4: atom_name = atom_name[0:4]
-        if len(res_name) > 3: res_name = res_name[0:3]
-        if res_num > 9999: res_num = res_num % 10000
-        if len(chain) > 1: chain = chain[0:1]
+        if len(atom_name) > 4:
+            atom_name = atom_name[0:4]
+        if len(res_name) > 3:
+            res_name = res_name[0:3]
+        if res_num > 9999:
+            res_num = res_num % 10000
+        if len(chain) > 1:
+            chain = chain[0:1]
         return atom_name, res_name, res_num, chain
 
     @classmethod
@@ -320,58 +361,81 @@ class PDBQTWriterLegacy():
         """ """
         pdbinfo = setup.pdbinfo[atom_idx]
         if pdbinfo is None:
-            pdbinfo = pdbutils.PDBAtomInfo('', '', 0, '')
-        atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(pdbinfo) # TODO icode
+            pdbinfo = pdbutils.PDBAtomInfo("", "", 0, "")
+        atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(
+            pdbinfo
+        )  # TODO icode
         coord = setup.coord[atom_idx]
         atom_type = setup.get_atom_type(atom_idx)
         charge = setup.charge[atom_idx]
         pdbqt_line = cls._make_pdbqt_line(
-            count, atom_name, res_name, chain, res_num, coord, charge, atom_type)
+            count, atom_name, res_name, chain, res_num, coord, charge, atom_type
+        )
         return pdbqt_line
 
     @staticmethod
-    def _make_pdbqt_line(count, atom_name, res_name, chain, res_num, coord, charge, atom_type, icode=""):
+    def _make_pdbqt_line(
+        count, atom_name, res_name, chain, res_num, coord, charge, atom_type, icode=""
+    ):
         record_type = "ATOM"
         alt_id = " "
         occupancy = 1.0
         temp_factor = 0.0
         atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
-        pdbqt_line = atom.format(record_type, count, atom_name, alt_id, res_name, chain,
-                                 res_num, icode, float(coord[0]), float(coord[1]), float(coord[2]),
-                                 occupancy, temp_factor, charge, atom_type)
+        pdbqt_line = atom.format(
+            record_type,
+            count,
+            atom_name,
+            alt_id,
+            res_name,
+            chain,
+            res_num,
+            icode,
+            float(coord[0]),
+            float(coord[1]),
+            float(coord[2]),
+            occupancy,
+            temp_factor,
+            charge,
+            atom_type,
+        )
         return pdbqt_line
 
     @classmethod
     def _walk_graph_recursive(cls, setup, node, data, edge_start=0, first=False):
-        """ recursive walk of rigid bodies"""
+        """recursive walk of rigid bodies"""
 
         if first:
-            data["pdbqt_buffer"].append('ROOT')
-            member_pool = sorted(setup.flexibility_model['rigid_body_members'][node])
+            data["pdbqt_buffer"].append("ROOT")
+            member_pool = sorted(setup.flexibility_model["rigid_body_members"][node])
         else:
-            member_pool = setup.flexibility_model['rigid_body_members'][node][:]
+            member_pool = setup.flexibility_model["rigid_body_members"][node][:]
             member_pool.remove(edge_start)
             member_pool = [edge_start] + member_pool
 
         for member in member_pool:
             if setup.atom_ignore[member] == 1:
                 continue
-            pdbqt_line = cls._make_pdbqt_line_from_molsetup(setup, member, data["count"])
+            pdbqt_line = cls._make_pdbqt_line_from_molsetup(
+                setup, member, data["count"]
+            )
             data["pdbqt_buffer"].append(pdbqt_line)
             data["numbering"][member] = data["count"]  # count starts at 1
             data["count"] += 1
 
         if first:
-            data["pdbqt_buffer"].append('ENDROOT')
+            data["pdbqt_buffer"].append("ENDROOT")
 
         data["visited"].append(node)
 
-        for neigh in setup.flexibility_model['rigid_body_graph'][node]:
+        for neigh in setup.flexibility_model["rigid_body_graph"][node]:
             if neigh in data["visited"]:
                 continue
 
             # Write the branch
-            begin, next_index = setup.flexibility_model['rigid_body_connectivity'][node, neigh]
+            begin, next_index = setup.flexibility_model["rigid_body_connectivity"][
+                node, neigh
+            ]
 
             # do not write branch (or anything downstream) if any of the two atoms
             # defining the rotatable bond are ignored
@@ -401,19 +465,28 @@ class PDBQTWriterLegacy():
             if setup.atom_ignore[idx]:
                 continue
             if atom_type is None:
-                error_msg += 'atom number %d has None type, mol name: %s\n' % (idx, setup.get_mol_name())
+                error_msg += "atom number %d has None type, mol name: %s\n" % (
+                    idx,
+                    setup.get_mol_name(),
+                )
                 success = False
             c = setup.charge[idx]
-            if not bad_charge_ok and (type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)):
-                error_msg += 'atom number %d has non finite charge, mol name: %s, charge: %s\n' % (
-                idx, setup.get_mol_name(), str(c))
+            if not bad_charge_ok and (
+                type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)
+            ):
+                error_msg += (
+                    "atom number %d has non finite charge, mol name: %s, charge: %s\n"
+                    % (idx, setup.get_mol_name(), str(c))
+                )
                 success = False
 
         return success, error_msg
 
     @classmethod
     def write_string_from_linked_rdkit_chorizo(cls, chorizo):
-        rigid_pdbqt_string, flex_pdbqt_dict = cls.write_from_linked_rdkit_chorizo(chorizo)
+        rigid_pdbqt_string, flex_pdbqt_dict = cls.write_from_linked_rdkit_chorizo(
+            chorizo
+        )
         flex_pdbqt_string = ""
         for res_id, pdbqt_string in flex_pdbqt_dict.items():
             flex_pdbqt_string += pdbqt_string
@@ -442,7 +515,9 @@ class PDBQTWriterLegacy():
                 graph = molsetup.flexibility_model["rigid_body_graph"]
                 root = molsetup.flexibility_model["root"]
                 if len(graph[root]) != 1:
-                    raise RuntimeError(f"flexible residue {res_id} has {len(graph[root])} rotatable bonds from root, must have 1")
+                    raise RuntimeError(
+                        f"flexible residue {res_id} has {len(graph[root])} rotatable bonds from root, must have 1"
+                    )
                 conn = molsetup.flexibility_model["rigid_body_connectivity"]
                 rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
                 # from the root, use only the atom that is bonded to the only rotatable bond
@@ -451,17 +526,22 @@ class PDBQTWriterLegacy():
                     if body_idx == root and atom_idx != root_link_idx:
                         is_rigid_atom[atom_idx] = True
                         molsetup.atom_ignore[atom_idx] = True
-                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(molsetup, remove_smiles=True)
+                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
+                    molsetup, remove_smiles=True
+                )
                 molsetup.atom_ignore = original_ignore
                 if not ok:
                     raise RuntimeError(err)
-                this_flex_pdbqt, flex_atom_count = cls.adapt_pdbqt_for_autodock4_flexres(
-                    this_flex_pdbqt,
-                    resname,
-                    chain,
-                    int(resnum),
-                    skip_rename_ca_cb=True,
-                    atom_count=flex_atom_count)
+                this_flex_pdbqt, flex_atom_count = (
+                    cls.adapt_pdbqt_for_autodock4_flexres(
+                        this_flex_pdbqt,
+                        resname,
+                        chain,
+                        int(resnum),
+                        skip_rename_ca_cb=True,
+                        atom_count=flex_atom_count,
+                    )
+                )
                 flex_pdbqt_dict[res_id] = this_flex_pdbqt
 
             for i, atom_ignore in molsetup.atom_ignore.items():
@@ -472,12 +552,26 @@ class PDBQTWriterLegacy():
                 atom_name = molsetup.pdbinfo[i].name
                 charge = molsetup.charge[i]
                 atom_count += 1
-                rigid_pdbqt_string += cls._make_pdbqt_line(
-                    atom_count, atom_name, resname, chain, resnum, coord, charge, atom_type, icode) + linesep
+                rigid_pdbqt_string += (
+                    cls._make_pdbqt_line(
+                        atom_count,
+                        atom_name,
+                        resname,
+                        chain,
+                        resnum,
+                        coord,
+                        charge,
+                        atom_type,
+                        icode,
+                    )
+                    + linesep
+                )
         return rigid_pdbqt_string, flex_pdbqt_dict
 
     @classmethod
-    def write_string(cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
+    def write_string(
+        cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False
+    ):
         """Output a PDBQT file as a string.
 
         Args:
@@ -502,19 +596,25 @@ class PDBQTWriterLegacy():
         }
         atom_counter = {}
 
-        torsdof = len(setup.flexibility_model['rigid_body_graph']) - 1
+        torsdof = len(setup.flexibility_model["rigid_body_graph"]) - 1
 
-        if 'torsions_org' in setup.flexibility_model:
-            torsdof_org = setup.flexibility_model['torsions_org']
-            data["pdbqt_buffer"].append('REMARK Flexibility Score: %8.3f' % setup.flexibility_model['score'])
+        if "torsions_org" in setup.flexibility_model:
+            torsdof_org = setup.flexibility_model["torsions_org"]
+            data["pdbqt_buffer"].append(
+                "REMARK Flexibility Score: %8.3f" % setup.flexibility_model["score"]
+            )
             active_tors = torsdof_org
         else:
             active_tors = torsdof
 
-        data = cls._walk_graph_recursive(setup, setup.flexibility_model["root"], data, first=True)
+        data = cls._walk_graph_recursive(
+            setup, setup.flexibility_model["root"], data, first=True
+        )
 
         if add_index_map:
-            for i, remark_line in enumerate(cls.remark_index_map(setup, data["numbering"])):
+            for i, remark_line in enumerate(
+                cls.remark_index_map(setup, data["numbering"])
+            ):
                 # Need to use 'insert' because data["numbering"]
                 # is populated in self._walk_graph_recursive.
                 data["pdbqt_buffer"].insert(i, remark_line)
@@ -524,29 +624,43 @@ class PDBQTWriterLegacy():
             missing_h = []  # hydrogens which are not in the smiles
             strings_h_parent = []
             for key in data["numbering"]:
-                if key in setup.atom_pseudo: continue
+                if key in setup.atom_pseudo:
+                    continue
                 if key not in order:
                     if setup.get_element(key) != 1:
-                        error_msg += "non-Hydrogen atom unexpectedely missing from smiles!?"
+                        error_msg += (
+                            "non-Hydrogen atom unexpectedely missing from smiles!?"
+                        )
                         error_msg += " (mol name: %s)\n" % setup.get_mol_name()
                         pdbqt_string = ""
                         success = False
                         return pdbqt_string, success, error_msg
                     missing_h.append(key)
                     parents = setup.get_neigh(key)
-                    parents = [i for i in parents if i < setup.atom_true_count]  # exclude pseudos
+                    parents = [
+                        i for i in parents if i < setup.atom_true_count
+                    ]  # exclude pseudos
                     if len(parents) != 1:
-                        error_msg += "expected hydrogen to be bonded to exactly one atom"
+                        error_msg += (
+                            "expected hydrogen to be bonded to exactly one atom"
+                        )
                         error_msg += " (mol name: %s)\n" % setup.get_mol_name()
                         pdbqt_string = ""
                         success = False
                         return pdbqt_string, success, error_msg
                     parent_idx = order[parents[0]]  # already 1-indexed
-                    string = ' %d %d' % (parent_idx, data["numbering"][key])  # key 0-indexed; _numbering[key] 1-indexed
+                    string = " %d %d" % (
+                        parent_idx,
+                        data["numbering"][key],
+                    )  # key 0-indexed; _numbering[key] 1-indexed
                     strings_h_parent.append(string)
-            remarks_h_parent = cls.break_long_remark_lines(strings_h_parent, "REMARK H PARENT")
+            remarks_h_parent = cls.break_long_remark_lines(
+                strings_h_parent, "REMARK H PARENT"
+            )
             remark_prefix = "REMARK SMILES IDX"
-            remark_idxmap = cls.remark_index_map(setup, data["numbering"], order, remark_prefix, missing_h)
+            remark_idxmap = cls.remark_index_map(
+                setup, data["numbering"], order, remark_prefix, missing_h
+            )
             remarks = []
             remarks.append("REMARK SMILES %s" % smiles)  # break line at 79 chars?
             remarks.extend(remark_idxmap)
@@ -558,25 +672,30 @@ class PDBQTWriterLegacy():
                 data["pdbqt_buffer"].insert(i, remark_line)
 
         # torsdof is always going to be the one of the rigid, non-macrocyclic one
-        data["pdbqt_buffer"].append('TORSDOF %d' % active_tors)
+        data["pdbqt_buffer"].append("TORSDOF %d" % active_tors)
 
         pdbqt_string = linesep.join(data["pdbqt_buffer"]) + linesep
         return pdbqt_string, success, error_msg
 
     @classmethod
-    def remark_index_map(cls, setup, numbering, order=None, prefix="REMARK INDEX MAP", missing_h=()):
-        """ write mapping of atom indices from input molecule to output PDBQT
-            order[ob_index(i.e. 'key')] = smiles_index
+    def remark_index_map(
+        cls, setup, numbering, order=None, prefix="REMARK INDEX MAP", missing_h=()
+    ):
+        """write mapping of atom indices from input molecule to output PDBQT
+        order[ob_index(i.e. 'key')] = smiles_index
         """
 
-        if order is None: order = {key: key + 1 for key in numbering}  # key+1 breaks OB
+        if order is None:
+            order = {key: key + 1 for key in numbering}  # key+1 breaks OB
         # max_line_length = 79
         # remark_lines = []
         # line = prefix
         strings = []
         for key in numbering:
-            if key in setup.atom_pseudo: continue
-            if key in missing_h: continue
+            if key in setup.atom_pseudo:
+                continue
+            if key in missing_h:
+                continue
             string = " %d %d" % (order[key], numbering[key])
             strings.append(string)
         return cls.break_long_remark_lines(strings, prefix)
@@ -600,12 +719,14 @@ class PDBQTWriterLegacy():
         return remarks
 
     @staticmethod
-    def adapt_pdbqt_for_autodock4_flexres(pdbqt_string, res, chain, num, skip_rename_ca_cb=False, atom_count=None):
-        """ adapt pdbqt_string to be compatible with AutoDock4 requirements:
-             - first and second atoms named CA and CB
-             - write BEGIN_RES / END_RES
-             - remove TORSDOF
-            this is for covalent docking (tethered)
+    def adapt_pdbqt_for_autodock4_flexres(
+        pdbqt_string, res, chain, num, skip_rename_ca_cb=False, atom_count=None
+    ):
+        """adapt pdbqt_string to be compatible with AutoDock4 requirements:
+         - first and second atoms named CA and CB
+         - write BEGIN_RES / END_RES
+         - remove TORSDOF
+        this is for covalent docking (tethered)
         """
         new_string = "BEGIN_RES %s %s %s" % (res, chain, num) + linesep
         atom_number = 0
@@ -619,9 +740,9 @@ class PDBQTWriterLegacy():
                 if not skip_rename_ca_cb:
                     atom_number += 1
                     if atom_number == 1:
-                        line = line[:13] + 'CA' + line[15:]
+                        line = line[:13] + "CA" + line[15:]
                     elif atom_number == 2:
-                        line = line[:13] + 'CB' + line[15:]
+                        line = line[:13] + "CB" + line[15:]
                 if atom_count is not None:
                     atom_count += 1
                     n = "%5d" % atom_count
@@ -629,9 +750,13 @@ class PDBQTWriterLegacy():
                     line = line[:6] + n + line[11:]
                 new_string += line + linesep
                 continue
-            elif offset is not None and (line.startswith("BRANCH") or line.startswith("ENDBRANCH")):
+            elif offset is not None and (
+                line.startswith("BRANCH") or line.startswith("ENDBRANCH")
+            ):
                 keyword, i, j = line.split()
-                new_string += f"{keyword} {int(i)+offset:3d} {int(j)+offset:3d}" + linesep
+                new_string += (
+                    f"{keyword} {int(i)+offset:3d} {int(j)+offset:3d}" + linesep
+                )
                 continue
             new_string += line + linesep
         new_string += "END_RES %s %s %s" % (res, chain, num) + linesep

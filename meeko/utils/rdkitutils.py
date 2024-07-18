@@ -16,7 +16,6 @@ source: https://sourceforge.net/p/rdkit/mailman/message/36404394/
 """
 
 
-
 def getPdbInfoNoNull(atom):
     """extract information for populating an ATOM/HETATM line
     in the PDB"""
@@ -24,39 +23,45 @@ def getPdbInfoNoNull(atom):
     if minfo is None:
         atomic_number = atom.GetAtomicNum()
         if atomic_number == 0:
-            name = '%-2s' % '*'
+            name = "%-2s" % "*"
         else:
-            name = '%-2s' % mini_periodic_table[atomic_number]
-        chain = ' '
+            name = "%-2s" % mini_periodic_table[atomic_number]
+        chain = " "
         resNum = 1
-        icode = ''
-        resName = 'UNL'
+        icode = ""
+        resName = "UNL"
     else:
         name = minfo.GetName()
         chain = minfo.GetChainId()
         resNum = minfo.GetResidueNumber()
         icode = minfo.GetInsertionCode()
         resName = minfo.GetResidueName()
-    return PDBAtomInfo(name=name, resName=resName, resNum=resNum, icode=icode, chain=chain)
+    return PDBAtomInfo(
+        name=name, resName=resName, resNum=resNum, icode=icode, chain=chain
+    )
 
 
-class Mol2MolSupplier():
-    """ RDKit Mol2 molecule supplier.
+class Mol2MolSupplier:
+    """RDKit Mol2 molecule supplier.
     Parameters
         sanitize: perform RDKit sanitization of Mol2 molecule"""
 
-    def __init__(self, filename, sanitize=True, removeHs=False, cleanupSubstructures=True):
-        self.fp = open(filename, 'r')
-        self._opts = {'sanitize': sanitize,
-                      'removeHs': removeHs,
-                      'cleanupSubstructures': cleanupSubstructures}
+    def __init__(
+        self, filename, sanitize=True, removeHs=False, cleanupSubstructures=True
+    ):
+        self.fp = open(filename, "r")
+        self._opts = {
+            "sanitize": sanitize,
+            "removeHs": removeHs,
+            "cleanupSubstructures": cleanupSubstructures,
+        }
         self.buff = []
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        """ iterator step """
+        """iterator step"""
         while True:
             line = self.fp.readline()
             # empty line
@@ -69,7 +74,7 @@ class Mol2MolSupplier():
                 # buffer empty, stopping the iteration
                 self.fp.close()
                 raise StopIteration
-            if '@<TRIPOS>MOLECULE' in line:
+            if "@<TRIPOS>MOLECULE" in line:
                 # first molecule parsed
                 if len(self.buff) == 0:
                     self.buff.append(line)
@@ -108,7 +113,9 @@ def react_and_map(reactants, rxn):
     for products in products_list:
         result_reac_map = []
         result_atom_map = []
-        new_atom_label_list = []  # for atoms created by the reaction that are labeled e.g. F in "[O:1]>>[O:1][F:2]"
+        new_atom_label_list = (
+            []
+        )  # for atoms created by the reaction that are labeled e.g. F in "[O:1]>>[O:1][F:2]"
         for product in products:
             atom_idxmap = []
             reac_idxmap = []
@@ -124,7 +131,9 @@ def react_and_map(reactants, rxn):
                         new_atom_label.append(None)
                     else:
                         reactant_idx = None
-                        new_atom_label.append(old_mapno)  # the reaction SMARTS created this atom and it has a label
+                        new_atom_label.append(
+                            old_mapno
+                        )  # the reaction SMARTS created this atom and it has a label
                     # if atom.HasProp("reactant_idx"):
                     #    raise RuntimeError("did not expect both old_mapno and reactant_idx")
                     #    #print("did not expect both old_mapno and reactant_idx")
