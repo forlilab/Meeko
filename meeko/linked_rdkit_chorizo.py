@@ -1019,8 +1019,9 @@ class LinkedRDKitChorizo:
                 atoms_with_bonds = set()
                 from_raw = {value: key for (key, value) in mapping.items()}
                 for raw_index in raw_atoms_with_bonds:
-                    atom_index = from_raw[raw_index]
-                    atoms_with_bonds.add(atom_index)
+                    if raw_index in from_raw:  # bonds can occur on atoms the template does not have
+                        atom_index = from_raw[raw_index]
+                        atoms_with_bonds.add(atom_index)
                 # we treat blunt ends like bonds
                 for res_id, atom_idx in blunt_ends:
                     if res_id == residue_key:
