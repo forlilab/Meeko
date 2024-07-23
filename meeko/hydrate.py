@@ -137,7 +137,7 @@ class Hydrate:
                         distance, theta, phi, coordinates
                     )
                     watersetup = self.make_water()
-                    watercoords = [watersetup.coord[i] for i in watersetup.coord]
+                    watercoords = watersetup.coord
                     self.orient_water(
                         watercoords, water_center, parent_center, is_donor
                     )
@@ -324,7 +324,7 @@ class HydrateMoleculeLegacy:
         # It will be the same distance for all of the water molecules
         hb_length = self._distance
 
-        for a, neighbors in setup.graph.items():
+        for a, neighbors in enumerate(setup.graph):
             atom_type = setup.get_atom_type(a)
             anchor_xyz = setup.get_coord(a)
             neighbor1_xyz = setup.get_coord(neighbors[0])
@@ -359,7 +359,7 @@ class HydrateMoleculeLegacy:
                 elif n_wat == 2:
                     # Example: C=0 (backbone oxygen)
                     tmp_neighbors = [
-                        x for x in setup.get_neigh(neighbors[0]) if not x == a
+                        x for x in setup.get_neighbors(neighbors[0]) if not x == a
                     ]
                     neighbor2_xyz = setup.get_coord(tmp_neighbors[0])
                     positions = self._place_sp2_two_waters(
@@ -405,7 +405,7 @@ class HydrateMoleculeLegacy:
                 pdbinfo = pdbutils.PDBAtomInfo(
                     "WAT", tmp.resName, tmp.resNum, tmp.icode, tmp.chain
                 )
-                setup.add_pseudo(
+                setup.add_pseudo_atom(
                     coord=water_on_anchor,
                     charge=self._charge,
                     anchor_list=[water_anchor],

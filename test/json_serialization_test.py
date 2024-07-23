@@ -20,7 +20,6 @@ from meeko import (
     ResidueTemplateEncoder,
     ResidueChemTemplates,
     ResidueChemTemplatesEncoder,
-    Restraint,
 )
 
 from meeko import linked_rdkit_chorizo
@@ -565,6 +564,3 @@ def check_linked_rdkit_chorizo_equality(
     # Checks log equality
     assert decoded_obj.log == starting_obj.log
     return
-
-
-# endregion

@@ -26,7 +26,7 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     offchrg_by_parent = {}
     for i in molsetup.atom_pseudo:
         if molsetup.atom_type[i] == offchrg_type:
-            neigh = molsetup.get_neigh(i)
+            neigh = molsetup.get_neighbors(i)
             if len(neigh) != 1:
                 raise RuntimeError(
                     "offsite charge %s is bonded to: %s which has len() != 1"
@@ -138,7 +138,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     offchrg_by_parent = {}
     for i in molsetup.atom_pseudo:
         if molsetup.atom_type[i] == offchrg_type:
-            neigh = molsetup.get_neigh(i)
+            neigh = molsetup.get_neighbors(i)
             if len(neigh) != 1:
                 raise RuntimeError(
                     "offsite charge %s is bonded to: %s which has len() != 1"
@@ -544,7 +544,7 @@ class PDBQTWriterLegacy:
                 )
                 flex_pdbqt_dict[res_id] = this_flex_pdbqt
 
-            for i, atom_ignore in molsetup.atom_ignore.items():
+            for i, atom_ignore in enumerate(molsetup.atom_ignore):
                 if atom_ignore or not is_rigid_atom[i]:
                     continue
                 atom_type = molsetup.atom_type[i]
@@ -636,7 +636,7 @@ class PDBQTWriterLegacy:
                         success = False
                         return pdbqt_string, success, error_msg
                     missing_h.append(key)
-                    parents = setup.get_neigh(key)
+                    parents = setup.get_neighbors(key)
                     parents = [
                         i for i in parents if i < setup.atom_true_count
                     ]  # exclude pseudos

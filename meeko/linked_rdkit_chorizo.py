@@ -342,6 +342,7 @@ def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
         If a provided index in indices_to_update is not a Hydrogen, if a Hydrogen only has Hydrogen neighbors, or if the
         number of visited Hydrogens does not match the number of Hydrogens marked to be deleted.
     """
+
     # Gets the conformer and a readable and writable version of the Mol using RDKit
     conf = mol.GetConformer()
     tmpmol = Chem.RWMol(mol)
@@ -1514,7 +1515,7 @@ class LinkedRDKitChorizo:
         for res_id in self.get_valid_residues():
             molsetup = self.residues[res_id].molsetup
             wanted_atom_indices = []
-            for i, ignore in molsetup.atom_ignore.items():
+            for i, ignore in enumerate(molsetup.atom_ignore):
                 if not ignore and not self.residues[res_id].is_flexres_atom[i]:
                     wanted_atom_indices.append(i)
             for key, values in molsetup.atom_params.items():
@@ -1766,7 +1767,6 @@ class ChorizoResidue:
         bool
         """
         return self.rdkit_mol is not None and not self.user_deleted
-
 
 class ResiduePadder:
     """

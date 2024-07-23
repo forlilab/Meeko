@@ -26,7 +26,7 @@ def get_openff_epsilon_sigma(rdmol, vdw_list, vdw_by_type, output_index_start=0)
     mk_prep = MoleculePreparation.from_config(meeko_config)
     mk_prep.prepare(rdmol)
     molsetup = mk_prep.setup
-    for i, atype in molsetup.atom_type.items():
+    for i, atype in enumerate(molsetup.atom_type):
         data[i + output_index_start] = {
             "atom_type": atype,
             "epsilon": vdw_by_type[atype]["epsilon"],

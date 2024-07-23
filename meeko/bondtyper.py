@@ -20,6 +20,7 @@ class BondTyperLegacy:
 
             rigidify_bond_smarts (list): patterns to freeze bonds, e.g. conjugated carbons
         """
+
         amide_bonds = [(x[0], x[1]) for x in setup.find_pattern('[NX3]-[CX3]=[O,N]')] # includes amidines
 
         # tertiary amides with non-identical substituents will be allowed to rotate
