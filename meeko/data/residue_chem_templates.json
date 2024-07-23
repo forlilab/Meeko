@@ -54,20 +54,17 @@
 	}
     },
 
-    "//": {
+    "residue_templates": {
     	"NME": {
     	    "smiles": "C([H])([H])([H])N[H]",
     	    "atom_name": ["CH3", "HH31", "HH32", "HH33", "N", "H"],
-    	    "link_labels": {"4": "label"}
+    	    "link_labels": {"4": "N-term"}
     	},
     	"ACE": {
     	    "smiles": "C(=O)C([H])([H])[H]",
     	    "atom_name": ["C", "O", "CH3", "H1", "H2", "H3"],
-    	    "link_labels": {"4": "label"}
-    	}
-    },
-
-    "residue_templates": {
+    	    "link_labels": {"0": "C-term"}
+    	},
 	"MG": {
 	    "smiles": "[Mg+2]",
 	    "link_labels": {},
