@@ -35,6 +35,7 @@ meekodir = pathlib.Path(meeko.__file__).parents[0]
 
 # Test Data
 ahhy_example = pkgdir / "test/linked_rdkit_chorizo_data/AHHY.pdb"
+just_one_ALA_missing = pkgdir / "test/linked_rdkit_chorizo_data/just-one-ALA-missing-CB.pdb"
 
 # Chorizo creation data
 with open(meekodir / "data" / "residue_chem_templates.json") as f:
@@ -50,6 +51,20 @@ def populated_rdkit_chorizo():
     pdb_str = file.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
         pdb_str, chem_templates, mk_prep, blunt_ends=[("A:1", 0)]
+    )
+    return chorizo
+
+
+@pytest.fixture
+def populated_rdkit_chorizo_missing():
+    file = open(just_one_ALA_missing)
+    pdb_str = file.read()
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+            pdb_str,
+            chem_templates,
+            mk_prep,
+            blunt_ends=[("A:1", 0), ("A:1", 2)],
+            allow_bad_res=True,
     )
     return chorizo
 
@@ -249,7 +264,7 @@ def test_residue_chem_templates_encoding_decoding(populated_residue_chem_templat
     return
 
 
-def test_linked_rdkit_chorizo_encoding_decoding(populated_rdkit_chorizo):
+def test_linked_rdkit_chorizo_encoding_decoding(populated_rdkit_chorizo, populated_rdkit_chorizo_missing):
     """
     Takes a fully populated LinkedRDKitChorizo, checks that it can be serialized to JSON and deserialized back into an
     object without any errors, then checks that the deserialized object matches the starting object and that the
@@ -266,18 +281,22 @@ def test_linked_rdkit_chorizo_encoding_decoding(populated_rdkit_chorizo):
     """
     # Starts by getting a LinkedRDKitChorizo object, converting it to a json string, and then decoding the string into
     # a new LinkedRDKitChorizo object
-    starting_chorizo = populated_rdkit_chorizo
-    json_str = json.dumps(starting_chorizo, cls=LinkedRDKitChorizoEncoder)
-    decoded_chorizo = json.loads(
-        json_str, object_hook=linked_rdkit_chorizo.linked_rdkit_chorizo_json_decoder
+    chorizos = (
+        populated_rdkit_chorizo,
+        populated_rdkit_chorizo_missing,
     )
+    for starting_chorizo in chorizos:
+        json_str = json.dumps(starting_chorizo, cls=LinkedRDKitChorizoEncoder)
+        decoded_chorizo = json.loads(
+            json_str, object_hook=linked_rdkit_chorizo.linked_rdkit_chorizo_json_decoder
+        )
 
-    # Asserts that the starting and ending objects have the expected LinkedRDKitChorizo type
-    assert isinstance(starting_chorizo, LinkedRDKitChorizo)
-    assert isinstance(decoded_chorizo, LinkedRDKitChorizo)
+        # Asserts that the starting and ending objects have the expected LinkedRDKitChorizo type
+        assert isinstance(starting_chorizo, LinkedRDKitChorizo)
+        assert isinstance(decoded_chorizo, LinkedRDKitChorizo)
 
-    # Checks that the two chorizos are equal
-    check_linked_rdkit_chorizo_equality(decoded_chorizo, starting_chorizo)
+        # Checks that the two chorizos are equal
+        check_linked_rdkit_chorizo_equality(decoded_chorizo, starting_chorizo)
     return
 
 
@@ -396,11 +415,17 @@ def check_residue_equality(decoded_obj: ChorizoResidue, starting_obj: ChorizoRes
 
     # RDKit Mols - Check whether we can test for equality with RDKit Mols
     # assert decoded_residue.raw_rdkit_mol == starting_residue.raw_rdkit_mol
-    assert isinstance(decoded_obj.raw_rdkit_mol, Chem.rdchem.Mol)
+    assert type(decoded_obj.raw_rdkit_mol) == type(starting_obj.raw_rdkit_mol)
+    if isinstance(decoded_obj.raw_rdkit_mol, Chem.rdchem.Mol):
+        assert Chem.MolToSmiles(decoded_obj.raw_rdkit_mol) == Chem.MolToSmiles(starting_obj.raw_rdkit_mol)
     # assert decoded_residue.rdkit_mol == starting_residue.rdkit_mol
-    assert isinstance(decoded_obj.rdkit_mol, Chem.rdchem.Mol)
+    assert type(decoded_obj.rdkit_mol) == type(starting_obj.rdkit_mol)
+    if isinstance(decoded_obj.rdkit_mol, Chem.rdchem.Mol):
+        assert Chem.MolToSmiles(decoded_obj.rdkit_mol) == Chem.MolToSmiles(starting_obj.rdkit_mol)
     # assert decoded_residue.padded_mol == starting_residue.padded_mol
-    assert isinstance(decoded_obj.padded_mol, Chem.rdchem.Mol)
+    assert type(decoded_obj.padded_mol) == type(starting_obj.padded_mol)
+    if isinstance(decoded_obj.padded_mol, Chem.rdchem.Mol):
+        assert Chem.MolToSmiles(decoded_obj.padded_mol) == Chem.MolToSmiles(starting_obj.padded_mol)
 
     # MapIDX
     assert decoded_obj.mapidx_to_raw == starting_obj.mapidx_to_raw
@@ -410,8 +435,9 @@ def check_residue_equality(decoded_obj: ChorizoResidue, starting_obj: ChorizoRes
     assert decoded_obj.residue_template_key == starting_obj.residue_template_key
     assert decoded_obj.input_resname == starting_obj.input_resname
     assert decoded_obj.atom_names == starting_obj.atom_names
-    check_molsetup_equality(decoded_obj.molsetup, starting_obj.molsetup)
-    assert isinstance(decoded_obj.molsetup, RDKitMoleculeSetup)
+    assert type(decoded_obj.molsetup) == type(starting_obj.molsetup)
+    if isinstance(decoded_obj.molsetup, RDKitMoleculeSetup):
+        check_molsetup_equality(decoded_obj.molsetup, starting_obj.molsetup)
 
     # Bools
     assert decoded_obj.is_flexres_atom == starting_obj.is_flexres_atom
