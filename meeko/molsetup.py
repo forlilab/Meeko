@@ -45,6 +45,7 @@ from .utils import rdkitutils
 # region DEFAULT VALUES
 DEFAULT_PDBINFO = None
 DEFAULT_CHARGE = 0.0
+DEFAULT_COORD = defaultdict
 DEFAULT_ATOMIC_NUM = None
 DEFAULT_ATOM_TYPE = None
 DEFAULT_IS_IGNORE = False
@@ -192,6 +193,92 @@ class UniqAtomParams:
         return param_idxs
 
 
+@dataclass
+class Atom:
+    index: int
+    pdbinfo: str = DEFAULT_PDBINFO
+    charge: float = DEFAULT_CHARGE
+    atomic_num: int = DEFAULT_ATOMIC_NUM
+    atom_type: str = DEFAULT_ATOM_TYPE
+    is_ignore: bool = DEFAULT_IS_IGNORE
+    is_chiral: bool = DEFAULT_IS_CHIRAL
+    graph: list[int] = field(default_factory=list)
+    interaction_vectors: list[np.array] = field(default_factory=list)
+
+    is_dummy: bool = False
+    is_pseudo_atom: bool = False
+
+
+@dataclass
+class Bond:
+    canon_id: (int, int)
+    index1: int
+    index2: int
+    order: int = DEFAULT_BOND_ORDER
+    rotatable: bool = DEFAULT_BOND_ROTATABLE
+
+    def __init__(
+        self,
+        index1: int,
+        index2: int,
+        order: int = DEFAULT_BOND_ORDER,
+        rotatable: bool = DEFAULT_BOND_ROTATABLE,
+    ):
+        self.canon_id = self.get_bond_id(index1, index2)
+        self.index1 = index1
+        self.index2 = index2
+        self.order = order
+        self.rotatable = rotatable
+        return
+
+    @staticmethod
+    def get_bond_id(idx1: int, idx2: int):
+        """
+        Generates a consistent, "canonical", bond id from a pair of atom indices in the graph.
+
+        Parameters
+        ----------
+        idx1: int
+            atom index of one of the atoms in the bond
+        idx2: int
+            atom index of the other atom in the bond
+
+        Returns
+        -------
+        canon_id: tuple
+            a tuple of the two indices in their canonical order.
+        """
+        idx_min = min(idx1, idx2)
+        idx_max = max(idx1, idx2)
+        return idx_min, idx_max
+
+
+@dataclass
+class Ring:
+    ring_id: int
+    corner_flip: bool = DEFAULT_RING_CORNER_FLIP
+    graph: dict = DEFAULT_RING_GRAPH
+    is_aromatic: bool = DEFAULT_RING_IS_AROMATIC
+
+
+@dataclass
+class Restraint:
+    atom_index: int
+    target_xyz: (float, float, float)
+    kcal_per_angstrom_square: float
+    delay_angstroms: float
+
+    def copy(self):
+        new_target_xyz = (self.target_xyz[0], self.target_xyz[1], self.target_xyz[2])
+        new_restraint = Restraint(
+            self.atom_index,
+            new_target_xyz,
+            self.kcal_per_angstrom_square,
+            self.delay_angstroms,
+        )
+        return new_restraint
+
+
 class MoleculeSetup:
 
     # region CLASS CONSTANTS
@@ -224,10 +311,10 @@ class MoleculeSetup:
         overwrite: bool = False,
         pdbinfo: str = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
+        coord: np.ndarray = DEFAULT_COORD,
         atomic_num: int = DEFAULT_ATOMIC_NUM,
         atom_type: str = DEFAULT_ATOM_TYPE,
         is_ignore: bool = DEFAULT_IS_IGNORE,
-        is_chiral: bool = DEFAULT_IS_CHIRAL,
         graph: list[int] = field(default_factory=list),
     ):
         """
@@ -238,13 +325,21 @@ class MoleculeSetup:
         Parameters
         ----------
         atom_index: int
+            atom index in the MoleculeSetup
         overwrite: bool
+            can we overwrite other atoms may be in the same atom index as this one
         pdbinfo: str
+            pdb string for the atom
+        coord: np.ndarray
+            the atom's coordinates
         charge: float
+            partial charge to be loaded for the atom
         atomic_num: int
+            the atomic number of the atom
         atom_type: str
+            TODO: needs info
         is_ignore: bool
-        is_chiral: bool
+            ignore flag for the atom
         graph: List[List[int]]
 
         Returns
@@ -275,7 +370,14 @@ class MoleculeSetup:
 
         # Creates and adds new atom to the atom list
         new_atom = Atom(
-            atom_index, pdbinfo, charge, atomic_num, atom_type, is_ignore, is_chiral, graph
+            atom_index,
+            pdbinfo,
+            charge,
+            coord,
+            atomic_num,
+            atom_type,
+            is_ignore,
+            graph,
         )
         if atom_index < len(self.atoms):
             self.atoms[atom_index] = new_atom
@@ -283,10 +385,11 @@ class MoleculeSetup:
         self.atoms.append(new_atom)
         return
 
-    def add_pseudo_atom(
+    def add_pseudoatom(
         self,
         pdbinfo: str = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
+        coord: np.ndarray = DEFAULT_COORD,
         atom_type: str = DEFAULT_ATOM_TYPE,
         is_ignore: bool = DEFAULT_IS_IGNORE,
         anchor_list: list[int] = None,
@@ -294,19 +397,38 @@ class MoleculeSetup:
         directional_vectors: list[int] = None,
     ):
         """
+        Adds a pseudoatom with all the specified attributes to the MoleculeSetup. Default values will be used for any
+        attributes with unspecified values. Multiple bonds can be specified to support the centroids of aromatic rings.
+        If rotatable, makes the anchor atom rotatable to allow the pseudoatom movement.
 
         Parameters
         ----------
-        pdbinfo
-        charge
-        atom_type
-        is_ignore
-        anchor_list
-        rotatable
+        pdbinfo: str
+            PDB string for the pseudoatom.
+        charge: float
+            partial charge for the pseudoatom
+        coord: np.ndarray
+            the pseudoatom's coordinates
+        atom_type: str
+            TODO: needs info
+        is_ignore: bool
+            ignore flag for the pseudoatom
+        anchor_list: list[int]
+            a list of ints indicating the multiple bonds that can be specified as input
+        rotatable: bool
+            flag indicating if the anchor atom should be marked as rotatable to allow the pseudoatom movement.
         directional_vectors
+            TODO: needs info
 
         Returns
         -------
+        pseudoatom_index: int
+            The atom_index of the added pseudoatom
+
+        Raises
+        ------
+        RuntimeError:
+            When the incorrect number of anchors of pseudoatoms are found in rigid_groups in the flexibility model
 
         """
         # Places the atom at the end of the atom list.
@@ -316,6 +438,7 @@ class MoleculeSetup:
             pseudoatom_index,
             pdbinfo=pdbinfo,
             charge=charge,
+            coord=coord,
             atomic_num=self.PSEUDOATOM_ATOMIC_NUM,
             atom_type=atom_type,
             is_ignore=is_ignore,
@@ -328,6 +451,28 @@ class MoleculeSetup:
         # Adds directional vectors [Check what this is used for/if this is used]
         if directional_vectors is not None:
             self._add_interaction_vectors(pseudoatom_index, directional_vectors)
+        # If there are no specified anchor atoms,
+        if not self.flexibility_model or not anchor_list:
+            return pseudoatom_index
+        # TODO: revise this logic
+        # If there is a flexibility model in the MoleculeSetup, adds the psuedoatom to the flexibility model's rigid
+        # group tracking
+        rigid_groups_indices = []
+        for anchor in anchor_list:
+            for rigid_index, members in self.flexibility_model[
+                "rigid_body_members"
+            ].items():
+                if anchor in members:
+                    rigid_groups_indices.append(rigid_index)
+        if len(rigid_groups_indices) != 1:
+            raise RuntimeError(
+                f"anchors of pseudo atom found in {len(rigid_groups_indices)} rigid_groups (must be 1)"
+            )
+        rigid_index = rigid_groups_indices[0]
+        self.flexibility_model["rigid_body_members"][rigid_index].append(
+            pseudoatom_index
+        )
+        # returns the pseudoatom index
         return pseudoatom_index
 
     def delete_atom(self, atom_index: int):
@@ -353,22 +498,29 @@ class MoleculeSetup:
         atom_index_2: int,
         order: int = DEFAULT_BOND_ORDER,
         rotatable: bool = DEFAULT_BOND_ROTATABLE,
-    ):
+    ) -> None:
         """
+        Creates a bond and adds it to all the internal data structures where atom bonds are being tracked.
 
         Parameters
         ----------
-        atom_index_1
-        atom_index_2
-        order
-        rotatable
+        atom_index_1: int
+            Atom index of one of the atoms in the bond
+        atom_index_2: int
+            Atom index of the other atom in the bond
+        order: int
+            Bond order to set for the bond
+        rotatable: bool
+            Indicates whether the bond is rotatable
 
         Returns
         -------
+        None
 
         Raises
         ------
-
+        IndexError:
+            When one or more the given bond atom indices do not exist in the MoleculeSetup
         """
         # Checks that both of the atom indices provided are valid indices, otherwise throws an error
         if len(self.atoms) <= atom_index_1 or len(self.atoms) <= atom_index_2:
@@ -387,15 +539,18 @@ class MoleculeSetup:
 
     def delete_bond(self, atom_index_1: int, atom_index_2: int):
         """
+        Deletes a bond from the molecule setup.
 
         Parameters
         ----------
-        atom_index_1
-        atom_index_2
+        atom_index_1: int
+            The atom index of one of the atoms in the bond to delete
+        atom_index_2: int
+            The atom index of the other atom in the bond to delete
 
         Returns
         -------
-
+        None
         """
         # Gets canon bond id for the bond to delete
         canon_bond_id = Bond.get_bond_id(atom_index_1, atom_index_2)
@@ -407,16 +562,109 @@ class MoleculeSetup:
         return
 
     def add_rotamers(
-        self, index_list: list[(int, int, int, int)], angles_list: np.ndarray
+        self, index_list: list[(int, int, int, int)], angle_list: np.ndarray
     ):
-        # TODO: pull implementation over
-        pass
+        """
+        Adds rotamers to the internal record of rotamers.
+
+        Parameters
+        ----------
+        index_list: list[(int, int, int, int)]
+        angle_list: np.ndarray
+
+        Returns
+        -------
+        None
+        """
+        # It's unclear how this will work without the coordinates in the moleculesetup. food for thought.
+        # TODO: address issues with the lack of coords and add detail in function comment
+        rotamers = {}
+        for (idx1, idx2, idx3, idx4), angle in zip(index_list, angle_list):
+            bond_id = Bond.get_bond_id(idx2, idx3)
+            if bond_id in rotamers:
+                raise RuntimeError("repeated bond %d-$d" % bond_id)
+            if not self.bond_info[bond_id].rotatable:
+                raise RuntimeError(
+                    "trying to add rotamer for non rotatable bond %d-%d" % bond_id
+                )
+            # d0 = calcDihedral(xyz[i1], xyz[i2], xyz[i3], xyz[i4])
+            dihedral = 0  # TODO: fix this
+            rotamers[bond_id] = angle - dihedral
+        self.rotamers.append(rotamers)
+        return
+
+    def delete_rotamers(
+        self,
+        bond_id_list: list[tuple] = None,
+        index_list: list[(int, int, int, int)] = None,
+    ):
+        """
+        Deletes rotamers from the internal list of rotamers, either by using bond ids or by generating bond ids from a
+        list of input indices.
+
+        Parameters
+        ----------
+        bond_id_list: list[tuple]
+        index_list: list[(int, int, int, int)]
+
+        Returns
+        -------
+        None
+        """
+        # loops through the index list, generates bond ids from the provided indices and adds them to the bond_id_list
+        if index_list is not None:
+            for idx1, idx2, idx3, idx4 in index_list:
+                bond_id = Bond.get_bond_id(idx2, idx3)
+                bond_id_list.append(bond_id)
+        # deletes all bond_ids in bond_id_list from self.rotamers
+        if bond_id_list is not None:
+            for bond_id in bond_id_list:
+                if bond_id in self.rotamers:
+                    del self.rotamers[bond_id]
+        return
+
+    def _add_interaction_vectors(self, atom_index: int, vector_list: list[np.array]):
+        """
+        Adds input vector list to the list of directional interaction vectors for the specified atom.
+
+        Parameters
+        ----------
+        atom_index: int
+            index of the atom to add the vectors to
+        vector_list: list[np.array]
+            a list of directional interaction vectors
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        IndexError
+            if the specified atom index does not exist or is a dummy atom.
+        """
+        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
+            raise IndexError(
+                "INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom."
+            )
+        for vector in vector_list:
+            self.atoms[atom_index].interaction_vectors.append(vector)
+        return
 
     def count_true_atoms(self):
+        """
+        Counts the number of atoms in the MoleculeSetup that are not pseudo_atoms or marked as dummy atoms, and
+        sets self.true_atom_count to that number.
+
+        Returns
+        -------
+        true_atom_count: int
+            The number of atoms currently in the MoleculeSetup that are not dummy atoms or pseudo_atoms.
+        """
         for atom in self.atoms:
             if not atom.is_pseudo_atom and not atom.is_dummy:
                 self.true_atom_count += 1
-        return
+        return self.true_atom_count
 
     def _add_interaction_vectors(self, atom_index: int, vector_list: list[np.array]):
         """
@@ -451,6 +699,25 @@ class MoleculeSetup:
     # region Getters and Setters
 
     def get_pdbinfo(self, atom_index: int):
+        """
+        Retrieves the PDB Info string for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to retrieve data for.
+
+        Returns
+        -------
+        pdbinfo: str
+            A string containing the pdb information for the atom
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
+            data.
+        """
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
                 "GET_PDBINFO: provided atom index is out of range or is a dummy atom"
@@ -458,6 +725,25 @@ class MoleculeSetup:
         return self.atoms[atom_index].pdbinfo
 
     def get_charge(self, atom_index: int):
+        """
+        Retrieves the partial charge for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to retrieve data for.
+
+        Returns
+        -------
+        charge: float
+            The charge associated with the atom
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
+            data.
+        """
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
                 "GET_CHARGE: provided atom index is out of range or is a dummy atom"
@@ -465,6 +751,25 @@ class MoleculeSetup:
         return self.atoms[atom_index].charge
 
     def get_atomic_num(self, atom_index: int):
+        """
+        Retrieves the atomic number for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to retrieve data for.
+
+        Returns
+        -------
+        atomic_num: int
+            The atomic number associated with an atom.
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
+            data.
+        """
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
                 "GET_ATOMIC_NUM: provided atom index is out of range or is a dummy atom"
@@ -472,6 +777,25 @@ class MoleculeSetup:
         return self.atoms[atom_index].atomic_num
 
     def get_atom_type(self, atom_index: int):
+        """
+        Retrieves the atom type for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to retrieve data for.
+
+        Returns
+        -------
+        charge: str
+            The atom index associated with the atom
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
+            data.
+        """
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
                 "GET_ATOM_TYPE: provided atom index is out of range or is a dummy atom"
@@ -511,20 +835,51 @@ class MoleculeSetup:
         return None
 
     def get_is_ignore(self, atom_index: int):
+        """
+        Retrieves the is_ignore boolean for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to retrieve data for.
+
+        Returns
+        -------
+        is_ignore: bool
+            Indicates whether a particular atom should be ignored
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
+            data.
+        """
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
                 "GET_IS_IGNORE: provided atom index is out of range or is a dummy atom"
             )
         return self.atoms[atom_index].is_ignore
 
-    def get_is_chiral(self, atom_index: int):
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "GET_IS_CHIRAL: provided atom index is out of range or is a dummy atom"
-            )
-        return self.atoms[atom_index].is_chiral
-
     def get_neighbors(self, atom_index: int):
+        """
+        Retrieves the partial charge for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to retrieve data for.
+
+        Returns
+        -------
+        graph: list[int]
+            The graph of the atoms connections to other atoms.
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
+            data.
+        """
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
                 "GET_GRAPH: provided atom index is out of range or is a dummy atom"
@@ -540,72 +895,92 @@ class MoleculeSetup:
 
     # endregion
 
-    # def get_bonds_in_ring
-    # def walk_recursive
-    # def perceive_rings
+    def merge_terminal_atoms(self, indices):
+        """
+        Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
+        other atom.
 
-    # def merge_terminal_atoms(self, indices):
-    #     """
-    #     Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
-    #     other atom.
-    #
-    #     Parameters
-    #     ----------
-    #     indices: list
-    #         A list of indices to merge
-    #
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #     for index in indices:
-    #         if len(self.get_neighbors(index)) != 1:
-    #             msg = "Atempted to merge atom %d with %d neighbors. "
-    #             msg += "Only atoms with one neighbor can be merged."
-    #             msg = msg % (index + 1, self.get_neighbors(index))
-    #             raise RuntimeError(msg)
-    #         neighbor_index = self.get_neighbors(index)[0]
-    #         self.atoms[neighbor_index].charge += self.get_charge(index)
-    #         self.atoms[index].charge = 0.0
-    #         self.atoms[index].is_ignore = True
-    #     return
+        Parameters
+        ----------
+        indices: list
+            A list of indices to merge
+
+        Returns
+        -------
+        None
+        """
+        for index in indices:
+            if len(self.get_neighbors(index)) != 1:
+                msg = "Atempted to merge atom %d with %d neighbors. "
+                msg += "Only atoms with one neighbor can be merged."
+                msg = msg % (index + 1, self.get_neighbors(index))
+                raise RuntimeError(msg)
+            neighbor_index = self.get_neighbors(index)[0]
+            self.atoms[neighbor_index].charge += self.get_charge(index)
+            self.atoms[index].charge = 0.0
+            self.atoms[index].is_ignore = True
+        return
 
 
-# TODO: RENAME THIS TO NOT BE WORD VOMIT, CLEAN UP - Sets all the requirements for if you're building
-# A moleculesetup with an external toolkit like RDKit or OB
-class MoleculeSetupExternalToolBuild(ABC):
+class MoleculeSetupExternalToolkit(ABC):
+    """
+    Additional functions and requirements to extend the MoleculeSetup class when you want to use it with external
+    toolkits like OpenBabel and RDKit.
+
+    Required Attributes
+    -------------------
+    dihedral_interactions: list
+        A list of fourier series [add detail]
+    """
 
     @staticmethod
-    def are_fourier_series_identical(fs1, fs2):
+    def are_fourier_series_identical(series1: list, series2: list) -> bool:
         """
-        NOT MODIFIED YET
+        Compares two fourier series represented as lists of dictionaries.
+
+        Parameters
+        ----------
+        series1: list[dict]
+            The first fourier series to compare.
+        series2: list[dict]
+            The second fourier series to compare.
+
+        Returns
+        -------
+        A bool indicicating whether the fourier series are equal.
         """
+        # Gets the indices of both series by periodicity and checks for equality
         index_by_periodicity1 = {
-            fs1[index]["periodicity"]: index for index in range(len(fs1))
+            series1[index]["periodicity"]: index for index in range(len(series1))
         }
         index_by_periodicity2 = {
-            fs2[index]["periodicity"]: index for index in range(len(fs2))
+            series2[index]["periodicity"]: index for index in range(len(series2))
         }
         if index_by_periodicity1 != index_by_periodicity2:
             return False
+        # After establishing equality of the indices, loops through periodicity abd checks that the values stored in
+        # each fourier series dictionary are equal.
         for periodicity in index_by_periodicity1:
             index1 = index_by_periodicity1[periodicity]
             index2 = index_by_periodicity2[periodicity]
             for key in ["k", "phase", "periodicity"]:
-                if fs1[index1][key] != fs2[index2][key]:
+                if series1[index1][key] != series2[index2][key]:
                     return False
         return True
 
     def add_dihedral_interaction(self, fourier_series):
         """
+        Adds a safe copy of the input fourier series to the dihedral_interactions list if the fourier series is not
+        already in the list.
 
         Parameters
         ----------
-        fourier_series
+        fourier_series: list[dict]
 
         Returns
         -------
-
+        index: int
+            The index of the input fourier series in the dihedral interactions list.
         """
         index = 0
         for existing_fs in self.dihedral_interactions:
@@ -636,16 +1011,31 @@ class MoleculeSetupExternalToolBuild(ABC):
     def get_smiles_and_order(self):
         pass
 
-class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolBuild):
+
+class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
     """
     Subclass of MoleculeSetup, used to represent MoleculeSetup objects working with RDKit objects
 
     Attributes
     ----------
     mol : rdkit.Chem.rdchem.Mol
-        an RDKit Mol object to base the Molecule Setup on
-    modified_atom_positions :
-        list of dictionaries where keys are atom indices
+        An RDKit Mol object to base the Molecule Setup on.
+    modified_atom_positions: list
+        List of dictionaries where keys are atom indices, Used to store sets of coordinates, e.g. docked poses, as
+        dictionaries indexed by the atom index, because not all atoms need to have new coordinates specified.
+        Unspecified hydrogen positions bonded to modified heavy atom positions are to be calculated "on-the-fly".
+    dihedral_interactions: list[]
+        A list of fourier series, each of which are represented as a list of dictionaries.
+    dihedral_partaking_atoms: dict()
+        a mapping from atom index (int?) to dihedral index (int?)
+    dihedral_labels: dict()
+        a mapping from atom index to a string dihedral labels
+    atom_to_ring_id: dict()
+        mapping of atom index to ring id of each atom belonging to the ring
+    ring_corners: dict()
+        unclear what this is a mapping of, but is used to store corner flexibility for the rings
+    rmsd_symmetry_indices: tuple
+        Tuples of the indices of the molecule's atoms that match a substructure query. needs info.
 
     Methods
     -------
@@ -653,21 +1043,52 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolBuild):
         constructor for the RDKitMoleculeSetup object (consider adapting to init?)
     """
 
+    def __init__(self, name: str = None, is_sidechain: bool = False):
+        super().__init__(name, is_sidechain)
+        self.modified_atom_positions = []
+        self.dihedral_interactions = []
+        self.dihedral_partaking_atoms = {}
+        self.dihedral_labels = {}
+
     @classmethod
     def from_mol(
         cls,
-        mol,
-        keep_chorded_rings=False,
-        keep_equivalent_rings=False,
-        assign_charges=True,
-        conformer_id=-1,
+        mol: Chem.Mol,
+        keep_chorded_rings: bool = False,
+        keep_equivalent_rings: bool = False,
+        assign_charges: bool = True,
+        conformer_id: int = -1,
     ):
+        """
+
+        Parameters
+        ----------
+        mol: rdkit.Chem.rdchem.Mol
+            RDKit Mol object to build the RDKitMoleculeSetup from.
+        keep_chorded_rings: bool
+        keep_equivalent_rings: bool
+        assign_charges: bool
+        conformer_id: int
+
+        Returns
+        -------
+        molsetup: RDKitMoleculeSetup
+            A populated RDKitMoleculeSetup object
+
+        Raises
+        ------
+        ValueError:
+            If the RDKit Mol has implicit Hydrogens or if there are no conformers for the given RDKit Mol
+        """
+        # Checks if the input molecule is valid
         if cls.has_implicit_hydrogens(mol):
             raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
         if mol.GetNumConformers() == 0:
             raise ValueError(
                 "RDKit molecule does not have a conformer. Need 3D coordinates."
             )
+
+        # Gets the RDKit Conformer that we are going to load into the molecule setup
         rdkit_conformer = mol.GetConformer(conformer_id)
         if not rdkit_conformer.Is3D():
             warnings.warn(
@@ -677,6 +1098,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolBuild):
         if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one."
             print(msg, file=sys.stderr)
+
+        # Creating and populating the molecule setup with properties from RDKit as well as calculated values from our
+        # functions
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
@@ -697,29 +1121,132 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolBuild):
 
         return molsetup
 
-    # @classmethod
-    # def from_mol(
-    #     cls,
-    #     mol: rdkit.Chem.Mol,
-    #     keep_chorded_rings: bool = False,
-    #     keep_equivalent_rings: bool = False,
-    #     assign_charges: bool = True,
-    #     conformer_id: int = 1,
-    # ):
-    #     # Checks if the input molecule is valid
-    #     if has_implicit_hydrogens(mol):
-    #         raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
-    #     if mol.GetNumConformers(mol) == 0:
-    #         raise ValueError(
-    #             "RDKit molecule does not have a conformer. Need 3D coordinates."
-    #         )
-    #
-    #     # Gets the RDKit Conformer that we are going to load into the molecule setup
-    #     rdkit_conformer = mol.GetConformer(conformer_id)
-    #
-    #     # Creating and populating the molecule setup with properties from RDKit
-    #
-    #     pass
+    # region Ring Construction
+
+    # NOTE: This is a candidate for moving to utils
+    @staticmethod
+    def get_bonds_in_ring(ring: list[int]):
+        """
+        Takes as input a list of atom indices corresponding to atoms in a ring and returns a list of all the bonds ids
+        in the ring.
+
+        Parameters
+        ----------
+        ring: list[int]
+            A list of atom indices of the atoms in a ring.
+
+        Returns
+        -------
+        A list of canonical bond id tuples for the bonds in the ring.
+        """
+        bonds = []
+        num_indices = len(ring)
+        for i in range(num_indices):
+            bond = (ring[i], ring[(i + 1) % num_indices])
+            bond = Bond.get_bond_id(bond[0], bond[1])
+            bonds.append(bond)
+        return bonds
+
+    def _is_ring_aromatic(self, ring_atom_indices: list[(int, int)]):
+        """
+        Determines whether a ring is aromatic.
+
+        Parameters
+        ----------
+        ring_atom_indices: the atom indices in the ring.
+
+        Returns
+        -------
+        A boolean indicating whether this ring is aromatic.
+        """
+        for atom_idx1, atom_idx2 in self.get_bonds_in_ring(ring_atom_indices):
+            bond = self.mol.GetBondBetweenAtoms(atom_idx1, atom_idx2)
+            if not bond.GetIsAromatic():
+                return False
+        return True
+
+    @staticmethod
+    def _construct_old_graph(atom_list: list[Atom]):
+        """
+        To support older implementations of helper functions in Meeko, takes a list of atoms and uses it to create a
+        list of each atom's graph value, where the index of a graph in the list corresponds to the atom's atom_index.
+
+        Parameters
+        ----------
+        atom_list: list[Atom]
+            A list of populated Atom objects.
+
+        Returns
+        -------
+        A list of lists of ints, where each list of ints represents the bonds from that atom index to other atom
+        indices.
+        """
+        output_graph = []
+        for atom in atom_list:
+            output_graph.append(atom.graph)
+        return output_graph
+
+    def _recursive_graph_walk(
+        self, idx: int, collected: list[int] = None, exclude: list[int] = None
+    ):
+        """
+        Recursively walks through a molecular graph and returns bond-connected subgroups.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to start the recursive walk from
+        collected: list[int]
+            a list of connected subgroups
+        exclude: list[int]
+            a list of atom indices to exclude from the final walk.
+
+        Returns
+        -------
+        A list of ints indicating the subgroups that are bond-connected.
+        """
+        if collected is None:
+            collected = []
+        if exclude is None:
+            exclude = []
+        for neighbor in self.get_neighbors(idx):
+            if neighbor in collected or neighbor in exclude:
+                continue
+            collected.append(neighbor)
+            self._recursive_graph_walk(neighbor, collected.exclude)
+        return collected
+
+    def perceive_rings(self, keep_chorded_rings: bool, keep_equivalent_rings: bool):
+        """
+        Uses Hanser-Jauffret-Kaufmann exhaustive ring detection to find the rings in the molecule
+
+        Parameters
+        ----------
+        keep_chorded_rings: bool
+            Indicates whether we want to keep chorded rings
+        keep_equivalent_rings: bool
+            Indicates whether we want to keep equivalent rings
+
+        Returns
+        -------
+        None
+        """
+        old_graph = self._construct_old_graph(self.atoms)
+        hjk_ring_detection = utils.HJKRingDetection(old_graph)
+        rings = hjk_ring_detection.scan(keep_chorded_rings, keep_equivalent_rings)
+        for ring_atom_indices in rings:
+            ring_to_add = Ring(ring_atom_indices)
+            if self._is_ring_aromatic(ring_atom_indices):
+                ring_to_add.is_aromatic = True
+            for atom_idx in ring_atom_indices:
+                # TODO: add it to some sort of atom to ring id tracking thing -> add to atom data structure
+                ring_to_add.graph = self._recursive_graph_walk(
+                    atom_idx, collected=[], exclude=list(ring_atom_indices)
+                )
+            self.rings[ring_atom_indices] = ring_to_add
+        return
+
+    # endregion
 
     def get_conformer_with_modified_positions(self, new_atom_positions):
         # we operate on one conformer at a time because SetTerminalAtomPositions
@@ -948,8 +1475,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolBuild):
                 charge=charges[idx],
                 atom_type=None,
                 pdbinfo=rdkitutils.getPdbInfoNoNull(a),
-                chiral=False,
-                ignore=False,
+                is_ignore=False,
             )
 
     def init_bond(self):
@@ -1056,91 +1582,6 @@ class OBMoleculeSetup(MoleculeSetup):
     def copy(self):
         """return a copy of the current setup"""
         return OBMoleculeSetup(template=self)
-
-@dataclass
-class Atom:
-    index: int
-    pdbinfo: str = DEFAULT_PDBINFO
-    charge: float = DEFAULT_CHARGE
-    atomic_num: int = DEFAULT_ATOMIC_NUM
-    atom_type: str = DEFAULT_ATOM_TYPE
-    is_ignore: bool = DEFAULT_IS_IGNORE
-    is_chiral: bool = DEFAULT_IS_CHIRAL
-    graph: list[int] = field(default_factory=list)
-    interaction_vectors: list[np.array] = field(default_factory=list)
-
-    is_dummy: bool = False
-    is_pseudo_atom: bool = False
-
-
-@dataclass
-class Bond:
-    canon_id: (int, int)
-    index1: int
-    index2: int
-    order: int = DEFAULT_BOND_ORDER
-    rotatable: bool = DEFAULT_BOND_ROTATABLE
-
-    def __init__(
-        self,
-        index1: int,
-        index2: int,
-        order: int = DEFAULT_BOND_ORDER,
-        rotatable: bool = DEFAULT_BOND_ROTATABLE,
-    ):
-        self.canon_id = self.get_bond_id(index1, index2)
-        self.index1 = index1
-        self.index2 = index2
-        self.order = order
-        self.rotatable = rotatable
-        return
-
-    @staticmethod
-    def get_bond_id(idx1: int, idx2: int):
-        """
-        Generates a consistent, "canonical", bond id from a pair of atom indices in the graph.
-
-        Parameters
-        ----------
-        idx1: int
-            atom index of one of the atoms in the bond
-        idx2: int
-            atom index of the other atom in the bond
-
-        Returns
-        -------
-        canon_id: tuple
-            a tuple of the two indices in their canonical order.
-        """
-        idx_min = min(idx1, idx2)
-        idx_max = max(idx1, idx2)
-        return idx_min, idx_max
-
-
-@dataclass
-class Ring:
-    ring_id: int
-    corner_flip: bool = DEFAULT_RING_CORNER_FLIP
-    graph: dict = DEFAULT_RING_GRAPH
-    is_aromatic: bool = DEFAULT_RING_IS_AROMATIC
-
-
-@dataclass
-class Restraint:
-    atom_index: int
-    target_xyz: (float, float, float)
-    kcal_per_angstrom_square: float
-    delay_angstroms: float
-
-    def copy(self):
-        new_target_xyz = (self.target_xyz[0], self.target_xyz[1], self.target_xyz[2])
-        new_restraint = Restraint(
-            self.atom_index,
-            new_target_xyz,
-            self.kcal_per_angstrom_square,
-            self.delay_angstroms,
-        )
-        return new_restraint
 
 
 # TODO: refactor molsetup class then refactor this and consider making it more readable.
