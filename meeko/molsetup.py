@@ -49,6 +49,7 @@ DEFAULT_COORD = np.array([0.0, 0.0, 0.0], dtype="float")
 DEFAULT_ATOMIC_NUM = None
 DEFAULT_ATOM_TYPE = None
 DEFAULT_IS_IGNORE = False
+DEFAULT_GRAPH = []
 
 DEFAULT_BOND_ORDER = 0
 DEFAULT_BOND_ROTATABLE = False
@@ -198,7 +199,7 @@ class Atom:
     index: int
     pdbinfo: str = DEFAULT_PDBINFO
     charge: float = DEFAULT_CHARGE
-    coord: np.ndarray = DEFAULT_COORD
+    coord: np.ndarray = field(default_factory=np.ndarray)
     atomic_num: int = DEFAULT_ATOMIC_NUM
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
@@ -506,11 +507,11 @@ class MoleculeSetup:
         overwrite: bool = False,
         pdbinfo: str = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
-        coord: np.ndarray = DEFAULT_COORD,
+        coord: np.ndarray = None,
         atomic_num: int = DEFAULT_ATOMIC_NUM,
         atom_type: str = DEFAULT_ATOM_TYPE,
         is_ignore: bool = DEFAULT_IS_IGNORE,
-        graph: list[int] = field(default_factory=list),
+        graph: list[int] = None,
     ):
         """
         Adds an atom with all the specified attributes to the MoleculeSetup, either at the specified atom index, or by
@@ -549,8 +550,11 @@ class MoleculeSetup:
         # If atom index is specified and it would be trying to overwrite an existing atom in the atom list, raises a
         # Runtime Exception
         insert_disallowed = len(self.atoms) > atom_index and not overwrite
-        dummy_atom_present = self.atoms[atom_index].is_dummy
-        if atom_index is not None and insert_disallowed and not dummy_atom_present:
+        if (
+            atom_index is not None
+            and insert_disallowed
+            and not self.atoms[atom_index].is_dummy
+        ):
             raise RuntimeError(
                 "ADD_ATOM Error: the atom_index [%d] is already occupied (use 'overwrite' to force)"
             )
@@ -564,6 +568,10 @@ class MoleculeSetup:
             self.atoms.append(Atom(len(self.atoms), is_dummy=True))
 
         # Creates and adds new atom to the atom list
+        if coord is None:
+            coord = deepcopy(DEFAULT_COORD)
+        if graph is None:
+            graph = deepcopy(DEFAULT_GRAPH)
         new_atom = Atom(
             atom_index,
             pdbinfo,
@@ -584,7 +592,7 @@ class MoleculeSetup:
         self,
         pdbinfo: str = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
-        coord: np.ndarray = DEFAULT_COORD,
+        coord: np.ndarray = None,
         atom_type: str = DEFAULT_ATOM_TYPE,
         is_ignore: bool = DEFAULT_IS_IGNORE,
         anchor_list: list[int] = None,
@@ -629,6 +637,8 @@ class MoleculeSetup:
         # Places the atom at the end of the atom list.
         pseudoatom_index = len(self.atoms)
         # Creates the atom and marks it as a pseudoatom
+        if coord is None:
+            coord = deepcopy(DEFAULT_COORD)
         new_pseudoatom = Atom(
             pseudoatom_index,
             pdbinfo=pdbinfo,
@@ -1777,12 +1787,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
 
         Returns
         -------
-        A list of lists of ints, where each list of ints represents the bonds from that atom index to other atom
-        indices.
+        A dict mapping from atom index to lists of ints, where each list of ints represents the bonds from that
+        atom index to other atom indices.
         """
-        output_graph = []
+        output_graph = {}
         for atom in atom_list:
-            output_graph.append(atom.graph)
+            output_graph[atom.index] = atom.graph
         return output_graph
 
     def perceive_rings(self, keep_chorded_rings: bool, keep_equivalent_rings: bool):
