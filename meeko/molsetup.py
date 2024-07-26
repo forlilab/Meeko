@@ -45,11 +45,10 @@ from .utils import rdkitutils
 # region DEFAULT VALUES
 DEFAULT_PDBINFO = None
 DEFAULT_CHARGE = 0.0
-DEFAULT_COORD = defaultdict
+DEFAULT_COORD = np.array([0.0, 0.0, 0.0], dtype="float")
 DEFAULT_ATOMIC_NUM = None
 DEFAULT_ATOM_TYPE = None
 DEFAULT_IS_IGNORE = False
-DEFAULT_IS_CHIRAL = False
 
 DEFAULT_BOND_ORDER = 0
 DEFAULT_BOND_ROTATABLE = False
@@ -60,6 +59,7 @@ DEFAULT_RING_IS_AROMATIC = False
 # endregion
 
 
+# region Helper Data Organization Classes
 class UniqAtomParams:
     """
     A helper class used to keep parameters organized in a particular way that lets them be more usable.
@@ -198,15 +198,80 @@ class Atom:
     index: int
     pdbinfo: str = DEFAULT_PDBINFO
     charge: float = DEFAULT_CHARGE
+    coord: np.ndarray = DEFAULT_COORD
     atomic_num: int = DEFAULT_ATOMIC_NUM
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
-    is_chiral: bool = DEFAULT_IS_CHIRAL
     graph: list[int] = field(default_factory=list)
     interaction_vectors: list[np.array] = field(default_factory=list)
 
     is_dummy: bool = False
     is_pseudo_atom: bool = False
+
+    @staticmethod
+    def from_json(obj: dict):
+        """
+        Takes an object and attempts to deserialize it into an Atom object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary constructed by deserializing the JSON representation
+            of an Atom object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to an Atom, will return an Atom with data populated from the
+        dictionary. Otherwise, returns the input object.
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+
+        # Check that all the keys we expect are in the object dictionary as a safety measure
+        expected_json_keys = {
+            "index",
+            "pdbinfo",
+            "charge",
+            "coord",
+            "atomic_num",
+            "atom_type",
+            "is_ignore",
+            "graph",
+            "interaction_vectors",
+            "is_dummy",
+            "is_pseudo_atom",
+        }
+        if set(obj.keys()) != expected_json_keys:
+            return obj
+
+        # Constructs an atom object from the provided keys.
+        index = obj["index"]
+        pdbinfo = obj["pdbinfo"]
+        charge = obj["charge"]
+        coord = np.asarray(obj["coord"])
+        atomic_num = obj["atomic_num"]
+        atom_type = obj["atom_type"]
+        is_ignore = obj["is_ignore"]
+        graph = obj["graph"]
+        interaction_vectors = [np.asarray(i) for i in obj["interaction_vectors"]]
+        is_dummy = obj["is_dummy"]
+        is_pseudo_atom = obj["is_pseudo_atom"]
+        output_atom = Atom(
+            index,
+            pdbinfo,
+            charge,
+            coord,
+            atomic_num,
+            atom_type,
+            is_ignore,
+            graph,
+            interaction_vectors,
+            is_dummy,
+            is_pseudo_atom,
+        )
+        return output_atom
 
 
 @dataclass
@@ -252,34 +317,167 @@ class Bond:
         idx_max = max(idx1, idx2)
         return idx_min, idx_max
 
+    @staticmethod
+    def from_json(obj: dict):
+        """
+        Takes an object and attempts to deserialize it into a Bond object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary constructed by deserializing the JSON representation
+            of a Bond object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to a Bond, will return a Bond with data populated from the
+        dictionary. Otherwise, returns the input object.
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+
+        # Check that all the keys we expect are in the object dictionary as a safety measure
+        expected_json_keys = {"canon_id", "index1", "index2", "order", "rotatable"}
+        if set(obj.keys()) != expected_json_keys:
+            return obj
+
+        # Constructs a bond object from the provided keys.
+        index1 = obj["index1"]
+        index2 = obj["index2"]
+        order = obj["order"]
+        rotatable = obj["rotatable"]
+        output_bond = Bond(index1, index2, order, rotatable)
+        return output_bond
+
 
 @dataclass
 class Ring:
-    ring_id: int
+    ring_id: tuple
     corner_flip: bool = DEFAULT_RING_CORNER_FLIP
     graph: dict = DEFAULT_RING_GRAPH
     is_aromatic: bool = DEFAULT_RING_IS_AROMATIC
+
+    @staticmethod
+    def from_json(obj: dict):
+        """
+        Takes an object and attempts to deserialize it into a Ring object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary constructed by deserializing the JSON representation
+            of a Ring object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to a Ring, will return a Ring with data populated from the
+        dictionary. Otherwise, returns the input object.
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+
+        # Check that all the keys we expect are in the object dictionary as a safety measure
+        expected_json_keys = {"ring_id", "corner_flip", "graph", "is_aromatic"}
+        if set(obj.keys()) != expected_json_keys:
+            return obj
+
+        # Constructs a Ring object from the provided keys.
+        ring_id = tuple(obj["ring_id"])
+        corner_flip = obj["corner_flip"]
+        graph = obj["graph"]
+        is_aromatic = obj["is_aromatic"]
+        output_ring = Ring(ring_id, corner_flip, graph, is_aromatic)
+        return output_ring
 
 
 @dataclass
 class Restraint:
     atom_index: int
-    target_xyz: (float, float, float)
+    target_coords: (float, float, float)
     kcal_per_angstrom_square: float
     delay_angstroms: float
 
     def copy(self):
-        new_target_xyz = (self.target_xyz[0], self.target_xyz[1], self.target_xyz[2])
+        new_target_coords = (
+            self.target_coords[0],
+            self.target_coords[1],
+            self.target_coords[2],
+        )
         new_restraint = Restraint(
             self.atom_index,
-            new_target_xyz,
+            new_target_coords,
             self.kcal_per_angstrom_square,
             self.delay_angstroms,
         )
         return new_restraint
 
+    @staticmethod
+    def from_json(obj: dict):
+        """
+        Takes an object and attempts to deserialize it into a Restraint object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary constructed by deserializing the JSON representation
+            of a Restraint object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to a Restraint, will return a Restraint with data populated from the
+        dictionary. Otherwise, returns the input object.
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+
+        # Check that all the keys we expect are in the object dictionary as a safety measure
+        expected_json_keys = {
+            "atom_index",
+            "target_coords",
+            "kcal_per_angstrom_square",
+            "delay_angstroms",
+        }
+        if set(obj.keys()) != expected_json_keys:
+            return obj
+
+        # Constructs a Restraint object from the provided keys.
+        atom_index = obj["atom_index"]
+        target_coords = tuple(obj["target_coords"])
+        kcal_per_angstrom_square = obj["kcal_per_angstrom_square"]
+        delay_angstroms = obj["delay_angstroms"]
+        output_restraint = Restraint(
+            atom_index, target_coords, kcal_per_angstrom_square, delay_angstroms
+        )
+        return output_restraint
+
+
+# endregion
+
 
 class MoleculeSetup:
+    """
+    Base MoleculeSetup Class, provides a way to store information about molecules for a number of purposes.
+
+    Attributes
+    ----------
+    name: str
+    is_sidechain: bool
+    true_atom_count: int
+    pseudoatom_count: int
+
+    atoms: list[Atom]
+    bond_info: dict[tuple, Bond]
+    rings: dict
+
+    rotamers: list[dict]
+    flexibility_model: dict
+    """
 
     # region CLASS CONSTANTS
     PSEUDOATOM_ATOMIC_NUM = 0
@@ -287,22 +485,19 @@ class MoleculeSetup:
 
     def __init__(self, name: str = None, is_sidechain: bool = False):
         # Molecule Setup Identity
-        self.name = name
-        self.is_sidechain = is_sidechain
-        self.true_atom_count = 0
-        self.pseudo_atom_count = 0
+        self.name: str = name
+        self.is_sidechain: bool = is_sidechain
+        self.true_atom_count: int = 0
+        self.pseudoatom_count: int = 0
 
         # Tracking atoms and bonds
         self.atoms: list[Atom] = []
-        self.bond_info = {}
-        self.rings = {}
-        self.rotamers = []
-        pass
+        self.bond_info: dict[tuple, Bond] = {}
+        self.rings: dict[tuple, Ring] = {}
+        self.rotamers: list[dict] = []  # TODO: revisit rotamer implementation
 
-    @classmethod
-    def from_prmtop_inpcrd(cls, prmtop, crd_filename: str):
-        # TODO: pull functionality over and clean up
-        pass
+        # TODO: redesign flexibility model to resolve some of the circular imports and to make it more structured
+        self.flexibility_model = None  # from flexibility_model - from flexibility.py
 
     # region Manually Building A MoleculeSetup
     def add_atom(
@@ -666,33 +861,38 @@ class MoleculeSetup:
                 self.true_atom_count += 1
         return self.true_atom_count
 
-    def _add_interaction_vectors(self, atom_index: int, vector_list: list[np.array]):
+    # this might void the graph connections and everything in bonds, might need to add a dict of the changes we're
+    # making and then use that save this for a future push.
+    def clean_atoms(self, remove_pseudoatoms: bool = False):
         """
-        Adds input vector list to the list of directional ineraction vectors for the specified atom.
+        Cleans dummy and potentially also pseudoatoms from the MoleculeSetup so only true atoms remain. Note that this
+        is pretty slow and should not be done often.
 
         Parameters
         ----------
-        atom_index: int
-            index of the atom to add the vectors to
-        vector_list: list[np.array]
-            a list of directional interaction vectors
+        remove_pseudoatoms: bool
+            Indicates if we want to remove all the pseudoatoms from the MoleculeSetup.
 
         Returns
         -------
-        None
-
-        Raises
-        ------
-        IndexError
-            if the specified atom index does not exist or is a dummy atom.
+        The number of atoms removed from the MoleculeSetup.
         """
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom"
-            )
-        for vector in vector_list:
-            self.atoms[atom_index].interaction_vectors.append(vector)
-        return
+        new_atoms = []
+        removed_atom_count = 0
+        atom_index_mapping = {}
+        for atom in self.atoms:
+            if remove_pseudoatoms and atom.is_pseudo_atom:
+                removed_atom_count += 1
+                continue
+            if atom.is_dummy:
+                removed_atom_count += 1
+                continue
+            atom.index = atom.index - removed_atom_count
+            new_atoms.append(atom)
+        self.atoms = new_atoms
+        if remove_pseudoatoms:
+            self.pseudoatom_count = 0
+        return removed_atom_count
 
     # endregion
 
@@ -793,14 +993,40 @@ class MoleculeSetup:
         Raises
         ------
         IndexError:
-            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
-            data.
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain data.
         """
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
             raise IndexError(
                 "GET_ATOM_TYPE: provided atom index is out of range or is a dummy atom"
             )
         return self.atoms[atom_index].atom_type
+
+    def set_atom_type(self, atom_index: int, atom_type: str) -> None:
+        """
+        Sets the atom type for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to set atom_type for.
+        atom_type
+            Atom type string to set.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain data.
+        """
+        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
+            raise IndexError(
+                "SET_ATOM_TYPE: provided atom index is out of range or is a dummy atom"
+            )
+        self.atoms[atom_index].atom_type = atom_type
+        return
 
     def set_atom_type_from_uniq_atom_params(
         self, uniq_atom_params: UniqAtomParams, prefix: str
@@ -895,7 +1121,7 @@ class MoleculeSetup:
 
     # endregion
 
-    def merge_terminal_atoms(self, indices):
+    def merge_terminal_atoms(self, indices) -> None:
         """
         Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
         other atom.
@@ -921,11 +1147,202 @@ class MoleculeSetup:
             self.atoms[index].is_ignore = True
         return
 
+    # NOTE: This is a candidate for moving to utils
+    @staticmethod
+    def get_bonds_in_ring(ring: list[int]) -> list[tuple]:
+        """
+        Takes as input a list of atom indices corresponding to atoms in a ring and returns a list of all the bonds ids
+        in the ring.
 
+        Parameters
+        ----------
+        ring: list[int]
+            A list of atom indices of the atoms in a ring.
+
+        Returns
+        -------
+        A list of canonical bond id tuples for the bonds in the ring.
+        """
+        bonds = []
+        num_indices = len(ring)
+        for i in range(num_indices):
+            bond = (ring[i], ring[(i + 1) % num_indices])
+            bond = Bond.get_bond_id(bond[0], bond[1])
+            bonds.append(bond)
+        return bonds
+
+    def _recursive_graph_walk(
+        self, idx: int, collected: list[int] = None, exclude: list[int] = None
+    ):
+        """
+        Recursively walks through a molecular graph and returns bond-connected subgroups.
+
+        Parameters
+        ----------
+        idx: int
+            atom index to start the recursive walk from
+        collected: list[int]
+            a list of connected subgroups
+        exclude: list[int]
+            a list of atom indices to exclude from the final walk.
+
+        Returns
+        -------
+        A list of ints indicating the subgroups that are bond-connected.
+        """
+        if collected is None:
+            collected = []
+        if exclude is None:
+            exclude = []
+        for neighbor in self.get_neighbors(idx):
+            if neighbor in collected or neighbor in exclude:
+                continue
+            collected.append(neighbor)
+            self._recursive_graph_walk(neighbor, collected.exclude)
+        return collected
+
+    def write_coord_string(self) -> str:
+        """
+        Constructs and returns a string of all atom and pseudoatom elements and coordinates.
+
+        Returns
+        -------
+        A string of all atom and pseudoatom elements and coordinates.
+        """
+        n = len(self.atoms)
+        output_string = "%d\n\n" % n
+        for index in range(n):
+            element = "Ne"
+            if self.atoms[index].is_dummy:
+                continue
+            if not self.atoms[index].is_pseudo_atom:
+                element = utils.mini_periodic_table[self.atoms[index].atomic_num]
+            x, y, z = self.atoms[index].coord
+            output_string += "%3s %12.6f %12.6f %12.6f\n" % (element, x, y, z)
+        return output_string
+
+    def show(self) -> None:
+        """
+        Legacy function to print the contents of a MoleculeSetup in a human-readable format.
+
+        Returns
+        -------
+        None
+        """
+        total_charge = 0
+
+        print("Molecule Setup\n")
+        print(
+            "==============[ ATOMS ]==================================================="
+        )
+        print("idx  |          coords            | charge |ign| atype    | connections")
+        print(
+            "-----+----------------------------+--------+---+----------+--------------- . . . "
+        )
+        for atom in self.atoms:
+            print(
+                "% 4d | % 8.3f % 8.3f % 8.3f | % 1.3f | %d"
+                % (
+                    atom.index,
+                    atom.coord[0],
+                    atom.coord[1],
+                    atom.coord[2],
+                    atom.charge,
+                    atom.is_ignore,
+                ),
+                "| % -8s |" % atom.atom_type,
+                atom.graph,
+            )
+            total_charge += atom.charge
+        print(
+            "-----+----------------------------+--------+---+----------+--------------- . . . "
+        )
+        print("  TOT CHARGE: %3.3f" % total_charge)
+        print("\n======[ DIRECTIONAL VECTORS ]==========")
+        for atom in self.atoms:
+            if atom.interaction_vector:
+                print("% 4d " % atom.index, atom.atom_type, end=" ")
+
+        print("\n==============[ BONDS ]================")
+        # For sanity users, we won't show those keys for now
+        keys_to_not_show = ["bond_order", "type"]
+        for bond_id, bond in list(self.bond_info.items()):
+            t = ", ".join(
+                "%s: %s" % (i, j)
+                for i, j in bond.__dict__.items()
+                if i not in keys_to_not_show
+            )
+            print("% 8s - " % str(bond_id), t)
+        print("")
+        return
+
+    def to_json(self):
+        """
+        Converts MoleculeSetup object to a JSON string.
+
+        Returns
+        -------
+        A JSON string representation of the MoleculeSetup object.
+        """
+        return json.dumps(self, cls=MoleculeSetupEncoder)
+
+    @staticmethod
+    def from_json(obj):
+        """
+        Takes an object and attempts to decode it into a MoleculeSetup object.
+
+        Parameters
+        ----------
+        obj: Object
+            This can be any object, but it should be a dictionary generated by deserializing a JSON of a MoleculeSetup
+            object.
+
+        Returns
+        -------
+        If the input is a dictionary corresponding to a MoleculeSetup, will return a MoleculeSetup with data
+        populated from the dictionary. Otherwise, returns the input object.
+        """
+        # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
+        # safe data, so we should ignore it.
+        if type(obj) is not dict:
+            return obj
+
+        # checks that all the keys we expect are in the object dictionary as a safety measure
+        expected_molsetup_keys = {
+            "name",
+            "is_sidechain",
+            "true_atom_count",
+            "pseudoatom_count",
+            "atoms",
+            "bond_info",
+            "rings",
+            "rotamers",
+            "flexibility_model",
+        }
+        if set(obj.keys()) != expected_molsetup_keys:
+            return obj
+
+        # Constructs a MoleculeSetup object and restores the expected attributes
+        name = obj["name"]
+        is_sidechain = obj["is_sidechain"]
+        molsetup = MoleculeSetup(name, is_sidechain)
+        molsetup.true_atom_count = obj["true_atom_count"]
+        molsetup.pseudoatom_count = obj["pseudoatom_count"]
+        molsetup.atoms = [Atom.from_json(x) for x in obj["atoms"]]
+        molsetup.bond_info = {
+            tuple(k): Bond.from_json(v) for k, v in obj["bond_info"].items()
+        }
+        molsetup.rings = {tuple(k): Ring.from_json(v) for k, v in obj["rings"].items()}
+        molsetup.rotamers = obj["rotamers"]
+        molsetup.flexibility_model = obj["flexibility_model"]
+        return molsetup
+
+
+# region External Toolkit Support
 class MoleculeSetupExternalToolkit(ABC):
     """
-    Additional functions and requirements to extend the MoleculeSetup class when you want to use it with external
-    toolkits like OpenBabel and RDKit.
+    Additional functions and requirements to extend the MoleculeSetup class in order to use it with  external toolkits
+    such as RDKit and OpenBabel.
 
     Required Attributes
     -------------------
@@ -992,7 +1409,7 @@ class MoleculeSetupExternalToolkit(ABC):
         return index
 
     @abstractmethod
-    def init_atom(self):
+    def init_atom(self, assign_charges, coords):
         pass
 
     @abstractmethod
@@ -1004,12 +1421,14 @@ class MoleculeSetupExternalToolkit(ABC):
         pass
 
     @abstractmethod
-    def find_pattern(self):
+    def find_pattern(self, smarts: str):
         pass
 
     @abstractmethod
     def get_smiles_and_order(self):
         pass
+
+    pass
 
 
 class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
@@ -1049,6 +1468,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         self.dihedral_interactions = []
         self.dihedral_partaking_atoms = {}
         self.dihedral_labels = {}
+        self.atom_to_ring_id = {}
+        self.ring_corners = {}
+        self.rmsd_symmetry_indices = ()
 
     @classmethod
     def from_mol(
@@ -1121,190 +1543,104 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
 
         return molsetup
 
-    # region Ring Construction
-
-    # NOTE: This is a candidate for moving to utils
-    @staticmethod
-    def get_bonds_in_ring(ring: list[int]):
+    def init_atom(self, assign_charges: bool, coords: list[np.ndarray]):
         """
-        Takes as input a list of atom indices corresponding to atoms in a ring and returns a list of all the bonds ids
-        in the ring.
+        Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
 
         Parameters
         ----------
-        ring: list[int]
-            A list of atom indices of the atoms in a ring.
-
-        Returns
-        -------
-        A list of canonical bond id tuples for the bonds in the ring.
-        """
-        bonds = []
-        num_indices = len(ring)
-        for i in range(num_indices):
-            bond = (ring[i], ring[(i + 1) % num_indices])
-            bond = Bond.get_bond_id(bond[0], bond[1])
-            bonds.append(bond)
-        return bonds
-
-    def _is_ring_aromatic(self, ring_atom_indices: list[(int, int)]):
-        """
-        Determines whether a ring is aromatic.
-
-        Parameters
-        ----------
-        ring_atom_indices: the atom indices in the ring.
-
-        Returns
-        -------
-        A boolean indicating whether this ring is aromatic.
-        """
-        for atom_idx1, atom_idx2 in self.get_bonds_in_ring(ring_atom_indices):
-            bond = self.mol.GetBondBetweenAtoms(atom_idx1, atom_idx2)
-            if not bond.GetIsAromatic():
-                return False
-        return True
-
-    @staticmethod
-    def _construct_old_graph(atom_list: list[Atom]):
-        """
-        To support older implementations of helper functions in Meeko, takes a list of atoms and uses it to create a
-        list of each atom's graph value, where the index of a graph in the list corresponds to the atom's atom_index.
-
-        Parameters
-        ----------
-        atom_list: list[Atom]
-            A list of populated Atom objects.
-
-        Returns
-        -------
-        A list of lists of ints, where each list of ints represents the bonds from that atom index to other atom
-        indices.
-        """
-        output_graph = []
-        for atom in atom_list:
-            output_graph.append(atom.graph)
-        return output_graph
-
-    def _recursive_graph_walk(
-        self, idx: int, collected: list[int] = None, exclude: list[int] = None
-    ):
-        """
-        Recursively walks through a molecular graph and returns bond-connected subgroups.
-
-        Parameters
-        ----------
-        idx: int
-            atom index to start the recursive walk from
-        collected: list[int]
-            a list of connected subgroups
-        exclude: list[int]
-            a list of atom indices to exclude from the final walk.
-
-        Returns
-        -------
-        A list of ints indicating the subgroups that are bond-connected.
-        """
-        if collected is None:
-            collected = []
-        if exclude is None:
-            exclude = []
-        for neighbor in self.get_neighbors(idx):
-            if neighbor in collected or neighbor in exclude:
-                continue
-            collected.append(neighbor)
-            self._recursive_graph_walk(neighbor, collected.exclude)
-        return collected
-
-    def perceive_rings(self, keep_chorded_rings: bool, keep_equivalent_rings: bool):
-        """
-        Uses Hanser-Jauffret-Kaufmann exhaustive ring detection to find the rings in the molecule
-
-        Parameters
-        ----------
-        keep_chorded_rings: bool
-            Indicates whether we want to keep chorded rings
-        keep_equivalent_rings: bool
-            Indicates whether we want to keep equivalent rings
+        assign_charges: bool
+            Indicates whether we should extract/generate charges.
+        coords: list[np.ndarray]
+            Atom coordinates for the RDKit Mol.
 
         Returns
         -------
         None
         """
-        old_graph = self._construct_old_graph(self.atoms)
-        hjk_ring_detection = utils.HJKRingDetection(old_graph)
-        rings = hjk_ring_detection.scan(keep_chorded_rings, keep_equivalent_rings)
-        for ring_atom_indices in rings:
-            ring_to_add = Ring(ring_atom_indices)
-            if self._is_ring_aromatic(ring_atom_indices):
-                ring_to_add.is_aromatic = True
-            for atom_idx in ring_atom_indices:
-                # TODO: add it to some sort of atom to ring id tracking thing -> add to atom data structure
-                ring_to_add.graph = self._recursive_graph_walk(
-                    atom_idx, collected=[], exclude=list(ring_atom_indices)
-                )
-            self.rings[ring_atom_indices] = ring_to_add
-        return
+        # extract/generate charges
+        if assign_charges:
+            copy_mol = Chem.Mol(self.mol)
+            for atom in copy_mol.GetAtoms():
+                if atom.GetAtomicNum() == 34:
+                    atom.SetAtomicNum(16)
+            rdPartialCharges.ComputeGasteigerCharges(copy_mol)
+            charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
+        else:
+            charges = [0.0] * self.mol.GetNumAtoms()
+        # register atom
+        for a in self.mol.GetAtoms():
+            idx = a.GetIdx()
+            self.add_atom(
+                atom_index=idx,
+                pdbinfo=rdkitutils.getPdbInfoNoNull(a),
+                charge=charges[idx],
+                coord=coords[idx],
+                atomic_num=a.GetAtomicNum(),
+                is_ignore=False,
+            )
 
-    # endregion
+    def init_bond(self):
+        """
+        Uses the RDKit mol to initialize bond info for the RDKitMoleculeSetup
 
-    def get_conformer_with_modified_positions(self, new_atom_positions):
-        # we operate on one conformer at a time because SetTerminalAtomPositions
-        # acts on all conformers of a molecule, and we don't want to guarantee
-        # that all conformers require the same set of terminal atoms to be updated
-        new_mol = Chem.Mol(self.mol)
-        new_conformer = Chem.Conformer(self.mol.GetConformer())
-        is_set_list = [False] * self.mol.GetNumAtoms()
-        for atom_index, new_position in new_atom_positions.items():
-            new_conformer.SetAtomPosition(atom_index, new_position)
-            is_set_list[atom_index] = True
-        new_mol.RemoveAllConformers()
-        new_mol.AddConformer(new_conformer, assignId=True)
-        for atom_index, is_set in enumerate(is_set_list):
-            if not is_set and new_mol.GetAtomWithIdx(atom_index).GetAtomicNum() == 1:
-                neighbors = new_mol.GetAtomWithIdx(atom_index).GetNeighbors()
-                if len(neighbors) != 1:
-                    raise RuntimeError("Expected H to have one neighbors")
-                Chem.SetTerminalAtomCoords(new_mol, atom_index, neighbors[0].GetIdx())
-        return new_conformer
+        Returns
+        -------
+        None
+        """
+        for b in self.mol.GetBonds():
+            idx1 = b.GetBeginAtomIdx()
+            idx2 = b.GetEndAtomIdx()
+            bond_order = int(b.GetBondType())
+            # fix the RDKit aromatic type (FIXME)
+            if bond_order == 12:  # aromatic
+                bond_order = 5
+            if bond_order == 1:
+                rotatable = True
+            else:
+                rotatable = False
+            self.add_bond(idx1, idx2, order=bond_order, rotatable=rotatable)
 
-    def get_mol_with_modified_positions(self, new_atom_positions_list=None):
-        if new_atom_positions_list is None:
-            new_atom_positions_list = self.modified_atom_positions
-        new_mol = Chem.Mol(self.mol)
-        new_mol.RemoveAllConformers()
-        for new_atom_positions in new_atom_positions_list:
-            conformer = self.get_conformer_with_modified_positions(new_atom_positions)
-            new_mol.AddConformer(conformer, assignId=True)
-        return new_mol
+    def find_pattern(self, smarts: str):
+        """
+        Given a SMARTS pattern, finds substruct matches in the molecule.
 
+        Parameters
+        ----------
+        smarts:
+            A SMARTS string to find in the RDKit Mol object
+
+        Returns
+        -------
+        The substruct matches in the RDKit Mol for the given SMARTS.
+        """
+        p = Chem.MolFromSmarts(smarts)
+        return self.mol.GetSubstructMatches(p)
+
+    def get_mol_name(self):
+        """
+        Gets the RDKit Mol's name from self.mol.
+
+        Returns
+        -------
+        If the mol has a name, returns the name property.
+        """
+        if self.mol.HasProp("_Name"):
+            return self.mol.GetProp("_Name")
+        else:
+            return None
+
+    # TODO: Add more inline comments and clean up this function
     def get_smiles_and_order(self):
         """
-        return the SMILES after Chem.RemoveHs()
-        and the mapping between atom indices in smiles and self.mol
-        """
+        Returns the SMILES string and the mapping between atom indices in the SMILES and self.molof an atom after
+        running RDKit's RemoveHs function.
 
-        ### # support sidechains in which not all real atoms are included in PDBQT
-        ### ignored = []
-        ### for atom in self.mol.GetAtoms():
-        ###     index = atom.GetIdx()
-        ###     if self.atom_ignore[index]:
-        ###         ignored.append(index)
-        ### if len(ignored) > 0: # e.g. sidechain padded with amides
-        ###     mol_no_ignore = Chem.EditableMol(self.mol)
-        ###     for index in sorted(ignored, reverse=True):
-        ###         mol_no_ignore.RemoveAtom(index)
-        ###     # remove dangling Hs
-        ###     dangling_hs = []
-        ###     for atom in mol_no_ignore.GetMol().GetAtoms():
-        ###         if atom.GetAtomicNum() == 1:
-        ###             if len(atom.GetNeighbors()) == 0:
-        ###                 dangling_hs.append(atom.GetIdx())
-        ###     for index in sorted(dangling_hs, reverse=True):
-        ###         mol_no_ignore.RemoveAtom(index)
-        ###     mol_no_ignore = mol_no_ignore.GetMol()
-        ###     Chem.SanitizeMol(mol_no_ignore)
-        ### else:
+        Returns
+        -------
+        smiles:
+        order:
+        """
         mol_no_ignore = self.mol
 
         # 3D SDF files written by other toolkits (OEChem, ChemAxon)
@@ -1409,20 +1745,151 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         order = {noH_to_H[i]: order[i] + 1 for i in range(len(order))}  # 1-index
         return smiles, order
 
-    def find_pattern(self, smarts):
-        p = Chem.MolFromSmarts(smarts)
-        return self.mol.GetSubstructMatches(p)
+    # region Ring Construction
+    def _is_ring_aromatic(self, ring_atom_indices: list[(int, int)]):
+        """
+        Determines whether a ring is aromatic.
 
-    def get_mol_name(self):
-        if self.mol.HasProp("_Name"):
-            return self.mol.GetProp("_Name")
-        else:
-            return None
+        Parameters
+        ----------
+        ring_atom_indices: the atom indices in the ring.
+
+        Returns
+        -------
+        A boolean indicating whether this ring is aromatic.
+        """
+        for atom_idx1, atom_idx2 in self.get_bonds_in_ring(ring_atom_indices):
+            bond = self.mol.GetBondBetweenAtoms(atom_idx1, atom_idx2)
+            if not bond.GetIsAromatic():
+                return False
+        return True
+
+    @staticmethod
+    def _construct_old_graph(atom_list: list[Atom]):
+        """
+        To support older implementations of helper functions in Meeko, takes a list of atoms and uses it to create a
+        list of each atom's graph value, where the index of a graph in the list corresponds to the atom's atom_index.
+
+        Parameters
+        ----------
+        atom_list: list[Atom]
+            A list of populated Atom objects.
+
+        Returns
+        -------
+        A list of lists of ints, where each list of ints represents the bonds from that atom index to other atom
+        indices.
+        """
+        output_graph = []
+        for atom in atom_list:
+            output_graph.append(atom.graph)
+        return output_graph
+
+    def perceive_rings(self, keep_chorded_rings: bool, keep_equivalent_rings: bool):
+        """
+        Uses Hanser-Jauffret-Kaufmann exhaustive ring detection to find the rings in the molecule
+
+        Parameters
+        ----------
+        keep_chorded_rings: bool
+            Indicates whether we want to keep chorded rings
+        keep_equivalent_rings: bool
+            Indicates whether we want to keep equivalent rings
+
+        Returns
+        -------
+        None
+        """
+        old_graph = self._construct_old_graph(self.atoms)
+        hjk_ring_detection = utils.HJKRingDetection(old_graph)
+        rings = hjk_ring_detection.scan(keep_chorded_rings, keep_equivalent_rings)
+        for ring_atom_indices in rings:
+            ring_to_add = Ring(ring_atom_indices)
+            if self._is_ring_aromatic(ring_atom_indices):
+                ring_to_add.is_aromatic = True
+            for atom_idx in ring_atom_indices:
+                # TODO: add it to some sort of atom to ring id tracking thing -> add to atom data structure
+                ring_to_add.graph = self._recursive_graph_walk(
+                    atom_idx, collected=[], exclude=list(ring_atom_indices)
+                )
+            self.rings[ring_atom_indices] = ring_to_add
+        return
+
+    # endregion
+
+    def get_conformer_with_modified_positions(self, new_atom_positions):
+        """
+        Gets a conformer with the specified new atom positions.
+        We operate on one conformer at a time because SetTerminalAtomPositions acts on all conformers of a molecule,
+        and we do not want to guarantee that all conformers require the same set of terminal atoms to be updated.
+
+        Parameters
+        ----------
+        new_atom_positions:
+            The new atom positions we want to use.
+
+        Returns
+        -------
+        new_conformer:
+            A new conformer with the input new atom positions.
+        """
+        new_mol = Chem.Mol(self.mol)
+        new_conformer = Chem.Conformer(self.mol.GetConformer())
+        is_set_list = [False] * self.mol.GetNumAtoms()
+        for atom_index, new_position in new_atom_positions.items():
+            new_conformer.SetAtomPosition(atom_index, new_position)
+            is_set_list[atom_index] = True
+        new_mol.RemoveAllConformers()
+        new_mol.AddConformer(new_conformer, assignId=True)
+        for atom_index, is_set in enumerate(is_set_list):
+            if not is_set and new_mol.GetAtomWithIdx(atom_index).GetAtomicNum() == 1:
+                neighbors = new_mol.GetAtomWithIdx(atom_index).GetNeighbors()
+                if len(neighbors) != 1:
+                    raise RuntimeError("Expected H to have one neighbors")
+                Chem.SetTerminalAtomCoords(new_mol, atom_index, neighbors[0].GetIdx())
+        return new_conformer
+
+    def get_mol_with_modified_positions(self, new_atom_positions_list=None):
+        """
+        Modifies the stored RDKit Mol to a new set of atom positions, either those provided or the ones stored in
+        self.modified_atom_positions, and returns the modified Mol object.
+
+        Parameters
+        ----------
+        new_atom_positions_list:
+            New atom positions to add to the RDKit Mol object.
+
+        Returns
+        -------
+        new_mol: rdkit.Chem.rdchem.Mol
+            A new RDKit Mol object with conformers that have the desired new atom positions.
+        """
+        if new_atom_positions_list is None:
+            new_atom_positions_list = self.modified_atom_positions
+        new_mol = Chem.Mol(self.mol)
+        new_mol.RemoveAllConformers()
+        for new_atom_positions in new_atom_positions_list:
+            conformer = self.get_conformer_with_modified_positions(new_atom_positions)
+            new_mol.AddConformer(conformer, assignId=True)
+        return new_mol
 
     def get_num_mol_atoms(self):
+        """
+        Gets the number of atoms in the RDKit Mol object.
+
+        Returns
+        -------
+        Number of atoms in the RDKit Mol object.
+        """
         return self.mol.GetNumAtoms()
 
     def get_equivalent_atoms(self):
+        """
+
+        Returns
+        -------
+
+        """
         return list(Chem.CanonicalRankAtoms(self.mol, breakTies=False))
 
     @staticmethod
@@ -1446,62 +1913,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
             )
         return matches
 
-    def init_atom(self, assign_charges, coords):
-        """initialize the atom table information"""
-        # extract/generate charges
-        if assign_charges:
-            copy_mol = Chem.Mol(self.mol)
-            for atom in copy_mol.GetAtoms():
-                if atom.GetAtomicNum() == 34:
-                    atom.SetAtomicNum(16)
-            rdPartialCharges.ComputeGasteigerCharges(copy_mol)
-            charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
-        else:
-            charges = [0.0] * self.mol.GetNumAtoms()
-        # perceive chirality
-        chiral_info = {}
-        for data in Chem.FindMolChiralCenters(self.mol, includeUnassigned=True):
-            chiral_info[data[0]] = data[1]
-        # register atom
-        for a in self.mol.GetAtoms():
-            idx = a.GetIdx()
-            chiral = False
-            if idx in chiral_info:
-                chiral = chiral_info[idx]
-            self.add_atom(
-                idx,
-                coord=coords[idx],
-                atomic_num=a.GetAtomicNum(),
-                charge=charges[idx],
-                atom_type=None,
-                pdbinfo=rdkitutils.getPdbInfoNoNull(a),
-                is_ignore=False,
-            )
-
-    def init_bond(self):
-        """initialize bond information"""
-        for b in self.mol.GetBonds():
-            idx1 = b.GetBeginAtomIdx()
-            idx2 = b.GetEndAtomIdx()
-            bond_order = int(b.GetBondType())
-            # fix the RDKit aromatic type (FIXME)
-            if bond_order == 12:  # aromatic
-                bond_order = 5
-            if bond_order == 1:
-                rotatable = True
-            else:
-                rotatable = False
-            self.add_bond(idx1, idx2, order=bond_order, rotatable=rotatable)
-
-    def copy(self):
-        """return a copy of the current setup"""
-        newsetup = RDKitMoleculeSetup()
-        for key, value in self.__dict__.items():
-            if key != "mol":
-                newsetup.__dict__[key] = deepcopy(value)
-        newsetup.mol = Chem.Mol(self.mol)  # not sure how deep of a copy this is
-        return newsetup
-
     @staticmethod
     def has_implicit_hydrogens(mol):
         # based on needsHs from RDKit's AddHs.cpp
@@ -1516,6 +1927,18 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
     def restrain_to(
         self, target_mol, kcal_per_angstrom_square=1.0, delay_angstroms=2.0
     ):
+        """
+
+        Parameters
+        ----------
+        target_mol
+        kcal_per_angstrom_square
+        delay_angstroms
+
+        Returns
+        -------
+
+        """
         if not _has_misctools:
             raise ImportError(_import_misctools_error)
         stereo_isomorphism = StereoIsomorphism()
@@ -1532,12 +1955,81 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         return
 
 
-class OBMoleculeSetup(MoleculeSetup):
+class OBMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
+    """
+    Subclass of MoleculeSetup, used to represent MoleculeSetup objects constructed using OpenBabel.
+
+    Attributes
+    ----------
+    mol :
+        An OpenBabel Mol object to base the OBMoleculeSetup on.
+    """
+
+    def init_atom(self, assign_charges: bool, coords: list = None):
+        """
+        Initializes atoms in the molecule using OpenBabel data.
+
+        Parameters
+        ----------
+        assign_charges: bool
+            Indicates whether charges should be calculated for the atoms in this molecule.
+        coords: list
+            Allows a user to input atom coordinates for the atoms in the molecule.
+
+        Returns
+        -------
+        None
+        """
+        for a in ob.OBMolAtomIter(self.mol):
+            partial_charge = a.GetPartialCharge() * float(assign_charges)
+            self.add_atom(
+                atom_index=a.GetIdx() - 1,
+                pdbinfo=obutils.getPdbInfoNoNull(a),
+                charge=partial_charge,
+                coord=np.asarray(obutils.getAtomCoords(a), dtype="float"),
+                atomic_num=a.GetAtomicNum(),
+                is_ignore=False,
+            )
+
+    def init_bond(self):
+        """
+        Uses the OpenBabel molecule data to initialize bond info for the OBMoleculeSetup
+
+        Returns
+        -------
+        None
+        """
+        for b in ob.OBMolBondIter(self.mol):
+            idx1 = b.GetBeginAtomIdx() - 1
+            idx2 = b.GetEndAtomIdx() - 1
+            bond_order = b.GetBondOrder()
+            if b.IsAromatic():
+                bond_order = 5
+            self.add_bond(idx1, idx2, order=bond_order)
 
     def get_mol_name(self):
+        """
+        Gets the mol name from self.mol.
+
+        Returns
+        -------
+        If the mol has a title, returns the title property.
+        """
         return self.mol.GetTitle()
 
-    def find_pattern(self, smarts):
+    def find_pattern(self, smarts: str):
+        """
+        Given a SMARTS pattern, finds substruct matches in the molecule.
+
+        Parameters
+        ----------
+        smarts: str
+            A SMARTS string to find in the OpenBabel molecule.
+
+        Returns
+        -------
+        The substruct matches in the OpenBabel mol for the given SMARTS.
+        """
         obsmarts = ob.OBSmartsPattern()
         obsmarts.Init(smarts)
         found = obsmarts.Match(self.mol)
@@ -1547,53 +2039,167 @@ class OBMoleculeSetup(MoleculeSetup):
                 output.append([y - 1 for y in x])
         return output
 
+    def get_smiles_and_order(self):
+        raise NotImplementedError
+
     def get_num_mol_atoms(self):
+        """
+        Gets the number of atoms in the OpenBabel mol.
+
+        Returns
+        -------
+        The number of molecules in the OpenBabel mol.
+        """
         return self.mol.NumAtoms()
 
     def get_equivalent_atoms(self):
         raise NotImplementedError
 
-    def init_atom(self, assign_charges):
-        """initialize atom data table"""
-        for a in ob.OBMolAtomIter(self.mol):
-            partial_charge = a.GetPartialCharge() * float(assign_charges)
-            self.add_atom(
-                a.GetIdx() - 1,
-                coord=np.asarray(obutils.getAtomCoords(a), dtype="float"),
-                atomic_num=a.GetAtomicNum(),
-                charge=partial_charge,
-                atom_type=None,
-                pdbinfo=obutils.getPdbInfoNoNull(a),
-                ignore=False,
-                chiral=a.IsChiral(),
-            )
-            # TODO check consistency for chiral model between OB and RDKit
 
-    def init_bond(self):
-        """initialize bond data table"""
-        for b in ob.OBMolBondIter(self.mol):
-            idx1 = b.GetBeginAtomIdx() - 1
-            idx2 = b.GetEndAtomIdx() - 1
-            bond_order = b.GetBondOrder()
-            if b.IsAromatic():
-                bond_order = 5
-            self.add_bond(idx1, idx2, order=bond_order)
-
-    def copy(self):
-        """return a copy of the current setup"""
-        return OBMoleculeSetup(template=self)
+# endregion
 
 
-# TODO: refactor molsetup class then refactor this and consider making it more readable.
-class MoleculeSetupEncoder(json.JSONEncoder):
+# region JSON Serialization and Deserialization
+class AtomEncoder(json.JSONEncoder):
     """
-    JSON Encoder class for molecule setup objects. Makes decisions about how to convert types to JSON serializable types
-    so they can be reliably decoded should a user want to pull the JSON back into an object.
+    JSON Encoder class for Atom dataclass.
     """
 
     def default(self, obj):
         """
-        Overrides the default JSON encoder for data structures for Molecule Setup objects.
+        Overrides the default JSON encoder for data structures for Atom objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Atom JSON format for Atom objects.
+            For all other objects will return the default JSON encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the Atom class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, Atom):
+            return {
+                "index": obj.index,
+                "pdbinfo": obj.pdbinfo,
+                "charge": obj.charge,
+                "coord": obj.coord.tolist(),  # converts coord from numpy array to lists
+                "atomic_num": obj.atomic_num,
+                "atom_type": obj.atom_type,
+                "is_ignore": obj.is_ignore,
+                "graph": obj.graph,
+                "interaction_vectors": [v.tolist() for v in obj.interaction_vectors],
+                "is_dummy": obj.is_dummy,
+                "is_pseudo_atom": obj.is_pseudo_atom,
+            }
+        return json.JSONEncoder.default(self, obj)
+
+
+class BondEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for Bond dataclass.
+    """
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for Bond objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Bond JSON format for Bond objects.
+            For all other objects will return the default JSON encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the Bond class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, Bond):
+            return {
+                "canon_id": obj.canon_id,
+                "index1": obj.index1,
+                "index2": obj.index2,
+                "order": obj.order,
+                "rotatable": obj.rotatable,
+            }
+        return json.JSONEncoder.default(self, obj)
+
+
+class RingEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for Ring dataclass.
+    """
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for Ring objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Ring JSON format for Ring objects.
+            For all other objects will return the default JSON encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the Ring class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, Ring):
+            return {
+                "ring_id": obj.ring_id,
+                "corner_flip": obj.corner_flip,
+                "graph": obj.graph,
+                "is_aromatic": obj.is_aromatic,
+            }
+        return json.JSONEncoder.default(self, obj)
+
+
+class RestraintEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for Restraint dataclass.
+    """
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for Restraint objects.
+
+        Parameters
+        ----------
+        obj: object
+            Can take any object as input, but will only create the Restraint JSON format for Restraint objects.
+            For all other objects will return the default JSON encoding.
+
+        Returns
+        -------
+        A JSON serializable object that represents the Restraint class or the default JSONEncoder output for an
+        object.
+        """
+        if isinstance(obj, Restraint):
+            return {
+                "atom_index": obj.atom_index,
+                "target_coords": obj.target_coords,
+                "kcal_per_angstrom_square": obj.kcal_per_angstrom_square,
+                "delay_angstroms": obj.delay_angstroms,
+            }
+        return json.JSONEncoder.default(self, obj)
+
+
+class MoleculeSetupEncoder(json.JSONEncoder):
+    """
+    JSON Encoder class for MoleculeSetup dataclass.
+    """
+
+    atom_encoder = AtomEncoder()
+    bond_encoder = BondEncoder()
+    ring_encoder = RingEncoder()
+
+    def default(self, obj):
+        """
+        Overrides the default JSON encoder for data structures for MoleculeSetup objects.
 
         Parameters
         ----------
@@ -1606,73 +2212,23 @@ class MoleculeSetupEncoder(json.JSONEncoder):
         A JSON serializable object that represents the MoleculeSetup class or the default JSONEncoder output for an
         object.
         """
-        # Checks if the input object is a MoleculeSetup as desired
         if isinstance(obj, MoleculeSetup):
-            separator_char = ","  # TODO: consider setting this somewhere else so it is the same for decode and encode
-            # Sets the elements of an output dict of attributes based off of all the attributes that are guaranteed to
-            # be present and
-            output_dict = {
-                # Attributes that are dictionaries mapping from atom index to some other property
-                "coord": {
-                    k: v.tolist() for k, v in obj.coord.items()
-                },  # converts coords from numpy arrays to lists
-                "charge": obj.charge,
-                "pdbinfo": obj.pdbinfo,
-                "atom_type": obj.atom_type,
-                "atom_ignore": obj.atom_ignore,
-                "chiral": obj.chiral,
-                "graph": obj.graph,
-                "element": obj.element,
-                "interaction_vector": obj.interaction_vector,
-                "atom_to_ring_id": obj.atom_to_ring_id,
-                # Dihedral
-                "dihedral_interactions": obj.dihedral_interactions,
-                "dihedral_partaking_atoms": obj.dihedral_partaking_atoms,
-                "dihedral_labels": obj.dihedral_labels,
-                # Dictionaries with tuple keys have the tuples converted to strings
-                "bond": {
-                    separator_char.join([str(i) for i in k]): v
-                    for k, v in obj.bond.items()
+            return {
+                "name": obj.name,
+                "is_sidechain": obj.is_sidechain,
+                "true_atom_count": obj.true_atom_count,
+                "pseudoatom_count": obj.pseudoatom_count,
+                "atoms": [self.atom_encoder.default(x) for x in obj.atoms],
+                "bond_info": {
+                    k: self.bond_encoder.default(v) for k, v in obj.bond_info.items()
                 },
                 "rings": {
-                    separator_char.join([str(i) for i in k]): v
-                    for k, v in obj.rings.items()
+                    k: self.ring_encoder.default(v) for k, v in obj.rings.items()
                 },
-                # Dictionaries of dictionaries
-                "atom_params": obj.atom_params,
-                "flexibility_model": obj.flexibility_model,
-                "ring_closure_info": obj.ring_closure_info,
-                "ring_corners": obj.ring_corners,
-                # Lists
-                "atom_pseudo": obj.atom_pseudo,
-                "restraints": [asdict(restraint) for restraint in obj.restraints],
-                "rings_aromatic": obj.rings_aromatic,
                 "rotamers": obj.rotamers,
-                # Simple variables
-                "atom_true_count": obj.atom_true_count,
-                "is_sidechain": obj.is_sidechain,
-                "name": obj.name,
-                "rmsd_symmetry_indices": obj.rmsd_symmetry_indices,
+                "flexibility_model": obj.flexibility_model,
             }
-            # Since the flexibility model attribute contains dictionaries with tuples as keys, it needs to be treated
-            # more specifically.
-            if "rigid_body_connectivity" in obj.flexibility_model:
-                new_rigid_body_conn_dict = {
-                    separator_char.join([str(i) for i in k]): v
-                    for k, v in obj.flexibility_model["rigid_body_connectivity"].items()
-                }
-                output_dict["flexibility_model"] = {
-                    k: (
-                        v
-                        if k != "rigid_body_connectivity"
-                        else new_rigid_body_conn_dict
-                    )
-                    for k, v in obj.flexibility_model.items()
-                }
-
-            # Adds mol attribute if the input MoleculeSetup is an RDKitMoleculeSetup
-            if isinstance(obj, RDKitMoleculeSetup):
-                output_dict["mol"] = rdMolInterchange.MolToJSON(obj.mol)
-            return output_dict
-        # If the input object is not a MoleculeSetup, returns the default JSON encoding for that object
         return json.JSONEncoder.default(self, obj)
+
+
+# endregion
