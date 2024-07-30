@@ -57,14 +57,14 @@ class EspalomaTyper:
         charges = [float(q) for q in molgraph.nodes["n1"].data["q"]]
         total_charge = 0.0
         for i in range(len(charges)):
-            #print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
-            molsetup.charge[i] = charges[i] 
+            # print("%12.4f %12.4f" % (molsetup.charge[i], charges[i]))
+            molsetup.atoms[i].charge = charges[i]
             total_charge += charges[i]
-        for j in range(i+1, len(molsetup.charge)):
-            if molsetup.charge[j] != 0.:
+        for j in range(i+1, len(molsetup.atoms)):
+            if molsetup.get_charge(j) != 0.:
                 raise RuntimeError("expected zero charge beyond real atoms, at this point")
             
-    def set_espaloma_dihedrals(self, molsetup, molgraph):
+    def set_espaloma_dihedrals(self, molsetup: RDKitMoleculeSetup, molgraph):
         """Grab dihedrals from graph node and set them to the molsetup """
 
         ENERGY_UNIT_FACTOR = 0.00038087988 #Avoid relying on OpenFF for unit conversion 

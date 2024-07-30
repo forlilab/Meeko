@@ -57,6 +57,8 @@ DEFAULT_BOND_ROTATABLE = False
 DEFAULT_RING_CORNER_FLIP = False
 DEFAULT_RING_GRAPH = defaultdict
 DEFAULT_RING_IS_AROMATIC = False
+DEFAULT_RING_CLOSURE_BONDS_REMOVED = []
+DEFAULT_RING_CLOSURE_PSEUDOS_BY_ATOM = defaultdict
 # endregion
 
 
@@ -197,7 +199,7 @@ class UniqAtomParams:
 @dataclass
 class Atom:
     index: int
-    pdbinfo: str = DEFAULT_PDBINFO
+    pdbinfo:  str or PDBAtomInfo = DEFAULT_PDBINFO
     charge: float = DEFAULT_CHARGE
     coord: np.ndarray = field(default_factory=np.ndarray)
     atomic_num: int = DEFAULT_ATOMIC_NUM
@@ -396,6 +398,12 @@ class Ring:
 
 
 @dataclass
+class RingClosureInfo:
+    bonds_removed: list = field(default_factory=list)
+    pseudos_by_atom: dict = DEFAULT_RING_CLOSURE_PSEUDOS_BY_ATOM
+
+
+@dataclass
 class Restraint:
     atom_index: int
     target_coords: (float, float, float)
@@ -496,10 +504,11 @@ class MoleculeSetup:
         self.atoms: list[Atom] = []
         self.bond_info: dict[tuple, Bond] = {}
         self.rings: dict[tuple, Ring] = {}
+        self.ring_closure_info = RingClosureInfo([], {})
         self.rotamers: list[dict] = []  # TODO: revisit rotamer implementation
 
         self.atom_params = {}
-        self.restraints = [] # TODO: determine whether restraints are being used anymore
+        self.restraints = []  # TODO: determine whether restraints are being used anymore
 
         # TODO: redesign flexibility model to resolve some of the circular imports and to make it more structured
         self.flexibility_model = None  # from flexibility_model - from flexibility.py
@@ -509,7 +518,7 @@ class MoleculeSetup:
         self,
         atom_index: int = None,
         overwrite: bool = False,
-        pdbinfo: str = DEFAULT_PDBINFO,
+        pdbinfo: str or PDBAtomInfo = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
         coord: np.ndarray = None,
         atomic_num: int = DEFAULT_ATOMIC_NUM,
@@ -594,7 +603,7 @@ class MoleculeSetup:
 
     def add_pseudoatom(
         self,
-        pdbinfo: str = DEFAULT_PDBINFO,
+        pdbinfo: str or PDBAtomInfo = DEFAULT_PDBINFO,
         charge: float = DEFAULT_CHARGE,
         coord: np.ndarray = None,
         atom_type: str = DEFAULT_ATOM_TYPE,
@@ -1189,14 +1198,14 @@ class MoleculeSetup:
 
     # NOTE: This is a candidate for moving to utils
     @staticmethod
-    def get_bonds_in_ring(ring: list[int]) -> list[tuple]:
+    def get_bonds_in_ring(ring: tuple) -> list[tuple]:
         """
-        Takes as input a list of atom indices corresponding to atoms in a ring and returns a list of all the bonds ids
+        Takes as input a tuple of atom indices corresponding to atoms in a ring and returns a list of all the bonds ids
         in the ring.
 
         Parameters
         ----------
-        ring: list[int]
+        ring: tuple
             A list of atom indices of the atoms in a ring.
 
         Returns
@@ -1504,6 +1513,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
 
     def __init__(self, name: str = None, is_sidechain: bool = False):
         super().__init__(name, is_sidechain)
+        self.mol = None
         self.modified_atom_positions = []
         self.dihedral_interactions: list[dict] = []
         self.dihedral_partaking_atoms: dict = {}

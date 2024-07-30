@@ -7,6 +7,9 @@
 from copy import deepcopy
 from .utils import pdbutils
 
+from meeko import RDKitMoleculeSetup
+from molsetup import Bond
+
 
 def _calc_max_weighted_depth(
     model: dict,
@@ -110,7 +113,7 @@ def merge_terminal_atoms(flex_model: dict, not_terminal_atoms: list[int] = ()) -
 
 
 def get_flexibility_model(
-    molsetup,
+    molsetup: RDKitMoleculeSetup,
     root_atom_index: int = None,
     break_combo_data: dict = None,
 ):
@@ -120,7 +123,7 @@ def get_flexibility_model(
 
     Parameters
     ----------
-    molsetup: MoleculeSetup
+    molsetup: RDKitMoleculeSetup
         The molecule setup to generate a flexibility model for.
     root_atom_index: int
 
@@ -154,7 +157,7 @@ def get_flexibility_model(
         )
         # Gets the number of atoms that aren't marked to be ignored
         nr_not_ignored = sum(
-            [not molsetup.atom_ignore[i] for i in range(len(molsetup.atom_ignore))]
+            [not molsetup.get_is_ignore(i) for i in range(len(molsetup.atoms))]
         )
         # Checks the validity of the model by ensuring that all of the atoms that should have been visited were visited,
         # otherwise raises an error
@@ -196,7 +199,7 @@ def get_flexibility_model(
 
         # Gets the number of atoms that aren't marked to be ignored
         nr_not_ignored = sum(
-            [not molsetup.atom_ignore[i] for i in range(len(molsetup.atom_ignore))]
+            [not molsetup.get_is_ignore(i) for i in range(len(molsetup.atoms))]
         )
         # Checks the validity of the model by ensuring that all of the atoms that should have been visited were visited,
         # otherwise raises an error
@@ -294,7 +297,7 @@ def update_closure_atoms(
     """
     # Loops through the bonds to break and adds all the bonds to
     for i, bond in enumerate(bonds_to_break):
-        molsetup.ring_closure_info["bonds_removed"].append(
+        molsetup.ring_closure_info.bonds_removed.append(
             bond
         )  # bond is a pair of atom indices
 
@@ -306,7 +309,7 @@ def update_closure_atoms(
                 coord = molsetup.get_coord(target)
             else:
                 coord = glue_pseudo_atoms[anchor]
-            anchor_info = molsetup.pdbinfo[anchor]
+            anchor_info = molsetup.get_pdbinfo(anchor)
             pdbinfo = pdbutils.PDBAtomInfo(
                 "G",
                 anchor_info.resName,
@@ -314,7 +317,7 @@ def update_closure_atoms(
                 anchor_info.icode,
                 anchor_info.chain,
             )
-            pseudo_index = molsetup.add_pseudo(
+            pseudo_index = molsetup.add_pseudoatom(
                 coord=coord,
                 charge=0.0,
                 anchor_list=[anchor],
@@ -324,14 +327,14 @@ def update_closure_atoms(
             )
             if anchor in molsetup.ring_closure_info:
                 raise RuntimeError("did not expect more than one G per atom")
-            molsetup.ring_closure_info["pseudos_by_atom"][anchor] = pseudo_index
+            molsetup.ring_closure_info.pseudos_by_atom[anchor] = pseudo_index
         molsetup.set_atom_type(bond[0], "CG%d" % i)
         molsetup.set_atom_type(bond[1], "CG%d" % i)
     return
 
 
 def walk_rigid_body_graph(
-    molsetup,
+    molsetup: RDKitMoleculeSetup,
     bonds_to_break: tuple,
     unbroken_rings_bonds: list[tuple],
     start: int = None,
@@ -357,12 +360,12 @@ def walk_rigid_body_graph(
     """
     # If start is none, uses the default start which is the first non-ignored atom
     if start is None:
-        for index, _ in enumerate(molsetup.atom_ignore):
-            if not molsetup.atom_ignore[index]:
-                start = index
+        for atom in molsetup.atoms:
+            if not atom.is_ignore:
+                start = atom.index
                 break
     # If the start atom is marked to be ignored, returns nothing
-    if molsetup.atom_ignore[start]:
+    if molsetup.get_is_ignore(start):
         return
     if data is None:
         data = {
@@ -386,26 +389,28 @@ def walk_rigid_body_graph(
     group_members = [start]
     while idx < len(group_members):
         current = group_members[idx]
-        if molsetup.atom_ignore[current]:
+        if molsetup.get_is_ignore(current):
             idx += 1
             continue
-        for neigh in molsetup.get_neigh(current):
-            if molsetup.atom_ignore[neigh]:
+        for neigh in molsetup.get_neighbors(current):
+            if molsetup.get_is_ignore(neigh):
                 continue
-            bond_id = molsetup.get_bond_id(current, neigh)
+            bond_id = Bond.get_bond_id(current, neigh)
             if bond_id in bonds_to_break:
                 continue
-            bond_info = molsetup.get_bond(current, neigh)
+            bond_info = None
+            if bond_id in molsetup.bond_info:
+                bond_info = molsetup.bond_info[bond_id]
             if neigh in data["visited"]:
                 neigh_in_other_rigid_body = (
                     rigid_index != data["rigid_index_by_atom"][neigh]
                 )
-                if not bond_info["rotatable"] and neigh_in_other_rigid_body:
+                if not bond_info.rotatable and neigh_in_other_rigid_body:
                     raise RuntimeError(
                         "Flexible bonds within rigid group. We have a problem."
                     )
                 continue
-            if bond_info["rotatable"] and bond_id not in unbroken_rings_bonds:
+            if bond_info.rotatable and bond_id not in unbroken_rings_bonds:
                 sprouts_buffer.append((current, neigh))
             else:
                 group_members.append(neigh)
