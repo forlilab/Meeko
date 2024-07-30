@@ -2054,6 +2054,7 @@ class ChorizoResidueEncoder(json.JSONEncoder):
                 "is_flexres_atom": obj.is_flexres_atom,
                 "is_movable": obj.is_movable,
                 "user_deleted": obj.user_deleted,
+                "molsetup_mapidx": obj.molsetup_mapidx,
             }
         return json.JSONEncoder.default(self, obj)
 
@@ -2237,6 +2238,7 @@ def chorizo_residue_json_decoder(obj: dict):
         "is_flexres_atom",
         "is_movable",
         "user_deleted",
+        "molsetup_mapidx",
     }
 
     if set(obj.keys()) != expected_residue_keys:
@@ -2263,6 +2265,10 @@ def chorizo_residue_json_decoder(obj: dict):
 
     residue.padded_mol = rdkit_mol_from_json(obj["padded_mol"])
     residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
+    if obj["molsetup_mapidx"] is None:
+        residue.molsetup_mapidx = None
+    else:
+        residue.molsetup_mapidx = {int(k): v for k, v in obj["molsetup_mapidx"].items()}
 
     # boolean values
     residue.is_flexres_atom = obj["is_flexres_atom"]
@@ -2462,6 +2468,7 @@ def rdkit_mol_from_json(json_str: str):
         raise ValueError(
             f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
         )
+    Chem.SanitizeMol(rdkit_mols[0])  # needed to compute gasteiger charges
     return rdkit_mols[0]
 
 

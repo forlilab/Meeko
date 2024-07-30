@@ -1186,6 +1186,7 @@ class MoleculeSetup:
                     f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
                 )
             molsetup.mol = rdkit_mols[0]
+            Chem.SanitizeMol(molsetup.mol)  # needed to compute gasteiger charges
         return molsetup
 
 
