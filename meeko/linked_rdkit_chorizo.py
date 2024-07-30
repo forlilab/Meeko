@@ -12,7 +12,7 @@ from rdkit.Chem import rdMolInterchange
 from prody.atomic.atomgroup import AtomGroup
 from prody.atomic.selection import Selection
 
-from .molsetup import MoleculeSetup
+from .molsetup import MoleculeSetup, RDKitMoleculeSetup
 from .molsetup import MoleculeSetupEncoder
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
@@ -83,7 +83,6 @@ def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=
     -------
 
     """
-    """recursively find all paths between start and end nodes"""
     current_path = current_path + (start_node,)
     paths_found = list(paths_found)
     for node in graph[start_node]:
@@ -518,107 +517,6 @@ class LinkedRDKitChorizo:
     suggested_mutations:
     """
 
-    @classmethod
-    def from_pdb_string(
-        cls,
-        pdb_string,
-        chem_templates,
-        mk_prep,
-        set_template=None,
-        residues_to_delete=None,
-        allow_bad_res=False,
-        bonds_to_delete=None,
-        blunt_ends=None,
-    ):
-        """
-
-        Parameters
-        ----------
-        pdb_string
-        chem_templates
-        mk_prep
-        set_template
-        residues_to_delete
-        allow_bad_res
-        bonds_to_delete
-        blunt_ends
-
-        Returns
-        -------
-
-        """
-
-        raw_input_mols = cls._pdb_to_residue_mols(pdb_string)
-        bonds = find_inter_mols_bonds(raw_input_mols)
-        if bonds_to_delete is not None:
-            for res1, res2 in bonds_to_delete:
-                if (res1, res2) in bonds:
-                    bonds.pop((res1, res2))
-                elif (res2, res1) in bonds:
-                    bonds.pop((res2, res1))
-        chorizo = cls(
-            raw_input_mols,
-            bonds,
-            chem_templates,
-            mk_prep,
-            set_template,
-            residues_to_delete,
-            blunt_ends,
-        )
-        if not allow_bad_res and len(chorizo.get_ignored_residues()):
-            raise RuntimeError("got unmatched residues")
-        return chorizo
-
-    @classmethod
-    def from_prody(
-        cls,
-        prody_obj: Union[Selection, AtomGroup],
-        chem_templates,
-        mk_prep,
-        set_template=None,
-        residues_to_delete=None,
-        allow_bad_res=False,
-        bonds_to_delete=None,
-        blunt_ends=None,
-    ):
-        """
-
-        Parameters
-        ----------
-        prody_obj
-        chem_templates
-        mk_prep
-        set_template
-        residues_to_delete
-        allow_bad_res
-        bonds_to_delete
-        blunt_ends
-
-        Returns
-        -------
-
-        """
-        raw_input_mols = cls._prody_to_residue_mols(prody_obj)
-        bonds = find_inter_mols_bonds(raw_input_mols)
-        if bonds_to_delete is not None:
-            for res1, res2 in bonds_to_delete:
-                if (res1, res2) in bonds:
-                    bonds.pop((res1, res2))
-                elif (res2, res1) in bonds:
-                    bonds.pop((res2, res1))
-        chorizo = cls(
-            raw_input_mols,
-            bonds,
-            chem_templates,
-            mk_prep,
-            set_template,
-            residues_to_delete,
-            blunt_ends,
-        )
-        if not allow_bad_res and len(chorizo.get_ignored_residues()):
-            raise RuntimeError("got unmatched residues")
-        return chorizo
-
     def __init__(
         self,
         raw_input_mols: dict[str, tuple[Chem.Mol, str]],
@@ -626,7 +524,7 @@ class LinkedRDKitChorizo:
         residue_chem_templates: ResidueChemTemplates,
         mk_prep=None,
         set_template: dict[str, str] = None,
-        residues_to_delete: list[str] =None,
+        residues_to_delete: list[str] = None,
         blunt_ends: list[tuple[str, int]] = None,
     ):
         """
@@ -734,6 +632,107 @@ class LinkedRDKitChorizo:
 
         return
 
+    @classmethod
+    def from_pdb_string(
+        cls,
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        set_template=None,
+        residues_to_delete=None,
+        allow_bad_res=False,
+        bonds_to_delete=None,
+        blunt_ends=None,
+    ):
+        """
+
+        Parameters
+        ----------
+        pdb_string
+        chem_templates
+        mk_prep
+        set_template
+        residues_to_delete
+        allow_bad_res
+        bonds_to_delete
+        blunt_ends
+
+        Returns
+        -------
+
+        """
+
+        raw_input_mols = cls._pdb_to_residue_mols(pdb_string)
+        bonds = find_inter_mols_bonds(raw_input_mols)
+        if bonds_to_delete is not None:
+            for res1, res2 in bonds_to_delete:
+                if (res1, res2) in bonds:
+                    bonds.pop((res1, res2))
+                elif (res2, res1) in bonds:
+                    bonds.pop((res2, res1))
+        chorizo = cls(
+            raw_input_mols,
+            bonds,
+            chem_templates,
+            mk_prep,
+            set_template,
+            residues_to_delete,
+            blunt_ends,
+        )
+        if not allow_bad_res and len(chorizo.get_ignored_residues()):
+            raise RuntimeError("got unmatched residues")
+        return chorizo
+
+    @classmethod
+    def from_prody(
+        cls,
+        prody_obj: Union[Selection, AtomGroup],
+        chem_templates,
+        mk_prep,
+        set_template=None,
+        residues_to_delete=None,
+        allow_bad_res=False,
+        bonds_to_delete=None,
+        blunt_ends=None,
+    ):
+        """
+
+        Parameters
+        ----------
+        prody_obj
+        chem_templates
+        mk_prep
+        set_template
+        residues_to_delete
+        allow_bad_res
+        bonds_to_delete
+        blunt_ends
+
+        Returns
+        -------
+
+        """
+        raw_input_mols = cls._prody_to_residue_mols(prody_obj)
+        bonds = find_inter_mols_bonds(raw_input_mols)
+        if bonds_to_delete is not None:
+            for res1, res2 in bonds_to_delete:
+                if (res1, res2) in bonds:
+                    bonds.pop((res1, res2))
+                elif (res2, res1) in bonds:
+                    bonds.pop((res2, res1))
+        chorizo = cls(
+            raw_input_mols,
+            bonds,
+            chem_templates,
+            mk_prep,
+            set_template,
+            residues_to_delete,
+            blunt_ends,
+        )
+        if not allow_bad_res and len(chorizo.get_ignored_residues()):
+            raise RuntimeError("got unmatched residues")
+        return chorizo
+
     def parameterize(self, mk_prep):
         """
 
@@ -754,13 +753,13 @@ class LinkedRDKitChorizo:
             molsetup = molsetups[0]
             self.residues[residue_id].molsetup = molsetup
             self.residues[residue_id].is_flexres_atom = [
-                False for _ in molsetup.atom_ignore
+                False for _ in molsetup.atoms
             ]
 
             # set ignore to True for atoms that are padding
-            for index in range(len(molsetup.atom_ignore)):
-                if index not in residue.molsetup_mapidx:
-                    molsetup.atom_ignore[index] = True
+            for atom in molsetup.atoms:
+                if atom.index not in residue.molsetup_mapidx:
+                    atom.is_ignore = True
 
             # recalculate flexibility tree after setting ignored atoms
             mk_prep.calc_flex(molsetup)
@@ -775,10 +774,10 @@ class LinkedRDKitChorizo:
                 )
             not_ignored_idxs = []
             charges = []
-            for i, q in molsetup.charge.items():  # charge is ordered dict
-                if i in residue.molsetup_mapidx:  # TODO offsite not in mapidx
-                    charges.append(q)
-                    not_ignored_idxs.append(i)
+            for atom in molsetup.atoms:
+                if atom.index in residue.molsetup_mapidx: # TODO offsite not in mapidx
+                    charges.append(atom.charge)
+                    not_ignored_idxs.append(atom.index)
             charges = rectify_charges(charges, net_charge, decimals=3)
             chain, resnum = residue_id.split(":")
             resname = self.residues[residue_id].input_resname
@@ -787,7 +786,7 @@ class LinkedRDKitChorizo:
             else:
                 atom_names = self.residues[residue_id].atom_names
             for i, j in enumerate(not_ignored_idxs):
-                molsetup.charge[j] = charges[i]
+                molsetup.atoms[j].charge = charges[i]
                 atom_name = atom_names[residue.molsetup_mapidx[j]]
                 if resnum[-1].isalpha():
                     icode = resnum[-1]
@@ -1264,18 +1263,17 @@ class LinkedRDKitChorizo:
             raise RuntimeError(
                 "can't define a sidechain without bonds to other residues"
             )
-        # elif len(link_atoms) == 1:
-        #    raise NotImplementedError("residue bonded to only one other residue")
-        graph = residue.molsetup.graph
+        # TODO: rewrite this to work better with new MoleculeSetups
+        graph = {atom.index: atom.graph for atom in residue.molsetup.atoms}
         for i in range(len(link_atoms) - 1):
             start_node = link_atoms[i]
             end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
             backbone_paths = find_graph_paths(graph, start_node, end_nodes)
             for path in backbone_paths:
-                for i in range(len(path) - 1):
-                    idx1 = min(path[i], path[i + 1])
-                    idx2 = max(path[i], path[i + 1])
-                    residue.molsetup.bond[(idx1, idx2)]["rotatable"] = False
+                for x in range(len(path) - 1):
+                    idx1 = min(path[x], path[x + 1])
+                    idx2 = max(path[x], path[x + 1])
+                    residue.molsetup.bond[(idx1, idx2)].rotatable = False
         residue.is_movable = True
 
         mk_prep.calc_flex(
@@ -1515,9 +1513,9 @@ class LinkedRDKitChorizo:
         for res_id in self.get_valid_residues():
             molsetup = self.residues[res_id].molsetup
             wanted_atom_indices = []
-            for i, ignore in enumerate(molsetup.atom_ignore):
-                if not ignore and not self.residues[res_id].is_flexres_atom[i]:
-                    wanted_atom_indices.append(i)
+            for atom in molsetup.atoms:
+                if not atom.is_ignore and not self.residues[res_id].is_flexres_atom[atom.index]:
+                    wanted_atom_indices.append(atom.index)
             for key, values in molsetup.atom_params.items():
                 atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 for i in wanted_atom_indices:
@@ -1535,7 +1533,7 @@ class LinkedRDKitChorizo:
                 atom_params[key].extend(
                     [None] * len(wanted_atom_indices)
                 )  # fill in incomplete "row"
-            coords.append(molsetup.coord[i])
+            coords.append(molsetup.get_coord(i))
         if hasattr(self, "param_rename"):  # e.g. "gasteiger" -> "q"
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
@@ -1613,9 +1611,9 @@ def add_rotamers_to_chorizo_molsetups(rotamer_states_list, chorizo):
             # data readily available
             molsetup = chorizo.residues[res_with_resname].molsetup
             name_to_molsetup_idx = {}
-            for atom_index, pdbinfo in molsetup.pdbinfo.items():
-                atom_name = pdbinfo.name
-                name_to_molsetup_idx[atom_name] = atom_index
+            for atom in molsetup.atoms:
+                atom_name = atom.pdbinfo.name
+                name_to_molsetup_idx[atom_name] = atom.index
 
             resname = res_with_resname.split(":")[1]
             resname = rotamer_res_disambiguate.get(resname, resname)
@@ -1663,6 +1661,8 @@ class ChorizoResidue:
         names of the atoms in the same order as rdkit_mol
     padded_mol: RDKit Mol
         molecule padded with ResiduePadder
+    molsetup: RDKitMoleculeSetup
+        An RDKitMoleculeSetup associated with this residue
     molsetup_mapidx: dict (int -> int)
         key: index of atom in padded_mol
         value: index of atom in rdkit_mol
@@ -1767,6 +1767,7 @@ class ChorizoResidue:
         bool
         """
         return self.rdkit_mol is not None and not self.user_deleted
+
 
 class ResiduePadder:
     """
