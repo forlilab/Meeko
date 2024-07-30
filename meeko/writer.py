@@ -14,6 +14,9 @@ from rdkit import Chem
 from .utils import pdbutils
 from .utils.rdkitutils import mini_periodic_table
 
+from meeko import MoleculeSetup
+from molsetup import Bond
+
 linesep = pathlib.os.linesep
 
 
@@ -24,51 +27,52 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
         )
     offchrg_type = "OFFCHRG"
     offchrg_by_parent = {}
-    for i in molsetup.atom_pseudo:
-        if molsetup.atom_type[i] == offchrg_type:
-            neigh = molsetup.get_neighbors(i)
+    for atom in molsetup.atoms:
+        if atom.is_pseudo_atom and atom.atom_type == offchrg_type:
+            neigh = molsetup.get_neighbors(atom.index)
             if len(neigh) != 1:
                 raise RuntimeError(
                     "offsite charge %s is bonded to: %s which has len() != 1"
-                    % (i, json.dumps(neigh))
+                    % (atom.index, json.dumps(neigh))
                 )
             if neigh[0] in offchrg_by_parent:
                 raise RuntimeError(
                     "atom %d has more than one offsite charge" % neigh[0]
                 )
-            offchrg_by_parent[neigh[0]] = i
+            offchrg_by_parent[neigh[0]] = atom.index
     output_indices_start_at_one = True
     index_start = int(output_indices_start_at_one)
     positions_block = ""
     charges = []
     offchrg_by_oid_parent = {}
     elements = []
-    n_real_atoms = molsetup.atom_true_count
-    n_fake_atoms = len(molsetup.atom_pseudo)
+    n_real_atoms = molsetup.true_atom_count
+    n_fake_atoms = molsetup.pseudoatom_count
     indexmap = {}  # molsetup: oid
     count_oids = 0
-    for index in range(n_real_atoms):
-        if molsetup.atom_ignore[index]:
+    for atom in molsetup.atoms:
+        index = atom.index
+        if atom.is_dummy or atom.is_pseudo_atom or atom.is_ignore:
             continue
-        if molsetup.atom_type[index] == offchrg_type:
-            continue  # handled by offchrg_by_parent
+        if atom.atom_type == offchrg_type:
+            continue # handled by offchrg_by_parent
         oid_id = count_oids + index_start
         indexmap[index] = count_oids
-        x, y, z = molsetup.coord[index]
+        x, y, z = atom.coord
         positions_block += "position.%d = (%f,%f,%f)\n" % (oid_id, x, y, z)
-        charges.append(molsetup.charge[index])
+        charges.append(atom.charge)
         if index in offchrg_by_parent:
             index_pseudo = offchrg_by_parent[index]
-            xq_abs, yq_abs, zq_abs = molsetup.coord[index_pseudo]
+            xq_abs, yq_abs, zq_abs = molsetup.atoms[index_pseudo].coord
             xq_rel = xq_abs - x
             yq_rel = yq_abs - y
             zq_rel = zq_abs - z
             offchrg_by_oid_parent[count_oids] = {
-                "q": molsetup.charge[index_pseudo],
+                "q": molsetup.atoms[index_pseudo].charge,
                 "xyz": (xq_rel, yq_rel, zq_rel),
             }
         count_oids += 1
-        element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
+        element = "%s %s %d" % (name, atom.atom_type, oid_id)
         elements.append(element)
 
     tmp = []
@@ -91,19 +95,19 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     bonds = [[] for _ in range(count_oids)]
     bond_orders = [[] for _ in range(count_oids)]
     static_links = []
-    for i, j in molsetup.bond.keys():
-        if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
+    for i, j in molsetup.bond_info.keys():
+        if molsetup.get_is_ignore(i) or molsetup.get_is_ignore(j):
             continue
         if (
-            molsetup.atom_type[i] == offchrg_type
-            or molsetup.atom_type[j] == offchrg_type
+            molsetup.get_atom_type(i) == offchrg_type
+            or molsetup.get_atom_type(j) == offchrg_type
         ):
             continue
         oid_i = indexmap[i]
         oid_j = indexmap[j]
         bonds[oid_i].append("%d" % (oid_j + index_start))
-        bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
-        if not molsetup.bond[(i, j)]["rotatable"]:
+        bond_orders[oid_i].append("%d" % molsetup.bond_info[(i, j)].order)
+        if not molsetup.bond_info[(i, j)].rotatable:
             static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
     bonds = [",".join(j_list) for j_list in bonds]
     bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
@@ -136,51 +140,52 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
         )
     offchrg_type = "OFFCHRG"
     offchrg_by_parent = {}
-    for i in molsetup.atom_pseudo:
-        if molsetup.atom_type[i] == offchrg_type:
-            neigh = molsetup.get_neighbors(i)
+    for atom in molsetup.atoms:
+        if atom.is_pseudo_atom and atom.atom_type == offchrg_type:
+            neigh = molsetup.get_neighbors(atom.index)
             if len(neigh) != 1:
                 raise RuntimeError(
                     "offsite charge %s is bonded to: %s which has len() != 1"
-                    % (i, json.dumps(neigh))
+                    % (atom.index, json.dumps(neigh))
                 )
             if neigh[0] in offchrg_by_parent:
                 raise RuntimeError(
                     "atom %d has more than one offsite charge" % neigh[0]
                 )
-            offchrg_by_parent[neigh[0]] = i
+            offchrg_by_parent[neigh[0]] = atom.index
     output_indices_start_at_one = True
     index_start = int(output_indices_start_at_one)
     positions_block = ""
     charges = []
     offchrg_by_oid_parent = {}
     elements = []
-    n_real_atoms = molsetup.atom_true_count
-    n_fake_atoms = len(molsetup.atom_pseudo)
+    n_real_atoms = molsetup.true_atom_count
+    n_fake_atoms = molsetup.pseudoatom_count
     indexmap = {}  # molsetup: oid
     count_oids = 0
-    for index in range(n_real_atoms):
-        if molsetup.atom_ignore[index]:
+    for atom in molsetup.atoms:
+        index = atom.index
+        if atom.is_dummy or atom.is_pseudo_atom or atom.is_ignore:
             continue
-        if molsetup.atom_type[index] == offchrg_type:
+        if atom.atom_type == offchrg_type:
             continue  # handled by offchrg_by_parent
         oid_id = count_oids + index_start
         indexmap[index] = count_oids
-        x, y, z = molsetup.coord[index]
+        x, y, z = atom.coord
         positions_block += "position.%d = (%f,%f,%f)\n" % (oid_id, x, y, z)
-        charges.append(molsetup.charge[index])
+        charges.append(atom.charge)
         if index in offchrg_by_parent:
             index_pseudo = offchrg_by_parent[index]
-            xq_abs, yq_abs, zq_abs = molsetup.coord[index_pseudo]
+            xq_abs, yq_abs, zq_abs = molsetup.atoms[index_pseudo].coord
             xq_rel = xq_abs - x
             yq_rel = yq_abs - y
             zq_rel = zq_abs - z
             offchrg_by_oid_parent[count_oids] = {
-                "q": molsetup.charge[index_pseudo],
+                "q": molsetup.get_charge(index_pseudo),
                 "xyz": (xq_rel, yq_rel, zq_rel),
             }
         count_oids += 1
-        element = "%s %s %d" % (name, molsetup.atom_type[index], oid_id)
+        element = "%s %s %d" % (name, molsetup.get_atom_type(index), oid_id)
         elements.append(element)
 
     tmp = []
@@ -203,19 +208,19 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     bonds = [[] for _ in range(count_oids)]
     bond_orders = [[] for _ in range(count_oids)]
     static_links = []
-    for i, j in molsetup.bond.keys():
-        if molsetup.atom_ignore[i] or molsetup.atom_ignore[j]:
+    for i, j in molsetup.bond_info.keys():
+        if molsetup.get_is_ignore(i) or molsetup.get_is_ignore(j):
             continue
         if (
-            molsetup.atom_type[i] == offchrg_type
-            or molsetup.atom_type[j] == offchrg_type
+            molsetup.get_atom_type(i) == offchrg_type
+            or molsetup.get_atom_type(j) == offchrg_type
         ):
             continue
         oid_i = indexmap[i]
         oid_j = indexmap[j]
         bonds[oid_i].append("%d" % (oid_j + index_start))
-        bond_orders[oid_i].append("%d" % molsetup.bond[(i, j)]["bond_order"])
-        if not molsetup.bond[(i, j)]["rotatable"]:
+        bond_orders[oid_i].append("%d" % molsetup.bond_info[(i, j)].order)
+        if not molsetup.bond_info[(i, j)].rotatable:
             static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
     bonds = [",".join(j_list) for j_list in bonds]
     bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
@@ -254,14 +259,14 @@ def get_dihedrals_block(molsetup, indexmap, name):
     for atomidx in molsetup.dihedral_partaking_atoms:
         a, b, c, d = atomidx
         if (
-            molsetup.atom_ignore[a]
-            or molsetup.atom_ignore[b]
-            or molsetup.atom_ignore[c]
-            or molsetup.atom_ignore[d]
+            molsetup.get_is_ignore(a)
+            or molsetup.get_is_ignore(b)
+            or molsetup.get_is_ignore(c)
+            or molsetup.get_is_ignore(d)
         ):
             continue
-        bond_id = molsetup.get_bond_id(b, c)
-        if not molsetup.bond[bond_id]["rotatable"]:
+        bond_id = Bond.get_bond_id(b, c)
+        if not molsetup.bond_info[bond_id].rotatable:
             continue
         index = molsetup.dihedral_partaking_atoms[atomidx]
         atomidx_by_index.setdefault(index, set())
@@ -359,15 +364,15 @@ class PDBQTWriterLegacy:
     @classmethod
     def _make_pdbqt_line_from_molsetup(cls, setup, atom_idx, count):
         """ """
-        pdbinfo = setup.pdbinfo[atom_idx]
+        pdbinfo = setup.get_pdbinfo(atom_idx)
         if pdbinfo is None:
             pdbinfo = pdbutils.PDBAtomInfo("", "", 0, "")
         atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(
             pdbinfo
         )  # TODO icode
-        coord = setup.coord[atom_idx]
+        coord = setup.get_coord(atom_idx)
         atom_type = setup.get_atom_type(atom_idx)
-        charge = setup.charge[atom_idx]
+        charge = setup.get_charge(atom_idx)
         pdbqt_line = cls._make_pdbqt_line(
             count, atom_name, res_name, chain, res_num, coord, charge, atom_type
         )
@@ -414,7 +419,7 @@ class PDBQTWriterLegacy:
             member_pool = [edge_start] + member_pool
 
         for member in member_pool:
-            if setup.atom_ignore[member] == 1:
+            if setup.get_is_ignore(member) == 1:
                 continue
             pdbqt_line = cls._make_pdbqt_line_from_molsetup(
                 setup, member, data["count"]
@@ -439,7 +444,7 @@ class PDBQTWriterLegacy:
 
             # do not write branch (or anything downstream) if any of the two atoms
             # defining the rotatable bond are ignored
-            if setup.atom_ignore[begin] or setup.atom_ignore[next_index]:
+            if setup.get_is_ignore(begin) or setup.get_is_ignore(next_index):
                 continue
 
             begin = data["numbering"][begin]
@@ -461,22 +466,31 @@ class PDBQTWriterLegacy:
             error_msg = "molsetup has restraints but these can't be written to PDBQT"
             success = False
 
-        for idx, atom_type in setup.atom_type.items():
-            if setup.atom_ignore[idx]:
+        for atom in setup.atoms:
+            if atom.is_ignore:
                 continue
-            if atom_type is None:
+            if atom.atom_type is None:
                 error_msg += "atom number %d has None type, mol name: %s\n" % (
-                    idx,
+                    atom.index,
                     setup.get_mol_name(),
                 )
                 success = False
-            c = setup.charge[idx]
+        for atom in setup.atoms:
+            if atom.is_ignore:
+                continue
+            if atom.atom_type is None:
+                error_msg += "atom number %d has None type, mol name: %s\n" % (
+                    atom.index,
+                    setup.get_mol_name(),
+                )
+                success = False
+            c = atom.charge
             if not bad_charge_ok and (
                 type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)
             ):
                 error_msg += (
                     "atom number %d has non finite charge, mol name: %s, charge: %s\n"
-                    % (idx, setup.get_mol_name(), str(c))
+                    % (atom.index, setup.get_mol_name(), str(c))
                 )
                 success = False
 
@@ -575,7 +589,7 @@ class PDBQTWriterLegacy:
         """Output a PDBQT file as a string.
 
         Args:
-            setup: MoleculeSetup
+            setup: RDKitMoleculeSetup
 
         Returns:
             str:  PDBQT string of the molecule
@@ -624,10 +638,10 @@ class PDBQTWriterLegacy:
             missing_h = []  # hydrogens which are not in the smiles
             strings_h_parent = []
             for key in data["numbering"]:
-                if key in setup.atom_pseudo:
+                if setup.atoms[key].is_pseudo_atom:
                     continue
                 if key not in order:
-                    if setup.get_element(key) != 1:
+                    if setup.get_atomic_num(key) != 1:
                         error_msg += (
                             "non-Hydrogen atom unexpectedely missing from smiles!?"
                         )
@@ -638,7 +652,7 @@ class PDBQTWriterLegacy:
                     missing_h.append(key)
                     parents = setup.get_neighbors(key)
                     parents = [
-                        i for i in parents if i < setup.atom_true_count
+                        i for i in parents if i < setup.true_atom_count
                     ]  # exclude pseudos
                     if len(parents) != 1:
                         error_msg += (
@@ -692,7 +706,7 @@ class PDBQTWriterLegacy:
         # line = prefix
         strings = []
         for key in numbering:
-            if key in setup.atom_pseudo:
+            if setup.atoms[key].is_pseudo_atom:
                 continue
             if key in missing_h:
                 continue
