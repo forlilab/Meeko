@@ -19,20 +19,34 @@ from .utils import pdbutils
 class Waters:
 
     @staticmethod
-    def make_molsetup_OPC():
-        """build a molsetup for an OPC water"""
+    def make_molsetup_OPC() -> RDKitMoleculeSetup:
+        """
+        Builds an RDKitMoleculeSetup for an OPC water.
+
+        Returns
+        -------
+        molsetup: RDKitMoleculeSetup
+            An RDKitMoleculeSetup for an OPC water.
+        """
 
         raise NotImplementedError
         rdmol = Chem.MolFromSmiles("O")
         conformer = Chem.Conformer(rdmol.GetNumAtoms())
         conformer.SetAtomPosition(0, Point3D(0, 0, 0))
         rdmol.AddConformer(conformer)
-        molsetup = RDKitMoleculeSetup(rdmol)
+        molsetup = RDKitMoleculeSetup.from_mol(rdmol)
         return molsetup
 
     @staticmethod
-    def make_molsetup_TIP3P_AA():
-        """build a molsetup for an all atom (AA) TIP3P water, i.e. explicit Hs"""
+    def make_molsetup_TIP3P_AA() -> RDKitMoleculeSetup:
+        """
+        Builds an RDKitMoleculeSetup for an all atom (AA) TIP3P water, i.e. explicit Hs
+
+        Returns
+        -------
+        molsetup: RDKitMoleculeSetup
+            An RDKitMoleculeSetup for an all atom (AA) TIP3P water.
+        """
 
         rdmol = Chem.MolFromSmiles("O")
         rdmol = Chem.AddHs(rdmol)
@@ -45,15 +59,15 @@ class Waters:
             2, Point3D(np.cos(ang_hoh) * dist_oh, np.sin(ang_hoh) * dist_oh, 0)
         )
         rdmol.AddConformer(conformer)
-        molsetup = RDKitMoleculeSetup(rdmol)
-        molsetup.bond[(0, 1)]["rotatable"] = False
-        molsetup.bond[(0, 2)]["rotatable"] = False
-        molsetup.atom_type[0] = "n-tip3p-O"
-        molsetup.atom_type[1] = "n-tip3p-H"
-        molsetup.atom_type[2] = "n-tip3p-H"
-        molsetup.charge[0] = -0.834
-        molsetup.charge[1] = 0.417
-        molsetup.charge[2] = 0.417
+        molsetup = RDKitMoleculeSetup.from_mol(rdmol)
+        molsetup.add_bond(0, 1, rotatable=False)
+        molsetup.add_bond(0, 2, rotatable=False)
+        molsetup.atoms[0].atom_type = "n-tip3p-O"
+        molsetup.atoms[1].atom_type = "n-tip3p-H"
+        molsetup.atoms[2].atom_type = "n-tip3p-H"
+        molsetup.atoms[0].charge = -0.834
+        molsetup.atoms[1].charge = 0.417
+        molsetup.atoms[2].charge = 0.417
         return molsetup
 
 
@@ -98,8 +112,8 @@ class Hydrate:
         else:
             raise RuntimeError("unknown water model: %s" % water_model)
 
-    def __call__(self, molsetup):
-        coordinates = [molsetup.coord[i] for i in range(molsetup.atom_true_count)]
+    def __call__(self, molsetup: RDKitMoleculeSetup):
+        coordinates = [molsetup.get_coord(i) for i in range(molsetup.true_atom_count)]
         water_molsetup_list = []
         for rule in self.rule_list:
             hits = molsetup.find_pattern(rule["smarts"])
@@ -148,12 +162,24 @@ class Hydrate:
 
     @staticmethod
     def orient_water(coords, target_xyz, anchor_xyz, anchor_is_donor):
-        """coords will be changed in place
+        """
+        Coordinates will be changed in place
         target_xyz is where the water oxygen will be
         anchor_xyz is the atom to which this molecule belongs
         anchor_is_donor is True for H, and False for O, N, S
 
         expects starting O to be at (0, 0, 0) and an H along x-axis
+
+        Parameters
+        ----------
+        coords
+        target_xyz
+        anchor_xyz
+        anchor_is_donor
+
+        Returns
+        -------
+
         """
 
         if anchor_is_donor:
@@ -186,14 +212,29 @@ class Hydrate:
 
 
 class HydrateMoleculeLegacy:
-    def __init__(self, distance=3.0, charge=0, atom_type="W"):
-        """Initialize the legacy hydrate typer for AutoDock 4.2.x
 
-        Args:
-            distance (float): distance between water molecules and ligand heavy atoms. (default: 3.0)
-            charge (float): partial charge of the water molecule. Not use for the hydrated docking. (default: 0)
-            atom_type (str): atom type of the water molecule. (default: W)
+    DEFAULT_HYDRATE_DISTANCE = 3.0
+    DEFAULT_HYDRATE_CHARGE = 0.0
+    DEFAULT_ATOM_TYPE = "W"
+    DEFAULT_HB_LENGTH = 3.0
 
+    def __init__(
+        self,
+        distance: float = DEFAULT_HYDRATE_DISTANCE,
+        charge: float = DEFAULT_HYDRATE_CHARGE,
+        atom_type: str = DEFAULT_ATOM_TYPE,
+    ):
+        """
+        Initialize the legacy hydrate typer for AutoDock 4.2.x
+
+        Parameters
+        ----------
+        distance: float
+            Distance between water molecules and ligand heavy atoms.
+        charge: float
+            Partial charge of the water molecule. Not use for the hydrated docking.
+        atom_type: str
+            Atom type of the water molecule.
         """
         self._distance = distance
         self._charge = charge
@@ -217,7 +258,9 @@ class HydrateMoleculeLegacy:
             },
         }
 
-    def _place_sp1_one_water(self, anchor_xyz, neighbor_xyz, hb_length=3.0):
+    def _place_sp1_one_water(
+        self, anchor_xyz, neighbor_xyz, hb_length=DEFAULT_HB_LENGTH
+    ):
         position = anchor_xyz + geomutils.vector(neighbor_xyz, anchor_xyz)
         position = geomutils.resize_vector(position, hb_length, anchor_xyz)
         positions = np.array([position])
@@ -225,7 +268,7 @@ class HydrateMoleculeLegacy:
         return positions
 
     def _place_sp2_one_water(
-        self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_length=3.0
+        self, anchor_xyz, neighbor1_xyz, neighbor2_xyz, hb_length=DEFAULT_HB_LENGTH
     ):
         position = geomutils.atom_to_move(anchor_xyz, [neighbor1_xyz, neighbor2_xyz])
         position = geomutils.resize_vector(position, hb_length, anchor_xyz)
@@ -312,7 +355,7 @@ class HydrateMoleculeLegacy:
 
         return positions
 
-    def hydrate(self, setup):
+    def hydrate(self, setup: RDKitMoleculeSetup):
         """Add water molecules to the ligand
 
         Args:
@@ -324,9 +367,10 @@ class HydrateMoleculeLegacy:
         # It will be the same distance for all of the water molecules
         hb_length = self._distance
 
-        for a, neighbors in enumerate(setup.graph):
-            atom_type = setup.get_atom_type(a)
-            anchor_xyz = setup.get_coord(a)
+        for atom in setup.atoms:
+            neighbors = atom.graph
+            atom_type = atom.atom_type
+            anchor_xyz = atom.coord
             neighbor1_xyz = setup.get_coord(neighbors[0])
             positions = np.array([])
             n_wat = None
@@ -338,10 +382,10 @@ class HydrateMoleculeLegacy:
                 except KeyError:
                     raise RuntimeError(
                         "Cannot place water molecules on atom %d of type %s with %d neighbors."
-                        % (a, atom_type, len(neighbors))
+                        % (atom.index, atom_type, len(neighbors))
                     )
 
-                water_anchors.append(a)
+                water_anchors.append(atom.index)
 
             if hyb == 1:
                 if n_wat == 1:
@@ -359,7 +403,9 @@ class HydrateMoleculeLegacy:
                 elif n_wat == 2:
                     # Example: C=0 (backbone oxygen)
                     tmp_neighbors = [
-                        x for x in setup.get_neighbors(neighbors[0]) if not x == a
+                        x
+                        for x in setup.get_neighbors(neighbors[0])
+                        if not x == atom.index
                     ]
                     neighbor2_xyz = setup.get_coord(tmp_neighbors[0])
                     positions = self._place_sp2_two_waters(
@@ -401,11 +447,11 @@ class HydrateMoleculeLegacy:
 
         for water_anchor, waters_on_anchor in zip(water_anchors, water_positions):
             for water_on_anchor in waters_on_anchor:
-                tmp = setup.pdbinfo[water_anchor]
+                tmp = setup.get_pdbinfo(water_anchor)
                 pdbinfo = pdbutils.PDBAtomInfo(
                     "WAT", tmp.resName, tmp.resNum, tmp.icode, tmp.chain
                 )
-                setup.add_pseudo_atom(
+                setup.add_pseudoatom(
                     coord=water_on_anchor,
                     charge=self._charge,
                     anchor_list=[water_anchor],
