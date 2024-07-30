@@ -7,6 +7,7 @@
 from collections import defaultdict
 from operator import itemgetter
 
+from molsetup import Bond
 
 # region
 DEFAULT_MIN_RING_SIZE = 7
@@ -59,11 +60,11 @@ class FlexMacrocycle:
     def collect_rings(self, setup):
         """
         Gets non-aromatic rings of desired size and lists bonds that are part of unbreakable rings. Bonds belonging to
-        rigid cycles can't be deleted or made rotatble even if they are part of a breakable ring.
+        rigid cycles can't be deleted or made rotatable even if they are part of a breakable ring.
 
         Parameters
         ----------
-        setup: MoleculeSetup
+        setup: RDKitMoleculeSetup
 
         Returns
         -------
@@ -78,7 +79,7 @@ class FlexMacrocycle:
             setup.rings.keys()
         ):  # ring_id are the atom indices in each ring
             size = len(ring_id)
-            if ring_id in setup.rings_aromatic:
+            if setup.rings[ring_id].is_aromatic:
                 rigid_rings.append(ring_id)
             elif size < self._min_ring_size:
                 rigid_rings.append(ring_id)
@@ -109,13 +110,13 @@ class FlexMacrocycle:
         score: int
             A score for the bond.
         """
-        bond = self.setup.get_bond_id(bond[0], bond[1])
-        if not self.setup.bond[bond]['rotatable']:
+        bond = Bond.get_bond_id(bond[0], bond[1])
+        if not self.setup.bond_info[bond].rotatable:
             return -1
         atom_idx1, atom_idx2 = bond
-        if self.setup.atom_type[atom_idx1] != "C":
+        if self.setup.get_atom_type(atom_idx1) != "C":
             return -1
-        if self.setup.atom_type[atom_idx2] != "C":
+        if self.setup.get_atom_type(atom_idx2) != "C":
             return -1
         # historically we returned a score <= 100, that was lower for triple
         # bonds, chiral atoms, conjugated bonds, and double bonds. This score
@@ -161,7 +162,7 @@ class FlexMacrocycle:
 
         Parameters
         ----------
-        setup: MoleculeSetup
+        setup: RDKitMoleculeSetup
         delete_these_bonds: list
 
         Returns
@@ -177,7 +178,7 @@ class FlexMacrocycle:
         else:
             breakable_bonds = {}
             for bond in delete_these_bonds:
-                bond = self.setup.get_bond_id(bond[0], bond[1])
+                bond = Bond.get_bond_id(bond[0], bond[1])
                 breakable_bonds[bond] = self._score_bond(bond)
         break_combo_data = self.combinatorial_break_search(breakable_bonds)
         return break_combo_data, bonds_in_rigid_rings

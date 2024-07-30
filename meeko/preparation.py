@@ -13,6 +13,7 @@ import warnings
 from rdkit import Chem
 
 import meeko.macrocycle
+from .molsetup import Bond
 from .molsetup import OBMoleculeSetup
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
@@ -195,7 +196,7 @@ class MoleculePreparation:
 
         if _has_openbabel:
             self._classes_setup[ob.OBMol] = OBMoleculeSetup
-        if keep_chorded_rings and keep_equivalent_rings == False:
+        if keep_chorded_rings and not keep_equivalent_rings:
             warnings.warn(
                 "keep_equivalent_rings=False ignored because keep_chorded_rings=True",
                 RuntimeWarning,
@@ -270,7 +271,7 @@ class MoleculePreparation:
 
         # This must be done before calling get_flexibility_model
         for bond in bonds_in_rigid_rings:
-            setup.bond[bond]["rotatable"] = False
+            setup.bond_info[bond].rotatable = False
 
         flex_model, bonds_to_break = get_flexibility_model(
             setup, root_atom_index, break_combo_data
@@ -289,9 +290,9 @@ class MoleculePreparation:
         # bond to a terminal atom, or in a ring that isn't flexible
         actual_rotatable = [v for k, v in flex_model["rigid_body_connectivity"].items()]
         actual_rotatable.extend(bonds_to_break)
-        for bond in setup.bond:
+        for bond in setup.bond_info:
             if bond not in actual_rotatable:
-                setup.bond[bond]["rotatable"] = False
+                setup.bond_info[bond].rotatable = False
 
         # calculate torsions that would be rotatable without macrocycle breaking
         if break_combo_data is not None and len(break_combo_data["bond_break_combos"]):
@@ -300,8 +301,8 @@ class MoleculePreparation:
                 for bond in setup.get_bonds_in_ring(ring):
                     ring_bonds.append(bond)
             flex_model["torsions_org"] = 0
-            for bond in setup.bond:
-                if setup.bond[bond]["rotatable"] and bond not in ring_bonds:
+            for bond in setup.bond_info:
+                if setup.bond_info[bond].rotatable and bond not in ring_bonds:
                     flex_model["torsions_org"] += 1
 
         setup.flexibility_model = flex_model
@@ -478,7 +479,7 @@ class MoleculePreparation:
         if glue_pseudo_atoms is None:
             glue_pseudo_atoms = {}
         mol_type = type(mol)
-        if not mol_type in self._classes_setup:
+        if mol_type not in self._classes_setup:
             raise TypeError(
                 "Molecule is not an instance of supported types: %s" % type(mol)
             )
@@ -517,9 +518,9 @@ class MoleculePreparation:
         # merge hydrogens (or any terminal atoms)
         indices = set()
         for atype_to_merge in self.merge_these_atom_types:
-            for index, atype in enumerate(setup.atom_type):
-                if atype == atype_to_merge:
-                    indices.add(index)
+            for atom in setup.atoms:
+                if atom.atom_type == atype_to_merge:
+                    indices.add(atom.index)
         setup.merge_terminal_atoms(indices)
 
         # 3.  assign bond types
@@ -591,7 +592,7 @@ class MoleculePreparation:
             there is an incorrect number of coordinates in glue_pseudo_atoms.
         """
         for index1, index2 in break_ring_bonds:
-            has_bond = molsetup.get_bond_id(index1, index2) in molsetup.bond
+            has_bond = Bond.get_bond_id(index1, index2) in molsetup.bond_info
             if not has_bond:
                 raise ValueError("bond (%d, %d) not in molsetup" % (index1, index2))
             for index in (index1, index2):

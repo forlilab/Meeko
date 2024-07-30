@@ -1522,6 +1522,17 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         self.ring_corners = {}
         self.rmsd_symmetry_indices = ()
 
+    def copy(self):
+        """
+        Returns a copy of the current RDKitMoleculeSetup.
+        """
+        newsetup = RDKitMoleculeSetup()
+        for key, value in self.__dict__.items():
+            if key != "mol":
+                newsetup.__dict__[key] = deepcopy(value)
+        newsetup.mol = Chem.Mol(self.mol)  # not sure how deep of a copy this is
+        return newsetup
+
     @classmethod
     def from_mol(
         cls,
