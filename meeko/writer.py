@@ -14,7 +14,6 @@ from rdkit import Chem
 from .utils import pdbutils
 from .utils.rdkitutils import mini_periodic_table
 
-from meeko import MoleculeSetup
 from molsetup import Bond
 
 linesep = pathlib.os.linesep

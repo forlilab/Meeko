@@ -25,7 +25,8 @@ class AtomTyper:
         # offatoms must be typed after charges, because offsites pull charge
         if offatom_params is not None:
             cached_offatoms = cls._cache_offatoms(molsetup, offatom_params)
-            cls._set_offatoms(molsetup, cached_offatoms, molsetup.coord)
+            coords = {atom.index: atom.coord for atom in molsetup.atoms if not atom.is_dummy}
+            cls._set_offatoms(molsetup, cached_offatoms, coords)
 
         if dihedral_params not in (None, "espaloma"):
             cls._type_dihedrals(molsetup, dihedral_params)
@@ -56,7 +57,7 @@ class AtomTyper:
                     if atompar in ["smarts", "comment", "IDX"]:
                         continue
                     if atompar not in molsetup.atom_params:
-                        molsetup.atom_params[atompar] = [None] * len(molsetup.coord)
+                        molsetup.atom_params[atompar] = [None] * len(molsetup.atoms)
                     value = line[atompar]
                     # keep track of every "smartsgroup" that modified "atompar"
                     ensure.setdefault(atompar, [])
@@ -192,8 +193,8 @@ class AtomTyper:
             pdbinfo = pdbutils.PDBAtomInfo(
                 "G", tmp.resName, tmp.resNum, tmp.icode, tmp.chain
             )
-            q_parent = (1 - pull_charge_fraction) * molsetup.charge[atomgeom.parent]
-            q_offsite = pull_charge_fraction * molsetup.charge[atomgeom.parent]
+            q_parent = (1 - pull_charge_fraction) * molsetup.get_charge(atomgeom.parent)
+            q_offsite = pull_charge_fraction * molsetup.get_charge(atomgeom.parent)
             pseudo_atom = {
                 "coord": offatom_coords,
                 "anchor_list": [atomgeom.parent],
@@ -202,8 +203,8 @@ class AtomTyper:
                 "atom_type": atom_type,
                 "rotatable": False,
             }
-            molsetup.charge[atomgeom.parent] = q_parent
-            molsetup.add_pseudo_atom(**pseudo_atom)
+            molsetup[atomgeom.parent].charge = q_parent
+            molsetup.add_pseudoatom(**pseudo_atom)
         return
 
     @staticmethod

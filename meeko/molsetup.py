@@ -480,6 +480,7 @@ class MoleculeSetup:
     flexibility_model: dict
     """
 
+
     # region CLASS CONSTANTS
     PSEUDOATOM_ATOMIC_NUM = 0
     # endregion
@@ -496,6 +497,9 @@ class MoleculeSetup:
         self.bond_info: dict[tuple, Bond] = {}
         self.rings: dict[tuple, Ring] = {}
         self.rotamers: list[dict] = []  # TODO: revisit rotamer implementation
+
+        self.atom_params = {}
+        self.restraints = [] # TODO: determine whether restraints are being used anymore
 
         # TODO: redesign flexibility model to resolve some of the circular imports and to make it more structured
         self.flexibility_model = None  # from flexibility_model - from flexibility.py
@@ -959,6 +963,32 @@ class MoleculeSetup:
                 "GET_CHARGE: provided atom index is out of range or is a dummy atom"
             )
         return self.atoms[atom_index].charge
+
+    def get_coord(self, atom_index: int):
+        """
+        Retrieves the coordinates for the atom with the specified atom index.
+
+        Parameters
+        ----------
+        atom_index: int
+            Atom index to retrieve data for.
+
+        Returns
+        -------
+        coord: np.ndarray
+            The coordinates associated with the atom.
+
+        Raises
+        ------
+        IndexError:
+            When the provided atom index does not exist in the MoleculeSetup or the atom index does not contain
+            data.
+        """
+        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
+            raise IndexError(
+                "GET_CHARGE: provided atom index is out of range or is a dummy atom"
+            )
+        return self.atoms[atom_index].coord
 
     def get_atomic_num(self, atom_index: int):
         """
@@ -1454,11 +1484,11 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         dictionaries indexed by the atom index, because not all atoms need to have new coordinates specified.
         Unspecified hydrogen positions bonded to modified heavy atom positions are to be calculated "on-the-fly".
     dihedral_interactions: list[]
-        A list of fourier series, each of which are represented as a list of dictionaries.
+        A list of unique fourier_series, each of which are represented as a list of dictionaries.
     dihedral_partaking_atoms: dict()
-        a mapping from atom index (int?) to dihedral index (int?)
+        a mapping from tuples of atom indices to the indices in dihedral_interactions
     dihedral_labels: dict()
-        a mapping from atom index to a string dihedral labels
+        a mapping from tuples of atom indices to dihedral labels
     atom_to_ring_id: dict()
         mapping of atom index to ring id of each atom belonging to the ring
     ring_corners: dict()
@@ -1475,9 +1505,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
     def __init__(self, name: str = None, is_sidechain: bool = False):
         super().__init__(name, is_sidechain)
         self.modified_atom_positions = []
-        self.dihedral_interactions = []
-        self.dihedral_partaking_atoms = {}
-        self.dihedral_labels = {}
+        self.dihedral_interactions: list[dict] = []
+        self.dihedral_partaking_atoms: dict = {}
+        self.dihedral_labels: dict = {}
         self.atom_to_ring_id = {}
         self.ring_corners = {}
         self.rmsd_symmetry_indices = ()
