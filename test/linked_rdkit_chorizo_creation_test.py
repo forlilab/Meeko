@@ -1,5 +1,4 @@
 from meeko import LinkedRDKitChorizo
-from meeko import ChorizoResidue
 from meeko import PDBQTWriterLegacy
 from meeko import MoleculePreparation
 from meeko import ResidueChemTemplates
@@ -15,7 +14,9 @@ pkgdir = pathlib.Path(meeko.__file__).parents[1]
 meekodir = pathlib.Path(meeko.__file__).parents[0]
 
 ahhy_example = pkgdir / "test/linked_rdkit_chorizo_data/AHHY.pdb"
-just_one_ALA_missing = pkgdir / "test/linked_rdkit_chorizo_data/just-one-ALA-missing-CB.pdb"
+just_one_ALA_missing = (
+    pkgdir / "test/linked_rdkit_chorizo_data/just-one-ALA-missing-CB.pdb"
+)
 just_one_ALA = pkgdir / "test/linked_rdkit_chorizo_data/just-one-ALA.pdb"
 just_three_residues = pkgdir / "test/linked_rdkit_chorizo_data/just-three-residues.pdb"
 disulfide_bridge = pkgdir / "test/linked_rdkit_chorizo_data/just_a_disulfide_bridge.pdb"
@@ -34,12 +35,14 @@ mk_prep = MoleculePreparation(
     load_atom_params="ad4_types",
 )
 
+
 def check_charge(residue, expected_charge, tolerance=0.002):
     charge = 0
-    for i in range(len(residue.molsetup.atom_ignore)):
-        if not residue.molsetup.atom_ignore[i]:
-            charge += residue.molsetup.charge[i]
+    for atom in residue.molsetup.atoms:
+        if not atom.is_ignore:
+            charge += atom.charge
     assert abs(charge - expected_charge) < tolerance
+
 
 def run_padding_checks(residue):
     assert len(residue.molsetup_mapidx) == residue.rdkit_mol.GetNumAtoms()
@@ -51,14 +54,21 @@ def run_padding_checks(residue):
     # check padding atoms are ignored
     for i in range(residue.padded_mol.GetNumAtoms()):
         if i not in residue.molsetup_mapidx:  # is padding atom
-            assert residue.molsetup.atom_ignore[i]
+            assert residue.molsetup.atoms[i].is_ignore
+
 
 def test_flexres_pdbqt():
     with open(loop_with_disulfide) as f:
         pdb_string = f.read()
-    set_templates = {":6": "CYX", ":17": "CYX"} # TODO remove this to test use of bonds to set templates
+    set_templates = {
+        ":6": "CYX",
+        ":17": "CYX",
+    }  # TODO remove this to test use of bonds to set templates
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string, chem_templates, mk_prep, set_templates,
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        set_templates,
         blunt_ends=[(":5", 0), (":18", 2)],
     )
     chorizo.flexibilize_sidechain(":11", mk_prep)
@@ -70,11 +80,14 @@ def test_flexres_pdbqt():
         nr_flex_atoms += int(line.startswith("ATOM"))
     assert nr_flex_atoms == 9
 
+
 def test_AHHY_all_static_residues():
     f = open(ahhy_example, "r")
     pdb_string = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string, chem_templates, mk_prep,
+        pdb_string,
+        chem_templates,
+        mk_prep,
         blunt_ends=[("A:1", 0)],
     )
     # Asserts that the residues have been imported in a way that makes sense, and that all the
@@ -88,10 +101,10 @@ def test_AHHY_all_static_residues():
     assert chorizo.residues["A:3"].residue_template_key == "HIE"
     assert chorizo.residues["A:4"].residue_template_key == "CTYR"
 
-    check_charge(chorizo.residues["A:1"], 0.)
-    check_charge(chorizo.residues["A:2"], 0.)
-    check_charge(chorizo.residues["A:3"], 0.)
-    check_charge(chorizo.residues["A:4"], -1.)
+    check_charge(chorizo.residues["A:1"], 0.0)
+    check_charge(chorizo.residues["A:2"], 0.0)
+    check_charge(chorizo.residues["A:3"], 0.0)
+    check_charge(chorizo.residues["A:4"], -1.0)
 
     pdbqt_strings = PDBQTWriterLegacy.write_string_from_linked_rdkit_chorizo(chorizo)
     rigid_part, movable_part = pdbqt_strings
@@ -107,7 +120,9 @@ def test_AHHY_padding():
     with open(ahhy_example, "r") as f:
         pdb_string = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string, chem_templates, mk_prep,
+        pdb_string,
+        chem_templates,
+        mk_prep,
         blunt_ends=[("A:1", 0)],
     )
     assert len(chorizo.residues) == 4
@@ -117,12 +132,16 @@ def test_AHHY_padding():
         residue = chorizo.residues[residue_id]
         run_padding_checks(residue)
 
+
 def test_just_three_padded_mol():
     with open(just_three_residues, "r") as f:
         pdb_string = f.read()
     set_template = {":15": "NMET"}
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string, chem_templates, mk_prep, set_template=set_template,
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        set_template=set_template,
         blunt_ends=[(":17", 17)],
     )
     assert len(chorizo.residues) == 3
@@ -133,7 +152,7 @@ def test_just_three_padded_mol():
     assert chorizo.residues[":15"].residue_template_key == "NMET"
     assert chorizo.residues[":16"].residue_template_key == "SER"
     assert chorizo.residues[":17"].residue_template_key == "LEU"
-    check_charge(chorizo.residues[":15"], 1.)
+    check_charge(chorizo.residues[":15"], 1.0)
     check_charge(chorizo.residues[":16"], 0.0)
     check_charge(chorizo.residues[":17"], 0.0)
 
@@ -159,9 +178,12 @@ def test_AHHY_mutate_residues():
     with open(ahhy_example, "r") as f:
         pdb_string = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string, chem_templates, mk_prep,
-        residues_to_delete=delete_residues, set_template=set_template,
-        blunt_ends=[("A:1", 0)], 
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        residues_to_delete=delete_residues,
+        set_template=set_template,
+        blunt_ends=[("A:1", 0)],
     )
     assert len(chorizo.residues) == 4
     assert len(chorizo.get_ignored_residues()) == 0
@@ -173,7 +195,7 @@ def test_AHHY_mutate_residues():
     assert chorizo.residues["A:2"].residue_template_key == "HIP"
     assert chorizo.residues["A:3"].residue_template_key == "HIP"
 
-    check_charge(chorizo.residues["A:1"], 0.)
+    check_charge(chorizo.residues["A:1"], 0.0)
     check_charge(chorizo.residues["A:2"], 1.0)
     check_charge(chorizo.residues["A:3"], 1.0)
 
@@ -190,8 +212,11 @@ def test_residue_missing_atoms():
         pdb_string = f.read()
 
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string, chem_templates, mk_prep, allow_bad_res=True,
-        blunt_ends=[("A:1", 0), ("A:1", 2)],    
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        allow_bad_res=True,
+        blunt_ends=[("A:1", 0), ("A:1", 2)],
     )
     assert len(chorizo.get_valid_residues()) == 0
     assert len(chorizo.get_user_deleted_residues()) == 0
@@ -200,10 +225,14 @@ def test_residue_missing_atoms():
 
     with pytest.raises(RuntimeError):
         chorizo = LinkedRDKitChorizo.from_pdb_string(
-            pdb_string, chem_templates, mk_prep, allow_bad_res=False,
-            blunt_ends=[("A:1", 0), ("A:1", 2)],    
+            pdb_string,
+            chem_templates,
+            mk_prep,
+            allow_bad_res=False,
+            blunt_ends=[("A:1", 0), ("A:1", 2)],
         )
     return
+
 
 def test_AHHY_mk_prep_and_export():
     with open(ahhy_example, "r") as f:
@@ -212,8 +241,10 @@ def test_AHHY_mk_prep_and_export():
         add_atom_types=[{"smarts": "[CH2,CH3]", "new_param": 42.0}]
     )
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_text, chem_templates, mk_prep2,
-        blunt_ends=[("A:1", 0)], 
+        pdb_text,
+        chem_templates,
+        mk_prep2,
+        blunt_ends=[("A:1", 0)],
     )
     ap, xyz = chorizo.export_static_atom_params()
     # all parameters musthave same size
@@ -257,14 +288,15 @@ def test_disulfides():
     assert chorizo_thiols.residues["B:22"].residue_template_key == "CYS"
     assert chorizo_thiols.residues["B:95"].residue_template_key == "CYS"
 
+
 def test_insertion_code():
     with open(insertion_code, "r") as f:
         pdb_text = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-            pdb_text,
-            chem_templates,
-            mk_prep,
-            blunt_ends=[("B:82", 0), ("B:83", 2)],
+        pdb_text,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("B:82", 0), ("B:83", 2)],
     )
 
     expected_res = set(("B:82", "B:82A", "B:82B", "B:82C", "B:83"))

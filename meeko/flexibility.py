@@ -7,8 +7,7 @@
 from copy import deepcopy
 from .utils import pdbutils
 
-from meeko import RDKitMoleculeSetup
-from molsetup import Bond
+from .molsetup import Bond
 
 
 def _calc_max_weighted_depth(
@@ -113,7 +112,7 @@ def merge_terminal_atoms(flex_model: dict, not_terminal_atoms: list[int] = ()) -
 
 
 def get_flexibility_model(
-    molsetup: RDKitMoleculeSetup,
+    molsetup,
     root_atom_index: int = None,
     break_combo_data: dict = None,
 ):
@@ -334,7 +333,7 @@ def update_closure_atoms(
 
 
 def walk_rigid_body_graph(
-    molsetup: RDKitMoleculeSetup,
+    molsetup,
     bonds_to_break: tuple,
     unbroken_rings_bonds: list[tuple],
     start: int = None,

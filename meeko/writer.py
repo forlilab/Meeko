@@ -14,7 +14,7 @@ from rdkit import Chem
 from .utils import pdbutils
 from .utils.rdkitutils import mini_periodic_table
 
-from molsetup import Bond
+from .molsetup import Bond
 
 linesep = pathlib.os.linesep
 
@@ -521,10 +521,10 @@ class PDBQTWriterLegacy:
                 resnum = int(resnum)
             molsetup = chorizo.residues[res_id].molsetup
             resname = chorizo.residues[res_id].input_resname
-            is_rigid_atom = [True for _ in molsetup.atom_ignore]
+            is_rigid_atom = [True for _ in molsetup.atoms]
             if chorizo.residues[res_id].is_movable:
-                is_rigid_atom = [False for _ in molsetup.atom_ignore]
-                original_ignore = molsetup.atom_ignore.copy()
+                is_rigid_atom = [False for _ in molsetup.atoms]
+                original_ignore = {atom.index: atom.is_ignore for atom in molsetup.atoms}
                 graph = molsetup.flexibility_model["rigid_body_graph"]
                 root = molsetup.flexibility_model["root"]
                 if len(graph[root]) != 1:
@@ -538,11 +538,12 @@ class PDBQTWriterLegacy:
                 for atom_idx, body_idx in rigid_index_by_atom.items():
                     if body_idx == root and atom_idx != root_link_idx:
                         is_rigid_atom[atom_idx] = True
-                        molsetup.atom_ignore[atom_idx] = True
+                        molsetup.atoms[atom_idx].is_ignore = True
                 this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
                     molsetup, remove_smiles=True
                 )
-                molsetup.atom_ignore = original_ignore
+                for atom in molsetup.atoms:
+                    atom.is_ignore = original_ignore[atom.index]
                 if not ok:
                     raise RuntimeError(err)
                 this_flex_pdbqt, flex_atom_count = (
@@ -557,13 +558,13 @@ class PDBQTWriterLegacy:
                 )
                 flex_pdbqt_dict[res_id] = this_flex_pdbqt
 
-            for i, atom_ignore in enumerate(molsetup.atom_ignore):
-                if atom_ignore or not is_rigid_atom[i]:
+            for atom in molsetup.atoms:
+                if atom.is_ignore or not is_rigid_atom[atom.index]:
                     continue
-                atom_type = molsetup.atom_type[i]
-                coord = molsetup.coord[i]
-                atom_name = molsetup.pdbinfo[i].name
-                charge = molsetup.charge[i]
+                atom_type = atom.atom_type
+                coord = atom.coord
+                atom_name = atom.pdbinfo.name
+                charge = atom.charge
                 atom_count += 1
                 rigid_pdbqt_string += (
                     cls._make_pdbqt_line(

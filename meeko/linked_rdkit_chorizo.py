@@ -793,7 +793,7 @@ class LinkedRDKitChorizo:
                     resnum = resnum[:-1]
                 else:
                     icode = ""
-                molsetup.pdbinfo[j] = PDBAtomInfo(
+                molsetup.atoms[j].pdbinfo = PDBAtomInfo(
                     atom_name, resname, int(resnum), icode, chain
                 )
         return
@@ -1273,7 +1273,7 @@ class LinkedRDKitChorizo:
                 for x in range(len(path) - 1):
                     idx1 = min(path[x], path[x + 1])
                     idx2 = max(path[x], path[x + 1])
-                    residue.molsetup.bond[(idx1, idx2)].rotatable = False
+                    residue.molsetup.bond_info[(idx1, idx2)].rotatable = False
         residue.is_movable = True
 
         mk_prep.calc_flex(
@@ -1520,9 +1520,15 @@ class LinkedRDKitChorizo:
                 atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 for i in wanted_atom_indices:
                     atom_params[key].append(values[i])
+            # This was reworked to specifically address the new MoleculeSetup structure. Needs re-thinking
+            charge_dict = {atom.index: atom.charge for atom in molsetup.atoms}
+            atom_type_dict = {atom.index: atom.atom_type for atom in molsetup.atoms}
             for key in dedicated_attribute:
                 atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
-                values_dict = getattr(molsetup, key)
+                if key == "charge":
+                    values_dict = charge_dict
+                else:
+                    values_dict = atom_type_dict
                 for i in wanted_atom_indices:
                     atom_params[key].append(values_dict[i])
             counter_atoms += len(wanted_atom_indices)

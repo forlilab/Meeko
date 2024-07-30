@@ -1247,7 +1247,7 @@ class MoleculeSetup:
             if neighbor in collected or neighbor in exclude:
                 continue
             collected.append(neighbor)
-            self._recursive_graph_walk(neighbor, collected.exclude)
+            self._recursive_graph_walk(neighbor, collected, exclude)
         return collected
 
     def write_coord_string(self) -> str:

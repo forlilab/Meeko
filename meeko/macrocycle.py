@@ -7,7 +7,7 @@
 from collections import defaultdict
 from operator import itemgetter
 
-from molsetup import Bond
+from .molsetup import Bond
 
 # region
 DEFAULT_MIN_RING_SIZE = 7
