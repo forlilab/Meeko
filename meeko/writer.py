@@ -92,7 +92,7 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     elements_line = "elements = %s\n" % (",".join(elements))
 
     bonds = [[] for _ in range(count_oids)]
-    bond_orders = [[] for _ in range(count_oids)]
+    # bond_orders = [[] for _ in range(count_oids)]
     static_links = []
     for i, j in molsetup.bond_info.keys():
         if molsetup.get_is_ignore(i) or molsetup.get_is_ignore(j):
@@ -105,13 +105,13 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
         oid_i = indexmap[i]
         oid_j = indexmap[j]
         bonds[oid_i].append("%d" % (oid_j + index_start))
-        bond_orders[oid_i].append("%d" % molsetup.bond_info[(i, j)].order)
+        # bond_orders[oid_i].append("%d" % molsetup.bond_info[(i, j)].order)
         if not molsetup.bond_info[(i, j)].rotatable:
             static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
     bonds = [",".join(j_list) for j_list in bonds]
     bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
-    bond_orders = [",".join(orders) for orders in bond_orders]
-    bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
+    # bond_orders = [",".join(orders) for orders in bond_orders]
+    # bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
     staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
 
     output = ""
@@ -120,7 +120,7 @@ def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     output += charges_line
     output += elements_line
     output += bonds_line
-    output += bondorder_line
+    #output += bondorder_line
     output += staticlinks_line
     output += "number = 1\t\t// can only be 1 for the sandbox currently (but any number for classical MC)\n"
     output += "group_dipole = 1\t// not relevant for sandbox but classical MC\n"
@@ -205,7 +205,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     elements_line = "elements = %s\n" % (",".join(elements))
 
     bonds = [[] for _ in range(count_oids)]
-    bond_orders = [[] for _ in range(count_oids)]
+    # bond_orders = [[] for _ in range(count_oids)]
     static_links = []
     for i, j in molsetup.bond_info.keys():
         if molsetup.get_is_ignore(i) or molsetup.get_is_ignore(j):
@@ -218,13 +218,13 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
         oid_i = indexmap[i]
         oid_j = indexmap[j]
         bonds[oid_i].append("%d" % (oid_j + index_start))
-        bond_orders[oid_i].append("%d" % molsetup.bond_info[(i, j)].order)
+        # bond_orders[oid_i].append("%d" % molsetup.bond_info[(i, j)].order)
         if not molsetup.bond_info[(i, j)].rotatable:
             static_links.append("%d,%d" % (oid_i + index_start, oid_j + index_start))
     bonds = [",".join(j_list) for j_list in bonds]
     bonds_line = "connectivity = {%s}\n" % ("|".join(bonds))
-    bond_orders = [",".join(orders) for orders in bond_orders]
-    bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
+    # bond_orders = [",".join(orders) for orders in bond_orders]
+    # bondorder_line = "bond_order = {%s}\n" % ("|".join(bond_orders))
     staticlinks_line = "static_links = {%s}\n" % ("|".join(static_links))
 
     output = ""
@@ -233,7 +233,7 @@ def oids_block_from_setup(molsetup, name="LigandFromMeeko"):
     output += charges_line
     output += elements_line
     output += bonds_line
-    output += bondorder_line
+    # output += bondorder_line
     output += staticlinks_line
     output += "number = 1\t\t// can only be 1 for the sandbox currently (but any number for classical MC)\n"
     output += "group_dipole = 1\t// not relevant for sandbox but classical MC\n"

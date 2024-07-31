@@ -51,7 +51,6 @@ DEFAULT_ATOM_TYPE = None
 DEFAULT_IS_IGNORE = False
 DEFAULT_GRAPH = []
 
-DEFAULT_BOND_ORDER = 0
 DEFAULT_BOND_ROTATABLE = False
 
 DEFAULT_RING_CORNER_FLIP = False
@@ -282,20 +281,17 @@ class Bond:
     canon_id: (int, int)
     index1: int
     index2: int
-    order: int = DEFAULT_BOND_ORDER
     rotatable: bool = DEFAULT_BOND_ROTATABLE
 
     def __init__(
         self,
         index1: int,
         index2: int,
-        order: int = DEFAULT_BOND_ORDER,
         rotatable: bool = DEFAULT_BOND_ROTATABLE,
     ):
         self.canon_id = self.get_bond_id(index1, index2)
         self.index1 = index1
         self.index2 = index2
-        self.order = order
         self.rotatable = rotatable
         return
 
@@ -342,16 +338,15 @@ class Bond:
             return obj
 
         # Check that all the keys we expect are in the object dictionary as a safety measure
-        expected_json_keys = {"canon_id", "index1", "index2", "order", "rotatable"}
+        expected_json_keys = {"canon_id", "index1", "index2", "rotatable"}
         if set(obj.keys()) != expected_json_keys:
             return obj
 
         # Constructs a bond object from the provided keys.
         index1 = obj["index1"]
         index2 = obj["index2"]
-        order = obj["order"]
         rotatable = obj["rotatable"]
-        output_bond = Bond(index1, index2, order, rotatable)
+        output_bond = Bond(index1, index2, rotatable)
         return output_bond
 
 
@@ -713,7 +708,6 @@ class MoleculeSetup:
         self,
         atom_index_1: int,
         atom_index_2: int,
-        order: int = DEFAULT_BOND_ORDER,
         rotatable: bool = DEFAULT_BOND_ROTATABLE,
     ) -> None:
         """
@@ -725,8 +719,6 @@ class MoleculeSetup:
             Atom index of one of the atoms in the bond
         atom_index_2: int
             Atom index of the other atom in the bond
-        order: int
-            Bond order to set for the bond
         rotatable: bool
             Indicates whether the bond is rotatable
 
@@ -750,7 +742,7 @@ class MoleculeSetup:
         if atom_index_1 not in self.atoms[atom_index_2].graph:
             self.atoms[atom_index_2].graph.append(atom_index_1)
         # Creates new bond object and uses its internal canonical bond id to add it to MoleculeSetup bond tracking.
-        new_bond = Bond(atom_index_1, atom_index_2, order, rotatable)
+        new_bond = Bond(atom_index_1, atom_index_2, rotatable)
         self.bond_info[new_bond.canon_id] = new_bond
         return
 
@@ -1314,7 +1306,7 @@ class MoleculeSetup:
 
         print("\n==============[ BONDS ]================")
         # For sanity users, we won't show those keys for now
-        keys_to_not_show = ["bond_order", "type"]
+        keys_to_not_show = ["type"]
         for bond_id, bond in list(self.bond_info.items()):
             t = ", ".join(
                 "%s: %s" % (i, j)
@@ -1650,15 +1642,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         for b in self.mol.GetBonds():
             idx1 = b.GetBeginAtomIdx()
             idx2 = b.GetEndAtomIdx()
-            bond_order = int(b.GetBondType())
-            # fix the RDKit aromatic type (FIXME)
-            if bond_order == 12:  # aromatic
-                bond_order = 5
-            if bond_order == 1:
-                rotatable = True
-            else:
-                rotatable = False
-            self.add_bond(idx1, idx2, order=bond_order, rotatable=rotatable)
+            rotatable = int(b.GetBondType()) == 1
+            self.add_bond(idx1, idx2, rotatable=rotatable)
 
     def find_pattern(self, smarts: str):
         """
@@ -2061,10 +2046,8 @@ class OBMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         for b in ob.OBMolBondIter(self.mol):
             idx1 = b.GetBeginAtomIdx() - 1
             idx2 = b.GetEndAtomIdx() - 1
-            bond_order = b.GetBondOrder()
-            if b.IsAromatic():
-                bond_order = 5
-            self.add_bond(idx1, idx2, order=bond_order)
+            rotatable = b.GetBondOrder() == 1
+            self.add_bond(idx1, idx2, rotatable=rotatable)
 
     def get_mol_name(self):
         """
@@ -2181,7 +2164,6 @@ class BondEncoder(json.JSONEncoder):
                 "canon_id": obj.canon_id,
                 "index1": obj.index1,
                 "index2": obj.index2,
-                "order": obj.order,
                 "rotatable": obj.rotatable,
             }
         return json.JSONEncoder.default(self, obj)

@@ -56,10 +56,7 @@ class BondTyperLegacy:
 
         for bond_id, bond in setup.bond_info.items():
             rotatable = True
-            bond_order = bond.order
             if bond_id in to_rigidify:
-                rotatable = False
-            if bond_order > 1:
                 rotatable = False
             # check if bond is amide
             if (
@@ -67,6 +64,4 @@ class BondTyperLegacy:
                 or (bond_id[1], bond_id[0]) in amide_bonds
             ) and not flexible_amides:
                 rotatable = False
-                bond_order = 99
             bond.rotatable = rotatable
-            bond.order = bond_order
