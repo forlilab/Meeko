@@ -14,6 +14,6 @@ def test():
     mk_prep = MoleculePreparation()
     molsetup = mk_prep.prepare(mol)[0]
     nr_rot_bonds = 0
-    for idxs, bond_info in molsetup.bond.items():
-        nr_rot_bonds += int(bond_info["rotatable"])
+    for _, bond in molsetup.bond_info.items():
+        nr_rot_bonds += int(bond.rotatable)
     assert nr_rot_bonds == 0

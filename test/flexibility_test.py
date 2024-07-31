@@ -30,8 +30,8 @@ def run(
 
     # check rotatable bonds
     rot_bonds = set()
-    for bond_id, bond_info in molsetup.bond.items():
-        if bond_info["rotatable"]:
+    for bond_id, bond in molsetup.bond_info.items():
+        if bond.rotatable:
             rot_bonds.add(bond_id)
     assert rot_bonds == expected_rot_bonds
 

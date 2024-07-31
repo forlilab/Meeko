@@ -324,7 +324,7 @@ def update_closure_atoms(
                 rotatable=False,
                 pdbinfo=pdbinfo,
             )
-            if anchor in molsetup.ring_closure_info:
+            if anchor in molsetup.ring_closure_info.pseudos_by_atom:
                 raise RuntimeError("did not expect more than one G per atom")
             molsetup.ring_closure_info.pseudos_by_atom[anchor] = pseudo_index
         molsetup.set_atom_type(bond[0], "CG%d" % i)

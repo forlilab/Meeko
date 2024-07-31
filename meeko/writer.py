@@ -656,7 +656,8 @@ class PDBQTWriterLegacy:
                     ]  # exclude pseudos
                     if len(parents) != 1:
                         error_msg += (
-                            "expected hydrogen to be bonded to exactly one atom"
+                            f"expected hydrogen {key} to be bonded to exactly one atom"
+                            f" but it's bonded to {parents}"
                         )
                         error_msg += " (mol name: %s)\n" % setup.get_mol_name()
                         pdbqt_string = ""

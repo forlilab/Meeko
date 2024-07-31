@@ -477,7 +477,6 @@ class MoleculeSetup:
     ----------
     name: str
     is_sidechain: bool
-    true_atom_count: int
     pseudoatom_count: int
 
     atoms: list[Atom]
@@ -497,7 +496,6 @@ class MoleculeSetup:
         # Molecule Setup Identity
         self.name: str = name
         self.is_sidechain: bool = is_sidechain
-        self.true_atom_count: int = 0
         self.pseudoatom_count: int = 0
 
         # Tracking atoms and bonds
@@ -662,6 +660,7 @@ class MoleculeSetup:
             is_ignore=is_ignore,
             is_pseudo_atom=True,
         )
+        self.atoms.append(new_pseudoatom)
         # Adds bonds for all of the provided anchor atoms
         if anchor_list is not None:
             for anchor in anchor_list:
@@ -869,20 +868,21 @@ class MoleculeSetup:
             self.atoms[atom_index].interaction_vectors.append(vector)
         return
 
-    def count_true_atoms(self):
+    @property
+    def true_atom_count(self):
         """
-        Counts the number of atoms in the MoleculeSetup that are not pseudo_atoms or marked as dummy atoms, and
-        sets self.true_atom_count to that number.
+        Counts the number of atoms in the MoleculeSetup that are not pseudo_atoms or marked as dummy atoms
 
         Returns
         -------
-        true_atom_count: int
+        count: int
             The number of atoms currently in the MoleculeSetup that are not dummy atoms or pseudo_atoms.
         """
+        count = 0
         for atom in self.atoms:
             if not atom.is_pseudo_atom and not atom.is_dummy:
-                self.true_atom_count += 1
-        return self.true_atom_count
+                count += 1
+        return count
 
     # this might void the graph connections and everything in bonds, might need to add a dict of the changes we're
     # making and then use that save this for a future push.
@@ -1360,7 +1360,6 @@ class MoleculeSetup:
         expected_molsetup_keys = {
             "name",
             "is_sidechain",
-            "true_atom_count",
             "pseudoatom_count",
             "atoms",
             "bond_info",
@@ -1375,7 +1374,6 @@ class MoleculeSetup:
         name = obj["name"]
         is_sidechain = obj["is_sidechain"]
         molsetup = MoleculeSetup(name, is_sidechain)
-        molsetup.true_atom_count = obj["true_atom_count"]
         molsetup.pseudoatom_count = obj["pseudoatom_count"]
         molsetup.atoms = [Atom.from_json(x) for x in obj["atoms"]]
         molsetup.bond_info = {
@@ -2277,7 +2275,6 @@ class MoleculeSetupEncoder(json.JSONEncoder):
             return {
                 "name": obj.name,
                 "is_sidechain": obj.is_sidechain,
-                "true_atom_count": obj.true_atom_count,
                 "pseudoatom_count": obj.pseudoatom_count,
                 "atoms": [self.atom_encoder.default(x) for x in obj.atoms],
                 "bond_info": {
