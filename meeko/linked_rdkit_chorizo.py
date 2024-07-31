@@ -1518,6 +1518,7 @@ class LinkedRDKitChorizo:
             for i, ignore in molsetup.atom_ignore.items():
                 if not ignore and not self.residues[res_id].is_flexres_atom[i]:
                     wanted_atom_indices.append(i)
+                    coords.append(molsetup.coord[i])
             for key, values in molsetup.atom_params.items():
                 atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 for i in wanted_atom_indices:
@@ -1535,7 +1536,6 @@ class LinkedRDKitChorizo:
                 atom_params[key].extend(
                     [None] * len(wanted_atom_indices)
                 )  # fill in incomplete "row"
-            coords.append(molsetup.coord[i])
         if hasattr(self, "param_rename"):  # e.g. "gasteiger" -> "q"
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
