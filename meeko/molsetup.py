@@ -1374,6 +1374,14 @@ class MoleculeSetup:
         molsetup.rings = {tuple(k): Ring.from_json(v) for k, v in obj["rings"].items()}
         molsetup.rotamers = obj["rotamers"]
         molsetup.flexibility_model = obj["flexibility_model"]
+        if mol is not None:
+            rdkit_mols = rdMolInterchange.JSONToMols(mol)
+            if len(rdkit_mols) != 1:
+                raise ValueError(
+                    f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
+                )
+            molsetup.mol = rdkit_mols[0]
+            Chem.SanitizeMol(molsetup.mol)  # needed to compute gasteiger charges
         return molsetup
 
 

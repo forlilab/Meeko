@@ -1020,8 +1020,9 @@ class LinkedRDKitChorizo:
                 atoms_with_bonds = set()
                 from_raw = {value: key for (key, value) in mapping.items()}
                 for raw_index in raw_atoms_with_bonds:
-                    atom_index = from_raw[raw_index]
-                    atoms_with_bonds.add(atom_index)
+                    if raw_index in from_raw:  # bonds can occur on atoms the template does not have
+                        atom_index = from_raw[raw_index]
+                        atoms_with_bonds.add(atom_index)
                 # we treat blunt ends like bonds
                 for res_id, atom_idx in blunt_ends:
                     if res_id == residue_key:
@@ -1516,6 +1517,7 @@ class LinkedRDKitChorizo:
             for atom in molsetup.atoms:
                 if not atom.is_ignore and not self.residues[res_id].is_flexres_atom[atom.index]:
                     wanted_atom_indices.append(atom.index)
+                    coords.append(molsetup.get_coord(atom.index))
             for key, values in molsetup.atom_params.items():
                 atom_params.setdefault(key, [None] * counter_atoms)  # add new "column"
                 for i in wanted_atom_indices:
@@ -1539,7 +1541,6 @@ class LinkedRDKitChorizo:
                 atom_params[key].extend(
                     [None] * len(wanted_atom_indices)
                 )  # fill in incomplete "row"
-            coords.append(molsetup.get_coord(i))
         if hasattr(self, "param_rename"):  # e.g. "gasteiger" -> "q"
             for key, new_key in self.param_rename.items():
                 atom_params[new_key] = atom_params.pop(key)
@@ -2013,6 +2014,11 @@ class ResidueTemplate:
                 result[element]["excess"] += 1
         return result, mapping
 
+def rdkit_or_none_to_json(rdkit_mol):
+    if rdkit_mol is None:
+        return None
+    return rdMolInterchange.MolToJSON(rdkit_mol)
+
 
 # region JSON Encoders
 class ChorizoResidueEncoder(json.JSONEncoder):
@@ -2038,19 +2044,24 @@ class ChorizoResidueEncoder(json.JSONEncoder):
         object.
         """
         if isinstance(obj, ChorizoResidue):
+            if obj.molsetup is None:
+                molsetup_json = None
+            else:
+                molsetup_json = self.molecule_setup_encoder.default(obj.molsetup)
             return {
-                "raw_rdkit_mol": rdMolInterchange.MolToJSON(obj.raw_rdkit_mol),
-                "rdkit_mol": rdMolInterchange.MolToJSON(obj.rdkit_mol),
+                "raw_rdkit_mol": rdkit_or_none_to_json(obj.raw_rdkit_mol),
+                "rdkit_mol": rdkit_or_none_to_json(obj.rdkit_mol),
                 "mapidx_to_raw": obj.mapidx_to_raw,
                 "residue_template_key": obj.residue_template_key,
                 "input_resname": obj.input_resname,
                 "atom_names": obj.atom_names,
                 "mapidx_from_raw": obj.mapidx_from_raw,
-                "padded_mol": rdMolInterchange.MolToJSON(obj.padded_mol),
-                "molsetup": self.molecule_setup_encoder.default(obj.molsetup),
+                "padded_mol": rdkit_or_none_to_json(obj.padded_mol),
+                "molsetup": molsetup_json,
                 "is_flexres_atom": obj.is_flexres_atom,
                 "is_movable": obj.is_movable,
                 "user_deleted": obj.user_deleted,
+                "molsetup_mapidx": obj.molsetup_mapidx,
             }
         return json.JSONEncoder.default(self, obj)
 
@@ -2234,6 +2245,7 @@ def chorizo_residue_json_decoder(obj: dict):
         "is_flexres_atom",
         "is_movable",
         "user_deleted",
+        "molsetup_mapidx",
     }
 
     if set(obj.keys()) != expected_residue_keys:
@@ -2241,7 +2253,10 @@ def chorizo_residue_json_decoder(obj: dict):
     # Extracts init mols for ChorizoResidue:
     raw_rdkit_mol = rdkit_mol_from_json(obj["raw_rdkit_mol"])
     rdkit_mol = rdkit_mol_from_json(obj["rdkit_mol"])
-    mapidx_to_raw = {int(k): v for k, v in obj["mapidx_to_raw"].items()}
+    if obj["mapidx_to_raw"] is None:
+        mapidx_to_raw = None
+    else:
+        mapidx_to_raw = {int(k): v for k, v in obj["mapidx_to_raw"].items()}
 
     residue = ChorizoResidue(raw_rdkit_mol, rdkit_mol, mapidx_to_raw)
 
@@ -2250,9 +2265,17 @@ def chorizo_residue_json_decoder(obj: dict):
     residue.input_resname = obj["input_resname"]
     residue.atom_names = obj["atom_names"]
 
-    residue.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
+    if obj["mapidx_from_raw"] is None:
+        residue.mapidx_from_raw = None
+    else:
+        residue.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
+
     residue.padded_mol = rdkit_mol_from_json(obj["padded_mol"])
     residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
+    if obj["molsetup_mapidx"] is None:
+        residue.molsetup_mapidx = None
+    else:
+        residue.molsetup_mapidx = {int(k): v for k, v in obj["molsetup_mapidx"].items()}
 
     # boolean values
     residue.is_flexres_atom = obj["is_flexres_atom"]
@@ -2445,11 +2468,14 @@ def rdkit_mol_from_json(json_str: str):
     ValueError
         If no RDKitMol objects are returned, or if more than one is returned, throws a ValueError.
     """
+    if json_str is None:
+        return None
     rdkit_mols = rdMolInterchange.JSONToMols(json_str)
     if len(rdkit_mols) != 1:
         raise ValueError(
             f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
         )
+    Chem.SanitizeMol(rdkit_mols[0])  # needed to compute gasteiger charges
     return rdkit_mols[0]
 
 
