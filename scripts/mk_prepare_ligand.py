@@ -54,7 +54,6 @@ def cmd_lineparser():
             config.update(c)
 
     parser = argparse.ArgumentParser()#parents=[conf_parser]) # parents shows --config_file in help msg
-    parser.set_defaults(**config)
     parser.add_argument("-v", "--verbose", dest="verbose",
                         action="store_true", help="print information about molecule setup")
 
@@ -121,6 +120,7 @@ def cmd_lineparser():
                                 metavar='IDX', default=[1, 2],
                                 help='indices (1-based) of the SMARTS atoms that will be attached (default: 1 2)')
 
+    parser.set_defaults(**config)
     args = parser.parse_args(remaining_argv)
 
     # check reactive arguments
