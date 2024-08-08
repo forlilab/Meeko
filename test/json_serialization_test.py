@@ -23,9 +23,12 @@ from meeko import (
 )
 
 from meeko import linked_rdkit_chorizo
+from meeko.molsetup import Atom, Bond, Ring, RingClosureInfo, Restraint
 
 from rdkit import Chem
 from rdkit.Chem import rdChemReactions
+
+from meeko.utils.pdbutils import PDBAtomInfo
 
 # from ..meeko.utils.pdbutils import PDBAtomInfo
 
@@ -108,7 +111,7 @@ def test_rdkit_molsetup_encoding_decoding(populated_rdkit_molsetup):
     starting_molsetup = populated_rdkit_molsetup
     json_str = json.dumps(starting_molsetup, cls=MoleculeSetupEncoder)
     decoded_molsetup = json.loads(
-        json_str, object_hook=MoleculeSetup.molsetup_json_decoder
+        json_str, object_hook=RDKitMoleculeSetup.from_json
     )
 
     # First asserts that all types are as expected
@@ -300,77 +303,195 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
     -------
     None
     """
-    # Bool used while looping through values to check whether all values in a data structure have the expected type
-    correct_val_type = True
 
-    # First checks the attributes that we are not doing any type conversion on
+    # Checks if the MoleculeSetup is an RDKitMoleculeSetup, and if so also checks the RDKitMoleculeSetup attributes
+    if isinstance(starting_obj, RDKitMoleculeSetup):
+        assert isinstance(decoded_obj.mol, Chem.rdchem.Mol)
+        pass
 
-    # Next checks attributes that needed minimal type conversion
-
-    # Finally goes through attributes that needed complex interventions
-
-    assert decoded_obj.atom_pseudo == starting_obj.atom_pseudo  # EMPTY
-    assert isinstance(decoded_obj.coord, collections.OrderedDict)
-    assert decoded_obj.coord.keys() == starting_obj.coord.keys()
-    for key in decoded_obj.coord:
-        correct_val_type = correct_val_type & isinstance(
-            decoded_obj.coord[key], numpy.ndarray
-        )
-        assert set(decoded_obj.coord[key]) == set(starting_obj.coord[key])
-    assert correct_val_type
-    assert decoded_obj.charge == starting_obj.charge
-    assert decoded_obj.pdbinfo == starting_obj.pdbinfo
-    correct_val_type = True
-    # for key in decoded_molsetup.pdbinfo:
-    #    correct_val_type = correct_val_type & isinstance(decoded_molsetup.pdbinfo[key], PDBAtomInfo)
-    assert correct_val_type
-    assert decoded_obj.atom_type == starting_obj.atom_type
-    assert (
-        decoded_obj.atom_params == starting_obj.atom_params
-    )  # WILL THERE BE CONVERSIONS NEEDED FOR PARAMS?
-    assert (
-        decoded_obj.dihedral_interactions == starting_obj.dihedral_interactions
-    )  # EMPTY
-    assert (
-        decoded_obj.dihedral_partaking_atoms == starting_obj.dihedral_partaking_atoms
-    )  # EMPTY
-    assert decoded_obj.dihedral_labels == starting_obj.dihedral_labels  # EMPTY
-    assert decoded_obj.atom_ignore == starting_obj.atom_ignore
-    assert decoded_obj.chiral == starting_obj.chiral
-    assert decoded_obj.atom_true_count == starting_obj.atom_true_count
-    assert decoded_obj.graph == starting_obj.graph
-    # Assert that the starting object's bond attribute was not compromised in the serialization process:
-    assert isinstance(list(starting_obj.bond.keys())[0], tuple)
-    # Assert that the final object's bond attribute had the expected key type:
-    assert isinstance(list(decoded_obj.bond.keys())[0], tuple)
-    assert decoded_obj.bond == starting_obj.bond
-    assert decoded_obj.element == starting_obj.element
-    assert decoded_obj.interaction_vector == starting_obj.interaction_vector  # EMPTY
-    # Assert that both the starting and final objects have keys that are the expected type
-    if "rigid_body_connectivity" in starting_obj.flexibility_model:
-        assert isinstance(
-            list(starting_obj.flexibility_model["rigid_body_connectivity"].keys())[0],
-            tuple,
-        )
-        assert isinstance(
-            list(decoded_obj.flexibility_model["rigid_body_connectivity"].keys())[0],
-            tuple,
-        )
-    assert decoded_obj.flexibility_model == starting_obj.flexibility_model
-    assert decoded_obj.ring_closure_info == starting_obj.ring_closure_info  # EMPTY
-    assert decoded_obj.restraints == starting_obj.restraints  # EMPTY
+    # Going through and checking MoleculeSetup attributes
+    assert decoded_obj.name == starting_obj.name
+    assert isinstance(decoded_obj.is_sidechain, bool)
     assert decoded_obj.is_sidechain == starting_obj.is_sidechain
-    assert decoded_obj.rmsd_symmetry_indices == starting_obj.rmsd_symmetry_indices
-    # Assert that the starting object's bond attribute was not compromised in the serialization process:
-    assert isinstance(list(starting_obj.bond.keys())[0], tuple)
-    # Assert that the final object's bond attribute had the expected key type:
-    assert isinstance(list(decoded_obj.bond.keys())[0], tuple)
-    assert decoded_obj.rings == starting_obj.rings
-    assert decoded_obj.rings_aromatic == starting_obj.rings_aromatic
-    assert decoded_obj.atom_to_ring_id == starting_obj.atom_to_ring_id
-    assert decoded_obj.ring_corners == starting_obj.ring_corners  # EMPTY
-    assert decoded_obj.name == starting_obj.name  # EMPTY
-    assert decoded_obj.rotamers == starting_obj.rotamers  # EMPTY
+    assert isinstance(decoded_obj.pseudoatom_count, int)
+    assert decoded_obj.pseudoatom_count == starting_obj.pseudoatom_count
+
+    # Checking atoms
+    atom_idx = 0
+    assert len(decoded_obj.atoms) == len(starting_obj.atoms)
+    for atom in decoded_obj.atoms:
+        assert isinstance(atom, Atom)
+        assert atom.index == atom_idx
+        check_atom_equality(atom, starting_obj.atoms[atom_idx])
+        atom_idx += 1
+
+    # Checking bonds
+    for bond_id in starting_obj.bond_info:
+        assert isinstance(decoded_obj.bond_info[bond_id], Bond)
+        assert bond_id in decoded_obj.bond_info
+        check_bond_equality(decoded_obj.bond_info[bond_id], starting_obj.bond_info[bond_id])
+
+    # Checking rings
+    for ring_id in starting_obj.rings:
+        assert isinstance(decoded_obj.rings[ring_id], Ring)
+        assert ring_id in decoded_obj.rings
+        check_ring_equality(decoded_obj.rings[ring_id], starting_obj.rings[ring_id])
+    assert isinstance(decoded_obj.ring_closure_info, RingClosureInfo)
+    assert decoded_obj.ring_closure_info.bonds_removed == starting_obj.ring_closure_info.bonds_removed
+    for key in starting_obj.ring_closure_info.pseudos_by_atom:
+        assert key in decoded_obj.ring_closure_info.pseudos_by_atom
+        assert decoded_obj.ring_closure_info.pseudos_by_atom[key] == starting_obj.ring_closure_info.pseudos_by_atom[key]
+
+    # Checking other fields
+    assert len(decoded_obj.rotamers) == len(starting_obj.rotamers)
+    for idx, component_dict in enumerate(starting_obj.rotamers):
+        decoded_dict = decoded_obj.rotamers[idx]
+        for key in component_dict:
+            assert key in decoded_dict
+            assert decoded_dict[key] == component_dict[key]
+    for key in starting_obj.atom_params:
+        assert key in decoded_obj.atom_params
+        assert decoded_obj.atom_params[key] == starting_obj.atom_params[key]
+    assert len(decoded_obj.restraints) == len(starting_obj.restraints)
+    for idx, restraint in starting_obj.restraints:
+        assert isinstance(decoded_obj.restraints[idx], Restraint)
+        check_restraint_equality(decoded_obj.restraints[idx], starting_obj.restraints[idx])
+
+    # Checking flexibility model
+    for key in starting_obj.flexibility_model:
+        assert key in decoded_obj.flexibility_model
+        assert decoded_obj.flexibility_model[key] == starting_obj.flexibility_model[key]
+    return
+
+
+def check_atom_equality(decoded_obj: Atom, starting_obj: Atom):
+    """
+    Asserts that two Atom objects are equal, and that the decoded_obj input has fields contain correctly typed
+    data.
+
+    Parameters
+    ----------
+    decoded_obj: Atom
+        An Atom object that we want to check is correctly typed and contains the correct data.
+    starting_obj: Atom
+        An Atom object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
+    correct_val_type = True
+    # np.array conversion checks
+    assert isinstance(decoded_obj.coord, numpy.ndarray)
+    for i_vec in decoded_obj.interaction_vectors:
+        correct_val_type = correct_val_type and isinstance(i_vec, numpy.ndarray)
+    assert correct_val_type
+
+    # Checks for equality between decoded and original fields
+    assert isinstance(decoded_obj.index, int)
+    assert decoded_obj.index == starting_obj.index
+    # Only checks pdb info if the starting object's pdbinfo was a string. Otherwise, the decoder is not going to convert
+    # the pdbinfo field back to the PDBInfo type right now.
+    if isinstance(starting_obj.pdbinfo, str):
+        assert decoded_obj.pdbinfo == starting_obj.pdbinfo
+    assert isinstance(decoded_obj.charge, float)
+    assert decoded_obj.charge == starting_obj.charge
+    for idx, val in enumerate(decoded_obj.coord):
+        assert val == starting_obj.coord[idx]
+    assert isinstance(decoded_obj.atomic_num, int)
+    assert decoded_obj.atomic_num == starting_obj.atomic_num
+    assert decoded_obj.atom_type == starting_obj.atom_type
+    assert decoded_obj.graph == starting_obj.graph
+    assert isinstance(decoded_obj.is_ignore, bool)
+    assert decoded_obj.is_ignore == starting_obj.is_ignore
+    assert isinstance(decoded_obj.is_dummy, bool)
+    assert decoded_obj.is_dummy == starting_obj.is_dummy
+    assert isinstance(decoded_obj.is_pseudo_atom, bool)
+    assert decoded_obj.is_pseudo_atom == starting_obj.is_pseudo_atom
+    return
+
+
+def check_bond_equality(decoded_obj: Bond, starting_obj: Bond):
+    """
+    Asserts that two Bond objects are equal, and that the decoded_obj input has fields contain correctly typed
+    data.
+
+    Parameters
+    ----------
+    decoded_obj: Bond
+        An Bond object that we want to check is correctly typed and contains the correct data.
+    starting_obj: Bond
+        An Bond object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
+    assert isinstance(decoded_obj.canon_id, tuple)
+    assert isinstance(decoded_obj.canon_id[0], int)
+    assert isinstance(decoded_obj.canon_id[1], int)
+    assert decoded_obj.canon_id == starting_obj.canon_id
+    assert isinstance(decoded_obj.index1, int)
+    assert decoded_obj.index1 == starting_obj.index1
+    assert isinstance(decoded_obj.index2, int)
+    assert decoded_obj.index2 == starting_obj.index2
+    assert isinstance(decoded_obj.rotatable, bool)
+    assert decoded_obj.rotatable == starting_obj.rotatable
+    return
+
+
+def check_ring_equality(decoded_obj: Ring, starting_obj: Ring):
+    """
+    Asserts that two Ring objects are equal, and that the decoded_obj input has fields contain correctly typed
+    data.
+
+    Parameters
+    ----------
+    decoded_obj: Ring
+        An Ring object that we want to check is correctly typed and contains the correct data.
+    starting_obj: Ring
+        An Ring object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
+    assert isinstance(decoded_obj.ring_id, tuple)
+    assert decoded_obj.ring_id == starting_obj.ring_id
+    assert isinstance(decoded_obj.corner_flip, bool)
+    assert decoded_obj.corner_flip == starting_obj.corner_flip
+    assert len(decoded_obj.graph) == len(starting_obj.graph)
+    for idx, val in enumerate(starting_obj.graph):
+        assert decoded_obj.graph[idx] == val
+    assert isinstance(decoded_obj.is_aromatic, bool)
+    assert decoded_obj.is_aromatic == starting_obj.is_aromatic
+    return
+
+
+def check_restraint_equality(decoded_obj: Restraint, starting_obj: Restraint):
+    """
+    Asserts that two Restraint objects are equal, and that the decoded_obj input has fields contain correctly typed
+    data.
+
+    Parameters
+    ----------
+    decoded_obj: Restraint
+        An Restraint object that we want to check is correctly typed and contains the correct data.
+    starting_obj: Restraint
+        An Restraint object with the desired values to check the decoded object against.
+
+    Returns
+    -------
+    None
+    """
+    assert isinstance(decoded_obj.atom_index, int)
+    assert decoded_obj.atom_index == starting_obj.atom_index
+    assert isinstance(decoded_obj.target_coords, tuple)
+    assert decoded_obj.target_coords == starting_obj.target_coords
+    assert isinstance(decoded_obj.kcal_per_angstrom_square, float)
+    assert decoded_obj.kcal_per_angstrom_square == starting_obj.kcal_per_angstrom_square
+    assert isinstance(decoded_obj.delay_angstroms, float)
+    assert decoded_obj.delay_angstroms == starting_obj.delay_angstroms
     return
 
 
@@ -564,3 +685,4 @@ def check_linked_rdkit_chorizo_equality(
     # Checks log equality
     assert decoded_obj.log == starting_obj.log
     return
+# endregion

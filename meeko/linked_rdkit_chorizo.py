@@ -12,8 +12,9 @@ from rdkit.Chem import rdMolInterchange
 from prody.atomic.atomgroup import AtomGroup
 from prody.atomic.selection import Selection
 
-from .molsetup import MoleculeSetup, RDKitMoleculeSetup
+from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetupEncoder
+from .utils.jsonutils import rdkit_mol_from_json
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.prodyutils import prody_to_rdkit, ALLOWED_PRODY_TYPES
@@ -2252,7 +2253,7 @@ def chorizo_residue_json_decoder(obj: dict):
 
     residue.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
     residue.padded_mol = rdkit_mol_from_json(obj["padded_mol"])
-    residue.molsetup = MoleculeSetup.molsetup_json_decoder(obj["molsetup"])
+    residue.molsetup = RDKitMoleculeSetup.from_json(obj["molsetup"])
 
     # boolean values
     residue.is_flexres_atom = obj["is_flexres_atom"]
@@ -2422,35 +2423,4 @@ def linked_rdkit_chorizo_json_decoder(obj: dict):
     linked_rdkit_chorizo.log = obj["log"]
 
     return linked_rdkit_chorizo
-
-
-# SHOULD BE MOVED TO A UTILS FILE OR SOMETHING SIMILAR
-def rdkit_mol_from_json(json_str: str):
-    """
-    Takes in a JSON string and attempts to use RDKit's JSON to Mols utility to extract just one RDKitMol from the
-    json string. If none or more than one Mols are returned, raises an error.
-
-    Parameters
-    ----------
-    json_str: str
-        A JSON string representing an RDKit Mol.
-
-    Returns
-    -------
-    rdkit_mol: rdkit.Chem.rdchem.Mol
-        An RDKit Mol object corresponding to the input JSON string
-
-    Raises
-    ------
-    ValueError
-        If no RDKitMol objects are returned, or if more than one is returned, throws a ValueError.
-    """
-    rdkit_mols = rdMolInterchange.JSONToMols(json_str)
-    if len(rdkit_mols) != 1:
-        raise ValueError(
-            f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
-        )
-    return rdkit_mols[0]
-
-
 # endregion

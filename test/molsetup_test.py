@@ -12,7 +12,10 @@ import meeko
 def empty_molecule_setup():
     molsetup = MoleculeSetup()
     yield molsetup
+
+
 # endregion
+
 
 class TestMoleculeSetupInit:
     def test_add_one_atom(self):
