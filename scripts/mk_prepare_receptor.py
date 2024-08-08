@@ -25,12 +25,12 @@ from meeko import __file__ as pkg_init_path
 from rdkit import Chem
 import prody
 
-SUPPORTED_PRODY_FORMATS= { "pdb":prody.parsePDB, "cif":prody.parseMMCIF }
+SUPPORTED_PRODY_FORMATS = {"pdb": prody.parsePDB, "cif": prody.parseMMCIF}
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
 # the following preservers RDKit Atom properties in the chorizo pickle
-Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AtomProps) # |
+Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AtomProps)  # |
 #                                Chem.PropertyPickleOptions.PrivateProps)
 
 pkg_dir = pathlib.Path(pkg_init_path).parents[0]
@@ -40,17 +40,16 @@ with open(templates_fn) as f:
 
 
 def parse_cmdline_res(string):
-    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C"
-    """
+    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
     blocks = ("," + string).split(":")
     nr_blocks = len(blocks) - 1
     keys = []
     for i in range(nr_blocks):
         chain = blocks[i].split(",")[-1]
         if i + 1 == nr_blocks:
-            resnums = blocks[i+1].split(",")
+            resnums = blocks[i + 1].split(",")
         else:
-            resnums = blocks[i+1].split(",")[:-1]
+            resnums = blocks[i + 1].split(",")[:-1]
         if len(resnums) == 0:
             raise ValueError(f"missing residue in {resnums}")
         for resnum in resnums:
@@ -59,16 +58,15 @@ def parse_cmdline_res(string):
 
 
 def parse_cmdline_res_assign(string):
-    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}
-    """
-    
+    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}"""
+
     output = {}
     nr_assignments = string.count("=")
-    string = "," + string # enables `residues =` below to work in first iteraton
+    string = "," + string  # enables `residues =` below to work in first iteraton
     tmp = string.split("=")
     for i in range(nr_assignments):
-        residues = tmp[i].split(',')[1:] 
-        assigned_name = tmp[i+1].split(',')[0]
+        residues = tmp[i].split(",")[1:]
+        assigned_name = tmp[i + 1].split(",")[0]
         chain = ""
         for residue in residues:
             fields = residue.split(":")
@@ -108,24 +106,40 @@ def parse_residue_string(string):
     res_id = (None, None, None)
     if string.count(":") != 2:
         ok = False
-        err += "Need exacly two ':' but found %d in '%s'" % (string.count(":"), string) + os_linesep
+        err += (
+            "Need exacly two ':' but found %d in '%s'" % (string.count(":"), string)
+            + os_linesep
+        )
         err += "Example: 'A:HIE:42'" + os_linesep
         return res_id, ok, err
     chain, resname, resnum = string.split(":")
     if len(chain) not in (0, 1):
         ok = False
-        err += "chain must be 0 or 1 char but it is '%s' (%d chars) in '%s'" % (chain, len(chain), string) + os_linesep
+        err += (
+            "chain must be 0 or 1 char but it is '%s' (%d chars) in '%s'"
+            % (chain, len(chain), string)
+            + os_linesep
+        )
     if len(resname) > 3:
         ok = False
-        err += "resname must be max 3 characters long, but is '%s' in '%s'" % (resname, string) + os_linesep
+        err += (
+            "resname must be max 3 characters long, but is '%s' in '%s'"
+            % (resname, string)
+            + os_linesep
+        )
     try:
         resnum = int(resnum)
     except:
         ok = False
-        err += "resnum could not be converted to integer, it was '%s' in '%s'" % (resnum, string) + os_linesep
+        err += (
+            "resnum could not be converted to integer, it was '%s' in '%s'"
+            % (resnum, string)
+            + os_linesep
+        )
     if ok:
         res_id = (chain, resname, resnum)
     return res_id, ok, err
+
 
 def parse_residue_string_and_name(string):
     """
@@ -135,11 +149,13 @@ def parse_residue_string_and_name(string):
     """
     ok = True
     err = ""
-    output = {"res_id": (None, None, None),
-              "name": None}
+    output = {"res_id": (None, None, None), "name": None}
     if string.count(":") != 3:
         ok = False
-        err += "Need three ':' but found %d in %s" % (string.count(":"), string) + os_linesep
+        err += (
+            "Need three ':' but found %d in %s" % (string.count(":"), string)
+            + os_linesep
+        )
         err += "Example: 'A:HIE:42:CE1'" + os_linesep
         return output, ok, err
 
@@ -150,6 +166,7 @@ def parse_residue_string_and_name(string):
     ok &= ok_
     err += err_
     return output, ok, err
+
 
 def parse_resname_and_name(string):
     """
@@ -162,13 +179,14 @@ def parse_resname_and_name(string):
     output = (None, None)
     if string.count(":") != 1:
         ok = False
-        err += "Expected one ':' but found %d in %s" % (string.count(":"), string) + os_linesep
+        err += (
+            "Expected one ':' but found %d in %s" % (string.count(":"), string)
+            + os_linesep
+        )
         err += "Example: 'HIE:CE1'" + os_linesep
         return output, ok, err
     resname, name = string.split(":")
     return (resname, name), ok, err
-
-
 
 
 class TalkativeParser(argparse.ArgumentParser):
@@ -176,58 +194,127 @@ class TalkativeParser(argparse.ArgumentParser):
         """overload to print_help for every error"""
         self.print_help()
         this_script = path_to_this_script.name
-        print('\n%s: error: %s' % (this_script, message), file=sys.stderr)
+        print("\n%s: error: %s" % (this_script, message), file=sys.stderr)
         sys.exit(2)
+
 
 def check(success, error_msg):
     if not success:
         print("Error: " + error_msg, file=sys.stderr)
         sys.exit(2)
 
+
 def get_args():
     parser = TalkativeParser()
 
     io_group = parser.add_argument_group("Input/Output")
-    io_group.add_argument('--pdb', help="deprecated, use --macromol, still here as non-prody option, no PDBQT")
-    io_group.add_argument('--macromol', help="PDB/mmCIF input file")
-    io_group.add_argument('-o', '--output_filename', required=True, help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.")
-    io_group.add_argument('-p', '--chorizo_pickle') 
+    io_group.add_argument(
+        "--pdb",
+        help="deprecated, use --macromol, still here as non-prody option, no PDBQT",
+    )
+    io_group.add_argument("--macromol", help="PDB/mmCIF input file")
+    io_group.add_argument(
+        "-o",
+        "--output_filename",
+        required=True,
+        help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.",
+    )
+    io_group.add_argument("-p", "--chorizo_pickle")
 
     config_group = parser.add_argument_group("Receptor perception")
-    config_group.add_argument('-n', '--set_template',
-                                  help="e.g. A:5,7=CYX,B:17=HID")
-    config_group.add_argument(      '--delete_residues', help="e.g. '[\"A:350\", \"B:17\"]'")
-    config_group.add_argument(      '--blunt_ends', help="e.g. A:123,200=2,A:1=0")
-    config_group.add_argument(      '--chorizo_config', help="[.json]")
-    config_group.add_argument(      '--add_templates', help="[.json]")
-    config_group.add_argument(      '--mk_config', help="[.json]")
-    config_group.add_argument(      '--allow_bad_res', action="store_true",
-                                                 help="delete residues with missing atoms instead of raising error")
-    config_group.add_argument('-f', '--flexres', action="append", default=[],
-                        help="repeat flag for each residue, e.g: -f \" :42\" -f \"B:23\" and keep space for empty chain")
+    config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
+    config_group.add_argument("--delete_residues", help='e.g. \'["A:350", "B:17"]\'')
+    config_group.add_argument("--blunt_ends", help="e.g. A:123,200=2,A:1=0")
+    config_group.add_argument("--chorizo_config", help="[.json]")
+    config_group.add_argument("--add_templates", help="[.json]")
+    config_group.add_argument("--mk_config", help="[.json]")
+    config_group.add_argument(
+        "--allow_bad_res",
+        action="store_true",
+        help="delete residues with missing atoms instead of raising error",
+    )
+    config_group.add_argument(
+        "-f",
+        "--flexres",
+        action="append",
+        default=[],
+        help='repeat flag for each residue, e.g: -f " :42" -f "B:23" and keep space for empty chain',
+    )
 
     box_group = parser.add_argument_group("Size and center of grid box")
-    #box_group.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
-    box_group.add_argument('--skip_gpf', help="do not write a GPF file for autogrid", action="store_true")
-    box_group.add_argument('--box_size', help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float)
-    box_group.add_argument('--box_center', help="center of grid box (x, y, z) in Angstrom", nargs=3, type=float)
-    box_group.add_argument('--box_center_off_reactive_res', help="project grid box center along CA-CB bond 5 A away from CB", action="store_true")
-    box_group.add_argument('--ligand', help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted")
-    box_group.add_argument('--padding', help="padding around reference ligand [A]", type=float)
-
+    # box_group.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
+    box_group.add_argument(
+        "--skip_gpf", help="do not write a GPF file for autogrid", action="store_true"
+    )
+    box_group.add_argument(
+        "--box_size", help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float
+    )
+    box_group.add_argument(
+        "--box_center",
+        help="center of grid box (x, y, z) in Angstrom",
+        nargs=3,
+        type=float,
+    )
+    box_group.add_argument(
+        "--box_center_off_reactive_res",
+        help="project grid box center along CA-CB bond 5 A away from CB",
+        action="store_true",
+    )
+    box_group.add_argument(
+        "--ligand",
+        help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted",
+    )
+    box_group.add_argument(
+        "--padding", help="padding around reference ligand [A]", type=float
+    )
 
     reactive_group = parser.add_argument_group("Reactive")
-    reactive_group.add_argument('-r', '--reactive_flexres', action="append", default=[],
-                        help="same as --flexres but for reactive residues (max 8)")
-    reactive_group.add_argument('-g', '--reactive_name', action="append", default=[],
-                        help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific")
-    reactive_group.add_argument('-s', '--reactive_name_specific', action="append", default=[],
-                        help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.")
+    reactive_group.add_argument(
+        "-r",
+        "--reactive_flexres",
+        action="append",
+        default=[],
+        help="same as --flexres but for reactive residues (max 8)",
+    )
+    reactive_group.add_argument(
+        "-g",
+        "--reactive_name",
+        action="append",
+        default=[],
+        help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific",
+    )
+    reactive_group.add_argument(
+        "-s",
+        "--reactive_name_specific",
+        action="append",
+        default=[],
+        help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.",
+    )
 
-    reactive_group.add_argument('--r_eq_12', default=1.8, type=float, help="r_eq for reactive atoms (1-2 interaction)")
-    reactive_group.add_argument('--eps_12', default=2.5, type=float, help="epsilon for reactive atoms (1-2 interaction)")
-    reactive_group.add_argument('--r_eq_13_scaling', default=0.5, type=float, help="r_eq scaling for 1-3 interaction across reactive atoms")
-    reactive_group.add_argument('--r_eq_14_scaling', default=0.5, type=float, help="r_eq scaling for 1-4 interaction across reactive atoms")
+    reactive_group.add_argument(
+        "--r_eq_12",
+        default=1.8,
+        type=float,
+        help="r_eq for reactive atoms (1-2 interaction)",
+    )
+    reactive_group.add_argument(
+        "--eps_12",
+        default=2.5,
+        type=float,
+        help="epsilon for reactive atoms (1-2 interaction)",
+    )
+    reactive_group.add_argument(
+        "--r_eq_13_scaling",
+        default=0.5,
+        type=float,
+        help="r_eq scaling for 1-3 interaction across reactive atoms",
+    )
+    reactive_group.add_argument(
+        "--r_eq_14_scaling",
+        default=0.5,
+        type=float,
+        help="r_eq scaling for 1-4 interaction across reactive atoms",
+    )
     args = parser.parse_args()
 
     if (args.pdb is None) == (args.macromol is None):
@@ -255,33 +342,58 @@ def get_args():
         sys.exit(42)
     if not args.skip_gpf:
         if nr_boxcenter_specs < 1:
-            msg  = "missing center of grid box to write .gpf file for autogrid4" + os_linesep
-            msg += "use --box_size and either --box_center or --box_center_off_reactive_res" + os_linesep
+            msg = (
+                "missing center of grid box to write .gpf file for autogrid4"
+                + os_linesep
+            )
+            msg += (
+                "use --box_size and either --box_center or --box_center_off_reactive_res"
+                + os_linesep
+            )
             msg += "or --ligand and --padding" + os_linesep
-            msg += "Exactly one reactive residue required for --box_center_off_reactive_res" + os_linesep
+            msg += (
+                "Exactly one reactive residue required for --box_center_off_reactive_res"
+                + os_linesep
+            )
             msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
         if (args.box_size is None) and (args.padding is None):
-            msg  = "grid box size is missing to dock with the AD4 scoring function." + os_linesep
+            msg = (
+                "grid box size is missing to dock with the AD4 scoring function."
+                + os_linesep
+            )
             msg += "use either --box_size or both --ligand and --padding" + os_linesep
-            msg += "The grid box center and size will be used to write a GPF file for autogrid" + os_linesep
+            msg += (
+                "The grid box center and size will be used to write a GPF file for autogrid"
+                + os_linesep
+            )
             msg += "If a GPF file is not needed (e.g. docking with Vina scoring function) use option --skip_gpf"
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
 
-    if (args.box_center is not None) + (args.ligand is not None) + args.box_center_off_reactive_res > 1:
+    if (args.box_center is not None) + (
+        args.ligand is not None
+    ) + args.box_center_off_reactive_res > 1:
         msg = "--box_center, --box_center_off_reactive_res, and --ligand are mutually exclusive options"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
 
     return args
 
+
 args = get_args()
 
 reactive_atom = {
-    "SER":  "OG", "LYS":  "NZ", "TYR":  "OH", "CYS":  "SG", "HIE": "NE2",
-    "HID": "ND1", "GLU": "OE2", "THR": "OG1", "MET":  "SD",
+    "SER": "OG",
+    "LYS": "NZ",
+    "TYR": "OH",
+    "CYS": "SG",
+    "HIE": "NE2",
+    "HID": "ND1",
+    "GLU": "OE2",
+    "THR": "OG1",
+    "MET": "SD",
 }
 modified_resnames = set()
 
@@ -337,10 +449,10 @@ for resid_string in args.flexres:
     for res_id in keys:
         all_flexres.add(res_id)
 
-    #res_id, ok, err = parse_residue_string(resid_string)
-    #all_ok &= ok
-    #all_err += err
-    #if ok:
+    # res_id, ok, err = parse_residue_string(resid_string)
+    # all_ok &= ok
+    # all_err += err
+    # if ok:
     #    if res_id in reactive_flexres:
     #        all_err += "Command line error: can't determine if %s is reactive or not." % str(res_id) + os_linesep
     #        all_err += "Do not pass %s to --flexres if it is reactive." % str(res_id) + os_linesep
@@ -395,8 +507,8 @@ if args.set_template is not None:
 if args.blunt_ends is not None:
     j = parse_cmdline_res_assign(args.blunt_ends)
     # TODO parse also input/raw atom names, easier than indices
-    j = [(k, int(v)) for k,v in j.items()]
-    blunt_ends.extend(j) 
+    j = [(k, int(v)) for k, v in j.items()]
+    blunt_ends.extend(j)
 if args.delete_residues is not None:
     del_res.update(json.loads(args.delete_residues))
 if args.mk_config is not None:
@@ -420,7 +532,7 @@ if args.add_templates is not None:
         msg += f"{bad_keys=}" + os_linesep
         msg += f"allowed keys: {res_chem_templates.keys()}" + os_linesep
         msg += f"see template file: {templates_fn}" + os_linesep
-        print(msg, file=sys.stderr) 
+        print(msg, file=sys.stderr)
         sys.exit(2)
 templates = ResidueChemTemplates.from_dict(res_chem_templates)
 
@@ -432,17 +544,27 @@ if args.macromol is not None:
         parser = SUPPORTED_PRODY_FORMATS[ext]
         # we should do something with the header...
         input_obj, header = parser(args.macromol, header=True)
-        chorizo = LinkedRDKitChorizo.from_prody(input_obj, templates,
-                                                mk_prep, set_template, del_res, args.allow_bad_res,
-                                                blunt_ends=blunt_ends,
+        chorizo = LinkedRDKitChorizo.from_prody(
+            input_obj,
+            templates,
+            mk_prep,
+            set_template,
+            del_res,
+            args.allow_bad_res,
+            blunt_ends=blunt_ends,
         )
     # prody_mol = prody.
 else:
     with open(args.pdb) as f:
         pdb_string = f.read()
-    chorizo = LinkedRDKitChorizo.from_pdb_string(pdb_string, templates, #residue_templates, padders, ambiguous,
-                                                     mk_prep, set_template, del_res, args.allow_bad_res,
-                                                     blunt_ends=blunt_ends,
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_string,
+        templates,  # residue_templates, padders, ambiguous,
+        mk_prep,
+        set_template,
+        del_res,
+        args.allow_bad_res,
+        blunt_ends=blunt_ends,
     )
 
 #  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
@@ -450,32 +572,51 @@ else:
 
 for res_id in all_flexres:
     chorizo.flexibilize_sidechain(res_id, mk_prep)
-rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
+rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(
+    chorizo
+)
 if args.chorizo_pickle is not None:
     with open(args.chorizo_pickle, "wb") as f:
         pickle.dump(chorizo, f)
 
-#suggested_config = {}
-#if len(chorizo.suggested_mutations):
+# suggested_config = {}
+# if len(chorizo.suggested_mutations):
 #    suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
 
-#if len(chorizo.get_ignored_residues()) > 0:
+# if len(chorizo.get_ignored_residues()) > 0:
 #    removed_residues = chorizo.get_ignored_residues()
 #    print("Automatically deleted %d residues" % len(removed_residues))
 #    print(json.dumps(list(removed_residues.keys()), indent=4))
 #    suggested_config["deleted_residues"] = removed_residues.copy()
 
-#rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
-#ok, err = receptor.assign_types_charges()
-#check(ok, err)
+# rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
+# ok, err = receptor.assign_types_charges()
+# check(ok, err)
 
 pdbqt = {
     "rigid": rigid_pdbqt,
     "flex": flex_pdbqt_dict,
 }
 
-any_lig_base_types = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA",
-                      "S", "Cl", "CL", "Br", "BR", "I", "Si", "B"]
+any_lig_base_types = [
+    "HD",
+    "C",
+    "A",
+    "N",
+    "NA",
+    "OA",
+    "F",
+    "P",
+    "SA",
+    "S",
+    "Cl",
+    "CL",
+    "Br",
+    "BR",
+    "I",
+    "Si",
+    "B",
+]
 
 outpath = pathlib.Path(args.output_filename)
 
@@ -497,7 +638,9 @@ else:
             prefix_atype = "%d" % reactive_flexres_count
             resname = res_id[1]
             reactive_atom = reactive_flexres[res_id]
-            flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(flexres_pdbqt, reactive_atom, resname, prefix_atype)
+            flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(
+                flexres_pdbqt, reactive_atom, resname, prefix_atype
+            )
         all_flex_pdbqt += flexres_pdbqt
 
     suffix = outpath.suffix
@@ -516,7 +659,7 @@ written_files_log["description"].append("static (i.e., rigid) receptor input fil
 with open(rigid_fn, "w") as f:
     f.write(pdbqt["rigid"])
 
-#if len(suggested_config):
+# if len(suggested_config):
 #    suggested_fn = str(outpath.with_suffix("")) + "_suggested-config.json"
 #    written_files_log["filename"].append(suggested_fn)
 #    written_files_log["description"].append("log of automated decisions for user inspection")
@@ -536,18 +679,28 @@ if not args.skip_gpf:
         for res_id_tuple in reactive_flexres.keys():
             res_id = f"{res_id_tuple[0]}:{res_id_tuple[1]}:{res_id_tuple[2]}"
             molsetup = chorizo.residues[res_id].molsetup
-            calpha_idx = [i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CA"]
-            cbeta_idx = [i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CB"]
+            calpha_idx = [
+                i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CA"
+            ]
+            cbeta_idx = [
+                i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CB"
+            ]
             if len(calpha_idx) != 1:
-                check(success=False, error_msg=f"found {len(calpha_idx)} CA in {res_id} but expected 1")
+                check(
+                    success=False,
+                    error_msg=f"found {len(calpha_idx)} CA in {res_id} but expected 1",
+                )
             if len(cbeta_idx) != 1:
-                check(success=False, error_msg=f"found {len(cbeta_idx)} CB in {res_id} but expected 1")
+                check(
+                    success=False,
+                    error_msg=f"found {len(cbeta_idx)} CB in {res_id} but expected 1",
+                )
             calpha_idx = calpha_idx[0]
             cbeta_idx = cbeta_idx[0]
             ca = molsetup.coord[calpha_idx]
             cb = molsetup.coord[cbeta_idx]
-            v = (cb - ca)
-            v /= math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) + 1e-8
+            v = cb - ca
+            v /= math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2) + 1e-8
             box_center = ca + 5 * v
             box_centers.append(box_center)
         box_center = np.mean(box_centers, 0)
@@ -559,31 +712,70 @@ if not args.skip_gpf:
             ".mol": Chem.MolFromMolFile,
             ".mol2": Chem.MolFromMol2File,
             ".sdf": Chem.SDMolSupplier,
-            ".pdbqt": None
+            ".pdbqt": None,
         }
         if ft not in suppliers.keys():
-            check(success=False, error_msg=f"Given --ligand file type {ft} not readable!")
+            check(
+                success=False, error_msg=f"Given --ligand file type {ft} not readable!"
+            )
         elif ft != ".sdf" and ft != ".pdbqt":
             ligmol = suppliers[ft](args.ligand, removeHs=False, sanitize=False)
         elif ft == ".sdf":
-            ligmol = suppliers[ft](args.ligand, removeHs=False, sanitize=False)[0]  # assume we only want first molecule in file
+            ligmol = suppliers[ft](args.ligand, removeHs=False, sanitize=False)[
+                0
+            ]  # assume we only want first molecule in file
         else:  # .pdbqt
-            ligmol = RDKitMolCreate.from_pdbqt_mol(PDBQTMolecule.from_file(args.ligand))[0]  # assume we only want first molecule in file
-        
-        box_center, box_size = gridbox.calc_box(ligmol.GetConformer().GetPositions(), args.padding)
+            ligmol = RDKitMolCreate.from_pdbqt_mol(
+                PDBQTMolecule.from_file(args.ligand)
+            )[
+                0
+            ]  # assume we only want first molecule in file
+
+        box_center, box_size = gridbox.calc_box(
+            ligmol.GetConformer().GetPositions(), args.padding
+        )
     else:
         print("Error: No box center specified.", file=sys.stderr)
         sys.exit(2)
 
     # write .dat parameter file for B and Si
-    ff_fn = pathlib.Path(rigid_fn).parents[0] / pathlib.Path("boron-silicon-atom_par.dat")
+    ff_fn = pathlib.Path(rigid_fn).parents[0] / pathlib.Path(
+        "boron-silicon-atom_par.dat"
+    )
     written_files_log["filename"].append(str(ff_fn))
-    written_files_log["description"].append("atomic parameters for B and Si (for autogrid)")
+    written_files_log["description"].append(
+        "atomic parameters for B and Si (for autogrid)"
+    )
     with open(ff_fn, "w") as f:
         f.write(gridbox.boron_silicon_atompar)
-    rec_types = ['HD', 'C', 'A', 'N', 'NA', 'OA', 'F', 'P', 'SA', 'S', 'Cl', 'Br', 'I', 'Mg', 'Ca', 'Mn', 'Fe', 'Zn']
-    gpf_string, npts = gridbox.get_gpf_string(box_center, box_size, rigid_fn, rec_types, any_lig_base_types,
-                                                ff_param_fname=ff_fn.name)
+    rec_types = [
+        "HD",
+        "C",
+        "A",
+        "N",
+        "NA",
+        "OA",
+        "F",
+        "P",
+        "SA",
+        "S",
+        "Cl",
+        "Br",
+        "I",
+        "Mg",
+        "Ca",
+        "Mn",
+        "Fe",
+        "Zn",
+    ]
+    gpf_string, npts = gridbox.get_gpf_string(
+        box_center,
+        box_size,
+        rigid_fn,
+        rec_types,
+        any_lig_base_types,
+        ff_param_fname=ff_fn.name,
+    )
     # write GPF
     gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
     written_files_log["filename"].append(str(gpf_fn))
@@ -592,7 +784,7 @@ if not args.skip_gpf:
         f.write(gpf_string)
 
     # write a PDB for the box
-    box_fn =  str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
+    box_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
     written_files_log["filename"].append(box_fn)
     written_files_log["description"].append("PDB file to visualize the grid box")
     with open(box_fn, "w") as f:
@@ -604,7 +796,7 @@ if not args.skip_gpf:
     written_files_log["description"].append("Vina-style box dimension file")
     with open(box_vina_fn, "w") as f:
         f.write(gridbox.box_to_vina_string(box_center, box_size))
-    
+
     # check all flexres are inside the box
     if len(reactive_flexres) > 0:
         for res_id, res in chorizo.residues.items():
@@ -614,9 +806,16 @@ if not args.skip_gpf:
                 if not res.is_flexres_atom[index]:
                     continue
                 if gridbox.is_point_outside_box(coord, box_center, npts):
-                    print("WARNING: Flexible residue outside box." + os_linesep, file=sys.stderr)
-                    print("WARNING: Strongly recommended to use a box that encompasses flexible residues." + os_linesep, file=sys.stderr)
-                    break # only need to warn once
+                    print(
+                        "WARNING: Flexible residue outside box." + os_linesep,
+                        file=sys.stderr,
+                    )
+                    print(
+                        "WARNING: Strongly recommended to use a box that encompasses flexible residues."
+                        + os_linesep,
+                        file=sys.stderr,
+                    )
+                    break  # only need to warn once
 
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:
@@ -630,16 +829,17 @@ if len(reactive_flexres) > 0:
         if line.startswith("ATOM") or line.startswith("HETATM"):
             atype = line[77:].strip()
             basetype, _ = reactive_typer.get_basetype_and_order(atype)
-            if basetype is not None: # is None if not reactive
+            if basetype is not None:  # is None if not reactive
                 rec_reac_types.append(line[77:].strip())
 
     derivtypes, modpairs, collisions = get_reactive_config(
-                                    any_lig_reac_types,
-                                    rec_reac_types,
-                                    args.eps_12,
-                                    args.r_eq_12,
-                                    args.r_eq_13_scaling,
-                                    args.r_eq_14_scaling)
+        any_lig_reac_types,
+        rec_reac_types,
+        args.eps_12,
+        args.r_eq_12,
+        args.r_eq_13_scaling,
+        args.r_eq_14_scaling,
+    )
 
     if len(collisions) > 0:
         collision_str = ""
@@ -647,7 +847,10 @@ if len(reactive_flexres) > 0:
             collision_str += "%3s %3s" % (t1, t2) + os_linesep
         collision_fn = str(outpath.with_suffix(".atype_collisions"))
         written_files_log["filename"].append(collision_fn)
-        written_files_log["description"].append("type pairs (n=%d) that may lead to intra-molecular reactions" % len(collisions))
+        written_files_log["description"].append(
+            "type pairs (n=%d) that may lead to intra-molecular reactions"
+            % len(collisions)
+        )
         with open(collision_fn, "w") as f:
             f.write(collision_str)
 
@@ -683,7 +886,10 @@ if len(reactive_flexres) > 0:
         f.write(config)
     print()
     print("For reactive docking, pass the configuration file to AutoDock-GPU:")
-    print("    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>" % (config_fn, flex_fn))
+    print(
+        "    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>"
+        % (config_fn, flex_fn)
+    )
     print()
 
 print()
