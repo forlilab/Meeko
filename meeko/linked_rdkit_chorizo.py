@@ -2272,7 +2272,7 @@ def chorizo_residue_json_decoder(obj: dict):
         residue.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
 
     residue.padded_mol = rdkit_mol_from_json(obj["padded_mol"])
-    residue.molsetup = RDKitMoleculeSetup.molsetup_json_decoder(obj["molsetup"])
+    residue.molsetup = RDKitMoleculeSetup.from_json(obj["molsetup"])
     if obj["molsetup_mapidx"] is None:
         residue.molsetup_mapidx = None
     else:
