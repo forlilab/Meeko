@@ -394,6 +394,7 @@ if args.set_template is not None:
     set_template.update(j)
 if args.blunt_ends is not None:
     j = parse_cmdline_res_assign(args.blunt_ends)
+    # TODO parse also input/raw atom names, easier than indices
     j = [(k, int(v)) for k,v in j.items()]
     blunt_ends.extend(j) 
 if args.delete_residues is not None:

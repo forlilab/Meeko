@@ -59,8 +59,6 @@ DEFAULT_RING_GRAPH = []
 DEFAULT_RING_IS_AROMATIC = False
 DEFAULT_RING_CLOSURE_BONDS_REMOVED = []
 DEFAULT_RING_CLOSURE_PSEUDOS_BY_ATOM = defaultdict
-
-SERIALIZATION_SEPARATOR_CHAR = ","
 # endregion
 
 
@@ -506,9 +504,7 @@ class MoleculeSetup:
         self.rotamers: list[dict] = []  # TODO: revisit rotamer implementation
 
         self.atom_params: dict = {}
-        self.restraints: list = (
-            []
-        )  # TODO: determine whether restraints are being used anymore
+        self.restraints: list = []  # TODO: determine whether restraints are being used anymore
 
         # TODO: redesign flexibility model to resolve some of the circular imports and to make it more structured
         self.flexibility_model = None  # from flexibility_model - from flexibility.py

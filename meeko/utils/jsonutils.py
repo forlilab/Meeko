@@ -1,3 +1,4 @@
+from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
 
 
@@ -24,11 +25,14 @@ def rdkit_mol_from_json(json_str: str):
     ValueError
         If no RDKitMol objects are returned, or if more than one is returned, throws a ValueError.
     """
+    if json_str is None:
+        return None
     rdkit_mols = rdMolInterchange.JSONToMols(json_str)
     if len(rdkit_mols) != 1:
         raise ValueError(
             f"Expected 1 rdkit mol from json string but got {len(rdkit_mols)}"
         )
+    Chem.SanitizeMol(rdkit_mols[0])  # needed to compute gasteiger charges
     return rdkit_mols[0]
 
 
