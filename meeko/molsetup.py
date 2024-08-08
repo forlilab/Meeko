@@ -251,7 +251,7 @@ class Atom:
 
         # Constructs an atom object from the provided keys.
         index = obj["index"]
-        pdbinfo = obj["pdbinfo"]
+        pdbinfo = PDBAtomInfo(*obj["pdbinfo"])
         charge = obj["charge"]
         coord = np.asarray(obj["coord"])
         atomic_num = obj["atomic_num"]

@@ -20,6 +20,7 @@ from meeko import (
     ResidueTemplateEncoder,
     ResidueChemTemplates,
     ResidueChemTemplatesEncoder,
+    PDBQTWriterLegacy,
 )
 
 from meeko import linked_rdkit_chorizo
@@ -168,6 +169,33 @@ def test_chorizo_residue_encoding_decoding(populated_rdkit_chorizo_residue):
 
     check_residue_equality(decoded_residue, starting_residue)
     return
+
+
+def test_pdbqt_writing_from_decoded_chorizo(populated_rdkit_chorizo):
+    """
+    Takes a fully populated ChorizoResidue, writes a PDBQT string from it, encodes and decodes it, writes
+    another PDBQT string from the decoded chorizo, and then checks that the PDBQT strings are identical.
+
+    Parameters
+    ----------
+    populated_rdkit_chorizo: LinkedRDKitChorizo
+        Takes as input a populated LinkedRDKitChorizo object.
+
+    Returns
+    -------
+    None
+    """
+
+    starting_chorizo = populated_rdkit_chorizo
+    starting_pdbqt = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(starting_chorizo)
+    json_str = json.dumps(starting_chorizo, cls=LinkedRDKitChorizoEncoder)
+    decoded_chorizo = json.loads(
+        json_str, object_hook=linked_rdkit_chorizo.linked_rdkit_chorizo_json_decoder
+    )
+    decoded_pdbqt = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(decoded_chorizo) 
+    assert decoded_pdbqt == starting_pdbqt
+    return
+
 
 
 def test_residue_template_encoding_decoding(populated_residue_template):
