@@ -680,10 +680,10 @@ if not args.skip_gpf:
             res_id = f"{res_id_tuple[0]}:{res_id_tuple[1]}:{res_id_tuple[2]}"
             molsetup = chorizo.residues[res_id].molsetup
             calpha_idx = [
-                i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CA"
+                atom.index for atom in molsetup.atoms if atom.pdbinfo.name == "CA"
             ]
             cbeta_idx = [
-                i for i, pdbinfo in enumerate(molsetup.pdbinfo) if pdbinfo.name == "CB"
+                atom.index for atom in molsetup.atoms if atom.pdbinfo.name == "CB"
             ]
             if len(calpha_idx) != 1:
                 check(
@@ -697,8 +697,8 @@ if not args.skip_gpf:
                 )
             calpha_idx = calpha_idx[0]
             cbeta_idx = cbeta_idx[0]
-            ca = molsetup.coord[calpha_idx]
-            cb = molsetup.coord[cbeta_idx]
+            ca = molsetup.get_coord(calpha_idx)
+            cb = molsetup.get_coord(cbeta_idx)
             v = cb - ca
             v /= math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2) + 1e-8
             box_center = ca + 5 * v
@@ -802,10 +802,10 @@ if not args.skip_gpf:
         for res_id, res in chorizo.residues.items():
             if not res.is_movable:
                 continue
-            for index, coord in enumerate(res.molsetup.coord):
-                if not res.is_flexres_atom[index]:
+            for atom in res.molsetup.atoms:
+                if not res.is_flexres_atom[atom.index]:
                     continue
-                if gridbox.is_point_outside_box(coord, box_center, npts):
+                if gridbox.is_point_outside_box(atom.coord, box_center, npts):
                     print(
                         "WARNING: Flexible residue outside box." + os_linesep,
                         file=sys.stderr,
