@@ -37,7 +37,9 @@ meekodir = pathlib.Path(meeko.__file__).parents[0]
 
 # Test Data
 ahhy_example = pkgdir / "test/linked_rdkit_chorizo_data/AHHY.pdb"
-just_one_ALA_missing = pkgdir / "test/linked_rdkit_chorizo_data/just-one-ALA-missing-CB.pdb"
+just_one_ALA_missing = (
+    pkgdir / "test/linked_rdkit_chorizo_data/just-one-ALA-missing-CB.pdb"
+)
 
 # Chorizo creation data
 with open(meekodir / "data" / "residue_chem_templates.json") as f:
@@ -62,11 +64,11 @@ def populated_rdkit_chorizo_missing():
     file = open(just_one_ALA_missing)
     pdb_str = file.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-            pdb_str,
-            chem_templates,
-            mk_prep,
-            blunt_ends=[("A:1", 0), ("A:1", 2)],
-            allow_bad_res=True,
+        pdb_str,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("A:1", 0), ("A:1", 2)],
+        allow_bad_res=True,
     )
     return chorizo
 
@@ -125,9 +127,7 @@ def test_rdkit_molsetup_encoding_decoding(populated_rdkit_molsetup):
     # Encode and decode MoleculeSetup from json
     starting_molsetup = populated_rdkit_molsetup
     json_str = json.dumps(starting_molsetup, cls=MoleculeSetupEncoder)
-    decoded_molsetup = json.loads(
-        json_str, object_hook=RDKitMoleculeSetup.from_json
-    )
+    decoded_molsetup = json.loads(json_str, object_hook=RDKitMoleculeSetup.from_json)
 
     # First asserts that all types are as expected
     assert isinstance(starting_molsetup, RDKitMoleculeSetup)
@@ -266,7 +266,9 @@ def test_residue_chem_templates_encoding_decoding(populated_residue_chem_templat
     return
 
 
-def test_linked_rdkit_chorizo_encoding_decoding(populated_rdkit_chorizo, populated_rdkit_chorizo_missing):
+def test_linked_rdkit_chorizo_encoding_decoding(
+    populated_rdkit_chorizo, populated_rdkit_chorizo_missing
+):
     """
     Takes a fully populated LinkedRDKitChorizo, checks that it can be serialized to JSON and deserialized back into an
     object without any errors, then checks that the deserialized object matches the starting object and that the
@@ -348,7 +350,9 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
     for bond_id in starting_obj.bond_info:
         assert isinstance(decoded_obj.bond_info[bond_id], Bond)
         assert bond_id in decoded_obj.bond_info
-        check_bond_equality(decoded_obj.bond_info[bond_id], starting_obj.bond_info[bond_id])
+        check_bond_equality(
+            decoded_obj.bond_info[bond_id], starting_obj.bond_info[bond_id]
+        )
 
     # Checking rings
     for ring_id in starting_obj.rings:
@@ -356,10 +360,16 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
         assert ring_id in decoded_obj.rings
         check_ring_equality(decoded_obj.rings[ring_id], starting_obj.rings[ring_id])
     assert isinstance(decoded_obj.ring_closure_info, RingClosureInfo)
-    assert decoded_obj.ring_closure_info.bonds_removed == starting_obj.ring_closure_info.bonds_removed
+    assert (
+        decoded_obj.ring_closure_info.bonds_removed
+        == starting_obj.ring_closure_info.bonds_removed
+    )
     for key in starting_obj.ring_closure_info.pseudos_by_atom:
         assert key in decoded_obj.ring_closure_info.pseudos_by_atom
-        assert decoded_obj.ring_closure_info.pseudos_by_atom[key] == starting_obj.ring_closure_info.pseudos_by_atom[key]
+        assert (
+            decoded_obj.ring_closure_info.pseudos_by_atom[key]
+            == starting_obj.ring_closure_info.pseudos_by_atom[key]
+        )
 
     # Checking other fields
     assert len(decoded_obj.rotamers) == len(starting_obj.rotamers)
@@ -374,7 +384,9 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
     assert len(decoded_obj.restraints) == len(starting_obj.restraints)
     for idx, restraint in starting_obj.restraints:
         assert isinstance(decoded_obj.restraints[idx], Restraint)
-        check_restraint_equality(decoded_obj.restraints[idx], starting_obj.restraints[idx])
+        check_restraint_equality(
+            decoded_obj.restraints[idx], starting_obj.restraints[idx]
+        )
 
     # Checking flexibility model
     for key in starting_obj.flexibility_model:
@@ -537,15 +549,21 @@ def check_residue_equality(decoded_obj: ChorizoResidue, starting_obj: ChorizoRes
     # assert decoded_residue.raw_rdkit_mol == starting_residue.raw_rdkit_mol
     assert type(decoded_obj.raw_rdkit_mol) == type(starting_obj.raw_rdkit_mol)
     if isinstance(decoded_obj.raw_rdkit_mol, Chem.rdchem.Mol):
-        assert Chem.MolToSmiles(decoded_obj.raw_rdkit_mol) == Chem.MolToSmiles(starting_obj.raw_rdkit_mol)
+        assert Chem.MolToSmiles(decoded_obj.raw_rdkit_mol) == Chem.MolToSmiles(
+            starting_obj.raw_rdkit_mol
+        )
     # assert decoded_residue.rdkit_mol == starting_residue.rdkit_mol
     assert type(decoded_obj.rdkit_mol) == type(starting_obj.rdkit_mol)
     if isinstance(decoded_obj.rdkit_mol, Chem.rdchem.Mol):
-        assert Chem.MolToSmiles(decoded_obj.rdkit_mol) == Chem.MolToSmiles(starting_obj.rdkit_mol)
+        assert Chem.MolToSmiles(decoded_obj.rdkit_mol) == Chem.MolToSmiles(
+            starting_obj.rdkit_mol
+        )
     # assert decoded_residue.padded_mol == starting_residue.padded_mol
     assert type(decoded_obj.padded_mol) == type(starting_obj.padded_mol)
     if isinstance(decoded_obj.padded_mol, Chem.rdchem.Mol):
-        assert Chem.MolToSmiles(decoded_obj.padded_mol) == Chem.MolToSmiles(starting_obj.padded_mol)
+        assert Chem.MolToSmiles(decoded_obj.padded_mol) == Chem.MolToSmiles(
+            starting_obj.padded_mol
+        )
 
     # MapIDX
     assert decoded_obj.mapidx_to_raw == starting_obj.mapidx_to_raw
@@ -711,4 +729,6 @@ def check_linked_rdkit_chorizo_equality(
     # Checks log equality
     assert decoded_obj.log == starting_obj.log
     return
+
+
 # endregion

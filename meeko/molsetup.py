@@ -504,7 +504,9 @@ class MoleculeSetup:
         self.rotamers: list[dict] = []  # TODO: revisit rotamer implementation
 
         self.atom_params: dict = {}
-        self.restraints: list = []  # TODO: determine whether restraints are being used anymore
+        self.restraints: list = (
+            []
+        )  # TODO: determine whether restraints are being used anymore
 
         # TODO: redesign flexibility model to resolve some of the circular imports and to make it more structured
         self.flexibility_model = None  # from flexibility_model - from flexibility.py
@@ -2070,7 +2072,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
             "dihedral_labels",
             "atom_to_ring_id",
             "ring_corners",
-            "rmsd_symmetry_indices"
+            "rmsd_symmetry_indices",
         }
         for key in expected_molsetup_keys:
             if key not in obj.keys():
@@ -2097,7 +2099,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
             for k, v in obj["atom_to_ring_id"].items()
         }
         rdkit_molsetup.ring_corners = obj["ring_corners"]
-        rdkit_molsetup.rmsd_symmetry_indices = [string_to_tuple(v) for v in obj["rmsd_symmetry_indices"]]
+        rdkit_molsetup.rmsd_symmetry_indices = [
+            string_to_tuple(v) for v in obj["rmsd_symmetry_indices"]
+        ]
         return rdkit_molsetup
 
 
