@@ -99,8 +99,7 @@ def _read_receptor_pdbqt_string(pdbqt_string, skip_typing=False):
                               alt_id, in_code, occupancy, temp_factor, record_type))
 
             idx += 1
-    if idx == 0:
-        raise ValueError(f"no atoms found in {pdbqt_string=}") 
+
     atoms = np.array(atoms, dtype=atoms_dtype)
 
     return atoms, atom_annotations
@@ -130,11 +129,14 @@ class PDBQTReceptor:
     flexres_templates = flexres_templates
     skip_types=("H",)
 
-    def __init__(self, pdbqt_string, skip_typing=False):
-        self._pdbqt_filename = None
+    def __init__(self, pdbqt_filename, skip_typing=False):
+        self._pdbqt_filename = pdbqt_filename
         self._atoms = None
         self._atom_annotations = None
         self._KDTree = None
+
+        with open(pdbqt_filename) as f:
+            pdbqt_string = f.read()
 
         self._atoms, self._atom_annotations = _read_receptor_pdbqt_string(pdbqt_string, skip_typing)
         # We add to the KDTree only the rigid part of the receptor
@@ -142,20 +144,8 @@ class PDBQTReceptor:
         self._bonds = _identify_bonds(self._atom_annotations['all'], self._atoms['xyz'], self._atoms['atom_type'])
         self.atom_idxs_by_res = self.get_atom_indices_by_residue(self._atoms)
 
-    @classmethod
-    def from_pdbqt_filename(cls, pdbqt_filename, skip_typing=False):
-        with open(pdbqt_filename) as f:
-            pdbqt_string = f.read()
-        receptor = cls(pdbqt_string, skip_typing)
-        receptor._pdbqt_filename = pdbqt_filename
-        return receptor
-
     def __repr__(self):
-        if self._pdbqt_filename is None:
-            msg = '<Receptor containing %d atoms>' % self._atoms.shape[0]
-        else:
-            msg ='<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0])
-        return msg
+        return ('<Receptor from PDBQT file %s containing %d atoms>' % (self._pdbqt_filename, self._atoms.shape[0]))
 
     @staticmethod
     def get_atom_indices_by_residue(atoms):

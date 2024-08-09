@@ -527,9 +527,7 @@ if __name__ == "__main__":
                 suffixes = output.get_suffixes(molsetups)
                 for molsetup, suffix in zip(molsetups, suffixes):
                     pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(
-                        molsetup,
-                        bad_charge_ok=args.bad_charge_ok,
-                        add_index_map=args.add_index_map,
+                        molsetup, bad_charge_ok=args.bad_charge_ok
                     )
                     if success:
                         pdbqt_string = (
@@ -549,9 +547,7 @@ if __name__ == "__main__":
             suffixes = output.get_suffixes(molsetups)
             for molsetup, suffix in zip(molsetups, suffixes):
                 pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(
-                    molsetup,
-                    bad_charge_ok=args.bad_charge_ok,
-                    add_index_map=args.add_index_map,
+                    molsetup, bad_charge_ok=args.bad_charge_ok
                 )
                 if success:
                     name = molsetup.name
