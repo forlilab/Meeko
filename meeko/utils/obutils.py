@@ -15,42 +15,40 @@ from . import utils
 from . import pdbutils
 from .utils import mini_periodic_table
 
-# named tuple to contain information about an atom
-# PDBAtomInfo = namedtuple('PDBAtomInfo', "name resName resNum chain")
-# PDBResInfo  = namedtuple('PDBResInfo',       "resName resNum chain")
-
 
 def getAtomIdxCoords(obmol, atom_idx):
-    """return coordinates of atom idx """
+    """return coordinates of atom idx"""
     atom = obmol.GetAtom(atom_idx)
     return getAtomCoords(atom)
 
 
 def getAtomCoords(atom):
-    """ convert an OB atom into a numpy vector of coordinates """
-    return np.array([atom.GetX(), atom.GetY(), atom.GetZ()], 'f')
+    """convert an OB atom into a numpy vector of coordinates"""
+    return np.array([atom.GetX(), atom.GetY(), atom.GetZ()], "f")
 
 
 def getCoordsFromAtomIndices(obmol, atomIdxList):
-    """ extract coordinates for requested atom indices (return Numpy.array)"""
+    """extract coordinates for requested atom indices (return Numpy.array)"""
     coord = []
     for idx in atomIdxList:
         a = obmol.GetAtom(idx)
         coord.append(getAtomCoords(a))
     return np.array(coord)
 
+
 def getAtoms(obmol):
     return ob.OBMolAtomIter(obmol)
 
+
 def getAtomRes(atom):
-    """ retrieve residue info about the atom """
+    """retrieve residue info about the atom"""
     r = atom.GetResidue()
-    data = {'num': r.GetNum(), 'name': r.GetName(), 'chain': r.GetChain()}
+    data = {"num": r.GetNum(), "name": r.GetName(), "chain": r.GetChain()}
     return data
 
 
 def atomsCentroid(obmol, atomIndices):
-    """ calculate centroid from list of atom indices"""
+    """calculate centroid from list of atom indices"""
     coord = []
     for i in atomIndices:
         atom = obmol.GetAtom(i)
@@ -59,12 +57,12 @@ def atomsCentroid(obmol, atomIndices):
 
 
 def atomNeighbors(atom):
-    """ return atom neighbors"""
+    """return atom neighbors"""
     return [x for x in ob.OBAtomAtomIter(a)]
 
 
 def load_molecule_from_file(fname, molecule_format=None):
-    """ load molecule with openbabel"""
+    """load molecule with openbabel"""
     if molecule_format is None:
         n, ftype = utils.getNameExt(fname)
         ftype = ftype.lower()
@@ -78,7 +76,7 @@ def load_molecule_from_file(fname, molecule_format=None):
 
 
 def load_molecule_from_string(string, molecule_format):
-    """ load molecule with openbabel"""
+    """load molecule with openbabel"""
     mol = ob.OBMol()
     conv = ob.OBConversion()
     conv.SetInFormat(molecule_format)
@@ -88,7 +86,7 @@ def load_molecule_from_string(string, molecule_format):
 
 
 def writeMolecule(mol, fname=None, ftype=None):
-    """ save a molecule with openbabel"""
+    """save a molecule with openbabel"""
     if ftype is None:
         n, ftype = utils.getNameExt(fname)
         ftype = ftype.lower()
@@ -121,10 +119,10 @@ def getPdbInfoNoNull(atom):
     in the PDB"""
     res = atom.GetResidue()
     if res is None:
-        name = '%-2s' % mini_periodic_table[atom.GetAtomicNum()]
-        chain = ' '
+        name = "%-2s" % mini_periodic_table[atom.GetAtomicNum()]
+        chain = " "
         resNum = 1
-        resName = 'UNL'
+        resName = "UNL"
     else:
         name = res.GetAtomID(atom)
         chain = res.GetChain()
@@ -135,12 +133,12 @@ def getPdbInfoNoNull(atom):
 
 class OBMolSupplier:
     def __init__(self, fname, _format):
-        """  """
+        """ """
         self.fname = fname
         self.conv = ob.OBConversion()
         status = self.conv.SetInFormat(_format)
         if not status:
-            raise RuntimeError('could not set OBConversion input format: %s' % _format)
+            raise RuntimeError("could not set OBConversion input format: %s" % _format)
         self.got_mol_in_cache = False
         self.cached_mol = None
 
@@ -157,5 +155,3 @@ class OBMolSupplier:
             return mol
         else:
             raise StopIteration
-
-

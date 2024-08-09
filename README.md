@@ -345,3 +345,18 @@ The filename to be passed to `--import_dpf` was written by `mk_prepare_receptor.
 and it is suffixed with `reactive_config`.
 ```sh
 ADGPU -I *.reactive_config -L sufex1.pdbqt -N sufex1_docked_ -F *_flex.pdbqt -C 1
+```
+
+## Chorizo docs temporary placeholder
+
+Current init is a builder method designed to parse PDB files and topology
+objects. It is not designed to chorizify a polymer that already exists
+as a single RDKit molecule, or to build a single polymer molecule from the
+individual chorizo residues. To do that, one would have to react residues
+with each other. Padding could be adapted.
+
+
+How bonds between residues are handled and blunt residues, and deleting
+bonds "interactively".
+
+Document residue\_chem\_params.
