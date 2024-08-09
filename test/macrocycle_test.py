@@ -43,9 +43,9 @@ def test_external_ring_closure():
                     glue_pseudo_atoms=glue_pseudos)
     assert(len(setups) == 1)
     pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
-    assert(setups[0].ring_closure_info["bonds_removed"] == [(2, 3)])
-    assert(2 in setups[0].ring_closure_info["pseudos_by_atom"])
-    assert(3 in setups[0].ring_closure_info["pseudos_by_atom"])
+    assert setups[0].ring_closure_info.bonds_removed == [(2, 3)]
+    assert 2 in setups[0].ring_closure_info.pseudos_by_atom
+    assert 3 in setups[0].ring_closure_info.pseudos_by_atom
     cg_atoms, g_atoms = get_macrocycle_atom_types(pdbqt_string)
     assert(len(cg_atoms) == len(g_atoms))
     assert(len(cg_atoms) == 2 * len(set(cg_atoms)))
