@@ -121,6 +121,11 @@ def cmd_lineparser():
         help="keep macrocycles rigid in input conformation",
     )
     config_group.add_argument(
+        "--macrocycle_allow_A",
+        action="store_true",
+        help="allow bond break with atom type A, retyped as C",
+    )
+    config_group.add_argument(
         "--keep_chorded_rings",
         dest="keep_chorded_rings",
         action="store_true",

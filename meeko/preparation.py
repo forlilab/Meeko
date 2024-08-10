@@ -58,6 +58,7 @@ class MoleculePreparation:
     keep_chorded_rings: bool
     keep_equivalent_rings: bool
     double_bond_penalty: float
+    macrocycle_allow_A: bool
     rigidify_bonds_smarts: list
     rigidify_bonds_indices: list
 
@@ -84,6 +85,7 @@ class MoleculePreparation:
         keep_chorded_rings=False,
         keep_equivalent_rings=False,
         double_bond_penalty=meeko.macrocycle.DEFAULT_DOUBLE_BOND_PENALTY,
+        macrocycle_allow_A=False,
         rigidify_bonds_smarts=[],
         rigidify_bonds_indices=[],
         input_atom_params=None,
@@ -111,6 +113,7 @@ class MoleculePreparation:
         keep_chorded_rings
         keep_equivalent_rings
         double_bond_penalty
+        macrocycle_allow_A
         rigidify_bonds_smarts
         rigidify_bonds_indices
         input_atom_params
@@ -136,6 +139,7 @@ class MoleculePreparation:
         self.keep_chorded_rings = keep_chorded_rings
         self.keep_equivalent_rings = keep_equivalent_rings
         self.double_bond_penalty = double_bond_penalty
+        self.macrocycle_allow_A = macrocycle_allow_A
         self.rigidify_bonds_smarts = rigidify_bonds_smarts
         self.rigidify_bonds_indices = rigidify_bonds_indices
 
@@ -184,7 +188,10 @@ class MoleculePreparation:
 
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(
-            self.min_ring_size, self.max_ring_size, self.double_bond_penalty
+            self.min_ring_size,
+            self.max_ring_size,
+            self.double_bond_penalty,
+            allow_break_atype_A=self.macrocycle_allow_A,
         )
         self._water_builder = HydrateMoleculeLegacy()
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}

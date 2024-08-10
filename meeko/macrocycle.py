@@ -35,6 +35,7 @@ class FlexMacrocycle:
         max_ring_size: int = DEFAULT_MAX_RING_SIZE,
         double_bond_penalty: float = DEFAULT_DOUBLE_BOND_PENALTY,
         max_breaks: int = DEFAULT_MAX_BREAKS,
+        allow_break_atype_A: bool = False,
     ):
         """
         Initialize macrocycle typer.
@@ -47,12 +48,15 @@ class FlexMacrocycle:
             Maximum size of the ring, default is 33.
         double_bond_penalty: float
         max_breaks: int
+        allow_break_type_A: bool
+            Allow breaking bonds involving atoms typed A, default is False.
         """
         self._min_ring_size = min_ring_size
         self._max_ring_size = max_ring_size
         # accept also double bonds (if nothing better is found)
         self._double_bond_penalty = double_bond_penalty
         self.max_breaks = max_breaks
+        self.allow_break_atype_A = allow_break_atype_A
 
         self.setup = None
         self.breakable_rings = None
@@ -114,10 +118,11 @@ class FlexMacrocycle:
         if not self.setup.bond_info[bond].rotatable:
             return -1
         atom_idx1, atom_idx2 = bond
-        if self.setup.get_atom_type(atom_idx1) != "C":
-            return -1
-        if self.setup.get_atom_type(atom_idx2) != "C":
-            return -1
+        for i in (atom_idx1, atom_idx2):
+            atype = self.setup.get_atom_type(i)
+            is_allowed_A = self.allow_break_atype_A and atype == "A"
+            if atype != "C" and not is_allowed_A:
+                return -1
         # historically we returned a score <= 100, that was lower for triple
         # bonds, chiral atoms, conjugated bonds, and double bonds. This score
         # gets combined with the graph depth score in flexibility.py that
