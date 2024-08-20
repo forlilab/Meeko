@@ -40,54 +40,49 @@ with open(templates_fn) as f:
 
 
 def parse_cmdline_res(string):
-    """ Convert "A:5,7,BB:12C"  to  ["A:5", "A:7", "BB:12C"] """
-    blocks = [s for s in string.split(",") if s]
-    chain = ""
-    res_set = set()
-
-    for b in blocks:
-        if ":" in b:
-            segs = b.split(":")
-            if len(segs) > 2:
-                raise ValueError(f"too many delimiters (:) in {b}")
-
-            chain_id, resnum = segs
-            if not chain_id:
-                raise ValueError(f"missing chain ID in {b}")
-            if not resnum:
-                raise ValueError(f"missing residue number in {b}")
-
-            chain = chain_id
-            res_set.add(f"{chain}:{resnum}")
+    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
+    blocks = ("," + string).split(":")
+    nr_blocks = len(blocks) - 1
+    keys = []
+    for i in range(nr_blocks):
+        chain = blocks[i].split(",")[-1]
+        if i + 1 == nr_blocks:
+            resnums = blocks[i + 1].split(",")
         else:
-            res_set.add(f"{chain}:{b}")
-
-    return list(res_set)  # unique list, items may be in a different order
+            resnums = blocks[i + 1].split(",")[:-1]
+        if len(resnums) == 0:
+            raise ValueError(f"missing residue in {resnums}")
+        for resnum in resnums:
+            keys.append(f"{chain}:{resnum}")
+    return keys
 
 
 def parse_cmdline_res_assign(string):
-    """ Convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"} """
-    blocks = [s for s in string.split("=") if s]
-    
-    if len(blocks) < 2:
-        raise ValueError(f"incomplete assignment {string}")
-    
-    res_set = set(parse_cmdline_res(blocks[0])) # residue set from the first block
-    
+    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}"""
+
     output = {}
-    for b in blocks[1:]:
-        segs = b.split(",",1)
-        resname = segs[0]
-        
-        for res in res_set:
-            if res in output.keys():
-                raise ValueError(f"repeated assignment found for residue {res}")
-            
-            output[res] = resname
-            
-        if len(segs)>1: # there are more assignments
-            res_set = set(parse_cmdline_res(segs[1])) # residue set from the second segment
-        
+    nr_assignments = string.count("=")
+    string = "," + string  # enables `residues =` below to work in first iteraton
+    tmp = string.split("=")
+    for i in range(nr_assignments):
+        residues = tmp[i].split(",")[1:]
+        assigned_name = tmp[i + 1].split(",")[0]
+        chain = ""
+        for residue in residues:
+            fields = residue.split(":")
+            if len(fields) == 1:
+                resnum = fields[0]
+            elif len(fields) == 2:
+                chain = fields[0]
+                resnum = fields[1]
+            else:
+                raise ValueError(f"too many : in {residue}")
+            if len(resnum) == 0:
+                raise ValueError(f"missing residue in {residues}")
+            key = f"{chain}:{resnum}"
+            if key in output:
+                raise ValueError(f"repeated {key} in {residue}")
+            output[key] = assigned_name
     return output
 
 
@@ -243,7 +238,7 @@ def get_args():
         "--flexres",
         action="append",
         default=[],
-        help='repeat flag for each residue, e.g: -f " :42" -f "B:23" and keep space for empty chain',
+        help='repeat flag for each residue, e.g: -f " :42" -f "B:23", or alternatively, specifiy multiple residues at a time: -f "A:116,150" ; use a space for the chain ID if unspecified',
     )
 
     box_group = parser.add_argument_group("Size and center of grid box")
@@ -389,7 +384,18 @@ def get_args():
 
 args = get_args()
 
-### modified_resnames = set()
+reactive_atom = {
+    "SER": "OG",
+    "LYS": "NZ",
+    "TYR": "OH",
+    "CYS": "SG",
+    "HIE": "NE2",
+    "HID": "ND1",
+    "GLU": "OE2",
+    "THR": "OG1",
+    "MET": "SD",
+}
+modified_resnames = set()
 
 ### for react_name_str in args.reactive_name:
 ###     (resname, name), ok, err = parse_resname_and_name(react_name_str)
@@ -403,19 +409,6 @@ args = get_args()
 ###         print("Error in parsing --reactive_name argument" + os_linesep, file=sys.stderr)
 ###         print(err, file=sys.stderr)
 ###         sys.exit(2)
-
-
-reactive_atom = {
-    "SER": "OG",
-    "LYS": "NZ",
-    "TYR": "OH",
-    "CYS": "SG",
-    "HIE": "NE2",
-    "HID": "ND1",
-    "GLU": "OE2",
-    "THR": "OG1",
-    "MET": "SD",
-}
 
 reactive_flexres = {}
 all_ok = True
@@ -447,14 +440,13 @@ if len(reactive_flexres) > 8:
     sys.exit(2)
 
 all_flexres = set()
+keys = []
 for resid_string in args.flexres:
-    keys = []
-    for string in args.flexres:
-        more_keys = parse_cmdline_res(string)
-        keys.extend(more_keys)
-    print(f"flexibile sidechains: {keys}")
-    for res_id in keys:
-        all_flexres.add(res_id)
+    more_keys = parse_cmdline_res(resid_string)
+    keys.extend(more_keys)
+print(f"flexibile sidechains: {keys}")
+for res_id in keys:
+    all_flexres.add(res_id)
 
     # res_id, ok, err = parse_residue_string(resid_string)
     # all_ok &= ok
@@ -467,7 +459,7 @@ for resid_string in args.flexres:
     #    all_flexres.add(res_id)
 
 if all_ok:
-    all_flexres = all_flexres.union(reactive_flexres)
+    all_flexres = all_flexres.union([f"{x[0]}:{x[2]}" for x in reactive_flexres])
 else:
     print("Error:", file=sys.stderr)
     print(all_err, file=sys.stderr)
@@ -480,11 +472,12 @@ if len(all_flexres) > 0:
     string = "%5s%7s%12s%14s"
     for res_id in all_flexres:
         chain, resnum = res_id.split(":")
-        is_react = res_id in reactive_flexres
+        is_react = res_id in [f"{x[0]}:{x[2]}" for x in reactive_flexres]
         if is_react:
             print("OOOPPSSIES not supporting reactive flexres at this time")
             sys.exit(42)
-            react_atom = reactive_flexres[res_id]
+            react_index = [f"{x[0]}:{x[2]}" for x in reactive_flexres].index(res_id)
+            react_atom = list(reactive_flexres.values())[react_index]
         else:
             react_atom = ""
         print(string % (chain, resnum, is_react, react_atom))
@@ -723,7 +716,7 @@ if not args.skip_gpf:
         }
         if ft not in suppliers.keys():
             check(
-                success=False, error_msg=f"Given --ligand file type {ft} not readable!"
+                success=False, error_msg=f"Unsupported format for --ligand: {ft}. Supported formats are: {', '.join(list(suppliers.keys()))}"
             )
         elif ft != ".sdf" and ft != ".pdbqt":
             ligmol = suppliers[ft](args.ligand, removeHs=False, sanitize=False)
