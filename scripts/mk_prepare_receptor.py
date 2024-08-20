@@ -40,49 +40,54 @@ with open(templates_fn) as f:
 
 
 def parse_cmdline_res(string):
-    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
-    blocks = ("," + string).split(":")
-    nr_blocks = len(blocks) - 1
-    keys = []
-    for i in range(nr_blocks):
-        chain = blocks[i].split(",")[-1]
-        if i + 1 == nr_blocks:
-            resnums = blocks[i + 1].split(",")
+    """ Convert "A:5,7,BB:12C"  to  ["A:5", "A:7", "BB:12C"] """
+    blocks = [s for s in string.split(",") if s]
+    chain = ""
+    res_set = set()
+
+    for b in blocks:
+        if ":" in b:
+            segs = b.split(":")
+            if len(segs) > 2:
+                raise ValueError(f"too many delimiters (:) in {b}")
+
+            chain_id, resnum = segs
+            if not chain_id:
+                raise ValueError(f"missing chain ID in {b}")
+            if not resnum:
+                raise ValueError(f"missing residue number in {b}")
+
+            chain = chain_id
+            res_set.add(f"{chain}:{resnum}")
         else:
-            resnums = blocks[i + 1].split(",")[:-1]
-        if len(resnums) == 0:
-            raise ValueError(f"missing residue in {resnums}")
-        for resnum in resnums:
-            keys.append(f"{chain}:{resnum}")
-    return keys
+            res_set.add(f"{chain}:{b}")
+
+    return list(res_set)  # unique list, items may be in a different order
 
 
 def parse_cmdline_res_assign(string):
-    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}"""
-
+    """ Convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"} """
+    blocks = [s for s in string.split("=") if s]
+    
+    if len(blocks) < 2:
+        raise ValueError(f"incomplete assignment {string}")
+    
+    res_set = set(parse_cmdline_res(blocks[0])) # residue set from the first block
+    
     output = {}
-    nr_assignments = string.count("=")
-    string = "," + string  # enables `residues =` below to work in first iteraton
-    tmp = string.split("=")
-    for i in range(nr_assignments):
-        residues = tmp[i].split(",")[1:]
-        assigned_name = tmp[i + 1].split(",")[0]
-        chain = ""
-        for residue in residues:
-            fields = residue.split(":")
-            if len(fields) == 1:
-                resnum = fields[0]
-            elif len(fields) == 2:
-                chain = fields[0]
-                resnum = fields[1]
-            else:
-                raise ValueError(f"too many : in {residue}")
-            if len(resnum) == 0:
-                raise ValueError(f"missing residue in {residues}")
-            key = f"{chain}:{resnum}"
-            if key in output:
-                raise ValueError(f"repeated {key} in {residue}")
-            output[key] = assigned_name
+    for b in blocks[1:]:
+        segs = b.split(",",1)
+        resname = segs[0]
+        
+        for res in res_set:
+            if res in output.keys():
+                raise ValueError(f"repeated assignment found for residue {res}")
+            
+            output[res] = resname
+            
+        if len(segs)>1: # there are more assignments
+            res_set = set(parse_cmdline_res(segs[1])) # residue set from the second segment
+        
     return output
 
 
@@ -384,18 +389,7 @@ def get_args():
 
 args = get_args()
 
-reactive_atom = {
-    "SER": "OG",
-    "LYS": "NZ",
-    "TYR": "OH",
-    "CYS": "SG",
-    "HIE": "NE2",
-    "HID": "ND1",
-    "GLU": "OE2",
-    "THR": "OG1",
-    "MET": "SD",
-}
-modified_resnames = set()
+### modified_resnames = set()
 
 ### for react_name_str in args.reactive_name:
 ###     (resname, name), ok, err = parse_resname_and_name(react_name_str)
@@ -409,6 +403,19 @@ modified_resnames = set()
 ###         print("Error in parsing --reactive_name argument" + os_linesep, file=sys.stderr)
 ###         print(err, file=sys.stderr)
 ###         sys.exit(2)
+
+
+reactive_atom = {
+    "SER": "OG",
+    "LYS": "NZ",
+    "TYR": "OH",
+    "CYS": "SG",
+    "HIE": "NE2",
+    "HID": "ND1",
+    "GLU": "OE2",
+    "THR": "OG1",
+    "MET": "SD",
+}
 
 reactive_flexres = {}
 all_ok = True
