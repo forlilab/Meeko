@@ -1615,6 +1615,10 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one."
             print(msg, file=sys.stderr)
+        if len(Chem.GetMolFrags(mol)) != 1:
+            raise ValueError(f"RDKit molecule has {len(Chem.GetMolFrags(mol))} fragments. Must have 1.")
+        if mol.HasQuery():
+            raise ValueError(f"RDKit molecule has query. Check exotic fields (atom or bond) in SDF.")
 
         # Creating and populating the molecule setup with properties from RDKit as well as calculated values from our
         # functions
