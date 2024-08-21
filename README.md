@@ -76,7 +76,7 @@ mk_prepare_ligand.py -i molecule.sdf --merge_these_atom_types
 * Python (>=3.5)
 * Numpy
 * Scipy
-* RDKit
+* RDKit (>=2023.09)
 * ProDy (optionally, for covalent docking)
 
 Conda or Miniconda can install the dependencies:

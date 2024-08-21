@@ -4,9 +4,12 @@
 #
 
 import argparse
+from datetime import datetime
+import io
 import os
 import sys
 import json
+import tarfile
 import warnings
 
 from rdkit import Chem
@@ -82,6 +85,10 @@ def cmd_lineparser():
         help="molecule file (MOL2, SDF,...)",
     )
     io_group.add_argument(
+        "--name_from_prop",
+        help="set molecule name from RDKit/SDF property",
+    )
+    io_group.add_argument(
         "-o",
         "--out",
         dest="output_pdbqt_filename",
@@ -99,6 +106,18 @@ def cmd_lineparser():
         dest="multimol_prefix",
         action="store",
         help="replace internal molecule name in multi-molecule input by specified prefix. Incompatible with -o/--out and -/--.",
+    )
+    io_group.add_argument(
+        "-z",
+        "--multimol_targz",
+        action="store_true",
+        help="compress output files in .tar.gz",
+    )
+    io_group.add_argument(
+        "--multimol_targz_size",
+        type=int,
+        default=10000,
+        help="number of PDBQT files per .tar.gz",
     )
     io_group.add_argument(
         "-",
@@ -350,15 +369,18 @@ def cmd_lineparser():
 
 
 class Output:
-    def __init__(
-        self, multimol_output_dir, multimol_prefix, redirect_stdout, output_filename
-    ):
+    def __init__(self, multimol_output_dir, multimol_targz, multimol_targz_size, multimol_prefix, redirect_stdout, output_filename, name_from_prop):
         is_multimol = (multimol_prefix is not None) or (multimol_output_dir is not None)
         self._mkdir(multimol_output_dir)
 
         if multimol_output_dir is None:
             multimol_output_dir = "."
         self.multimol_output_dir = multimol_output_dir
+        self.multimol_targz = multimol_targz
+        self.multimol_targz_size = max(int(multimol_targz_size), 1)
+        self.tarf = None
+        self.tar_pdbqt_count = 0
+        self.tarf_index = 0
         self.multimol_prefix = multimol_prefix
         self.redirect_stdout = redirect_stdout
         self.output_filename = output_filename
@@ -369,6 +391,28 @@ class Output:
         self.duplicate_names = set()
         self.num_files_written = 0
         self.counter = 0
+        self.name_from_prop = name_from_prop
+
+    def _open_new_tar(self):
+        self.tarf_index += 1
+        prefix = "" if self.multimol_prefix is None else self.multimol_prefix
+        tgz_path = os.path.join(
+            self.multimol_output_dir,
+            f"{prefix}{self.tarf_index:07d}.tar.gz"
+        )
+        tarf = tarfile.open(tgz_path, "w:gz")
+        return tarf
+
+    def _add_to_tar(self, pdbqt_string, name):
+        if self.tarf is None or self.tar_pdbqt_count >= self.multimol_targz_size:
+            self.tarf = self._open_new_tar()
+            self.tar_pdbqt_count = 0
+        tarinfo = tarfile.TarInfo(name=f"{name}.pdbqt")
+        tarinfo.size = len(pdbqt_string)
+        tarinfo.mtime = datetime.timestamp(datetime.now())
+        self.tarf.addfile(tarinfo, io.BytesIO(pdbqt_string.encode()))
+        self.tar_pdbqt_count += 1
+        return
 
     def __call__(self, pdbqt_string, name, suffixes=()):
         self.counter += 1
@@ -380,6 +424,7 @@ class Output:
         for suffix in suffixes:
             if suffix is not None and len(suffix) > 0:
                 name += "_" + suffix
+
         if self.is_multimol:
             if name in self.visited_filenames:
                 self.duplicate_filenames.add(name)
@@ -393,10 +438,16 @@ class Output:
                     file=sys.stderr,
                 )
                 name = newname
+
             self.visited_filenames.add(name)
-            fpath = os.path.join(self.multimol_output_dir, name + ".pdbqt")
-            print(pdbqt_string, end="", file=open(fpath, "w"))
+
+            if self.multimol_targz:
+                self._add_to_tar(pdbqt_string, name)
+            else:
+                fpath = os.path.join(self.multimol_output_dir, name + ".pdbqt")
+                print(pdbqt_string, end="", file=open(fpath, "w"))
             self.num_files_written += 1
+
         elif self.redirect_stdout:
             print(pdbqt_string, end="")
         else:
@@ -467,17 +518,22 @@ if __name__ == "__main__":
     elif backend == "ob":
         print("Using openbabel instead of rdkit")
         mol_supplier = obutils.OBMolSupplier(input_molecule_filename, ext)
-
+    
     # configure output writer
     if args.output_pdbqt_filename is None:
         output_filename = input_fname + ".pdbqt"
     else:
         output_filename = args.output_pdbqt_filename
+
+
     output = Output(
         args.multimol_output_dir,
+        args.multimol_targz,
+        args.multimol_targz_size,
         args.multimol_prefix,
         args.redirect_stdout,
         output_filename,
+        args.name_from_prop,
     )
 
     # initialize covalent object for receptor
@@ -505,6 +561,14 @@ if __name__ == "__main__":
                 % (input_molecule_filename)
             )
             break
+
+        if args.name_from_prop is not None:
+            if mol.HasProp(args.name_from_prop):
+                name = mol.GetProp(args.name_from_prop)
+            else:
+                continue  # TODO log this event
+        else:
+            name = mol.GetProp("_Name")
         is_after_first = True
 
         # check that molecule was successfully loaded
@@ -559,7 +623,6 @@ if __name__ == "__main__":
                     add_index_map=args.add_index_map,
                 )
                 if success:
-                    name = molsetup.name
                     output(pdbqt_string, name, (suffix,))
                     if args.verbose:
                         molsetup.show()
@@ -569,6 +632,9 @@ if __name__ == "__main__":
                     print(error_msg, file=sys.stderr)
 
         input_mol_with_failure += int(this_mol_had_failure)
+
+    if output.tarf is not None:
+        output.tarf.close()
 
     if output.is_multimol:
         print(
