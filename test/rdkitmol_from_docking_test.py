@@ -3,6 +3,7 @@ from meeko import PDBQTMolecule
 from meeko import MoleculePreparation
 from meeko import PDBQTWriterLegacy
 from rdkit import Chem
+import numpy as np
 import pathlib
 import json
 import io
@@ -108,6 +109,9 @@ def test_small_04(): run("small-04.sdf", wet=True)
 def test_meeko_free_energy_prop_vina():
     fpath = datadir/ "vina-result-ethanol.pdbqt"
     pdbqt_mol = PDBQTMolecule.from_file(fpath)
+    ref_charges = [0.034, 0.152, -0.397, 0.21]
+    tolerance = 0.01
+    assert np.all(np.abs(pdbqt_mol.atoms()["partial_charges"] - ref_charges) < tolerance)
     sd_string, failures = RDKitMolCreate.write_sd_string(pdbqt_mol)
     assert len(failures) == 0
     sio = io.BytesIO(sd_string.encode())

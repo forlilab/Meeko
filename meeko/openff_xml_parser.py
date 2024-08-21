@@ -9,7 +9,8 @@ from .utils.utils import mini_periodic_table
 
 def load_openff():
     import openforcefields
-    p = pathlib.Path(openforcefields.__file__) # find openff-forcefields xml files
+
+    p = pathlib.Path(openforcefields.__file__)  # find openff-forcefields xml files
     offxml = p.parents[0] / "offxml" / "openff-2.0.0.offxml"
     offxml = offxml.resolve()
     vdw_list, dihedral_list, vdw_by_type = parse_offxml(offxml)
@@ -18,20 +19,25 @@ def load_openff():
 
 def get_openff_epsilon_sigma(rdmol, vdw_list, vdw_by_type, output_index_start=0):
     from .preparation import MoleculePreparation
+
     data = {}
-    meeko_config = {"keep_nonpolar_hydrogens": True}
-    meeko_config["atom_type_smarts"] = {"OFFATOMS": {}}
-    meeko_config["atom_type_smarts"]["ATOM_PARAMS"] = {"openff-2.0.0": vdw_list}
-    meeko_config["atom_type_smarts"]["CHARGE_MODEL"] = 'gasteiger'
+    meeko_config = {
+        "keep_nonpolar_hydrogens": True,
+        "atom_type_smarts": {
+            "OFFATOMS": {},
+            "ATOM_PARAMS": {"openff-2.0.0": vdw_list},
+            "CHARGE_MODEL": "gasteiger",
+        },
+    }
     mk_prep = MoleculePreparation.from_config(meeko_config)
     mk_prep.prepare(rdmol)
     molsetup = mk_prep.setup
-    for i, atype in molsetup.atom_type.items():
-        data[i + output_index_start] = {
-            "atom_type": atype,
-            "epsilon": vdw_by_type[atype]["epsilon"],
-            "sigma": vdw_by_type[atype]["rmin_half"] * 2.0 / (4 ** (1.0 / 12)),
-            "gasteiger": molsetup.charge[i],
+    for atom in molsetup.atoms:
+        data[atom.index + output_index_start] = {
+            "atom_type": atom.atom_type,
+            "epsilon": vdw_by_type[atom.atom_type]["epsilon"],
+            "sigma": vdw_by_type[atom.atom_type]["rmin_half"] * 2.0 / (4 ** (1.0 / 12)),
+            "gasteiger": molsetup.charge[atom.index],
         }
     return data
 
@@ -169,6 +175,7 @@ def make_dihedral_entry(attrib_dict_from_xml):
             raise ValueError(msg)
     return dihedral_entry
 
+
 def make_vdw_entry(attrib_dict_from_xml):
     """convert 'Atom' dict from OFFXML to autodockdev dict"""
 
@@ -201,6 +208,7 @@ def make_vdw_entry(attrib_dict_from_xml):
             raise ValueError(msg)
     return vdw_entry
 
+
 def assign_atypes(vdw_list, use_openff_id=True, force_uppercase=True):
 
     atypes_preserve = ["n-tip3p-O", "n-tip3p-H"]
@@ -211,7 +219,9 @@ def assign_atypes(vdw_list, use_openff_id=True, force_uppercase=True):
 
     for v in vdw_list:
         mol = Chem.MolFromSmarts(v["smarts"])
-        atom = mol.GetAtomWithIdx(v["IDX"][0] - 1) # consider only the first if multiple IDX
+        atom = mol.GetAtomWithIdx(
+            v["IDX"][0] - 1
+        )  # consider only the first if multiple IDX
         element = mini_periodic_table[atom.GetAtomicNum()]
         atomic_numbers.append(atom.GetAtomicNum())
         used_numbers.setdefault(element, set())
@@ -221,7 +231,7 @@ def assign_atypes(vdw_list, use_openff_id=True, force_uppercase=True):
             atype = off_id
         elif use_openff_id:
             # use id ("n1", "n2", "n3") -> [H1, H2, C3]
-            if off_id[0] == 'n' and off_id[1:].isdigit():
+            if off_id[0] == "n" and off_id[1:].isdigit():
                 n = int(off_id[1:])
             else:
                 n = len(vdw_list) + 1
@@ -240,7 +250,8 @@ def assign_atypes(vdw_list, use_openff_id=True, force_uppercase=True):
             v["atype"] = atype.upper()
         else:
             v["atype"] = atype
-    return atomic_numbers # needed to get atomic mass aftwerwards
+    return atomic_numbers  # needed to get atomic mass aftwerwards
+
 
 def make_vdw_by_atype(vdw_list, atomic_numbers):
     bytype = {}
@@ -259,9 +270,10 @@ def make_vdw_by_atype(vdw_list, atomic_numbers):
         index += 1
     return bytype
 
+
 def parse_offxml(offxml_filename):
     """
-        Convert OpenFF XML entries to autodockdev dictionaries
+    Convert OpenFF XML entries to autodockdev dictionaries
     """
 
     root = ET.parse(offxml_filename).getroot()

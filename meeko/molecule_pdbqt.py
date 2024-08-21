@@ -129,7 +129,7 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             xyz = np.array([line[30:38].strip(), line[38:46].strip(), line[46:54].strip()], dtype=float)
             try:
                 # PDBQT files from dry.py script are stripped from their partial charges. sigh...
-                partial_charges = float(line[71:77].strip())
+                partial_charges = float(line[70:76].strip())
             except:
                 partial_charges = 0.0
             atom_type = line[77:-1].strip()
