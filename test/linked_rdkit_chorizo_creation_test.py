@@ -316,7 +316,7 @@ def test_write_pdb_1igy():
     )
     pdbstr = chorizo.to_pdb()
 
-    # input 1igy has some hydrogens, were we are making sure
+    # input 1igy has some hydrogens, here we are making sure
     # that the position of one of them didn't change
     expected = "  -7.232 -23.058 -15.763"
     found = False
@@ -336,12 +336,12 @@ def test_write_pdb_AHHY():
         mk_prep,
         blunt_ends=[("A:1", 0)],
     )
-    pdbstr = chorizo.to_pdb()
-    mol = Chem.MolFromPDBBlock(pdbstr)
+    newpdbstr = chorizo.to_pdb()
     # AHHy doesn't have hydrogens. If hydrogens get mangled xyz=(0, 0, 0) when
     # added by RDKit, we will probably not be able to match templates anymore.
+    # and recreating the chorizo from newpdbstr will very likely fail
     chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_text,
+        newpdbstr,
         chem_templates,
         mk_prep,
         blunt_ends=[("A:1", 0)],
