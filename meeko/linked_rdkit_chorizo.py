@@ -23,7 +23,7 @@ from .utils.pdbutils import PDBAtomInfo
 import numpy as np
 
 
-logger = logging.getLogger("meeko.chorizo")
+logger = logging.getLogger(__name__)
 
 residues_rotamers = {
     "SER": [("C", "CA", "CB", "OG")],
@@ -1135,7 +1135,7 @@ class LinkedRDKitChorizo:
                         f"{tkey:10} {heavy_miss=} {heavy_excess=} {H_excess=} {bond_miss=} {bond_excess=}"
                         + os_linesep
                     )
-                logger.warn(m)
+                logger.warning(m)
             elif len(passed) == 1 or not raw_mol_has_H:
                 index = passed[0]
                 template_key = candidate_template_keys[index]
@@ -1261,6 +1261,11 @@ class LinkedRDKitChorizo:
                 heavy_atom = residue.rdkit_mol.GetAtomWithIdx(atom_index)
                 for neighbor in heavy_atom.GetNeighbors():
                     if neighbor.GetAtomicNum() != 1:
+                        continue
+                    if neighbor.GetIdx() in residue.mapidx_to_raw:
+                        # index of H exists in mapidx_to_raw, which means that
+                        # the raw_input_mol had the hydrogen. Thus, we do not
+                        # want to update its coordiantes.
                         continue
                     no_pad_idxs_to_update.append(neighbor.GetIdx())
                     padded_idxs_to_update.append(inv[neighbor.GetIdx()])
@@ -1505,7 +1510,6 @@ class LinkedRDKitChorizo:
         """
         pdbout = ""
         atom_count = 0
-        icode = ""
         pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                       {:2s} "
         pdb_line += pathlib.os.linesep
         for res_id in self.residues:
@@ -1537,7 +1541,12 @@ class LinkedRDKitChorizo:
                     for (i, xyz) in enumerate(resmol.GetConformer().GetPositions())
                 }
 
-            chain, resname, resnum = res_id.split(":")
+            chain, resnum = res_id.split(":")
+            if resnum[-1].isalpha():
+                icode = resnum[-1]
+                resnum = resnum[:-1]
+            else:
+                icode = ""
             resnum = int(resnum)
 
             for i, atom in enumerate(resmol.GetAtoms()):
@@ -1550,7 +1559,7 @@ class LinkedRDKitChorizo:
                     "ATOM",
                     atom_count,
                     atom_name,
-                    resname,
+                    self.residues[res_id].input_resname,
                     chain,
                     resnum,
                     icode,

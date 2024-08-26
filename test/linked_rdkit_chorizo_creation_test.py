@@ -1,3 +1,4 @@
+from rdkit import Chem
 from meeko import LinkedRDKitChorizo
 from meeko import PDBQTWriterLegacy
 from meeko import MoleculePreparation
@@ -302,3 +303,46 @@ def test_insertion_code():
     expected_res = set(("B:82", "B:82A", "B:82B", "B:82C", "B:83"))
     res = set(chorizo.residues)
     assert res == expected_res
+
+
+def test_write_pdb_1igy():
+    with open(insertion_code, "r") as f:
+        pdb_text = f.read()
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("B:82", 0), ("B:83", 2)],
+    )
+    pdbstr = chorizo.to_pdb()
+
+    # input 1igy has some hydrogens, here we are making sure
+    # that the position of one of them didn't change
+    expected = "  -7.232 -23.058 -15.763"
+    found = False
+    for line in pdbstr.splitlines():
+        if line[30:54] == expected:
+            found = True
+            break
+    assert found
+
+
+def test_write_pdb_AHHY():
+    with open(ahhy_example, "r") as f:
+        pdb_text = f.read()
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("A:1", 0)],
+    )
+    newpdbstr = chorizo.to_pdb()
+    # AHHy doesn't have hydrogens. If hydrogens get mangled xyz=(0, 0, 0) when
+    # added by RDKit, we will probably not be able to match templates anymore.
+    # and recreating the chorizo from newpdbstr will very likely fail
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        newpdbstr,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("A:1", 0)],
+    )
