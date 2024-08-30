@@ -26,14 +26,6 @@ from .utils.pdbutils import PDBAtomInfo
 from .receptor_pdbqt import PDBQTReceptor
 
 try:
-    from openbabel import openbabel as ob
-    from .utils import obutils
-except ImportError:
-    _has_openbabel = False
-else:
-    _has_openbabel = True
-
-try:
     from misctools import StereoIsomorphism
 except ImportError as _import_misctools_error:
     _has_misctools = False
@@ -2107,105 +2099,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
             string_to_tuple(v) for v in obj["rmsd_symmetry_indices"]
         ]
         return rdkit_molsetup
-
-
-class OBMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
-    """
-    Subclass of MoleculeSetup, used to represent MoleculeSetup objects constructed using OpenBabel.
-
-    Attributes
-    ----------
-    mol :
-        An OpenBabel Mol object to base the OBMoleculeSetup on.
-    """
-
-    def init_atom(self, assign_charges: bool, coords: list = None):
-        """
-        Initializes atoms in the molecule using OpenBabel data.
-
-        Parameters
-        ----------
-        assign_charges: bool
-            Indicates whether charges should be calculated for the atoms in this molecule.
-        coords: list
-            Allows a user to input atom coordinates for the atoms in the molecule.
-
-        Returns
-        -------
-        None
-        """
-        for a in ob.OBMolAtomIter(self.mol):
-            partial_charge = a.GetPartialCharge() * float(assign_charges)
-            self.add_atom(
-                atom_index=a.GetIdx() - 1,
-                pdbinfo=obutils.getPdbInfoNoNull(a),
-                charge=partial_charge,
-                coord=np.asarray(obutils.getAtomCoords(a), dtype="float"),
-                atomic_num=a.GetAtomicNum(),
-                is_ignore=False,
-            )
-
-    def init_bond(self):
-        """
-        Uses the OpenBabel molecule data to initialize bond info for the OBMoleculeSetup
-
-        Returns
-        -------
-        None
-        """
-        for b in ob.OBMolBondIter(self.mol):
-            idx1 = b.GetBeginAtomIdx() - 1
-            idx2 = b.GetEndAtomIdx() - 1
-            rotatable = b.GetBondOrder() == 1
-            self.add_bond(idx1, idx2, rotatable=rotatable)
-
-    def get_mol_name(self):
-        """
-        Gets the mol name from self.mol.
-
-        Returns
-        -------
-        If the mol has a title, returns the title property.
-        """
-        return self.mol.GetTitle()
-
-    def find_pattern(self, smarts: str):
-        """
-        Given a SMARTS pattern, finds substruct matches in the molecule.
-
-        Parameters
-        ----------
-        smarts: str
-            A SMARTS string to find in the OpenBabel molecule.
-
-        Returns
-        -------
-        The substruct matches in the OpenBabel mol for the given SMARTS.
-        """
-        obsmarts = ob.OBSmartsPattern()
-        obsmarts.Init(smarts)
-        found = obsmarts.Match(self.mol)
-        output = []
-        if found:
-            for x in obsmarts.GetUMapList():
-                output.append([y - 1 for y in x])
-        return output
-
-    def get_smiles_and_order(self):
-        raise NotImplementedError
-
-    def get_num_mol_atoms(self):
-        """
-        Gets the number of atoms in the OpenBabel mol.
-
-        Returns
-        -------
-        The number of molecules in the OpenBabel mol.
-        """
-        return self.mol.NumAtoms()
-
-    def get_equivalent_atoms(self):
-        raise NotImplementedError
 
 
 # endregion

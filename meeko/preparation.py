@@ -14,7 +14,6 @@ from rdkit import Chem
 
 import meeko.macrocycle
 from .molsetup import Bond
-from .molsetup import OBMoleculeSetup
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
 from .espalomatyper import EspalomaTyper
@@ -32,13 +31,6 @@ pkg_dir = pathlib.Path(__file__).parents[0]
 params_dir = pkg_dir / "data" / "params"
 # the above is controversial, see
 # https://stackoverflow.com/questions/6028000/how-to-read-a-static-file-from-inside-a-python-package
-
-try:
-    from openbabel import openbabel as ob
-except ImportError:
-    _has_openbabel = False
-else:
-    _has_openbabel = True
 
 # DeprecationWarning is not displayed by default
 warnings.filterwarnings("default", category=DeprecationWarning)
@@ -201,8 +193,6 @@ class MoleculePreparation:
         else:
             self.offatom_params = input_offatom_params
 
-        if _has_openbabel:
-            self._classes_setup[ob.OBMol] = OBMoleculeSetup
         if keep_chorded_rings and not keep_equivalent_rings:
             warnings.warn(
                 "keep_equivalent_rings=False ignored because keep_chorded_rings=True",

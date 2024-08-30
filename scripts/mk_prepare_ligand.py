@@ -30,21 +30,10 @@ except:
 else:
     _has_prody = True
 
-try:
-    from meeko import obutils  # fails if openbabel not available
-except:
-    _has_openbabel = False
-else:
-    _has_openbabel = True
-
 
 def cmd_lineparser():
     backend = "rdkit"
-    if "--ob_backend" in sys.argv:
-        if not _has_openbabel:
-            raise ImportError("--ob_backend requires openbabel which is not available")
-        backend = "ob"
-        sys.argv.remove("--ob_backend")
+
     conf_parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -515,9 +504,6 @@ if __name__ == "__main__":
         mol_supplier = parsers[ext](
             input_molecule_filename, removeHs=False
         )  # input must have explicit H
-    elif backend == "ob":
-        print("Using openbabel instead of rdkit")
-        mol_supplier = obutils.OBMolSupplier(input_molecule_filename, ext)
     
     # configure output writer
     if args.output_pdbqt_filename is None:
@@ -574,8 +560,6 @@ if __name__ == "__main__":
         # check that molecule was successfully loaded
         if backend == "rdkit":
             is_valid = mol is not None
-        elif backend == "ob":
-            is_valid = mol.NumAtoms() > 0
         input_mol_skipped += int(is_valid == False)
         if not is_valid:
             continue

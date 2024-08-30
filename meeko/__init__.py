@@ -7,13 +7,6 @@
 __version__ = "0.6.0-alpha.3"
 
 try:
-    import openbabel
-except ImportError:
-    _has_openbabel = False
-else:
-    _has_openbabel = True
-
-try:
     import prody
 except ImportError:
     _has_prody = False
@@ -73,12 +66,6 @@ __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup', 'MoleculeSetupEncoder',
            'Hydrate',
            'Restraint',
            ]
-
-if _has_openbabel:
-    from .molsetup import OBMoleculeSetup
-    from .utils import obutils
-    __all__.append("OBMoleculeSetup")
-    __all__.append("obutils")
 
 if _has_prody:
     from .covalentbuilder import CovalentBuilder
