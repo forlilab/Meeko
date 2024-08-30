@@ -86,109 +86,6 @@ def parse_cmdline_res_assign(string):
     return output
 
 
-def parse_residue_string(string):
-    """
-    Args:
-        string (str): Residue identifier in the format 'chain:resname:resnum'.
-
-    Returns:
-        tuple: Residue identifier components: (chain, resname, resnum).
-        bool: Whether the parsing was successful or not.
-        str: An error message describing any encountered parsing errors.
-
-    Example:
-        >>> parse_residue_string("A:ALA:42")
-        (('A', 'ALA', 42), True, '')
-    """
-
-    ok = True
-    err = ""
-    res_id = (None, None, None)
-    if string.count(":") != 2:
-        ok = False
-        err += (
-            "Need exacly two ':' but found %d in '%s'" % (string.count(":"), string)
-            + os_linesep
-        )
-        err += "Example: 'A:HIE:42'" + os_linesep
-        return res_id, ok, err
-    chain, resname, resnum = string.split(":")
-    if len(chain) not in (0, 1):
-        ok = False
-        err += (
-            "chain must be 0 or 1 char but it is '%s' (%d chars) in '%s'"
-            % (chain, len(chain), string)
-            + os_linesep
-        )
-    if len(resname) > 3:
-        ok = False
-        err += (
-            "resname must be max 3 characters long, but is '%s' in '%s'"
-            % (resname, string)
-            + os_linesep
-        )
-    try:
-        resnum = int(resnum)
-    except:
-        ok = False
-        err += (
-            "resnum could not be converted to integer, it was '%s' in '%s'"
-            % (resnum, string)
-            + os_linesep
-        )
-    if ok:
-        res_id = (chain, resname, resnum)
-    return res_id, ok, err
-
-
-def parse_residue_string_and_name(string):
-    """
-    Example:
-        >>> parse_residue_string_and_name("A:HIE:42:CE1")
-        ({"res_id": ('A', 'ALA', 42), "name": "CE1"}, True, '')
-    """
-    ok = True
-    err = ""
-    output = {"res_id": (None, None, None), "name": None}
-    if string.count(":") != 3:
-        ok = False
-        err += (
-            "Need three ':' but found %d in %s" % (string.count(":"), string)
-            + os_linesep
-        )
-        err += "Example: 'A:HIE:42:CE1'" + os_linesep
-        return output, ok, err
-
-    resid_string, name = string.rsplit(":", 1)
-    output["name"] = name
-    res_id, ok_, err_ = parse_residue_string(resid_string)
-    output["res_id"] = res_id
-    ok &= ok_
-    err += err_
-    return output, ok, err
-
-
-def parse_resname_and_name(string):
-    """
-    Example:
-        >>> parse_resname_and_name("HIE:CE1")
-        (("HIE", "CE1"), True, "")
-    """
-    ok = True
-    err = ""
-    output = (None, None)
-    if string.count(":") != 1:
-        ok = False
-        err += (
-            "Expected one ':' but found %d in %s" % (string.count(":"), string)
-            + os_linesep
-        )
-        err += "Example: 'HIE:CE1'" + os_linesep
-        return output, ok, err
-    resname, name = string.split(":")
-    return (resname, name), ok, err
-
-
 class TalkativeParser(argparse.ArgumentParser):
     def error(self, message):
         """overload to print_help for every error"""
@@ -321,36 +218,51 @@ def get_args():
         msg = "need either --pdb or --macromol, but not both"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    if (args.box_center is not None) and args.box_center_off_reactive_res:
-        msg = "can't use both --box_center and --box_center_off_reactive_res"
-        print("Command line error: " + msg, file=sys.stderr)
-        sys.exit(2)
-    if (args.box_size is None) and args.box_center_off_reactive_res:
-        print("--box_center_off_reactive_res requires --box_size", file=sys.stderr)
-        sys.exit(2)
-    if (args.padding is None) != (args.ligand is None):
-        print("--padding and --ligand must be used together", file=sys.stderr)
-        sys.exit(2)
-    nr_boxcenter_specs = 0
-    nr_boxcenter_specs += int(args.box_center is not None)
-    nr_boxcenter_specs += int(args.box_center_off_reactive_res)
-    nr_boxcenter_specs += int(args.ligand is not None)
-    if nr_boxcenter_specs > 1:
-        msg = "box center can't be specified in more than once."
-        msg += "use one of the following three options:" + os_linesep
-        msg += "  1) --box_center" + os_linesep
-        msg += "  2) both --box_size and --box_center_off_reactive_res" + os_linesep
-        msg += "  3) both --ligand and --padding in combination" + os_linesep
-        print(msg, file=sys.stderr)
-        sys.exit(2)
+    
     if not args.skip_gpf:
-        if nr_boxcenter_specs < 1:
-            msg = "missing center of grid box to write .gpf file for autogrid4"
-            msg += "use one of the following three options:" + os_linesep
-            msg += "  1) --box_center" + os_linesep
-            msg += "  2) both --box_size and --box_center_off_reactive_res" + os_linesep
-            msg += "  3) both --ligand and --padding in combination" + os_linesep
-            print(msg, file=sys.stderr)
+
+        box_help = f"""
+    box size and box size must be set use one of the following three combinations:
+    1) --box_center and --box_size
+    2) --box_center_off_reactive_res and --box_size
+    3) --ligand and --padding"""
+
+        # Ensure correct number of box specs
+        nr_boxcenter_specs = sum([(args.box_center is not None), 
+                                  (args.box_center_off_reactive_res), 
+                                  (args.ligand is not None)])
+        nr_boxsize_specs = sum([(args.box_size is not None), 
+                                (args.padding is not None)])
+        
+        box_specs = [
+            (nr_boxcenter_specs, "box center"),
+            (nr_boxsize_specs, "box size")
+        ]
+
+        for spec_count, spec_type in box_specs:
+            if spec_count > 1:
+                msg=f"{spec_type} can't be specified in more than once. {box_help}"
+                print("Command line error: " + msg, file=sys.stderr)
+                sys.exit(2)
+            elif spec_count < 1:
+                msg=f"missing {spec_type} to write .gpf file for autogrid4. {box_help}"
+                print("Command line error: " + msg, file=sys.stderr)
+                sys.exit(2)
+
+        # Ensure correct combinations of box specs
+        if (args.box_size is None):
+            if args.box_center_off_reactive_res:
+                msg=f"--box_center_off_reactive_res requires --box_size. {box_help}"
+                print("Command line error: " + msg, file=sys.stderr)
+                sys.exit(2)
+            elif (args.box_center is not None):
+                msg=f"--box_center requires --box_size. {box_help}"
+                print("Command line error: " + msg, file=sys.stderr)
+                sys.exit(2)
+        
+        if (args.padding is None) != (args.ligand is None):
+            msg=f"--padding and --ligand must be used together. {box_help}"
+            print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
 
     return args
@@ -369,93 +281,51 @@ reactive_atom = {
     "THR": "OG1",
     "MET": "SD",
 }
-modified_resnames = set()
 
+modified = set()
 for react_name_str in args.reactive_name:
-    (resname, name), ok, err = parse_resname_and_name(react_name_str)
-    if ok:
-        if resname in modified_resnames:
-            print("Command line error: repeated resname %s passed to --reactive_resname" % resname + os_linesep, file=sys.stderr)
-            sys.exit(2)
-        modified_resnames.add(resname)
-        reactive_atom[resname] = name
-    else:
-        print("Error in parsing --reactive_name argument" + os_linesep, file=sys.stderr)
-        print(err, file=sys.stderr)
+    resname, name = react_name_str.split(":")
+    if resname in modified:
+        print("Command line error: repeated resname %s passed to --reactive_resname" % resname + os_linesep, file=sys.stderr)
         sys.exit(2)
+    modified.add(resname)
+    reactive_atom[resname] = name
 
+modified = set()
 reactive_flexres_name = {}
-all_ok = True
-all_err = ""
-for resid_string in args.reactive_flexres:
-    res_id, ok, err = parse_residue_string(resid_string)
-    if ok:
-        resname = res_id[1]
-        if resname in reactive_atom:
-            reactive_flexres_name[res_id] = reactive_atom[resname]
-        else:
-            all_ok = False
-            all_err += "no default reactive name for %s, " % resname
-            all_err += "use --reactive_name or --reactive_name_specific" + os_linesep
-    all_ok &= ok
-    all_err += err
-
 for string in args.reactive_name_specific:
-    out, ok, err = parse_residue_string_and_name(string)
-    if ok:
-        # override name if res_id was also passed to --reactive_flexres
-        reactive_flexres_name[out["res_id"]] = out["name"]
-    all_ok &= ok
-    all_err += err
+    res_assign = parse_cmdline_res_assign(string)
+    for res_id in res_assign:
+        if res_id in modified:
+            print("Command line error: repeated resid %s passed to --reactive_name_specific" % res_id + os_linesep, file=sys.stderr)
+            sys.exit(2)
+        modified.add(res_id)
+        reactive_flexres_name[res_id] = res_assign[res_id]
 
-reactive_flexres = set([f"{res[0]}:{res[2]}" for res in reactive_flexres_name])
+reactive_flexres = set(reactive_flexres_name)
+for resid_string in args.reactive_flexres:
+    res_list = parse_cmdline_res(resid_string)
+    for res_id in res_list:
+        if res_id not in reactive_flexres:
+            reactive_flexres.add(res_id)
+            reactive_flexres_name[res_id] = ""
 
 if len(reactive_flexres) > 8:
     msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
     print("Command line error: " + msg, file=sys.stderr)
     sys.exit(2)
 
-all_flexres = set()
-for string in args.flexres:
-    for res_id in parse_cmdline_res(string):
-        if res_id in reactive_flexres:
-           all_err += "Command line error: can't determine if %s is reactive or not." % str(res_id) + os_linesep
-           all_err += "Do not pass %s to --flexres if it is reactive." % str(res_id) + os_linesep
-           all_ok = False
-        all_flexres.add(res_id)
-print(f"flexibile sidechains: {all_flexres}")
-
-if len(all_flexres) + len(reactive_flexres) > 0:
-    print()
-    print("Flexible residues:")
-    print("chain resnum is_reactive reactive_atom")
-    string = "%5s%7s%12s%14s"
-
-    if len(all_flexres) > 0: 
-        for res_id in all_flexres:
-            chain, resnum = res_id.split(":")
-            react_atom = ""
-            print(string % (chain, resnum, False, react_atom))
-
-    if len(reactive_flexres) > 0:
-        for res in reactive_flexres_name:
-            chain, resnum = [res[0], res[2]]
-            react_atom = reactive_flexres_name[res]
-            print(string % (chain, resnum, True, react_atom))
-
-if all_ok:
-    all_flexres = all_flexres.union(reactive_flexres)
-else:
-    print("Error:", file=sys.stderr)
-    print(all_err, file=sys.stderr)
-    sys.exit(2)
-
 if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
     msg = "--box_center_off_reactive_res can be used only with one reactive" + os_linesep
-    msg += "residue, but %d reactive residues are set" % len(reactive_flexres)
+    msg += "residue, but %d reactive residues are set" % len(reactive_flexres_name)
     print("Command line error:" + msg, file=sys.stderr)
     sys.exit(2)
 
+nonreactive_flexres = set()
+for string in args.flexres:
+    for res_id in parse_cmdline_res(string):
+        if res_id not in reactive_flexres:
+            nonreactive_flexres.add(res_id)
 
 # if args.pdb is not None:
 set_template = {}
@@ -534,6 +404,40 @@ else:
         blunt_ends=blunt_ends,
     )
 
+for res_id in reactive_flexres:
+    if res_id not in chorizo.residues:
+        print("resid %s not found in input receptor file" % res_id)
+        sys.exit(2)
+    res_atom = reactive_flexres_name[res_id]
+    if not res_atom:
+        input_resname = chorizo.residues[res_id].input_resname
+        if input_resname in reactive_atom:
+            reactive_flexres_name[res_id] = reactive_atom[input_resname]
+        else:
+            print("no default reactive name for %s, " % resname)
+            print("use --reactive_name or --reactive_name_specific" + os_linesep)
+            sys.exit(2)
+
+if len(nonreactive_flexres) + len(reactive_flexres) > 0:
+    print()
+    print("Flexible residues:")
+    print("chain resnum is_reactive reactive_atom")
+    string = "%5s%7s%12s%14s"
+
+    if len(nonreactive_flexres) > 0: 
+        for res_id in nonreactive_flexres:
+            chain, resnum = res_id.split(":")
+            react_atom = ""
+            print(string % (chain, resnum, False, react_atom))
+
+    if len(reactive_flexres) > 0:
+        for res_id in reactive_flexres_name:
+            chain, resnum = res_id.split(":")
+            react_atom = reactive_flexres_name[res_id]
+            print(string % (chain, resnum, True, react_atom))
+
+all_flexres = nonreactive_flexres.union(reactive_flexres)
+
 #  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
 #                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
 
@@ -599,9 +503,8 @@ else:
     reactive_flexres_count = 0
     for res_id, flexres_pdbqt in pdbqt["flex"].items():
         if res_id in reactive_flexres:
-            reactive_index = list([f"{res[0]}:{res[2]}" for res in reactive_flexres_name]).index(res_id)
-            resname = list(reactive_flexres_name.keys())[reactive_index][1]
-            reactive_atom = list(reactive_flexres_name.values())[reactive_index]
+            resname = chorizo.residues[res_id].input_resname
+            reactive_atom = reactive_flexres_name[res_id]
             reactive_flexres_count += 1
             prefix_atype = "%d" % reactive_flexres_count
             flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(
@@ -642,8 +545,7 @@ if not args.skip_gpf:
         # we have only one reactive residue and will set the box center
         # to be 5 Angstromg away from CB along the CA->CB vector
         box_centers = []
-        for res_id_tuple in reactive_flexres_name.keys():
-            res_id = f"{res_id_tuple[0]}:{res_id_tuple[2]}"
+        for res_id in reactive_flexres:
             molsetup = chorizo.residues[res_id].molsetup
             calpha_idx = [
                 atom.index for atom in molsetup.atoms if atom.pdbinfo.name == "CA"
@@ -822,7 +724,7 @@ if len(reactive_flexres) > 0:
 
     # The maps block is to tell AutoDock-GPU the base types for the reactive types.
     # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
-    # lines in a single configuration file simplifies the command line call.
+    # lines in a single configuraton file simplifies the command line call.
     map_block = ""
     map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
     all_types = []
