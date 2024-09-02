@@ -10,7 +10,7 @@ import sys
 
 import numpy as np
 
-from meeko import PDBQTReceptor
+from meeko.reactive import atom_name_to_molsetup_index, assign_x
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
@@ -140,7 +140,7 @@ def get_args():
 
     box_group = parser.add_argument_group("Size and center of grid box")
     # box_group.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
-box_group.add_argument(
+    box_group.add_argument(
         "--skip_gpf", help="do not write a GPF file for autogrid", action="store_true"
     )
     box_group.add_argument(
@@ -436,6 +436,16 @@ if len(nonreactive_flexres) + len(reactive_flexres) > 0:
             react_atom = reactive_flexres_name[res_id]
             print(string % (chain, resnum, True, react_atom))
 
+for res_id in reactive_flexres:
+    # get reactive atom types
+    reactive_aname = reactive_flexres_name[res_id]
+    reactive_atomi = atom_name_to_molsetup_index(chorizo.residues[res_id], reactive_aname)
+    reactive_atypes = assign_x(chorizo.residues[res_id].molsetup, reactive_atomi)
+    # set reactive atom types
+    nr_atom = len(chorizo.residues[res_id].molsetup.atoms)
+    for atom_index in range(nr_atom):
+        chorizo.residues[res_id].molsetup.atoms[atom_index].atom_type = reactive_atypes[atom_index]
+
 all_flexres = nonreactive_flexres.union(reactive_flexres)
 
 #  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
@@ -489,23 +499,6 @@ any_lig_base_types = [
     "B",
 ]
 
-
-def atom_name_to_molsetup_index(chorizo_residue, atom_name):
-    indices = []
-    for atom in chorizo_residue.raw_input_mol.GetAtoms():
-        name = atom.GetPDBResidueInfo().GetName().strip()
-        if name == atom_name:
-            indices.append(atom.GetIdx())
-    if len(indices) > 1:
-        raise RuntimeError(f"multiple atoms matched query atom name {atom_name}")
-    if len(indices) == 0:
-        return None
-    index = indices[0]
-    index = chorizo_residue.mapidx_from_raw[index]
-    inv = {j: i for i, j in chorizo_residue.molsetup_mapidx}
-    index = inv[index]
-    return index
-
 outpath = pathlib.Path(args.output_filename)
 
 written_files_log = {"filename": [], "description": []}
@@ -519,16 +512,6 @@ else:
     all_flex_pdbqt = ""
     reactive_flexres_count = 0
     for res_id, flexres_pdbqt in pdbqt["flex"].items():
-        if res_id in reactive_flexres:
-            resname = chorizo.residues[res_id].input_resname
-            reactive_atom = reactive_flexres_name[res_id]
-            reactive_atom_index = atom_name_to_molsetup_index(chorizo.residues[res_id], reactive_atom)
-            assign_x(chorizo.residues[res_id].molsetup, reactive_atom_index)
-            #reactive_flexres_count += 1
-            #prefix_atype = "%d" % reactive_flexres_count
-            #flexres_pdbqt = PDBQTReceptor.make_flexres_reactive(
-            #    flexres_pdbqt, reactive_atom, resname, prefix_atype
-            #)
         all_flex_pdbqt += flexres_pdbqt
 
     suffix = outpath.suffix

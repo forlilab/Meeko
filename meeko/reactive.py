@@ -114,6 +114,22 @@ reactive_typer = ReactiveAtomTyper()
 get_reactive_atype = reactive_typer.get_reactive_atype
 
 
+def atom_name_to_molsetup_index(chorizo_residue, atom_name):
+    indices = []
+    for atom in chorizo_residue.raw_rdkit_mol.GetAtoms():
+        name = atom.GetPDBResidueInfo().GetName().strip()
+        if name == atom_name:
+            indices.append(atom.GetIdx())
+    if len(indices) > 1:
+        raise RuntimeError(f"multiple atoms matched query atom name {atom_name}")
+    if len(indices) == 0:
+        return None
+    index = indices[0]
+    index = chorizo_residue.mapidx_from_raw[index]
+    inv = {j: i for i, j in chorizo_residue.molsetup_mapidx.items()}
+    index = inv[index]
+    return index
+
 
 def assign_x(molsetup, reactive_atom_index, get_reactive_atype=get_reactive_atype):
 
@@ -140,7 +156,6 @@ def assign_x(molsetup, reactive_atom_index, get_reactive_atype=get_reactive_atyp
                 reactive_type = get_reactive_atype(original_type, reactive_order=3)
                 atypes[index2] = reactive_type
     return atypes
-
 
 
 def assign_reactive_types(
