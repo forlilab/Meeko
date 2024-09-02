@@ -436,6 +436,7 @@ if len(nonreactive_flexres) + len(reactive_flexres) > 0:
             react_atom = reactive_flexres_name[res_id]
             print(string % (chain, resnum, True, react_atom))
 
+reactive_prefix = 1
 for res_id in reactive_flexres:
     # get reactive atom types
     reactive_aname = reactive_flexres_name[res_id]
@@ -444,7 +445,9 @@ for res_id in reactive_flexres:
     # set reactive atom types
     nr_atom = len(chorizo.residues[res_id].molsetup.atoms)
     for atom_index in range(nr_atom):
-        chorizo.residues[res_id].molsetup.atoms[atom_index].atom_type = reactive_atypes[atom_index]
+        if chorizo.residues[res_id].molsetup.atoms[atom_index].atom_type != reactive_atypes[atom_index]:
+            chorizo.residues[res_id].molsetup.atoms[atom_index].atom_type = f"{reactive_prefix}{reactive_atypes[atom_index]}"
+    reactive_prefix += 1
 
 all_flexres = nonreactive_flexres.union(reactive_flexres)
 
