@@ -418,7 +418,12 @@ class MoleculePreparation:
             " MoleculePreparation.prepare() returns a list of MoleculeSetup instances."
         )
         warnings.warn(msg, DeprecationWarning)
-        return self.deprecated_setup_access
+        if len(self.deprecated_setup_access) > 1:
+            raise RuntimeError(
+                "got multiple setups, use new api: molsetup_list = mk_prep(mol)"
+            )
+
+        return self.deprecated_setup_access[0]
 
     @classmethod
     def get_defaults_dict(cls):
@@ -551,20 +556,22 @@ class MoleculePreparation:
                 self.reactive_smarts,
                 self.reactive_smarts_idx,
             )
+
+            if len(reactive_types_dicts) == 0:
+                raise RuntimeError("reactive SMARTS didn't match")
+
             setups = []
             for r in reactive_types_dicts:
                 new_setup = setup.copy()
                 # There is no guarantee that the addition order in the dictionary will be the correct order to
                 # create the list in, so first sorts the keys from the dictionary then extracts the values in order
                 # to construct the new atom type list.
-                sorted_keys = list(r.keys())
-                sorted_keys.sort()
-                new_setup_atom_type = [r[idx] for idx in sorted_keys]
-                new_setup.atom_type = new_setup_atom_type
+                for idx, atom_type in r.items():
+                    new_setup.atoms[idx].atom_type = atom_type
                 setups.append(new_setup)
 
         # for a gentle introduction of the new API
-        self.deprecated_setup_access = setups[0]
+        self.deprecated_setup_access = setups
 
         return setups
 

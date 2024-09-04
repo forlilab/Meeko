@@ -131,7 +131,7 @@ def atom_name_to_molsetup_index(chorizo_residue, atom_name):
     return index
 
 
-def assign_x(molsetup, reactive_atom_index, get_reactive_atype=get_reactive_atype):
+def assign_reactive_types_by_index(molsetup, reactive_atom_index, get_reactive_atype=get_reactive_atype):
 
     atypes = {atom.index: atom.atom_type for atom in molsetup.atoms}
 
@@ -166,7 +166,7 @@ def assign_reactive_types(
     for atom_indices in molsetup.find_pattern(smarts):
 
         reactive_atom_index = atom_indices[smarts_idx]
-        atypes = assign_x(
+        atypes = assign_reactive_types_by_index(
             molsetup,
             reactive_atom_index,
             get_reactive_atype

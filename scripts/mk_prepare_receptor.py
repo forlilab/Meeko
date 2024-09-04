@@ -10,7 +10,8 @@ import sys
 
 import numpy as np
 
-from meeko.reactive import atom_name_to_molsetup_index, assign_x
+from meeko.reactive import atom_name_to_molsetup_index
+from meeko.reactive import assign_reactive_types_by_index
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
@@ -441,7 +442,7 @@ for res_id in reactive_flexres:
     # get reactive atom types
     reactive_aname = reactive_flexres_name[res_id]
     reactive_atomi = atom_name_to_molsetup_index(chorizo.residues[res_id], reactive_aname)
-    reactive_atypes = assign_x(chorizo.residues[res_id].molsetup, reactive_atomi)
+    reactive_atypes = assign_reactive_types_by_index(chorizo.residues[res_id].molsetup, reactive_atomi)
     # set reactive atom types
     nr_atom = len(chorizo.residues[res_id].molsetup.atoms)
     for atom_index in range(nr_atom):
