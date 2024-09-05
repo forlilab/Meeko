@@ -599,6 +599,8 @@ if __name__ == "__main__":
 
         else:
             molsetups = preparator.prepare(mol)
+            if len(molsetups) > 1:
+                output.is_multimol = True
             suffixes = output.get_suffixes(molsetups)
             for molsetup, suffix in zip(molsetups, suffixes):
                 pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(
@@ -607,7 +609,7 @@ if __name__ == "__main__":
                     add_index_map=args.add_index_map,
                 )
                 if success:
-                    output(pdbqt_string, name, (suffix,))
+                    output(pdbqt_string, output_filename.replace(".pdbqt",""), (suffix,))
                     if args.verbose:
                         molsetup.show()
                 else:

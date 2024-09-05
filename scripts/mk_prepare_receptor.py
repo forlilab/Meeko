@@ -10,8 +10,7 @@ import sys
 
 import numpy as np
 
-from meeko.reactive import atom_name_to_molsetup_index
-from meeko.reactive import assign_reactive_types_by_index
+from meeko.reactive import atom_name_to_molsetup_index, assign_reactive_types_by_index
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
@@ -136,7 +135,7 @@ def get_args():
         "--flexres",
         action="append",
         default=[],
-        help='e.g. -f ":42,B:23" is equivalent to -f ":42" -f "B:23" (skip chain ID if it is unspecified)',
+        help='specify the flexible residues by the chain ID and residue number, e.g. -f ":42,B:23" is equivalent to -f ":42" -f "B:23" (skip chain ID if it is unspecified)',
     )
 
     box_group = parser.add_argument_group("Size and center of grid box")
@@ -172,21 +171,21 @@ def get_args():
         "--reactive_flexres",
         action="append",
         default=[],
-        help='e.g. -r "A:LYS:100" -r "A:LYS:255" (repeate flag if there are multiple reactive flexible residues; max number of reactive flexible residues: 8)',
+        help='same as --flexres but for reactive residues (max 8)',
     )
     reactive_group.add_argument(
         "-g",
         "--reactive_name",
         action="append",
         default=[],
-        help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Overridden by --reactive_name_specific",
+        help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Repeat flag for multiple assignments. Overridden by --reactive_name_specific",
     )
     reactive_group.add_argument(
         "-s",
         "--reactive_name_specific",
         action="append",
         default=[],
-        help="set name of reactive atom for an individual residue, e.g: -s 'A:HIE:42:NE2'. Residue will be reactive.",
+        help="set name of reactive atom for an individual residue by the residue ID, e.g: -s 'A:42=NE2'. Residue will be reactive.",
     )
 
     reactive_group.add_argument(
@@ -219,7 +218,7 @@ def get_args():
         msg = "need either --pdb or --macromol, but not both"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    
+
     if not args.skip_gpf:
 
         box_help = f"""
@@ -229,40 +228,44 @@ def get_args():
     3) --ligand and --padding"""
 
         # Ensure correct number of box specs
-        nr_boxcenter_specs = sum([(args.box_center is not None), 
-                                  (args.box_center_off_reactive_res), 
-                                  (args.ligand is not None)])
-        nr_boxsize_specs = sum([(args.box_size is not None), 
-                                (args.padding is not None)])
-        
-        box_specs = [
-            (nr_boxcenter_specs, "box center"),
-            (nr_boxsize_specs, "box size")
-        ]
+        nr_boxcenter_specs = sum(
+            [
+                (args.box_center is not None),
+                (args.box_center_off_reactive_res),
+                (args.ligand is not None),
+            ]
+        )
+        nr_boxsize_specs = sum(
+            [(args.box_size is not None), (args.padding is not None)]
+        )
+
+        box_specs = [(nr_boxcenter_specs, "box center"), (nr_boxsize_specs, "box size")]
 
         for spec_count, spec_type in box_specs:
             if spec_count > 1:
-                msg=f"{spec_type} can't be specified in more than once. {box_help}"
+                msg = f"{spec_type} can't be specified in more than once. {box_help}"
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
             elif spec_count < 1:
-                msg=f"missing {spec_type} to write .gpf file for autogrid4. {box_help}"
+                msg = (
+                    f"missing {spec_type} to write .gpf file for autogrid4. {box_help}"
+                )
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
 
         # Ensure correct combinations of box specs
-        if (args.box_size is None):
+        if args.box_size is None:
             if args.box_center_off_reactive_res:
-                msg=f"--box_center_off_reactive_res requires --box_size. {box_help}"
+                msg = f"--box_center_off_reactive_res requires --box_size. {box_help}"
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
-            elif (args.box_center is not None):
-                msg=f"--box_center requires --box_size. {box_help}"
+            elif args.box_center is not None:
+                msg = f"--box_center requires --box_size. {box_help}"
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
-        
+
         if (args.padding is None) != (args.ligand is None):
-            msg=f"--padding and --ligand must be used together. {box_help}"
+            msg = f"--padding and --ligand must be used together. {box_help}"
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
 
@@ -271,6 +274,7 @@ def get_args():
 
 args = get_args()
 
+# Default mapping of residue name and reactive atom name
 reactive_atom = {
     "SER": "OG",
     "LYS": "NZ",
@@ -283,26 +287,39 @@ reactive_atom = {
     "MET": "SD",
 }
 
+# Process custom mapping of residue name and reactive atom name
 modified = set()
 for react_name_str in args.reactive_name:
     resname, name = react_name_str.split(":")
     if resname in modified:
-        print("Command line error: repeated resname %s passed to --reactive_resname" % resname + os_linesep, file=sys.stderr)
+        print(
+            "Command line error: repeated resname %s passed to --reactive_resname"
+            % resname
+            + os_linesep,
+            file=sys.stderr,
+        )
         sys.exit(2)
     modified.add(resname)
     reactive_atom[resname] = name
 
+# Process specified mapping of residue ID and reactive atom name
 modified = set()
 reactive_flexres_name = {}
 for string in args.reactive_name_specific:
     res_assign = parse_cmdline_res_assign(string)
     for res_id in res_assign:
         if res_id in modified:
-            print("Command line error: repeated resid %s passed to --reactive_name_specific" % res_id + os_linesep, file=sys.stderr)
+            print(
+                "Command line error: repeated resid %s passed to --reactive_name_specific"
+                % res_id
+                + os_linesep,
+                file=sys.stderr,
+            )
             sys.exit(2)
         modified.add(res_id)
         reactive_flexres_name[res_id] = res_assign[res_id]
 
+# Process residue ID of reactive flexible residues without specified reactive atom
 reactive_flexres = set(reactive_flexres_name)
 for resid_string in args.reactive_flexres:
     res_list = parse_cmdline_res(resid_string)
@@ -311,17 +328,22 @@ for resid_string in args.reactive_flexres:
             reactive_flexres.add(res_id)
             reactive_flexres_name[res_id] = ""
 
+# Evaluate number of reactive flexible residues
 if len(reactive_flexres) > 8:
     msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
     print("Command line error: " + msg, file=sys.stderr)
     sys.exit(2)
 
+# Evaluate compatibility with other options
 if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
-    msg = "--box_center_off_reactive_res can be used only with one reactive" + os_linesep
+    msg = (
+        "--box_center_off_reactive_res can be used only with one reactive" + os_linesep
+    )
     msg += "residue, but %d reactive residues are set" % len(reactive_flexres_name)
     print("Command line error:" + msg, file=sys.stderr)
     sys.exit(2)
 
+# Process residue ID of nonreactive flexible residues
 nonreactive_flexres = set()
 for string in args.flexres:
     for res_id in parse_cmdline_res(string):
@@ -405,6 +427,8 @@ else:
         blunt_ends=blunt_ends,
     )
 
+# Use residue name in the input structure file to find reactive atom name
+# According to the mapping of residue name and reactive atom name
 for res_id in reactive_flexres:
     if res_id not in chorizo.residues:
         print("resid %s not found in input receptor file" % res_id)
@@ -419,13 +443,14 @@ for res_id in reactive_flexres:
             print("use --reactive_name or --reactive_name_specific" + os_linesep)
             sys.exit(2)
 
+# Print nonreactive and reactive flexible residues specs
 if len(nonreactive_flexres) + len(reactive_flexres) > 0:
     print()
     print("Flexible residues:")
     print("chain resnum is_reactive reactive_atom")
     string = "%5s%7s%12s%14s"
 
-    if len(nonreactive_flexres) > 0: 
+    if len(nonreactive_flexres) > 0:
         for res_id in nonreactive_flexres:
             chain, resnum = res_id.split(":")
             react_atom = ""
@@ -437,19 +462,31 @@ if len(nonreactive_flexres) + len(reactive_flexres) > 0:
             react_atom = reactive_flexres_name[res_id]
             print(string % (chain, resnum, True, react_atom))
 
+# Assign reactive atom types for atoms in reactive flexible residues
 reactive_prefix = 1
 for res_id in reactive_flexres:
     # get reactive atom types
     reactive_aname = reactive_flexres_name[res_id]
-    reactive_atomi = atom_name_to_molsetup_index(chorizo.residues[res_id], reactive_aname)
+    reactive_atomi = atom_name_to_molsetup_index(
+        chorizo.residues[res_id], reactive_aname
+    )
+    if reactive_atomi is None:
+        print(f"cannot find reactive atom name {reactive_aname} from residue {res_id} in input receptor file")
+        sys.exit(2)
     reactive_atypes = assign_reactive_types_by_index(chorizo.residues[res_id].molsetup, reactive_atomi)
     # set reactive atom types
     nr_atom = len(chorizo.residues[res_id].molsetup.atoms)
     for atom_index in range(nr_atom):
-        if chorizo.residues[res_id].molsetup.atoms[atom_index].atom_type != reactive_atypes[atom_index]:
-            chorizo.residues[res_id].molsetup.atoms[atom_index].atom_type = f"{reactive_prefix}{reactive_atypes[atom_index]}"
+        if (
+            chorizo.residues[res_id].molsetup.atoms[atom_index].atom_type
+            != reactive_atypes[atom_index]
+        ):
+            chorizo.residues[res_id].molsetup.atoms[
+                atom_index
+            ].atom_type = f"{reactive_prefix}{reactive_atypes[atom_index]}"
     reactive_prefix += 1
 
+# Combine nonreactive and reactive flexible residues into one set
 all_flexres = nonreactive_flexres.union(reactive_flexres)
 
 #  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
@@ -645,7 +682,7 @@ if not args.skip_gpf:
     gpf_string, npts = gridbox.get_gpf_string(
         box_center,
         box_size,
-        rigid_fn,
+        pathlib.Path(rigid_fn).name,
         rec_types,
         any_lig_base_types,
         ff_param_fname=ff_fn.name,
@@ -730,7 +767,7 @@ if len(reactive_flexres) > 0:
 
     # The maps block is to tell AutoDock-GPU the base types for the reactive types.
     # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
-    # lines in a single configuraton file simplifies the command line call.
+    # lines in a single configuration file simplifies the command line call.
     map_block = ""
     map_prefix = pathlib.Path(rigid_fn).with_suffix("").name
     all_types = []

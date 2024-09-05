@@ -39,7 +39,6 @@ def cmd_lineparser():
 args = cmd_lineparser()
 
 docking_results_filenames = args.docking_results_filename
-template_filename = args.template_filename
 output_filename = args.output_filename
 suffix_name = args.suffix_name
 only_cluster_leads = args.only_cluster_leads
