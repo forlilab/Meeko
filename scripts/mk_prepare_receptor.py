@@ -158,11 +158,11 @@ def get_args():
         action="store_true",
     )
     box_group.add_argument(
-        "--ligand",
-        help="Reference ligand file path: .sdf, .mol, .mol2, .pdb, and .pdbqt files accepted",
+        "--box_enveloping",
+        help="Box will envelop atoms in this file [.sdf .mol .mol2 .pdb .pdbqt]",
     )
     box_group.add_argument(
-        "--padding", help="padding around reference ligand [A]", type=float
+        "--padding", help="padding around atoms passed to --box_enveloping [A]", type=float
     )
 
     reactive_group = parser.add_argument_group("Reactive")
@@ -222,17 +222,18 @@ def get_args():
     if not args.skip_gpf:
 
         box_help = f"""
-    box size and box size must be set use one of the following three combinations:
+    either explcitly skip defining a search space with --skip_gpf, or
+    set box center and size with one of the following three combinations:
     1) --box_center and --box_size
     2) --box_center_off_reactive_res and --box_size
-    3) --ligand and --padding"""
+    3) --box_enveloping and --padding"""
 
         # Ensure correct number of box specs
         nr_boxcenter_specs = sum(
             [
                 (args.box_center is not None),
                 (args.box_center_off_reactive_res),
-                (args.ligand is not None),
+                (args.box_enveloping is not None),
             ]
         )
         nr_boxsize_specs = sum(
@@ -264,8 +265,8 @@ def get_args():
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
 
-        if (args.padding is None) != (args.ligand is None):
-            msg = f"--padding and --ligand must be used together. {box_help}"
+        if (args.padding is None) != (args.box_enveloping is None):
+            msg = f"--padding and --box_enveloping must be used together. {box_help}"
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
 
@@ -616,8 +617,8 @@ if not args.skip_gpf:
             box_centers.append(box_center)
         box_center = np.mean(box_centers, 0)
         box_size = args.box_size
-    elif args.ligand is not None:
-        ft = pathlib.Path(args.ligand).suffix
+    elif args.box_enveloping is not None:
+        ft = pathlib.Path(args.box_enveloping).suffix
         suppliers = {
             ".pdb": Chem.MolFromPDBFile,
             ".mol": Chem.MolFromMolFile,
@@ -627,17 +628,18 @@ if not args.skip_gpf:
         }
         if ft not in suppliers.keys():
             check(
-                success=False, error_msg=f"Given --ligand file type {ft} not readable!"
+                success=False,
+                error_msg=f"Given --box_enveloping file type {ft} not readable!"
             )
         elif ft != ".sdf" and ft != ".pdbqt":
-            ligmol = suppliers[ft](args.ligand, removeHs=False, sanitize=False)
+            ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)
         elif ft == ".sdf":
-            ligmol = suppliers[ft](args.ligand, removeHs=False, sanitize=False)[
+            ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)[
                 0
             ]  # assume we only want first molecule in file
         else:  # .pdbqt
             ligmol = RDKitMolCreate.from_pdbqt_mol(
-                PDBQTMolecule.from_file(args.ligand)
+                PDBQTMolecule.from_file(args.box_enveloping)
             )[
                 0
             ]  # assume we only want first molecule in file
