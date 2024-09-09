@@ -114,35 +114,65 @@ reactive_typer = ReactiveAtomTyper()
 get_reactive_atype = reactive_typer.get_reactive_atype
 
 
+def atom_name_to_molsetup_index(chorizo_residue, atom_name):
+    indices = []
+    for atom in chorizo_residue.raw_rdkit_mol.GetAtoms():
+        name = atom.GetPDBResidueInfo().GetName().strip()
+        if name == atom_name:
+            indices.append(atom.GetIdx())
+    if len(indices) > 1:
+        raise RuntimeError(f"multiple atoms matched query atom name {atom_name}")
+    if len(indices) == 0:
+        return None
+    index = indices[0]
+    index = chorizo_residue.mapidx_from_raw[index]
+    inv = {j: i for i, j in chorizo_residue.molsetup_mapidx.items()}
+    index = inv[index]
+    return index
+
+
+def assign_reactive_types_by_index(molsetup, reactive_atom_index, get_reactive_atype=get_reactive_atype):
+
+    atypes = {atom.index: atom.atom_type for atom in molsetup.atoms}
+
+    # type reactive atom
+    original_type = molsetup.get_atom_type(reactive_atom_index)
+    reactive_type = get_reactive_atype(original_type, reactive_order=1)
+    atypes[reactive_atom_index] = reactive_type
+
+    # type atoms 1 bond away from reactive atom
+    for index1 in molsetup.atoms[reactive_atom_index].graph:
+        if not molsetup.get_is_ignore(index1):
+            original_type = molsetup.get_atom_type(index1)
+            reactive_type = get_reactive_atype(original_type, reactive_order=2)
+            atypes[index1] = reactive_type
+
+        # type atoms 2 bonds away from reactive
+        for index2 in molsetup.atoms[index1].graph:
+            if index2 == reactive_atom_index:
+                continue
+            if not molsetup.get_is_ignore(index2):
+                original_type = molsetup.get_atom_type(index2)
+                reactive_type = get_reactive_atype(original_type, reactive_order=3)
+                atypes[index2] = reactive_type
+    return atypes
+
+
 def assign_reactive_types(
     molsetup, smarts, smarts_idx, get_reactive_atype=get_reactive_atype
 ):
 
     atype_dicts = []
     for atom_indices in molsetup.find_pattern(smarts):
-        atypes = {atom.index: atom.atom_type for atom in molsetup.atoms}
+
         reactive_atom_index = atom_indices[smarts_idx]
+        atypes = assign_reactive_types_by_index(
+            molsetup,
+            reactive_atom_index,
+            get_reactive_atype
+        )
 
-        # type reactive atom
-        original_type = molsetup.get_atom_type(reactive_atom_index)
-        reactive_type = get_reactive_atype(original_type, reactive_order=1)
-        atypes[reactive_atom_index] = reactive_type
 
-        # type atoms 1 bond away from reactive atom
-        for index1 in molsetup.atoms[reactive_atom_index].graph:
-            if not molsetup.get_is_ignore(index1):
-                original_type = molsetup.get_atom_type(index1)
-                reactive_type = get_reactive_atype(original_type, reactive_order=2)
-                atypes[index1] = reactive_type
-
-            # type atoms 2 bonds away from reactive
-            for index2 in molsetup.atoms[index1].graph:
-                if index2 == reactive_atom_index:
-                    continue
-                if not molsetup.get_is_ignore(index2):
-                    original_type = molsetup.get_atom_type(index2)
-                    reactive_type = get_reactive_atype(original_type, reactive_order=3)
-                    atypes[index2] = reactive_type
 
         atype_dicts.append(atypes)
 
