@@ -158,31 +158,31 @@ class UniqAtomParams:
     def add_molsetup(
         self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False
     ):
-        if "q" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
-            msg = '"q" and "atom_type" found in molsetup.atom_params'
+        if "charge" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
+            msg = '"charge" and "atom_type" found in molsetup.atom_params'
             msg += " but are hard-coded to store molsetup.charge and"
             msg += " molsetup.atom_type in the internal data structure"
             raise RuntimeError(msg)
         if atom_params is None:
             atom_params = molsetup.atom_params
         param_idxs = []
-        for atom_index, ignore in enumerate(molsetup.atom_ignore):
-            if ignore:
+        for atom in molsetup.atoms:
+            if atom.is_ignore:
                 param_idx = None
             else:
-                p = {k: v[atom_index] for (k, v) in molsetup.atom_params.items()}
+                p = {k: v[atom.index] for (k, v) in molsetup.atom_params.items()}
                 if add_atomic_nr:
                     if "atomic_nr" in p:
                         raise RuntimeError(
                             "trying to add atomic_nr but it's already in atom_params"
                         )
-                    p["atomic_nr"] = molsetup.atomic_num[atom_index]
+                    p["atomic_nr"] = atom.atomic_num
                 if add_atom_type:
                     if "atom_type" in p:
                         raise RuntimeError(
                             "trying to add atom_type but it's already in atom_params"
                         )
-                    p["atom_type"] = molsetup.atom_type[atom_index]
+                    p["atom_type"] = atom.atom_type
                 param_idx = self.add_parameter(p)
             param_idxs.append(param_idx)
         return param_idxs
