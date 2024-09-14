@@ -5,7 +5,6 @@ import json
 import math
 from os import linesep as os_linesep
 import pathlib
-import pickle
 import sys
 
 import numpy as np
@@ -18,6 +17,7 @@ from meeko import MoleculeSetup
 from meeko import ResidueChemTemplates
 from meeko import PDBQTWriterLegacy
 from meeko import LinkedRDKitChorizo
+from meeko import LinkedRDKitChorizoEncoder
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
@@ -28,10 +28,6 @@ import prody
 SUPPORTED_PRODY_FORMATS = {"pdb": prody.parsePDB, "cif": prody.parseMMCIF}
 
 path_to_this_script = pathlib.Path(__file__).resolve()
-
-# the following preservers RDKit Atom properties in the chorizo pickle
-Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AtomProps)  # |
-#                                Chem.PropertyPickleOptions.PrivateProps)
 
 pkg_dir = pathlib.Path(pkg_init_path).parents[0]
 templates_fn = str(pkg_dir / "data" / "residue_chem_templates.json")
@@ -116,7 +112,7 @@ def get_args():
         required=True,
         help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.",
     )
-    io_group.add_argument("-p", "--chorizo_pickle")
+    io_group.add_argument("-j", "--write_json", help="dump chorizo to JSON file", action="store_true")
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
@@ -498,9 +494,6 @@ for res_id in all_flexres:
 rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(
     chorizo
 )
-if args.chorizo_pickle is not None:
-    with open(args.chorizo_pickle, "wb") as f:
-        pickle.dump(chorizo, f)
 
 # suggested_config = {}
 # if len(chorizo.suggested_mutations):
@@ -544,6 +537,13 @@ any_lig_base_types = [
 outpath = pathlib.Path(args.output_filename)
 
 written_files_log = {"filename": [], "description": []}
+
+if args.write_json:
+    fn = str(outpath.with_suffix("")) + ".json"
+    with open(fn, "w") as f:
+        json.dump(chorizo, f, cls=LinkedRDKitChorizoEncoder)
+    written_files_log["filename"].append(fn)
+    written_files_log["description"].append("parameterized receptor object")
 
 if len(all_flexres) == 0:
     box_center = args.box_center
