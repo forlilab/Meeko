@@ -609,7 +609,7 @@ if __name__ == "__main__":
                     add_index_map=args.add_index_map,
                 )
                 if success:
-                    output(pdbqt_string, output_filename.replace(".pdbqt",""), (suffix,))
+                    output(pdbqt_string, name, (suffix,))
                     if args.verbose:
                         molsetup.show()
                 else:
