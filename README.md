@@ -2,6 +2,7 @@
 
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
 [![PyPI version fury.io](https://img.shields.io/badge/version-0.6.0--alpha.3-green.svg)](https://pypi.python.org/pypi/meeko/)
+[![Documentation Status](https://readthedocs.org/projects/meeko/badge/?version=readthedocs)](https://meeko.readthedocs.io/en/readthedocs/?badge=readthedocs)
 
 Meeko reads an RDKit molecule object and writes a PDBQT string (or file)
 for [AutoDock-Vina](https://github.com/ccsb-scripps/AutoDock-Vina)
