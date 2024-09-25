@@ -85,84 +85,8 @@ conda install -c conda-forge numpy scipy rdkit
 pip install prody # optional. pip recommended at http://prody.csb.pitt.edu/downloads/
 ```
 
-## Installation (from PyPI)
-```bash
-$ pip install meeko
-```
-If using conda, `pip` installs the package in the active environment.
-
-## Installation (from source)
-You'll get the develop branch, which may be ahead of the latest release.
-```bash
-$ git clone https://github.com/forlilab/Meeko
-$ cd Meeko
-$ pip install .
-```
-
-Optionally include `--editable`. Changes in the original package location
-take effect immediately without the need to run `pip install .` again.
-```bash
-$ pip install --editable .
-```
-
-
-## Examples using the command line scripts
-
-#### 1. make PDBQT files
-AutoDock-GPU and Vina read molecules in the PDBQT format. These can be prepared
-by Meeko from SD files, or from Mol2 files, but SDF is strongly preferred.
-```console
-mk_prepare_ligand.py -i molecule.sdf -o molecule.pdbqt
-mk_prepare_ligand.py -i multi_mol.sdf --multimol_outdir folder_for_pdbqt_files
-```
-
-#### 2. convert docking results to SDF
-AutoDock-GPU and Vina write docking results in the PDBQT format. The DLG output
-from AutoDock-GPU contains docked poses in PDBQT blocks.
-Meeko generates RDKit molecules from PDBQT files (or strings) using the SMILES
-string in the REMARK lines. The REMARK lines also have the mapping of atom indices
-between SMILES and PDBQT. SD files with docked coordinates are written
-from RDKit molecules.
-
-```console
-mk_export.py molecule.pdbqt -o molecule.sdf
-mk_export.py vina_results.pdbqt -o vina_results.sdf
-mk_export.py autodock-gpu_results.dlg -o autodock-gpu_results.sdf
-```
-
-Making RDKit molecules from SMILES is safer than guessing bond orders
-from the coordinates, specially because the PDBQT lacks hydrogens bonded
-to carbon. As an example, consider the following conversion, in which
-OpenBabel adds an extra double bond, not because it has a bad algorithm,
-but because this is a nearly impossible task.
-```console
-$ obabel -:"C1C=CCO1" -o pdbqt --gen3d | obabel -i pdbqt -o smi
-[C]1=[C][C]=[C]O1
-```
 
 ## Python tutorial
-
-#### 1. making PDBQT strings for Vina or for AutoDock-GPU
-
-```python
-from meeko import MoleculePreparation
-from meeko import PDBQTWriterLegacy
-from rdkit import Chem
-
-input_molecule_file = "example/BACE_macrocycle/BACE_4.sdf"
-
-# there is one molecule in this SD file, this loop iterates just once
-for mol in Chem.SDMolSupplier(input_molecule_file, removeHs=False):
-    preparator = MoleculePreparation()
-    mol_setups = preparator.prepare(mol)
-    for setup in mol_setups:
-        setup.show() # optional
-        pdbqt_string = PDBQTWriterLegacy.write_string(setup)
-```
-At this point, `pdbqt_string` can be written to a file for
-docking with AutoDock-GPU or Vina, or passed directly to Vina within Python
-using `set_ligand_from_string(pdbqt_string)`. For context, see
-[the docs on using Vina from Python](https://autodock-vina.readthedocs.io/en/latest/docking_python.html).
 
 
 #### 2. RDKit molecule from docking results

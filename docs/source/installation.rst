@@ -1,4 +1,5 @@
-.. _installation:
+Installation
+============
 
 We recommend using micromamba to manage Python environments and install Meeko.
 Other similar package managers also work, like mamba, conda, or miniconda.
@@ -13,7 +14,7 @@ From conda-forge
 
 .. code-block:: bash
 
-    $ micromamba install meeko
+    micromamba install meeko
 
 
 From PyPI
@@ -21,7 +22,7 @@ From PyPI
 
 .. code-block:: bash
 
-    $ pip install meeko
+    pip install meeko
 
 If using micromamba or a similar package manager, ``pip`` installs the package
 in the active environment.
@@ -36,10 +37,10 @@ of the reasons to use the develop branch, which requires installing from source.
 
 .. code-block:: bash
 
-    $ git clone https://github.com/forlilab/Meeko.git
-    $ cd Meeko
-    $ git checkout develop
-    $ pip install .
+    git clone https://github.com/forlilab/Meeko.git
+    cd Meeko
+    git checkout develop
+    pip install .
 
 Alternatively, it is possible to install with ``pip install -e .``. Then, changes to
 the source files take immediate effect without requiring further ``pip install .``.

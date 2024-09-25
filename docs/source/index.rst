@@ -36,7 +36,29 @@ that integrate AutoDock with other software that also uses RDKit.
 
 .. toctree::
    :maxdepth: 2
-   :caption: MANUAL
+   :caption: Getting started
 
    installation
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Ligand preparation
+
+   cli_lig_prep
+   In Python <py_lig_prep>
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Receptor preparation
+
+   cli_rec_prep
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Exporting results
+
+   cli_export_result
+   In Python <py_export_result>
+
+
 

@@ -10,9 +10,9 @@ sys.path.insert(0, os.path.abspath('../../meeko/'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'meeko'
-copyright = '2024, Forli lab'
-author = 'Forli lab'
-release = '0.6.0'
+copyright = '2024, Forli Lab at Scripps Research'
+#author = 'Forli lab'
+#release = '0.6.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
