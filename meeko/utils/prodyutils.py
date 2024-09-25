@@ -419,8 +419,7 @@ def _prody_residue_to_rdkit(
         if keep_charges is True:
             partial_charge = atom.GetPartialCharge()
             rdkit_atom.SetProp("_prody_charges", partial_charge)
-        # add atom to the molecule
-        mol.AddAtom(rdkit_atom)
+        
         # store atom coordinates
         x, y, z = atom.getCoords()
         conformer.SetAtomPosition(idx_rdkit, Point3D(x, y, z))
@@ -438,6 +437,9 @@ def _prody_residue_to_rdkit(
         res_info.SetSecondaryStructure(0)
         res_info.SetSegmentNumber(0)
         rdkit_atom.SetPDBResidueInfo(res_info)
+
+        # add atom to the molecule
+        mol.AddAtom(rdkit_atom)
         # bookkeeping
         idx_prody_to_rdkit[idx_prody] = idx_rdkit
         idx_rdkit_to_prody[idx_rdkit] = idx_prody
