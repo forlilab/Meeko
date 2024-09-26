@@ -24,6 +24,8 @@ extensions = [
     'sphinx.ext.intersphinx',
 ]
 
+html_logo = "images/raccoon.png"
+
 templates_path = ['_templates']
 exclude_patterns = []
 
