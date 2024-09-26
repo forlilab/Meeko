@@ -23,9 +23,15 @@ from meeko import get_reactive_config
 from meeko import gridbox
 from meeko import __file__ as pkg_init_path
 from rdkit import Chem
-import prody
 
-SUPPORTED_PRODY_FORMATS = {"pdb": prody.parsePDB, "cif": prody.parseMMCIF}
+try:
+    import prody
+except ImportError as import_error:
+    _prody_import_error = import_error
+    _got_prody = False
+else:
+    SUPPORTED_PRODY_FORMATS = {"pdb": prody.parsePDB, "cif": prody.parseMMCIF}
+    _got_prody = True
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
@@ -107,9 +113,14 @@ def get_args():
     io_group = parser.add_argument_group("Input/Output")
     io_group.add_argument(
         "--pdb",
-        help="deprecated, use --macromol, still here as non-prody option, no PDBQT",
+        help="non-prody option, reads PDB (not PDBQT)",
     )
-    io_group.add_argument("--macromol", help="PDB/mmCIF input file")
+    need_prody_msg = ""
+    # if prody is not installed, the help message is extended to tell
+    # the user how to install prody
+    if not _got_prody:
+        need_prody_msg = " which can be installed from PyPI or conda-forge."
+    io_group.add_argument("--macromol", help=f"read PDB/mmCIF input file with Prody{need_prody_msg}")
     io_group.add_argument(
         "-o",
         "--output_filename",
@@ -400,6 +411,11 @@ templates = ResidueChemTemplates.from_dict(res_chem_templates)
 print(f"{templates=}")
 # create chorizos
 if args.macromol is not None:
+    if not _got_prody:
+        print(_prody_import_error, file=sys.stderr)
+        print("option --macromol requires Prody, which is not installed.")
+        print("Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)")
+        sys.exit(2)
     ext = pathlib.Path(args.macromol).suffix[1:].lower()
     if ext in SUPPORTED_PRODY_FORMATS:
         parser = SUPPORTED_PRODY_FORMATS[ext]

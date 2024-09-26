@@ -23,10 +23,10 @@ try:
     from meeko import CovalentBuilder
 
     _prody_parsers = {"pdb": prody.parsePDB, "mmcif": prody.parseMMCIF}
-    warnings.warn("Prody not available, covalent docking won't work", ImportWarning)
-except:
+except ImportError as err:
     _has_prody = False
     _prody_parsers = {}
+    _prody_import_error = err
 else:
     _has_prody = True
 
@@ -239,7 +239,7 @@ def cmd_lineparser():
 
     need_prody_msg = ""
     if not _has_prody:
-        need_prody_msg = ". Needs Prody which is unavailable"
+        need_prody_msg = ". Needs Prody which can be installed from PyPI or conda-forge"
     covalent_group = parser.add_argument_group(
         "Covalent docking (tethered)%s" % (need_prody_msg)
     )
@@ -328,7 +328,11 @@ def cmd_lineparser():
         sys.exit(2)
     is_covalent = num_required_covalent_args == 3
     if is_covalent and not _has_prody:
-        raise ImportError("Covalent docking requires Prody which is not available")
+        msg = "Covalent docking requires Prody which is not installed." + os.linesep
+        msg += "Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)"
+        print(_prody_import_error, file=sys.stderr)
+        print(msg)
+        sys.exit(2)
     if min(args.tether_smarts_indices) < 1:
         print(
             "--tether_smarts_indices is 1-indexed, all values must be greater than zero",

@@ -9,18 +9,28 @@ from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
 from rdkit.Chem import rdMolInterchange
-from prody.atomic.atomgroup import AtomGroup
-from prody.atomic.selection import Selection
 
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetupEncoder
 from .utils.jsonutils import rdkit_mol_from_json
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
-from .utils.prodyutils import prody_to_rdkit, ALLOWED_PRODY_TYPES
 from .utils.pdbutils import PDBAtomInfo
 
 import numpy as np
+
+try:
+    import prody
+except ImportError as _prody_import_error:
+    ALLOWED_PRODY_TYPES = None
+    AtomGroup = None
+    Selection = None
+    def prody_to_rdkit(*args):
+        raise ImportError(_prody_import_error)
+else:
+    from .utils.prodyutils import prody_to_rdkit, ALLOWED_PRODY_TYPES
+    from prody.atomic.atomgroup import AtomGroup
+    from prody.atomic.selection import Selection
 
 
 logger = logging.getLogger(__name__)
