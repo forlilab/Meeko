@@ -102,7 +102,6 @@ def rdkit_to_prody(
 
 
 ALLOWED_PRODY_TYPES = Union[Selection, AtomGroup, Chain, Residue]
-ALLOWED_PRODY_HIER_TYPES = Union[Selection, AtomGroup, Chain]
 
 
 def prody_to_rdkit(
@@ -170,59 +169,7 @@ def prody_to_rdkit(
     Mol
         RDKit molecule
     """
-    # define the atom group to use (i.e. prody molecule)
-    # print(type(prody_obj), [type(x) for x in (Selection, Residue, Chain)])
-    # if type(prody_obj) in [type(x) for x in (Selection, Residue, Chain)]:
 
-    if isinstance(prody_obj, Residue):
-        function = _prody_residue_to_rdkit
-    else:
-        function = _prody_hierarchy_to_rdkit
-    return function(prody_obj, name, sanitize, keep_bonds, keep_charges)
-
-
-def _prody_hierarchy_to_rdkit(
-    prody_obj: ALLOWED_PRODY_HIER_TYPES,
-    name: str = "molecule",
-    sanitize: bool = True,
-    keep_bonds: bool = False,
-    keep_charges: bool = False,
-) -> Mol:
-    """
-    Specialized function to process ProDy objects with hierachical view (AtomGroup, selections, chains, segments)
-
-    There should be no need to call this function manually, and
-    `prody_to_rdkit` should be used instead.
-
-    Parameters
-    ----------
-    prody_obj : AtomGroup, Selection, Chain
-        This object can be any ProDy class that has a `getHierarchy()` method
-    name : str (default: "molecule")
-        Name of the new RDKit molecule (accessible via Mol.GetProperty("_Name"))
-    sanitize : bool (default: True)
-        perform the sanitization of the RDKit molecule prior to returning it;
-        any exception during this process will be raised as RDKit would do.
-    keep_bonds : bool (default: False)
-        use bonds defined in the ProDy object, instead of perceiving them with
-        RDKit using rdDetermineBonds.DetermineConnectivity()
-    keep_charges : bool (default: False)
-        use partial charges defined in the ProDy object; when True, partial
-        charges are stored as  "_prody_charges" property in the RDKit molecule
-
-    Returns
-    -------
-    Mol
-        RDKit molecul
-    """
-    if hasattr:
-        atom_group = prody_obj
-    else:
-        atom_group = prody_obj.getAtomGroup()
-    # if isinstance(prody_obj, AtomGroup):
-    #     atom_group = prody_obj
-    # else:
-    #     atom_group = prody_obj.getAtomGroup()
     atom_count = len(prody_obj)
     # create rdkit data
     rdmol = Chem.Mol()
@@ -233,182 +180,11 @@ def _prody_hierarchy_to_rdkit(
     idx_rdkit_to_prody = {}
     idx_rdkit = 0
 
-    # create prody hierarchy iterator
-    hierarchy = prody_obj.getHierView()
-
     # start molecule editing
     mol.BeginBatchEdit()
-    # iterate chains
-    for chain in hierarchy.iterChains():
-        chain_id = str(chain.getChid())
-        # iterate residues
-        for res in chain.iterResidues():
-            # create a new rdkit residue
-            rdkit_res = Chem.rdchem.AtomPDBResidueInfo()
-            # gather residue info
-            res_name = str(res.getResname())
-            # check if residuee name 8lin std aa
-            monomer_info = Chem.rdchem.AtomMonomerInfo()
-            # TODO define if heteroatom...
-            # if res_name in standard_aa or in standard_na:
-            #     monomer_type = Chem.rdchem.AtomMonomerType.PDBRESIDUE
-            # else:
-            #     monomer_type = Chem.rdchem.AtomMonomerType.OTHER
-            # monomer_info.SetMonomerType(monomer_type)
-            res_num = int(res.getResnum())
-            rdkit_res.SetName(res_name)
-            rdkit_res.SetResidueNumber(res_num)
-            # TODO this is where all residue properties can be saved
-            # TODO set this when coming from proteib
-            # iterate atoms
-            # https://sourceforge.net/p/rdkit/mailman/rdkit-discuss/thread/CAFk1J6MVwDjZky1b6jKJTp%3DVE9zB_jmuZfkNFx%3DZ9sAdsqcJAA%40mail.gmail.com/#msg36474923
-            for atom in res.iterAtoms():
-                # gather atom info
-                idx_prody = int(atom.getIndex())
-                atom_name = str(atom.getName())
-                element = atom.getData("element")
-                # f8x PDB quirks like Zn/ZN
-                if len(element) > 1:
-                    element = f"{element[0]}{element[1].lower()}"
-                atomic_num = periodic_table.GetAtomicNumber(element)
-                rdkit_atom = Chem.Atom(atomic_num)
-                # TODO check which property to use
-                if keep_charges is True:
-                    partial_charge = atom.GetPartialCharge()
-                    rdkit_atom.SetProp("_prody_charges", partial_charge)
-                # add atom to the molecule
-                mol.AddAtom(rdkit_atom)
-                # store atom coordinates
-                x, y, z = atom.getCoords()
-                conformer.SetAtomPosition(idx_rdkit, Point3D(x, y, z))
-                # pdb/residue info
-                # TODO fill values?
-                # TODO passibg values at constructor not working?
-                res_info = Chem.rdchem.AtomPDBResidueInfo()
-                res_info.SetResidueName(res_name)
-                res_info.SetName(atom_name)
-                res_info.SetResidueNumber(res_num)
-                res_info.SetChainId(chain_id)
-                res_info.SetInsertionCode("")
-                res_info.SetTempFactor(0.0)
-                res_info.SetIsHeteroAtom(False)
-                res_info.SetSecondaryStructure(0)
-                res_info.SetSegmentNumber(0)
-                rdkit_atom.SetPDBResidueInfo(res_info)
-                # bookkeeping
-                idx_prody_to_rdkit[idx_prody] = idx_rdkit
-                idx_rdkit_to_prody[idx_rdkit] = idx_prody
-                idx_rdkit += 1
-    # iterate and create bonds
-    if keep_bonds is True:
-        bonds = atom_group.getBonds()
-    else:
-        bonds = None
-    if bonds is not None:
-        for bond in bonds:
-            bond_indices = [int(x) for x in bond.getIndices()]
-            # bond with atoms outside this selection
-            if (
-                not bond_indices[0] in idx_rdkit_to_prody
-                or not bond_indices[1] in idx_rdkit_to_prody
-            ):
-                continue
-            # bond_type = bond_types[bond[-1]]
-            bond_order = 1
-            bond_type = _bondtypes[bond_order]
-            print("bonds", bond_indices, bond)
-            mol.AddBond(bond_indices[0], bond_indices[1], bond_type)
-    # finalize molecule changes
-    mol.CommitBatchEdit()
-    rdmol = mol.GetMol()
-    # add coordinates
-    rdmol.AddConformer(conformer, assignId=True)
-    # the molecule needs bonds, one way or another
-    if bonds is None:
-        rdDetermineBonds.DetermineConnectivity(rdmol)
-    # sanitize the molecule if necessary
-    # TODO before or after ond perception?
-    if sanitize:
-        Chem.SanitizeMol(rdmol)
-    # attach the bookkeeping to the molecule
-    rdmol._idx_prody_to_rdkit = idx_prody_to_rdkit
-    rdmol._idx_rdkit_to_prody = idx_rdkit_to_prody
-    return rdmol
-
-
-def _prody_residue_to_rdkit(
-    prody_res: Residue,
-    name: str = "molecule",
-    sanitize: bool = True,
-    keep_bonds: bool = False,
-    keep_charges: bool = False,
-) -> Mol:
-    """
-    Specialized function to process ProDy Residue objects that do not have
-    a hierachical view.
-
-    There should be no need to call this function manually, and
-    `prody_to_rdkit` should be used instead.
-
-    Parameters
-    ----------
-    prody_res : Residue
-        Prody Residue class
-    name : str (default: "molecule")
-        Name of the new RDKit molecule (accessible via Mol.GetProperty("_Name"))
-    sanitize : bool (default: True)
-        perform the sanitization of the RDKit molecule prior to returning it;
-        any exception during this process will be raised as RDKit would do.
-    keep_bonds : bool (default: False)
-        use bonds defined in the ProDy object, instead of perceiving them with
-        RDKit using rdDetermineBonds.DetermineConnectivity()
-    keep_charges : bool (default: False)
-        use partial charges defined in the ProDy object; when True, partial
-        charges are stored as  "_prody_charges" property in the RDKit molecule
-
-    Returns
-    -------
-    Mol
-        RDKit molecul
-    """
-    atom_count = len(prody_res)
-    atom_group = prody_res.getAtomGroup()
-    # create rdkit data
-    rdmol = Chem.Mol()
-    mol = Chem.EditableMol(rdmol)
-    conformer = Chem.Conformer(atom_count)
-    # initialize boookkeeping objects
-    idx_prody_to_rdkit = {}
-    idx_rdkit_to_prody = {}
-    idx_rdkit = 0
-
-    # start molecule editing
-    mol.BeginBatchEdit()
-    # get chain info
-    chain_id = str(prody_res.getChid())
-    # create a new rdkit residue
-    rdkit_res = Chem.rdchem.AtomPDBResidueInfo()
-    # gather residue info
-    res_name = str(prody_res.getResname())
-    # check if residuee name 8lin std aa
-    monomer_info = Chem.rdchem.AtomMonomerInfo()
-    # TODO define if heteroatom...
-    # if res_name in standard_aa or in standard_na:
-    #     monomer_type = Chem.rdchem.AtomMonomerType.PDBRESIDUE
-    # else:
-    #     monomer_type = Chem.rdchem.AtomMonomerType.OTHER
-    # monomer_info.SetMonomerType(monomer_type)
-    res_num = int(prody_res.getResnum())
-    rdkit_res.SetName(res_name)
-    rdkit_res.SetResidueNumber(res_num)
-    # TODO this is where all residue properties can be saved
-    # TODO set this when coming from proteib
-    # iterate atoms
-    # https://sourceforge.net/p/rdkit/mailman/rdkit-discuss/thread/CAFk1J6MVwDjZky1b6jKJTp%3DVE9zB_jmuZfkNFx%3DZ9sAdsqcJAA%40mail.gmail.com/#msg36474923
-    for atom in prody_res.iterAtoms():
+    for atom in prody_obj:
         # gather atom info
         idx_prody = int(atom.getIndex())
-        atom_name = str(atom.getName())
         element = atom.getData("element")
         # f8x PDB quirks like Zn/ZN
         if len(element) > 1:
@@ -419,34 +195,29 @@ def _prody_residue_to_rdkit(
         if keep_charges is True:
             partial_charge = atom.GetPartialCharge()
             rdkit_atom.SetProp("_prody_charges", partial_charge)
-        
-        # store atom coordinates
         x, y, z = atom.getCoords()
         conformer.SetAtomPosition(idx_rdkit, Point3D(x, y, z))
-        # pdb/residue info
-        # TODO fill values?
-        # TODO passibg values at constructor not working?
         res_info = Chem.rdchem.AtomPDBResidueInfo()
-        res_info.SetResidueName(res_name)
-        res_info.SetName(atom_name)
-        res_info.SetResidueNumber(res_num)
-        res_info.SetChainId(chain_id)
+        res_info.SetResidueName(str(atom.getResname()))
+        res_info.SetName(str(atom.getName()))
+        res_info.SetResidueNumber(int(atom.getResnum()))
+        res_info.SetChainId(str(atom.getChid()))
         res_info.SetInsertionCode("")
         res_info.SetTempFactor(0.0)
         res_info.SetIsHeteroAtom(False)
         res_info.SetSecondaryStructure(0)
         res_info.SetSegmentNumber(0)
         rdkit_atom.SetPDBResidueInfo(res_info)
-
-        # add atom to the molecule
         mol.AddAtom(rdkit_atom)
-        # bookkeeping
         idx_prody_to_rdkit[idx_prody] = idx_rdkit
         idx_rdkit_to_prody[idx_rdkit] = idx_prody
         idx_rdkit += 1
     # iterate and create bonds
     if keep_bonds is True:
-        bonds = atom_group.getBonds()
+        if isinstance(prody_obj, AtomGroup):
+            bonds = prody_obj.getBonds()
+        else:
+            bonds = prody_obj.getAtomGroup().getBonds()
     else:
         bonds = None
     if bonds is not None:
