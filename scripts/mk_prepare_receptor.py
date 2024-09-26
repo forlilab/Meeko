@@ -26,7 +26,8 @@ from rdkit import Chem
 
 try:
     import prody
-except ImportError as _prody_import_error:
+except ImportError as import_error:
+    _prody_import_error = import_error
     _got_prody = False
 else:
     SUPPORTED_PRODY_FORMATS = {"pdb": prody.parsePDB, "cif": prody.parseMMCIF}
