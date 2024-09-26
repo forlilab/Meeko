@@ -218,7 +218,12 @@ def get_args():
         "--pdb",
         help="non-prody option, reads PDB (not PDBQT)",
     )
-    io_group.add_argument("--macromol", help="read PDB/mmCIF input file with Prody")
+    need_prody_msg = ""
+    # if prody is not installed, the help message is extended to tell
+    # the user how to install prody
+    if not _got_prody:
+        need_prody_msg = " which can be installed from PyPI or conda-forge."
+    io_group.add_argument("--macromol", help=f"read PDB/mmCIF input file with Prody{need_prody_msg}")
     io_group.add_argument(
         "-o",
         "--output_filename",
@@ -546,8 +551,9 @@ print(f"{templates=}")
 # create chorizos
 if args.macromol is not None:
     if not _got_prody:
-        print("option --macromol requires prody, which is not installed")
         print(_prody_import_error, file=sys.stderr)
+        print("option --macromol requires Prody, which is not installed.")
+        print("Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)")
         sys.exit(2)
     ext = pathlib.Path(args.macromol).suffix[1:].lower()
     if ext in SUPPORTED_PRODY_FORMATS:
