@@ -1463,6 +1463,10 @@ class LinkedRDKitChorizo:
             pdbmol = Chem.MolFromPDBBlock(
                 pdb_block, removeHs=False
             )  # TODO RDKit ignores AltLoc ?
+
+            if not pdbmol:
+                raise RuntimeError(f"An error occurred while trying to build pdb mol for {reskey} {resname}")
+
             resname = list(reskey_to_resname[reskey])[
                 0
             ]  # already verified length of set is 1
