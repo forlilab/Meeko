@@ -1464,7 +1464,8 @@ class LinkedRDKitChorizo:
                 pdb_block, removeHs=False
             )  # TODO RDKit ignores AltLoc ?
 
-            if not pdbmol:
+            # MolFromPDBBlock returns None on failure
+            if pdbmol is None: 
                 raise RuntimeError(f"An error occurred while trying to build pdb mol for {reskey} {resname}")
 
             resname = list(reskey_to_resname[reskey])[
