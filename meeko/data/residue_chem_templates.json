@@ -121,7 +121,7 @@
 		"p": {
 			"smiles": "P(=O)([O-])[O-]",
 			"atom_name": [ "P", "OP1", "OP2", "OP3"],
-			"link_labels": {"0": "3-prime"}
+			"link_labels": {"0": "5-prime"}
 		},
 		"A_": {
 			"smiles": "[H]OC1([H])C([H])(N2C([H])=NC3=C2N=C([H])N=C3N([H])[H])OC([H])(C([H])([H])OP(=O)([O-])[O-])C1([H])O[H]",
