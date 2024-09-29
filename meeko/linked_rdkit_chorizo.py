@@ -130,10 +130,10 @@ def find_inter_mols_bonds(mols_dict):
         16: 1.05,
         17: 1.02,
         # 19: 2.03,
-        # 20: 1.76,
+        20: 0.00,
         # 24: 1.39,
         25: 0.00,  # hack to avoid bonds with metals
-        # 26: 1.32,
+        26: 0.00,
         30: 0.00,  # hack to avoid bonds with metals
         # 34: 1.20,
         35: 1.20,
