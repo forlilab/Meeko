@@ -1236,23 +1236,30 @@ class LinkedRDKitChorizo:
                 atom.GetIdx(): atom.GetIdx() for atom in padded_mol.GetAtoms()
             }
             for atom_index, link_label in residue.link_labels.items():
-                adjacent_mol = None
+                adjacent_mol, adjacent_resname = [None, None]
                 adjacent_atom_index = None
                 for (r1_id, r2_id), (i1, i2) in bonds.items():
                     if r1_id == residue_id and i1 == atom_index:
-                        adjacent_mol = residues[r2_id].rdkit_mol
+                        adjacent_mol, adjacent_resname = [residues[r2_id].rdkit_mol, residues[r2_id].input_resname]
                         adjacent_atom_index = i2
                         bond_use_count[(r1_id, r2_id)] += 1
                         break
                     elif r2_id == residue_id and i2 == atom_index:
-                        adjacent_mol = residues[r1_id].rdkit_mol
+                        adjacent_mol, adjacent_resname = [residues[r1_id].rdkit_mol, residues[r1_id].input_resname]
                         adjacent_atom_index = i1
                         bond_use_count[(r1_id, r2_id)] += 1
                         break
-
-                padded_mol, mapidx = padders[link_label](
+                if adjacent_resname == 'NME': 
+                    capping_rxn_smarts = "[C:1](=[O:2])>>[C:11][N:12][C:1](=[O:2])"
+                    capping_adjacent_res_smarts = "[C:11][N:12]"
+                    capping = ResiduePadder(capping_rxn_smarts, capping_adjacent_res_smarts)
+                    padded_mol, mapidx = capping(
                     padded_mol, adjacent_mol, atom_index, adjacent_atom_index
                 )
+                else:
+                    padded_mol, mapidx = padders[link_label](
+                        padded_mol, adjacent_mol, atom_index, adjacent_atom_index
+                    )
 
                 tmp = {}
                 for i, j in enumerate(mapidx):

@@ -44,6 +44,10 @@
 	    "rxn_smarts": "[C:1](=[O:2])[C:3][N:4]>>[C:1](=[O:2])[C:3][N:4][C:11](=[O:12])[C:13]",
 	    "adjacent_res_smarts": "[C:11](=[O:12])[C:13][N]"
 	},
+	"NME-N-term": {
+	    "rxn_smarts": "[C:3][N:4]>>[C:3][N:4][C:11](=[O:12])[C:13]",
+	    "adjacent_res_smarts": "[C:11](=[O:12])[C:13][N]"
+	},
 	"C-term": {
 	    "rxn_smarts": "[C:1](=[O:2])[C:3][N:4]>>[C:11][N:12][C:1](=[O:2])[C:3][N:4]",
 	    "adjacent_res_smarts": "[C](=O)[C:11][N:12]"
@@ -58,7 +62,7 @@
     	"NME": {
     	    "smiles": "C([H])([H])([H])N[H]",
     	    "atom_name": ["CH3", "HH31", "HH32", "HH33", "N", "H"],
-    	    "link_labels": {"4": "N-term"}
+    	    "link_labels": {"4": "NME-N-term"}
     	},
     	"ACE": {
     	    "smiles": "C(=O)C([H])([H])[H]",
