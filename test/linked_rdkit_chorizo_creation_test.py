@@ -184,7 +184,7 @@ def test_AHHY_mutate_residues():
         set_template=set_template,
         blunt_ends=[("A:1", 0)],
     )
-    assert len(chorizo.residues) == 4
+    assert len(chorizo.residues) == 3
     assert len(chorizo.get_ignored_residues()) == 0
     assert len(chorizo.get_valid_residues()) == 3
 

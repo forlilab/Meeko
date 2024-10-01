@@ -479,7 +479,7 @@ def _delete_residues(res_to_delete, raw_input_mols):
 
     Parameters
     ----------
-    res_to_delete: list (str)
+    res_to_delete: list (str) or None
         residue IDs to delete in format <chain>:<resnum><icode>
     raw_input_mols: dict (str -> RDKit mol)
         keys are residue IDs
@@ -490,6 +490,8 @@ def _delete_residues(res_to_delete, raw_input_mols):
     (modifies raw_input_mols in-place)
 
     """
+    if res_to_delete is None:
+        return
     missing = set()
     for res in res_to_delete:
         if res not in raw_input_mols:
