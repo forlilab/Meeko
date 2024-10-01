@@ -96,7 +96,6 @@ def test_AHHY_all_static_residues():
     assert len(chorizo.residues) == 4
     assert len(chorizo.get_ignored_residues()) == 0
     assert len(chorizo.get_valid_residues()) == 4
-    assert len(chorizo.get_user_deleted_residues()) == 0
     assert chorizo.residues["A:1"].residue_template_key == "ALA"
     assert chorizo.residues["A:2"].residue_template_key == "HID"
     assert chorizo.residues["A:3"].residue_template_key == "HIE"
@@ -148,7 +147,6 @@ def test_just_three_padded_mol():
     assert len(chorizo.residues) == 3
     assert len(chorizo.get_ignored_residues()) == 0
     assert len(chorizo.get_valid_residues()) == 3
-    assert len(chorizo.get_user_deleted_residues()) == 0
 
     assert chorizo.residues[":15"].residue_template_key == "NMET"
     assert chorizo.residues[":16"].residue_template_key == "SER"
@@ -189,8 +187,6 @@ def test_AHHY_mutate_residues():
     assert len(chorizo.residues) == 4
     assert len(chorizo.get_ignored_residues()) == 0
     assert len(chorizo.get_valid_residues()) == 3
-    assert len(chorizo.get_user_deleted_residues()) == 1
-    assert chorizo.residues["A:4"].user_deleted
 
     assert chorizo.residues["A:1"].residue_template_key == "ALA"
     assert chorizo.residues["A:2"].residue_template_key == "HIP"
@@ -220,7 +216,6 @@ def test_residue_missing_atoms():
         blunt_ends=[("A:1", 0), ("A:1", 2)],
     )
     assert len(chorizo.get_valid_residues()) == 0
-    assert len(chorizo.get_user_deleted_residues()) == 0
     assert len(chorizo.residues) == 1
     assert len(chorizo.get_ignored_residues()) == 1
 

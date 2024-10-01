@@ -608,7 +608,6 @@ def check_residue_equality(decoded_obj: ChorizoResidue, starting_obj: ChorizoRes
     # Bools
     assert decoded_obj.is_flexres_atom == starting_obj.is_flexres_atom
     assert decoded_obj.is_movable == starting_obj.is_movable
-    assert decoded_obj.user_deleted == starting_obj.user_deleted
     return
 
 

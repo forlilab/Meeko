@@ -131,7 +131,7 @@ def get_args():
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
-    config_group.add_argument("--delete_residues", help='e.g. \'["A:350", "B:17"]\'')
+    config_group.add_argument("--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("--blunt_ends", help="e.g. A:123,200=2,A:1=0")
     config_group.add_argument("--chorizo_config", help="[.json]")
     config_group.add_argument("--add_templates", help="[.json]")
@@ -382,7 +382,7 @@ if args.blunt_ends is not None:
     j = [(k, int(v)) for k, v in j.items()]
     blunt_ends.extend(j)
 if args.delete_residues is not None:
-    del_res.extend(json.loads(args.delete_residues))
+    del_res.extend(parse_cmdline_res(args.delete_residues))
 if args.mk_config is not None:
     with open(args.mk_config) as f:
         mk_config = json.load(f)
@@ -506,9 +506,6 @@ for res_id in reactive_flexres:
 # Combine nonreactive and reactive flexible residues into one set
 all_flexres = nonreactive_flexres.union(reactive_flexres)
 
-#  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
-#                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
-
 for res_id in all_flexres:
     chorizo.flexibilize_sidechain(res_id, mk_prep)
 rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(
@@ -517,20 +514,6 @@ rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo
 if args.chorizo_pickle is not None:
     with open(args.chorizo_pickle, "wb") as f:
         pickle.dump(chorizo, f)
-
-# suggested_config = {}
-# if len(chorizo.suggested_mutations):
-#    suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
-
-# if len(chorizo.get_ignored_residues()) > 0:
-#    removed_residues = chorizo.get_ignored_residues()
-#    print("Automatically deleted %d residues" % len(removed_residues))
-#    print(json.dumps(list(removed_residues.keys()), indent=4))
-#    suggested_config["deleted_residues"] = removed_residues.copy()
-
-# rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
-# ok, err = receptor.assign_types_charges()
-# check(ok, err)
 
 pdbqt = {
     "rigid": rigid_pdbqt,
@@ -587,14 +570,6 @@ written_files_log["filename"].append(rigid_fn)
 written_files_log["description"].append("static (i.e., rigid) receptor input file")
 with open(rigid_fn, "w") as f:
     f.write(pdbqt["rigid"])
-
-# if len(suggested_config):
-#    suggested_fn = str(outpath.with_suffix("")) + "_suggested-config.json"
-#    written_files_log["filename"].append(suggested_fn)
-#    written_files_log["description"].append("log of automated decisions for user inspection")
-#    with open(suggested_fn, "w") as f:
-#        print(suggested_config)
-#        json.dump(list(suggested_config.keys()), f)
 
 # GPF for autogrid4
 if not args.skip_gpf:
