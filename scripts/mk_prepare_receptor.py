@@ -382,7 +382,7 @@ if args.blunt_ends is not None:
     j = [(k, int(v)) for k, v in j.items()]
     blunt_ends.extend(j)
 if args.delete_residues is not None:
-    del_res.update(json.loads(args.delete_residues))
+    del_res.extend(json.loads(args.delete_residues))
 if args.mk_config is not None:
     with open(args.mk_config) as f:
         mk_config = json.load(f)
