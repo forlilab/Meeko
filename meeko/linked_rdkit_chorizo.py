@@ -1871,7 +1871,23 @@ class ResiduePadder:
             hit = self._check_and_map_adjacent_mol(adjacent_mol, adjacent_required_atom_index)
         
         # Get padded mol and index map from the rxn
-        padded_mol, idxmap = react_and_map((target_mol,), self.rxn, target_required_atom_index)
+        outcomes = react_and_map((target_mol,), self.rxn)
+
+        # Filter outcomes by target_required_atom_index
+        if target_required_atom_index is not None:
+            outcomes = [
+                (product, index_map)
+                for (product, index_map) in outcomes 
+                if target_required_atom_index in index_map["atom_idx"] 
+            ]
+
+        # Ensure single outcome
+        if len(outcomes) == 0:
+            raise RuntimeError(f"No passing outcomes")
+        elif len(outcomes) > 1:
+            raise RuntimeError(f"Multiple passing outcomes?")
+        padded_mol, idxmap = outcomes[0]
+
         padding_heavy_atoms = [
             i for i, j in enumerate(idxmap["atom_idx"])
             if j is None and padded_mol.GetAtomWithIdx(i).GetAtomicNum() != 1
@@ -1908,19 +1924,27 @@ class ResiduePadder:
         """
         if self.adjacent_smartsmol is None:
             raise RuntimeError("adjacent_res_smarts must be initialized to support adjacent_mol.")
-        
-        self.adjacent_smartsmol_mapidx = {
-            atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
-            for atom in self.adjacent_smartsmol.GetAtoms() if atom.HasProp("molAtomMapNumber")
-        }
 
         hits = adjacent_mol.GetSubstructMatches(self.adjacent_smartsmol)
         if adjacent_required_atom_index is not None:
             hits = [hit for hit in hits if adjacent_required_atom_index in hit]
             if len(hits) == 0:
-                raise RuntimeError(f"adjacent_mol doesn't contain adjacent_smartsmol.")
+                print("!!! FALL BACK for ADJ MOL !!!")
+                self.adjacent_smartsmol = remove_unmapped_atoms_from_mol(self.adjacent_smartsmol)
+                hits = adjacent_mol.GetSubstructMatches(self.adjacent_smartsmol)
+                hits = [hit for hit in hits if adjacent_required_atom_index in hit]
+                if len(hits) == 0:
+                    raise RuntimeError(f"adjacent_mol doesn't contain adjacent_smartsmol.")
+                elif len(hits) > 1:
+                    raise RuntimeError(f"adjacent_mol has multiple matches for adjacent_smartsmol.")
             elif len(hits) > 1:
-                raise RuntimeError(f"adjacent_mol has multiple matches for adjacent_smartsmol.")
+                raise RuntimeError(f"adjacent_mol has multiple matches for adjacent_smartsmol.")   
+
+        self.adjacent_smartsmol_mapidx = {
+            atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
+            for atom in self.adjacent_smartsmol.GetAtoms() if atom.HasProp("molAtomMapNumber")
+        }
+
         return hits[0]
     
     def _check_target_mol(self, target_mol):
@@ -1930,7 +1954,12 @@ class ResiduePadder:
         if target_mol.GetSubstructMatches(self.rxn.GetReactantTemplate(0)):
             return
         else:
-            raise RuntimeError(f"target_mol does not contain the expected reactant.")
+            print("!!! FALL BACK for TAR MOL !!!")
+            self.rxn = remove_unmapped_atoms_from_reaction(self.rxn)
+            if target_mol.GetSubstructMatches(self.rxn.GetReactantTemplate(0)):
+                return
+            else:
+                raise RuntimeError(f"target_mol does not contain the expected reactant.")
 
     @classmethod
     def from_json(cls, string):
@@ -1939,6 +1968,32 @@ class ResiduePadder:
 
     def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)
+
+
+def remove_unmapped_atoms_from_mol(mol):
+    """Remove unmapped atoms from a molecule."""
+    # Get all atoms and their mapping numbers
+    atoms_to_remove = []
+    for atom in mol.GetAtoms():
+        if not atom.HasProp("molAtomMapNumber"):
+            atoms_to_remove.append(atom.GetIdx())
+
+    # Remove unmapped atoms
+    if len(atoms_to_remove) > 0:
+        mol = Chem.RWMol(mol)
+        for idx in sorted(atoms_to_remove, reverse=True):
+            mol.RemoveAtom(idx)
+
+    return mol.GetMol()
+
+def remove_unmapped_atoms_from_reaction(reaction):
+    """Remove unmapped atoms from both reactants and products in a reaction SMARTS."""
+    # Assumes single reactant and single product
+    reactant = remove_unmapped_atoms_from_mol(reaction.GetReactantTemplate(0))
+    product = remove_unmapped_atoms_from_mol(reaction.GetProductTemplate(0))
+    rxn_smarts = f"{Chem.MolToSmarts(reactant)}>>{Chem.MolToSmarts(product)}"
+ 
+    return rdChemReactions.ReactionFromSmarts(rxn_smarts)
 
 
 class ResidueTemplate:

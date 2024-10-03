@@ -91,7 +91,7 @@ class Mol2MolSupplier:
         return mol
 
 
-def react_and_map(reactants: tuple[Chem.Mol], rxn: rdChemReactions.ChemicalReaction, target_required_atom_index = None):
+def react_and_map(reactants: tuple[Chem.Mol], rxn: rdChemReactions.ChemicalReaction):
     """run reaction and keep track of atom indices from reagents to products"""
 
     # Prepare for multiple possible outcomes resulted from multiple matched reactive sites in reactant
@@ -115,18 +115,4 @@ def react_and_map(reactants: tuple[Chem.Mol], rxn: rdChemReactions.ChemicalReact
         index_map = {"atom_idx": atom_idxmap, "new_atom_label": new_atom_label}
         outcomes.append((product, index_map))
 
-    # Filter outcomes by target_required_atom_index
-    if target_required_atom_index is not None:
-        outcomes = [
-            (product, index_map)
-            for (product, index_map) in outcomes 
-            if target_required_atom_index in index_map["atom_idx"] 
-        ]
-
-    # Ensure single outcome
-    if len(outcomes) == 0:
-        raise RuntimeError(f"No passing outcomes")
-    elif len(outcomes) > 1:
-        raise RuntimeError(f"Multiple passing outcomes?")
-
-    return outcomes[0]
+    return outcomes
