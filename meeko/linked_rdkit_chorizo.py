@@ -1818,6 +1818,16 @@ class ResiduePadder:
 
         # Ensure adjacent_res_smarts is None or a valid SMARTS        
         self.adjacent_smartsmol = self._initialize_adj_smartsmol(adjacent_res_smarts)
+
+        # Fill in adjacent_smartsmol_mapidx
+        if self.adjacent_smartsmol is None:
+            self.adjacent_smartsmol_mapidx = None
+        else:
+            self.adjacent_smartsmol_mapidx = {}
+            for atom in self.adjacent_smartsmol.GetAtoms():
+                if atom.HasProp("molAtomMapNumber"):
+                    j = atom.GetIntProp("molAtomMapNumber")
+                    self.adjacent_smartsmol_mapidx[j] = atom.GetIdx()
         
         # Ensure the atom mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
         is_ok, padding_ids, adjacent_ids = self._check_adj_smarts(self.rxn, self.adjacent_smartsmol)
@@ -1874,20 +1884,21 @@ class ResiduePadder:
         # labels have been checked upstream
 
         # Ensure target_mol contains self.rxn's reactant
-        if not self._check_target_mol(target_mol):
+        if self._check_target_mol(target_mol):
+            rxn = self.rxn
+        else:
+            print("!!! FALL BACK for TAR MOL !!!")
             rxn = remove_unmapped_atoms_from_reaction(self.rxn)
             if not target_mol.GetSubstructMatches(rxn.GetReactantTemplate(0)):
                 raise RuntimeError(f"target_mol does not contain the expected reactant.")
-        else:
-            rxn = self.rxn
-    
+        
         # Get adjacent_mol's reacting part that contains adjacent_required_atom_index
         if adjacent_mol is not None:
-            if not self._check_adjacent_mol(adjacent_mol, adjacent_required_atom_index):
+            if self._check_adjacent_mol(adjacent_mol, adjacent_required_atom_index):
+                adjacent_smartsmol = self.adjacent_smartsmol
+            else:
                 print("!!! FALL BACK for ADJ MOL !!!")
                 adjacent_smartsmol = remove_unmapped_atoms_from_mol(self.adjacent_smartsmol)
-            else:
-                adjacent_smartsmol = self.adjacent_smartsmol
             hits = adjacent_mol.GetSubstructMatches(adjacent_smartsmol)
             if len(hits) == 0:
                     raise RuntimeError(f"adjacent_mol doesn't contain adjacent_smartsmol.")
@@ -1899,6 +1910,7 @@ class ResiduePadder:
                 atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
                 for atom in adjacent_smartsmol.GetAtoms() if atom.HasProp("molAtomMapNumber")
                 }
+            print("adjacent_smartsmol_mapidx:", adjacent_smartsmol_mapidx)
 
         # Get padded mol and index map from the rxn
         outcomes = react_and_map((target_mol,), rxn)
