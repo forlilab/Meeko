@@ -657,6 +657,8 @@ class LinkedRDKitChorizo:
             residue = self.residues[residue_id]
             residue.padded_mol = padded_mol
             residue.molsetup_mapidx = mapidx_from_pad
+            print(residue_id, residue.input_resname, Chem.MolToSmiles(padded_mol))
+            Chem.MolToMolFile(padded_mol, f"/Users/amyhe/Downloads/{residue_id}.sdf")
 
         if mk_prep is not None:
             self.parameterize(mk_prep)
@@ -1212,13 +1214,9 @@ class LinkedRDKitChorizo:
                     adjacent_resname = residues[adjacent_rid].input_resname
                 
                 print(link_label, residue_id, residue.input_resname, adjacent_rid, adjacent_resname)
-                print("rxn smarts:", rdChemReactions.ReactionToSmarts(padders[link_label].rxn))
-                print("BEFORE:", Chem.MolToSmiles(padded_mol))
                 padded_mol, mapidx = padders[link_label](
                     padded_mol, adjacent_mol, atom_index, adjacent_atom_index
                 )
-                print("AFTER:", Chem.MolToSmiles(padded_mol))
-                # XXX
 
                 tmp = {}
                 for i, j in enumerate(mapidx):
@@ -1253,7 +1251,7 @@ class LinkedRDKitChorizo:
                 # can invert chirality in 3D positions
 
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
-            Chem.MolToMolFile(padded_mol, f"/Users/amyhe/Downloads/{residue_id}.sdf")
+            # XXX
                 
 
         # verify that all bonds resulted in padding
@@ -1934,16 +1932,13 @@ class ResiduePadder:
         if len(outcomes) == 0:
             raise RuntimeError(f"No passing outcomes")
         elif len(outcomes) > 1:
-            print([Chem.MolToSmiles(o[0]) for o in outcomes])
             raise RuntimeError(f"Multiple passing outcomes?")
         padded_mol, idxmap = outcomes[0]
-        print(idxmap["atom_idx"])
 
         padding_heavy_atoms = [
             i for i, j in enumerate(idxmap["atom_idx"])
             if j is None and padded_mol.GetAtomWithIdx(i).GetAtomicNum() != 1
         ]
-        print("padding_heavy_atoms:", padding_heavy_atoms)
         mapidx = idxmap["atom_idx"]
 
         # Add Hs to padded_mol and update mapidx
@@ -1961,13 +1956,14 @@ class ResiduePadder:
                 j = atom.GetIntProp("molAtomMapNumber")
                 k = idxmap["new_atom_label"].index(j)
                 l = adjacent_smartsmol_mapidx[j]
-                print(k, adjacent_coords[hit[l]])
                 padded_mol.GetConformer().SetAtomPosition(k, adjacent_coords[hit[l]])
             padded_mol.UpdatePropertyCache()  # avoids getNumImplicitHs() called without preceding call to calcImplicitValence()
             Chem.SanitizeMol(padded_mol)  # got crooked Hs without this
             padded_h = Chem.AddHs(
                 padded_mol, onlyOnAtoms=padding_heavy_atoms, addCoords=True
             )
+        print(Chem.MolToSmiles(padded_h))
+        print("mapidx:", mapidx)
         return padded_h, mapidx
     
     def _check_adjacent_mol(self, adjacent_mol, adjacent_required_atom_index):
