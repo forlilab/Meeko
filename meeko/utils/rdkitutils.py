@@ -1,4 +1,5 @@
 from rdkit import Chem
+from rdkit.Chem import rdChemReactions
 from .utils import mini_periodic_table
 from .pdbutils import PDBAtomInfo
 
@@ -90,66 +91,42 @@ class Mol2MolSupplier:
         return mol
 
 
-def react_and_map(reactants, rxn):
+def react_and_map(reactants: tuple[Chem.Mol], rxn: rdChemReactions.ChemicalReaction, target_required_atom_index = None):
     """run reaction and keep track of atom indices from reagents to products"""
 
-    # https://github.com/rdkit/rdkit/discussions/4327#discussioncomment-998612
+    # Prepare for multiple possible outcomes resulted from multiple matched reactive sites in reactant
+    outcomes = []
+    for products in rxn.RunReactants(reactants): 
+        # Assumes single product 
+        product = products[0]
+        # For each atom, get react_atom_idx if they were in reactant
+        atom_idxmap = [
+            atom.GetIntProp("react_atom_idx") if atom.HasProp("react_atom_idx")
+            else None
+            for atom in product.GetAtoms()
+        ]
+        # For each atom, get the rxn mapping number if the were added in the rxn
+        new_atom_label = [
+            atom.GetIntProp("old_mapno") if atom.HasProp("old_mapno") and not atom.HasProp("react_atom_idx")
+            else None
+            for atom in product.GetAtoms()
+        ]
+        # Collect product and index_map
+        index_map = {"atom_idx": atom_idxmap, "new_atom_label": new_atom_label}
+        outcomes.append((product, index_map))
 
-    # keep track of the reactant that each atom belongs to
-    for i, reactant in enumerate(reactants):
-        for atom in reactant.GetAtoms():
-            atom.SetIntProp("reactant_idx", i)
+    # Filter outcomes by target_required_atom_index
+    if target_required_atom_index is not None:
+        outcomes = [
+            (product, index_map)
+            for (product, index_map) in outcomes 
+            if target_required_atom_index in index_map["atom_idx"] 
+        ]
 
-    reactive_atoms_idxmap = {}
-    for i in range(rxn.GetNumReactantTemplates()):
-        reactant_template = rxn.GetReactantTemplate(i)
-        for atom in reactant_template.GetAtoms():
-            if atom.GetAtomMapNum():
-                reactive_atoms_idxmap[atom.GetAtomMapNum()] = i
+    # Ensure single outcome
+    if len(outcomes) == 0:
+        raise RuntimeError(f"No passing outcomes")
+    elif len(outcomes) > 1:
+        raise RuntimeError(f"Multiple passing outcomes?")
 
-    products_list = rxn.RunReactants(reactants)
-
-    index_map = {"reactant_idx": [], "atom_idx": [], "new_atom_label": []}
-    for products in products_list:
-        result_reac_map = []
-        result_atom_map = []
-        new_atom_label_list = (
-            []
-        )  # for atoms created by the reaction that are labeled e.g. F in "[O:1]>>[O:1][F:2]"
-        for product in products:
-            atom_idxmap = []
-            reac_idxmap = []
-            new_atom_label = []
-            for atom in product.GetAtoms():
-                if atom.HasProp("reactant_idx"):
-                    reactant_idx = atom.GetIntProp("reactant_idx")
-                    new_atom_label.append(None)
-                elif atom.HasProp("old_mapno"):  # this atom matched the reaction SMARTS
-                    old_mapno = atom.GetIntProp("old_mapno")
-                    if old_mapno in reactive_atoms_idxmap:
-                        reactant_idx = reactive_atoms_idxmap[old_mapno]
-                        new_atom_label.append(None)
-                    else:
-                        reactant_idx = None
-                        new_atom_label.append(
-                            old_mapno
-                        )  # the reaction SMARTS created this atom and it has a label
-                    # if atom.HasProp("reactant_idx"):
-                    #    raise RuntimeError("did not expect both old_mapno and reactant_idx")
-                    #    #print("did not expect both old_mapno and reactant_idx")
-                else:
-                    reactant_idx = None  # the reaction SMARTS creates new atoms
-                    new_atom_label.append(None)
-                reac_idxmap.append(reactant_idx)
-                if atom.HasProp("react_atom_idx"):
-                    atom_idxmap.append(atom.GetIntProp("react_atom_idx"))
-                else:
-                    atom_idxmap.append(None)
-            result_reac_map.append(reac_idxmap)
-            result_atom_map.append(atom_idxmap)
-            new_atom_label_list.append(new_atom_label)
-        index_map["reactant_idx"].append(result_reac_map)
-        index_map["atom_idx"].append(result_atom_map)
-        index_map["new_atom_label"].append(new_atom_label_list)
-
-    return products_list, index_map
+    return outcomes[0]

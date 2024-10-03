@@ -183,70 +183,6 @@ def find_inter_mols_bonds(mols_dict):
                     bonds[key].append(value)
     return bonds
 
-def update_H_positions(mol, indices_to_update, positions=None):
-    """re-calculate positions of some existing hydrogens
-
-    no guarantees that chirality can be preserved
-
-    Parameters
-    ----------
-    mol: RDKitmol
-        molecule with hydrogens
-    indices_to_update: list
-        indices of hydrogens for which positions will be re-calculated
-    """
-    new_positions = dict()
-    if positions is not None:
-        mol = Chem.Mol(mol)
-
-    conf = mol.GetConformer()
-    tmpmol = Chem.RWMol(mol)
-    to_del = {}
-    to_add_h = []
-    for h_index in indices_to_update:
-        atom = tmpmol.GetAtomWithIdx(h_index)
-        if atom.GetAtomicNum() != 1:
-            raise RuntimeError("only H positions can be updated")
-        heavy_neighbors = []
-        for neigh_atom in atom.GetNeighbors():
-            if neigh_atom.GetAtomicNum() != 1:
-                heavy_neighbors.append(neigh_atom)
-        if len(heavy_neighbors) != 1:
-            raise RuntimeError(f"hydrogens must have 1 non-H neighbor, got {len(heavy_neighbors)}")
-        to_add_h.append(heavy_neighbors[0])
-        to_del[h_index] = heavy_neighbors[0]
-    for i in sorted(to_del, reverse=True):
-        tmpmol.RemoveAtom(i)
-        to_del[i].SetNumExplicitHs(to_del[i].GetNumExplicitHs() + 1)
-    to_add_h = list(
-        set([atom.GetIdx() for atom in to_add_h]))  # atom.GetIdx() returns new index after deleting Hs
-    tmpmol = tmpmol.GetMol()
-    tmpmol.UpdatePropertyCache()
-    # for atom in tmpmol.GetAtoms():
-    #    print(atom.GetAtomicNum(), atom.GetNumImplicitHs(), atom.GetNumExplicitHs())
-    Chem.SanitizeMol(tmpmol)
-    tmpmol = Chem.AddHs(tmpmol, onlyOnAtoms=to_add_h, addCoords=True)
-    # tmpmol = Chem.AddHs(tmpmol, addCoords=True)
-    # print(tmpmol.GetNumAtoms())
-    tmpconf = tmpmol.GetConformer()
-    # print(tmpconf.GetPositions())
-    used_h = set()  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
-    for h_index, parent in to_del.items():
-        for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
-            # print(atom.GetAtomicNum(), atom.GetIdx(), len(mapping), tmpmol.GetNumAtoms())
-            has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
-            if atom.GetAtomicNum() == 1 and has_new_position:
-                if atom.GetIdx() not in used_h:
-                    # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
-                    # conf.SetAtomPosition(h_index, tmpconf.GetAtomPosition(atom.GetIdx()))
-                    positions = tmpconf.GetAtomPosition(atom.GetIdx())
-                    new_positions[h_index] = np.array([positions.x,
-                                                       positions.y,
-                                                       positions.z])
-                    used_h.add(atom.GetIdx())
-                    break  # h_index coords copied, don't look into further H bound to parent
-                    # no guarantees about preserving chirality, which we don't need
-    return new_positions
 
 def mapping_by_mcs(mol, ref):
     """
@@ -1850,7 +1786,7 @@ class ResiduePadder:
     # reaction should not delete atoms, not even Hs
     # reaction should create bonds at non-real Hs (implicit or explicit rdktt H)
 
-    def __init__(self, rxn_smarts, adjacent_res_smarts=None):  # , link_labels=None):
+    def __init__(self, rxn_smarts, adjacent_res_smarts=None): 
         """
         Parameters
         ----------
@@ -1867,105 +1803,95 @@ class ResiduePadder:
             unmapped in the reagents.
         """
 
+        # Ensure rxn_smarts has single reactant and single product
+        self.rxn = self._validate_rxn_smarts(rxn_smarts)
+
+        # Ensure adjacent_res_smarts is None or a valid SMARTS        
+        self.adjacent_smartsmol = self._initialize_adj_smartsmol(adjacent_res_smarts)
+        
+        # Ensure the atom mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
+        is_ok, padding_ids, adjacent_ids = self._check_adj_smarts(self.rxn, self.adjacent_smartsmol)
+        if not is_ok:
+            raise ValueError(f"SMARTS labels in adjacent_smartsmol ({adjacent_ids}) differ from \
+                             unmapped product labels in reaction ({padding_ids})")
+    
+    @staticmethod
+    def _validate_rxn_smarts(rxn_smarts):
+        """Ensure rxn_smarts has single reactant and single product"""
         rxn = rdChemReactions.ReactionFromSmarts(rxn_smarts)
         if rxn.GetNumReactantTemplates() != 1:
-            raise ValueError(
-                f"expected 1 reactants, got {rxn.GetNumReactantTemplates()} in {rxn_smarts}"
-            )
+            raise ValueError(f"Expected 1 reactant, got {rxn.GetNumReactantTemplates()}.")
         if rxn.GetNumProductTemplates() != 1:
-            raise ValueError(
-                f"expected 1 product, got {rxn.GetNumProductTemplates()} in {rxn_smarts}"
-            )
-        self.rxn = rxn
+            raise ValueError(f"Expected 1 product, got {rxn.GetNumProductTemplates()}.")
+        return rxn
+    
+    @staticmethod
+    def _initialize_adj_smartsmol(adjacent_res_smarts):
+        """
+        Ensure adjacent_res_smarts is None or a valid SMARTS
+        """
         if adjacent_res_smarts is None:
-            self.adjacent_smartsmol = None
-            self.adjacent_smartsmol_mapidx = None
-        else:
-            adjacent_smartsmol = Chem.MolFromSmarts(adjacent_res_smarts)
-            assert adjacent_smartsmol is not None
-            is_ok, padding_ids, adjacent_ids = self._check_adj_smarts(
-                rxn, adjacent_smartsmol
-            )
-            if not is_ok:
-                msg = (
-                    f"SMARTS labels in adjacent_smartsmol ({adjacent_ids}) differ from unmapped product labels in reaction ({padding_ids})"
-                    + os_linesep
-                )
-                msg += f"{rxn_smarts=}" + os_linesep
-                msg += f"{adjacent_res_smarts=}" + os_linesep
-            self.adjacent_smartsmol = adjacent_smartsmol
-            self.adjacent_smartsmol_mapidx = {}
-            for atom in self.adjacent_smartsmol.GetAtoms():
+            return None
+        adjacent_smartsmol = Chem.MolFromSmarts(adjacent_res_smarts)
+        if adjacent_smartsmol is None:
+            raise RuntimeError("Invalid SMARTS pattern in adjacent_res_smarts")
+        return adjacent_smartsmol
+    
+    @staticmethod
+    def _check_adj_smarts(rxn, adjacent_smartsmol):
+        """
+        Ensure the atom mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
+        """
+        def get_molAtomMapNumbers(mol):
+            numbers = set()
+            for atom in mol.GetAtoms():
                 if atom.HasProp("molAtomMapNumber"):
-                    j = atom.GetIntProp("molAtomMapNumber")
-                    self.adjacent_smartsmol_mapidx[j] = atom.GetIdx()
+                    numbers.add(atom.GetIntProp("molAtomMapNumber"))
+            return numbers
 
-    def __call__(
-        self,
-        target_mol,
-        adjacent_mol=None,
-        target_required_atom_index=None,
-        adjacent_required_atom_index=None,
-    ):
+        # Assumes single reactant and single product
+        reactant_ids = get_molAtomMapNumbers(rxn.GetReactantTemplate(0))
+        product_ids = get_molAtomMapNumbers(rxn.GetProductTemplate(0))
+        adjacent_ids = get_molAtomMapNumbers(adjacent_smartsmol)
+        padding_ids = product_ids.difference(reactant_ids)
+        is_ok = padding_ids == adjacent_ids
+        return is_ok, padding_ids, adjacent_ids
+
+    def __call__(self, target_mol, adjacent_mol=None, 
+                 target_required_atom_index=None, adjacent_required_atom_index=None):
         # add Hs only to padding atoms
         # copy coordinates if adjacent res has Hs bound to heavy atoms
         # labels have been checked upstream
 
-        products, idxmap = react_and_map((target_mol,), self.rxn)
-        if target_required_atom_index is not None:
-            passing_products = []
-            for product, atomidx in zip(products, idxmap["atom_idx"]):
-                if target_required_atom_index in atomidx[0]:  # 1 product template
-                    passing_products.append(product)
-            if len(passing_products) > 1:
-                raise RuntimeError(
-                    "more than 1 padding product has target_required_atom_index"
-                )
-            products = passing_products
-        if len(products) > 1 and target_required_atom_index is None:
-            raise RuntimeError(
-                "more than 1 padding product, consider using target_required_atom_index"
-            )
-        if len(products) == 0:
-            raise RuntimeError("zero products from padding reaction")
+        # Ensure target_mol contains self.rxn's reactant
+        self._check_target_mol(target_mol)
+    
+        # Get adjacent_mol's reacting part that contains adjacent_required_atom_index
+        if adjacent_mol is not None:
+            hit = self._check_and_map_adjacent_mol(adjacent_mol, adjacent_required_atom_index)
+        
+        # Get padded mol and index map from the rxn
+        padded_mol, idxmap = react_and_map((target_mol,), self.rxn, target_required_atom_index)
+        padding_heavy_atoms = [
+            i for i, j in enumerate(idxmap["atom_idx"])
+            if j is None and padded_mol.GetAtomWithIdx(i).GetAtomicNum() != 1
+        ]
+        mapidx = idxmap["atom_idx"]
 
-        padded_mol = products[0][0]
-
-        # is_pad_atom = [reactant_idx == 0 for reactant_idx in idxmap["reactant_idx"][0][0]]
-        # mapidx = {i: j for (i, j) in enumerate(idxmap["atom_idx"][0][0]) if j is not None}
-        # return padded_mol, is_pad_atom, mapidx
-
-        mapidx = idxmap["atom_idx"][0][0]
-        padding_heavy_atoms = []
-        for i, j in enumerate(idxmap["atom_idx"][0][0]):
-            # j is index in reactants, if j is None then it's a padding atom
-            if j is None and padded_mol.GetAtomWithIdx(i).GetAtomicNum() != 1:
-                padding_heavy_atoms.append(i)
-
+        # Add Hs to padded_mol and update mapidx
         if adjacent_mol is None:
             padded_mol.UpdatePropertyCache()  # avoids getNumImplicitHs() called without preceding call to calcImplicitValence()
             Chem.SanitizeMol(padded_mol)  # just in case
             padded_h = Chem.AddHs(padded_mol, onlyOnAtoms=padding_heavy_atoms)
             mapidx += [None] * (padded_h.GetNumAtoms() - padded_mol.GetNumAtoms())
-        elif self.adjacent_smartsmol is None:
-            raise RuntimeError(
-                "had to be initialized with adjacent_res_smarts to support adjacent_mol"
-            )
         else:
-            hits = adjacent_mol.GetSubstructMatches(self.adjacent_smartsmol)
-            if adjacent_required_atom_index is not None:
-                hits = [hit for hit in hits if adjacent_required_atom_index in hit]
-            if len(hits) != 1:
-                raise RuntimeError(
-                    f"length of hits must be 1, but it's {len(hits)}"
-                )  # TODO use required_atom_idx from bonds
-            hit = hits[0]
+            # Get coordinates of existing atoms
             adjacent_coords = adjacent_mol.GetConformer().GetPositions()
             for atom in self.adjacent_smartsmol.GetAtoms():
                 if not atom.HasProp("molAtomMapNumber"):
                     continue
                 j = atom.GetIntProp("molAtomMapNumber")
-                k = idxmap["new_atom_label"][0][0].index(j)
+                k = idxmap["new_atom_label"].index(j)
                 l = self.adjacent_smartsmol_mapidx[j]
                 padded_mol.GetConformer().SetAtomPosition(k, adjacent_coords[hit[l]])
             padded_mol.UpdatePropertyCache()  # avoids getNumImplicitHs() called without preceding call to calcImplicitValence()
@@ -1974,22 +1900,37 @@ class ResiduePadder:
                 padded_mol, onlyOnAtoms=padding_heavy_atoms, addCoords=True
             )
         return padded_h, mapidx
+    
+    def _check_and_map_adjacent_mol(self, adjacent_mol, adjacent_required_atom_index):
+        """
+        Ensure adjacent_mol contains self.adjacent_smartsmol, and 
+        there's exactly one match that includes atom with adjacent_required_atom_index
+        """
+        if self.adjacent_smartsmol is None:
+            raise RuntimeError("adjacent_res_smarts must be initialized to support adjacent_mol.")
+        
+        self.adjacent_smartsmol_mapidx = {
+            atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
+            for atom in self.adjacent_smartsmol.GetAtoms() if atom.HasProp("molAtomMapNumber")
+        }
 
-    @staticmethod
-    def _check_adj_smarts(rxn, adjacent_smartsmol):
-        def get_molAtomMapNumbers(mol):
-            numbers = set()
-            for atom in mol.GetAtoms():
-                if atom.HasProp("molAtomMapNumber"):
-                    numbers.add(atom.GetIntProp("molAtomMapNumber"))
-            return numbers
-
-        reactant_ids = get_molAtomMapNumbers(rxn.GetReactantTemplate(0))
-        product_ids = get_molAtomMapNumbers(rxn.GetProductTemplate(0))
-        adjacent_ids = get_molAtomMapNumbers(adjacent_smartsmol)
-        padding_ids = product_ids.difference(reactant_ids)
-        is_ok = padding_ids == adjacent_ids
-        return is_ok, padding_ids, adjacent_ids
+        hits = adjacent_mol.GetSubstructMatches(self.adjacent_smartsmol)
+        if adjacent_required_atom_index is not None:
+            hits = [hit for hit in hits if adjacent_required_atom_index in hit]
+            if len(hits) == 0:
+                raise RuntimeError(f"adjacent_mol doesn't contain adjacent_smartsmol.")
+            elif len(hits) > 1:
+                raise RuntimeError(f"adjacent_mol has multiple matches for adjacent_smartsmol.")
+        return hits[0]
+    
+    def _check_target_mol(self, target_mol):
+        """Ensure target_mol contains self.rxn's reactant"""
+    
+        # Assumes single reactant
+        if target_mol.GetSubstructMatches(self.rxn.GetReactantTemplate(0)):
+            return
+        else:
+            raise RuntimeError(f"target_mol does not contain the expected reactant.")
 
     @classmethod
     def from_json(cls, string):
