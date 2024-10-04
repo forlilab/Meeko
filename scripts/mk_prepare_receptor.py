@@ -288,6 +288,24 @@ def get_args():
 
 args = get_args()
 
+if args.wanted_altloc is None:
+    wanted_altloc = None
+else:
+    wanted_altloc = parse_cmdline_res_assign(args.wanted_altloc)
+    # Ensure meaningful wanted_altloc
+    for key, value in wanted_altloc.items():
+        if isinstance(value, str) and value.strip() == "":
+            msg = "Wanted atloc cannot be an empty string or a string with just space"
+            print("Command line error: " + msg, file=sys.stderr)
+            sys.exit(2)
+
+
+# Ensure meaningful allowed_altloc
+if args.allowed_altloc is not None and args.allowed_altloc.strip()=="":
+    msg = "Allowed atloc cannot be an empty string or a string with just space"
+    print("Command line error: " + msg, file=sys.stderr)
+    sys.exit(2)
+
 # Default mapping of residue name and reactive atom name
 reactive_atom = {
     "SER": "OG",
@@ -341,11 +359,6 @@ for resid_string in args.reactive_flexres:
         if res_id not in reactive_flexres:
             reactive_flexres.add(res_id)
             reactive_flexres_name[res_id] = ""
-
-if args.wanted_altloc is None:
-    wanted_altloc = None
-else:
-    wanted_altloc = parse_cmdline_res_assign(args.wanted_altloc)
 
 # Evaluate number of reactive flexible residues
 if len(reactive_flexres) > 8:

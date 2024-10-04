@@ -1438,7 +1438,7 @@ class LinkedRDKitChorizo:
     @staticmethod
     def _pdb_to_residue_mols(
         pdb_string,
-        wanted_altloc: Optional[str]=None,
+        wanted_altloc: Optional[dict[str, str]]=None,
         allowed_altloc: Optional[str]=None,
     ):
         """
@@ -1525,6 +1525,7 @@ class LinkedRDKitChorizo:
 
         # create rdkit molecules from PDB strings for each residue
         raw_input_mols = {}
+        print(wanted_altloc)
         for reskey, pdb_block in blocks_by_residue.items():
             requested_altloc = wanted_altloc.get(reskey, None)
             missed_altloc = False
