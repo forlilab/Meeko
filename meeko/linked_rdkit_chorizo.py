@@ -1921,7 +1921,7 @@ class ResiduePadder:
 
                 # Evaluate adjacent mol against the fallback adjacent mol SMARTS
                 if self._check_adjacent_mol(adjacent_smartsmol, adjacent_mol, adjacent_required_atom_index):
-                     print(f"Switched from Template adjacent mol ({Chem.MolFromSmarts(self.adjacent_smartsmol)}) to Fallback adjacent mol ({Chem.MolFromSmarts(adjacent_smartsmol)})")
+                     print(f"Switched from Template adjacent mol ({Chem.MolToSmarts(self.adjacent_smartsmol)}) to Fallback adjacent mol ({Chem.MolToSmarts(adjacent_smartsmol)})")
                 else:
                     raise RuntimeError(f"adjacent_mol doesn't contain the mapped atoms in adjacent_smartsmol.") 
             
