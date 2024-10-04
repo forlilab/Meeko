@@ -432,13 +432,11 @@ def _delete_residues(res_to_delete, raw_input_mols):
     for res in res_to_delete:
         if res not in raw_input_mols:
             missing.add(res)
-        raw_input_mols.pop(res)
+        raw_input_mols.pop(res, None)
     if len(missing) > 0:
         msg = "can't find the following residues to delete: " + " ".join(missing)
         raise ValueError(msg)
     return
-
-
 
 
 class ResidueChemTemplates:
@@ -1867,12 +1865,6 @@ class ResiduePadder:
         """
         Ensure the atom mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
         """
-        def get_molAtomMapNumbers(mol):
-            numbers = set()
-            for atom in mol.GetAtoms():
-                if atom.HasProp("molAtomMapNumber"):
-                    numbers.add(atom.GetIntProp("molAtomMapNumber"))
-            return numbers
 
         # Assumes single reactant and single product
         reactant_ids = get_molAtomMapNumbers(rxn.GetReactantTemplate(0))
@@ -1889,13 +1881,97 @@ class ResiduePadder:
         # labels have been checked upstream
 
         # Ensure target_mol contains self.rxn's reactant
-        if self._check_target_mol(target_mol):
-            rxn = self.rxn
-        else:
+        rxn = self.rxn
+        
+        def _apply_atom_mappings(mcs_mol: Chem.Mol, original_mol: Chem.Mol) -> Chem.Mol:
+            """
+            Apply atom mappings from the original molecule to the MCS molecule by matching the MCS as a substructure.
+
+            Parameters
+            ----------
+            mcs_mol : Chem.Mol
+                The MCS molecule obtained from FindMCS.
+            original_mol : Chem.Mol
+                The original molecule with atom mappings.
+
+            Returns
+            -------
+            Chem.Mol
+                A new MCS molecule with atom mappings applied from the original molecule.
+            """
+            # Perform substructure match between the MCS and the original molecule
+            match = original_mol.GetSubstructMatch(mcs_mol)
+            
+            if not match:
+                raise ValueError("No substructure match found between MCS and original molecule.")
+
+            # Create an editable version of the MCS molecule
+            rw_mcs_mol = Chem.RWMol(mcs_mol)
+            
+            # Loop through the matched atoms and transfer the atom mappings from the original molecule
+            for i, mcs_atom in enumerate(rw_mcs_mol.GetAtoms()):
+                original_atom_idx = match[i]  # Get the corresponding atom index from the original molecule
+                original_atom = original_mol.GetAtomWithIdx(original_atom_idx)
+                
+                # If the original atom has a molAtomMapNumber, transfer it to the MCS atom
+                if original_atom.HasProp("molAtomMapNumber"):
+                    mcs_atom.SetProp("molAtomMapNumber", original_atom.GetProp("molAtomMapNumber"))
+            
+            return rw_mcs_mol.GetMol()
+        
+        def remove_atoms_with_mapping(product: Chem.Mol, mapping_numbers: set) -> Chem.Mol:
+            """
+            Remove atoms with specific atom mapping numbers from a molecule.
+            
+            Parameters
+            ----------
+            product : Chem.Mol
+                The product molecule from which atoms will be removed.
+            mapping_numbers : list of int
+                A list of atom mapping numbers to remove from the molecule.
+            
+            Returns
+            -------
+            Chem.Mol
+                The modified product molecule with the specified atoms removed.
+            """
+            # Convert to an editable molecule
+            editable_product = Chem.RWMol(product)
+            
+            # Find and remove atoms with the given mapping numbers
+            atoms_to_remove = []
+            
+            for atom in editable_product.GetAtoms():
+                if atom.HasProp("molAtomMapNumber"):
+                    map_num = int(atom.GetProp("molAtomMapNumber"))
+                    if map_num in mapping_numbers:
+                        atoms_to_remove.append(atom.GetIdx())
+
+            # Remove atoms (in reverse order to avoid index shift issues)
+            for idx in sorted(atoms_to_remove, reverse=True):
+                editable_product.RemoveAtom(idx)
+            
+            # Return the modified molecule
+            return editable_product.GetMol()
+
+        if not self._check_target_mol(target_mol):
             print("!!! FALL BACK for TAR MOL !!!")
-            rxn = remove_unmapped_atoms_from_reaction(self.rxn)
-            if not target_mol.GetSubstructMatches(rxn.GetReactantTemplate(0)):
+            # Assumes single reactant and single product
+            reactant_smartsmol = rxn.GetReactantTemplate(0)
+            fallback_reactant_smartsmol = Chem.MolFromSmarts(rdFMCS.FindMCS([reactant_smartsmol, target_mol]).smartsString)
+            fallback_reactant = _apply_atom_mappings(fallback_reactant_smartsmol, reactant_smartsmol)
+            
+            reactant_ids = get_molAtomMapNumbers(reactant_smartsmol)
+            fallback_reactant_ids = get_molAtomMapNumbers(fallback_reactant)
+            if target_required_atom_index not in fallback_reactant_ids: 
                 raise RuntimeError(f"target_mol does not contain the expected reactant.")
+            else:
+                skipping_ids = reactant_ids.difference(fallback_reactant_ids)
+                print(skipping_ids)
+
+                fallback_product = remove_atoms_with_mapping(rxn.GetProductTemplate(0), skipping_ids)
+                fallback_rxnsmarts = f"{Chem.MolToSmarts(fallback_reactant)}>>{Chem.MolToSmarts(fallback_product)}"
+                rxn = rdChemReactions.ReactionFromSmarts(fallback_rxnsmarts)
         
         # Get adjacent_mol's reacting part that contains adjacent_required_atom_index
         if adjacent_mol is not None:
@@ -1915,7 +1991,6 @@ class ResiduePadder:
                 atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
                 for atom in adjacent_smartsmol.GetAtoms() if atom.HasProp("molAtomMapNumber")
                 }
-            print("adjacent_smartsmol_mapidx:", adjacent_smartsmol_mapidx)
 
         # Get padded mol and index map from the rxn
         outcomes = react_and_map((target_mol,), rxn)
@@ -1962,8 +2037,7 @@ class ResiduePadder:
             padded_h = Chem.AddHs(
                 padded_mol, onlyOnAtoms=padding_heavy_atoms, addCoords=True
             )
-        print(Chem.MolToSmiles(padded_h))
-        print("mapidx:", mapidx)
+
         return padded_h, mapidx
     
     def _check_adjacent_mol(self, adjacent_mol, adjacent_required_atom_index):
@@ -2000,6 +2074,14 @@ class ResiduePadder:
         return json.dumps(self, default=lambda o: o.__dict__)
 
 
+def get_molAtomMapNumbers(mol):
+    numbers = set()
+    for atom in mol.GetAtoms():
+        if atom.HasProp("molAtomMapNumber"):
+            numbers.add(atom.GetIntProp("molAtomMapNumber"))
+    return numbers
+
+
 def remove_unmapped_atoms_from_mol(mol):
     """Remove unmapped atoms from a molecule."""
     # Get all atoms and their mapping numbers
@@ -2013,17 +2095,9 @@ def remove_unmapped_atoms_from_mol(mol):
         mol = Chem.RWMol(mol)
         for idx in sorted(atoms_to_remove, reverse=True):
             mol.RemoveAtom(idx)
+        mol = mol.GetMol()
 
-    return mol.GetMol()
-
-def remove_unmapped_atoms_from_reaction(reaction):
-    """Remove unmapped atoms from both reactants and products in a reaction SMARTS."""
-    # Assumes single reactant and single product
-    reactant = remove_unmapped_atoms_from_mol(reaction.GetReactantTemplate(0))
-    product = remove_unmapped_atoms_from_mol(reaction.GetProductTemplate(0))
-    rxn_smarts = f"{Chem.MolToSmarts(reactant)}>>{Chem.MolToSmarts(product)}"
- 
-    return rdChemReactions.ReactionFromSmarts(rxn_smarts)
+    return mol
 
 
 class ResidueTemplate:
