@@ -1,6 +1,9 @@
 from rdkit import Chem
 from .utils import mini_periodic_table
 from .pdbutils import PDBAtomInfo
+from rdkit.Geometry import Point3D
+
+periodic_table = Chem.GetPeriodicTable()
 
 
 """
@@ -153,3 +156,79 @@ def react_and_map(reactants, rxn):
         index_map["new_atom_label"].append(new_atom_label_list)
 
     return products_list, index_map
+
+
+class AtomField:
+    """Stores data parsed from PDB or mmCIF"""
+
+    def __init__(
+        self,
+        atomname: str,
+        altloc: str,
+        resname: str,
+        chain: str,
+        resnum: int,
+        icode: str,
+        x: float,
+        y: float,
+        z: float,
+        element: str,
+    ):
+        self.atomname = atomname
+        self.altloc = altloc
+        self.resname = resname
+        self.chain = chain
+        self.resnum = resnum
+        self.icode = icode
+        self.x = x
+        self.y = y
+        self.z = z
+        if len(element) > 1:
+            element = f"{element[0].upper()}{element[1].lower()}"
+        else:
+            element = f"{element.upper()}"
+        self.atomic_nr = periodic_table.GetAtomicNumber(element)
+
+
+def _build_rdkit_mol_for_altloc(atom_fields_list, wanted_altloc:str=None):
+    mol = Chem.EditableMol(Chem.Mol())
+    mol.BeginBatchEdit() 
+    positions = []
+    idx_to_rdkit = {}
+    for index_list, atom in enumerate(atom_fields_list):
+        if wanted_altloc is not None:
+            if atom.altloc and atom.altloc != wanted_altloc:
+                # if atom.altloc is "" we still want to consider this atom
+                continue
+        rdkit_atom = Chem.Atom(atom.atomic_nr)
+        positions.append(Point3D(atom.x, atom.y, atom.z))
+        res_info = Chem.AtomPDBResidueInfo()
+        res_info.SetName(atom.atomname)
+        res_info.SetResidueName(atom.resname)
+        res_info.SetResidueNumber(atom.resnum)
+        res_info.SetChainId(atom.chain)
+        res_info.SetInsertionCode(atom.icode)
+        rdkit_atom.SetPDBResidueInfo(res_info)
+        index_rdkit = mol.AddAtom(rdkit_atom)
+        idx_to_rdkit[index_list] = index_rdkit
+    mol.CommitBatchEdit()
+    mol = mol.GetMol()
+    conformer = Chem.Conformer(mol.GetNumAtoms())
+    for index, position in enumerate(positions):
+        conformer.SetAtomPosition(index, position)
+    mol.AddConformer(conformer, assignId=True)
+    return mol, idx_to_rdkit
+        
+
+def build_one_rdkit_mol_per_altloc(atom_fields_list):
+    """ if no altlocs, the only key in the output dict is None
+        if altlocs exist, None is not a key: the keys are the altloc IDs
+    """
+    altlocs = set([atom.altloc for atom in atom_fields_list if atom.altloc])
+    rdkit_mol_dict = {}
+    if not altlocs:
+        altlocs = {None}
+    for altloc in altlocs:
+        mol, idx_to_rdkit = _build_rdkit_mol_for_altloc(atom_fields_list, altloc)
+        rdkit_mol_dict[altloc] = (mol, idx_to_rdkit)
+    return rdkit_mol_dict

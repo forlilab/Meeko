@@ -141,6 +141,8 @@ def get_args():
         action="store_true",
         help="delete residues with missing atoms instead of raising error",
     )
+    config_group.add_argument("--allowed_altloc", help="general default altloc")
+    config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
     config_group.add_argument(
         "-f",
         "--flexres",
@@ -340,6 +342,11 @@ for resid_string in args.reactive_flexres:
             reactive_flexres.add(res_id)
             reactive_flexres_name[res_id] = ""
 
+if args.wanted_altloc is None:
+    wanted_altloc = None
+else:
+    wanted_altloc = parse_cmdline_res_assign(args.wanted_altloc)
+
 # Evaluate number of reactive flexible residues
 if len(reactive_flexres) > 8:
     msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
@@ -442,6 +449,8 @@ else:
         del_res,
         args.allow_bad_res,
         blunt_ends=blunt_ends,
+        wanted_altloc=wanted_altloc,
+        allowed_altloc=args.allowed_altloc,
     )
 
 # Use residue name in the input structure file to find reactive atom name
