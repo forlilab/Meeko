@@ -106,9 +106,9 @@ def react_and_map(reactants: tuple[Chem.Mol], rxn: rdChemReactions.ChemicalReact
     -------
     list[tuple[Chem.Mol, dict[str, list[Optional[int]]]]]
         A list of tuples where each tuple contains a product molecule and a dictionary.
-        The dictionary has keys 'atom_idx' and 'new_atom_label', which are lists:
-        - 'atom_idx' maps the product atoms to their corresponding reactant atom indices (if applicable).
-        - 'new_atom_label' maps the product atoms to their reaction mapping numbers for newly added atoms.
+        The dictionary has keys 'atom_idx' and 'new_atom_label', which are ordered lists for product atoms:
+        - 'atom_idx' holds the corresponding atom indices in reactant. None for newly added atoms. 
+        - 'new_atom_label' holds the reaction mapping number, only for newly added atoms. 
     """
 
     # Prepare for multiple possible outcomes resulted from multiple matched reactive sites in reactant

@@ -655,8 +655,6 @@ class LinkedRDKitChorizo:
             residue = self.residues[residue_id]
             residue.padded_mol = padded_mol
             residue.molsetup_mapidx = mapidx_from_pad
-            print(residue_id, residue.input_resname, Chem.MolToSmiles(padded_mol))
-            Chem.MolToMolFile(padded_mol, f"/Users/amyhe/Downloads/{residue_id}.sdf")
 
         if mk_prep is not None:
             self.parameterize(mk_prep)
@@ -1192,8 +1190,7 @@ class LinkedRDKitChorizo:
                 atom.GetIdx(): atom.GetIdx() for atom in padded_mol.GetAtoms()
             }
             for atom_index, link_label in residue.link_labels.items():
-                # XXX
-                adjacent_rid, adjacent_resname  = [None, None]
+                adjacent_rid  = None
                 adjacent_mol = None
                 adjacent_atom_index = None
                 for (r1_id, r2_id), (i1, i2) in bonds.items():
@@ -1209,9 +1206,7 @@ class LinkedRDKitChorizo:
                 if adjacent_rid is not None:
                     adjacent_mol = residues[adjacent_rid].rdkit_mol
                     bond_use_count[(r1_id, r2_id)] += 1
-                    adjacent_resname = residues[adjacent_rid].input_resname
                 
-                print(link_label, residue_id, residue.input_resname, adjacent_rid, adjacent_resname)
                 padded_mol, mapidx = padders[link_label](
                     padded_mol, adjacent_mol, atom_index, adjacent_atom_index
                 )
@@ -1249,7 +1244,6 @@ class LinkedRDKitChorizo:
                 # can invert chirality in 3D positions
 
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
-            # XXX
                 
 
         # verify that all bonds resulted in padding
@@ -1967,8 +1961,6 @@ class ResiduePadder:
                 raise RuntimeError(f"target_mol does not contain the expected reactant.")
             else:
                 skipping_ids = reactant_ids.difference(fallback_reactant_ids)
-                print(skipping_ids)
-
                 fallback_product = remove_atoms_with_mapping(rxn.GetProductTemplate(0), skipping_ids)
                 fallback_rxnsmarts = f"{Chem.MolToSmarts(fallback_reactant)}>>{Chem.MolToSmarts(fallback_product)}"
                 rxn = rdChemReactions.ReactionFromSmarts(fallback_rxnsmarts)
