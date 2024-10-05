@@ -439,8 +439,7 @@ if args.macromol is not None:
     ext = pathlib.Path(args.macromol).suffix[1:].lower()
     if ext in SUPPORTED_PRODY_FORMATS:
         parser = SUPPORTED_PRODY_FORMATS[ext]
-        # we should do something with the header...
-        input_obj, header = parser(args.macromol, header=True)
+        input_obj = parser(args.macromol, altloc="all")
         chorizo = LinkedRDKitChorizo.from_prody(
             input_obj,
             templates,
@@ -449,8 +448,9 @@ if args.macromol is not None:
             del_res,
             args.allow_bad_res,
             blunt_ends=blunt_ends,
+            wanted_altloc=wanted_altloc,
+            allowed_altloc=args.allowed_altloc,
         )
-    # prody_mol = prody.
 else:
     with open(args.pdb) as f:
         pdb_string = f.read()

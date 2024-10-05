@@ -6,6 +6,7 @@ from rdkit.Chem import rdDetermineBonds
 from rdkit.Chem.rdchem import Mol
 from .rdkitutils import AtomField
 from .rdkitutils import build_one_rdkit_mol_per_altloc
+from .rdkitutils import _aux_altloc_mol_build
 
 from prody.atomic import ATOMIC_FIELDS
 from prody.atomic.atomgroup import AtomGroup
@@ -110,7 +111,7 @@ def prody_to_rdkit(
     prody_obj: ALLOWED_PRODY_TYPES,
     sanitize: bool = True,
     keep_bonds: bool = False,
-    wanted_altloc: Optional[str] = None,
+    requested_altloc: Optional[str] = None,
     allowed_altloc: Optional[str] = None,
 ) -> Mol:
     """
@@ -160,7 +161,7 @@ def prody_to_rdkit(
     wanted_altloc : Optional[str] (default: None)
         require specified alternate location
     allowed_altloc : Optional[str] (default: None)
-        if altlocs exist, use this one. Incompatible with wanted_altloc
+        if altlocs exist, use this one.
 
     Returns
     -------
@@ -172,47 +173,38 @@ def prody_to_rdkit(
         the requested altloc (with wanted_altloc) does not exist
     """
 
-    if wanted_altloc is not None and allowed_altloc is not None:
-        raise ValueError("can't use both wanted_altloc and allowed_altloc")
-
     atom_field_list = []
     indices_prody = []
     for atom in prody_obj:
         indices_prody.append(int(atom.getIndex()))
         x, y, z = atom.getCoords()
         atom_field = AtomField(
-            atomname=str(atom.getName()),
-            altloc=str(atom.getAltloc()),
-            resname=str(atom.getResname()),
-            chain=str(atom.getChid()),
+            atomname=str(atom.getName()).strip(),
+            altloc=str(atom.getAltloc()).strip(),
+            resname=str(atom.getResname()).strip(),
+            chain=str(atom.getChid()).strip(),
             resnum=int(atom.getResnum()),
-            icode=str(atom.getIcode()),
+            icode=str(atom.getIcode()).strip(),
             x=float(x),
             y=float(y),
             z=float(z),
-            element=str(atom.getElement()),
+            element=str(atom.getElement()).strip(),
         )
         atom_field_list.append(atom_field)
+    
+    rdmol, idx_to_rdkit, missed_altloc, needed_altloc = _aux_altloc_mol_build(
+        atom_field_list,
+        requested_altloc,
+        allowed_altloc,
+    )
 
-    mols_dict = build_one_rdkit_mol_per_altloc(atom_field_list) 
-    has_altloc = None not in mols_dict
-    if has_altloc and wanted_altloc is None and allowed_altloc is None:
-        return None, True, False 
-    elif wanted_altloc and wanted_altloc in mols_dict:
-        rdmol, idx_to_rdkit = mols_dict[wanted_altloc]
-    elif wanted_altloc and wanted_altloc not in mols_dict:
-        return None, False, True
-    elif allowed_altloc and allowed_altloc in mols_dict:
-        rdmol, idx_to_rdkit = mols_dict[allowed_altloc]
-    elif not has_altloc and wanted_altloc is None:
-        rdmol, idx_to_rdkit = mols_dict[None]
-    else:
-        raise RuntimeError("programming bug, please post full error on github")
+    if rdmol is None:
+        return None, missed_altloc, needed_altloc
 
     idx_prody_to_rdkit = {}
     idx_rdkit_to_prody = {}
-    for i, index_prody in enumerate(indices_prody):
-        index_rdkit = idx_to_rdkit[i]
+    for index_list, index_rdkit in idx_to_rdkit.items():
+        index_prody = indices_prody[index_list]
         idx_prody_to_rdkit[index_prody] = index_rdkit
         idx_rdkit_to_prody[index_rdkit] = index_prody
 
@@ -244,9 +236,8 @@ def prody_to_rdkit(
 
         mol.CommitBatchEdit()
         rdmol = mol.GetMol()
-    # add coordinates
-    rdmol.AddConformer(conformer, assignId=True)
-    # the molecule needs bonds, one way or another
+
+        # the molecule needs bonds, one way or another
     if bonds is None:
         rdDetermineBonds.DetermineConnectivity(rdmol)
     # sanitize the molecule if necessary
@@ -256,7 +247,7 @@ def prody_to_rdkit(
     # attach the bookkeeping to the molecule
     rdmol._idx_prody_to_rdkit = idx_prody_to_rdkit
     rdmol._idx_rdkit_to_prody = idx_rdkit_to_prody
-    return rdmol, False, False
+    return rdmol, missed_altloc, needed_altloc
 
 
 if __name__ == "__main__":

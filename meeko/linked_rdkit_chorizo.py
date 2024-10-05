@@ -10,7 +10,6 @@ from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
 from rdkit.Chem import rdMolInterchange
-from rdkit.Chem import rdDetermineBonds
 
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetupEncoder
@@ -19,6 +18,7 @@ from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.rdkitutils import AtomField
 from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
+from .utils.rdkitutils import _aux_altloc_mol_build
 from .utils.pdbutils import PDBAtomInfo
 
 import numpy as np
@@ -509,6 +509,45 @@ def _delete_residues(res_to_delete, raw_input_mols):
     return
 
 
+def handle_parsing_situations(
+    unmatched_res,
+    unparsed_res,
+    allow_bad_res,
+    res_missed_altloc,
+    res_needed_altloc,
+    ):
+    if unparsed_res:
+        msg = f"Failed parsing {unparsed_res}."
+        if allow_bad_res:
+            msg += " Ignored due to allow_bad_res."
+        logger.warning(msg)
+    if unmatched_res:
+        msg = f"Unmatched residues {list(unmatched_res)}"
+        if allow_bad_res:
+            msg += " ignored due to allow_bad_res."
+        logger.warning(msg)
+    if res_needed_altloc: 
+        msg = f"Have alternate location {res_needed_altloc}" + os_linesep
+        msg += "Either specify an altloc for each with option `wanted_altloc`" + os_linesep
+        msg += "or a general default altloc with option `allowed_altloc`."
+        logger.warning(msg)
+    if res_missed_altloc:
+        msg = f"Failed parsing {res_missed_altloc}. Requested altlocs weren't found."
+        logger.warning(msg)
+
+    msg = ""
+    if not allow_bad_res and unmatched_res:
+        msg += f"Failed matching templates for {list(unmatched_res)}" + os_linesep
+    elif not allow_bad_res and unparsed_res:
+        msg += f"Failed parsing {unparsed_res}." + os_linesep
+    if not allow_bad_res and (unmatched_res or unparsed_res):
+        msg += f"These can be ignored with option allow_bad_res" + os_linesep
+    if res_missed_altloc or res_needed_altloc:
+        msg += "Handle AltLocs with allowed_altloc or wanted_altloc" + os_linesep
+    if msg:
+        raise RuntimeError(msg)
+    return
+
 
 
 class ResidueChemTemplates:
@@ -803,34 +842,17 @@ class LinkedRDKitChorizo:
             blunt_ends,
         )
 
-        if unparsed_res:
-            msg = f"Failed parsing {unparsed_res} for unknown reasons. Inspect the structure"
-            logger.warning(msg)
-        ignored_res = chorizo.get_ignored_residues()
-        if ignored_res:
-            logger.warning(f"got unmatched residues: {list(ignored_res)}")
-        if not allow_bad_res and ignored_res and unparsed_res:
-            msg = f"Failed parsing {unparsed_res}" + os_linesep
-            msg += f"Failed matching {list(ignored_res)}" + os_linesep
-            msg += f"These can be ignored with option allow_bad_res"
-            raise RuntimeError(msg)
-        elif not allow_bad_res and ignored_res:
-            msg = f"Failed matching {list(ignored_res)}. Ignore with option allow_bad_res"
-            raise RuntimeError(msg)
-        elif not allow_bad_res and unparsed_res:
-            msg = f"Failed parsing {unparsed_res}. Ignore with option allow_bad_res"
-            raise RuntimeError(msg)
-        if res_missed_altloc:
-            msg = f"Failed parsing {res_missed_altloc}. Requested altlocs weren't found."
-            logger.warning(msg)
-        if res_needed_altloc: 
-            msg = f"Failed parsing {res_needed_altloc} because of alternate locations" + os_linesep
-            msg += "Either specify an altloc for each with option `wanted_altloc`" + os_linesep
-            msg += "or a general default altloc with option `allowed_altloc`."
-            logger.warning(msg)
-        if res_missed_altloc or res_needed_altloc:
-            raise RuntimeError("Handle AltLocs with allowed_altloc or wanted_altloc")
+        unmatched_res = chorizo.get_ignored_residues()
+        handle_parsing_situations(
+            unmatched_res,
+            unparsed_res,
+            allow_bad_res,
+            res_missed_altloc,
+            res_needed_altloc,
+        )
+
         return chorizo
+
 
     @classmethod
     def from_prody(
@@ -843,6 +865,8 @@ class LinkedRDKitChorizo:
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
+        wanted_altloc: Optional[dict]=None,
+        allowed_altloc: Optional[str]=None,
     ):
         """
 
@@ -856,13 +880,35 @@ class LinkedRDKitChorizo:
         allow_bad_res
         bonds_to_delete
         blunt_ends
+        wanted_altloc
+        allowed_altloc
 
         Returns
         -------
 
         """
-        raw_input_mols = cls._prody_to_residue_mols(prody_obj, None, None)
-        _delete_residues(residues_to_delete, raw_input_mols)
+
+        tmp_raw_input_mols = cls._prody_to_residue_mols(
+            prody_obj,
+            wanted_altloc,
+            allowed_altloc,
+        )
+        _delete_residues(residues_to_delete, tmp_raw_input_mols)
+        raw_input_mols = {}
+        res_needed_altloc = []
+        res_missed_altloc = []
+        unparsed_res = []
+        for res_id, stuff in tmp_raw_input_mols.items():
+            mol, resname, missed_altloc, needed_altloc = stuff
+            if mol is None and missed_altloc:
+                res_missed_altloc.append(res_id)
+            elif mol is None and needed_altloc:
+                res_needed_altloc.append(res_id)
+            elif mol is None:
+                unparsed_res.append(res_id)
+            else:
+                raw_input_mols[res_id] = (mol, resname)
+
         bonds = find_inter_mols_bonds(raw_input_mols)
         if bonds_to_delete is not None:
             for res1, res2 in bonds_to_delete:
@@ -878,8 +924,15 @@ class LinkedRDKitChorizo:
             set_template,
             blunt_ends,
         )
-        if not allow_bad_res and len(chorizo.get_ignored_residues()):
-            raise RuntimeError("got unmatched residues")
+        unmatched_res = chorizo.get_ignored_residues()
+        handle_parsing_situations(
+            unmatched_res,
+            unparsed_res,
+            allow_bad_res,
+            res_missed_altloc,
+            res_needed_altloc,
+        )
+
         return chorizo
 
     def parameterize(self, mk_prep):
@@ -1460,9 +1513,6 @@ class LinkedRDKitChorizo:
         interrupted_residues = set()
         pdb_block = []
 
-        if wanted_altloc is None:
-            wanted_altloc = {}
-
         def _add_if_new(to_dict, key, value, repeat_log):
             if key in to_dict:
                 repeat_log.add(key)
@@ -1523,45 +1573,21 @@ class LinkedRDKitChorizo:
             msg += f"but got {violations=}"
             raise ValueError(msg)
 
-        # create rdkit molecules from PDB strings for each residue
+        if wanted_altloc is None:
+            wanted_altloc = {}
         raw_input_mols = {}
-        for reskey, pdb_block in blocks_by_residue.items():
+        for reskey, atom_field_list in blocks_by_residue.items():
             requested_altloc = wanted_altloc.get(reskey, None)
-            missed_altloc = False
-            needed_altloc = False
-            mols_dict = build_one_rdkit_mol_per_altloc(pdb_block) 
-            has_altloc = None not in mols_dict
-            if has_altloc and requested_altloc is None and allowed_altloc is None:
-                pdbmol = None
-                missed_altloc = False 
-                needed_altloc = True
-            elif requested_altloc and requested_altloc in mols_dict:
-                pdbmol, idx_to_rdkit = mols_dict[requested_altloc]
-            elif requested_altloc and requested_altloc not in mols_dict:
-                pdbmol = None
-                missed_altloc = True
-                needed_altoc = False
-            elif allowed_altloc and allowed_altloc in mols_dict:
-                pdbmol, idx_to_rdkit = mols_dict[allowed_altloc]
-            elif not has_altloc and requested_altloc is None:
-                pdbmol, idx_to_rdkit = mols_dict[None]
-            else:
-                raise RuntimeError("programming bug, please post full error on github")
-
+            pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
+                atom_field_list,
+                requested_altloc,
+                allowed_altloc,
+            )
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
-
-            if pdbmol is None: 
-                raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
-                #raise RuntimeError(f"An error occurred while trying to build pdb mol for {reskey} {resname}")
-            else:
-                rdDetermineBonds.DetermineConnectivity(pdbmol)
-                for atom in pdbmol.GetAtoms():
-                    if atom.GetAtomicNum() == 7 and len(atom.GetNeighbors()) == 4:
-                        atom.SetFormalCharge(1)
-                _ = Chem.SanitizeMol(pdbmol)
-                raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
+            raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
 
         return raw_input_mols
+
 
     @staticmethod
     def _prody_to_residue_mols(
@@ -1579,6 +1605,7 @@ class LinkedRDKitChorizo:
         -------
 
         """
+
         if wanted_altloc_dict is None:
             wanted_altloc_dict = {}
         raw_input_mols = {}
@@ -1590,35 +1617,28 @@ class LinkedRDKitChorizo:
             # iterate residues
             for res in chain.iterResidues():
                 # gather residue info
-                chain_id = str(res.getChid())
-                res_name = str(res.getResname())
+                chain_id = str(res.getChid()).strip()
+                res_name = str(res.getResname()).strip()
                 res_num = int(res.getResnum())
                 res_index = int(res.getResnum())
-                icode = str(res.getIcode())
+                icode = str(res.getIcode()).strip()
                 reskey = f"{chain_id}:{res_num}{icode}"
                 reskey_to_resname.setdefault(reskey, set())
                 reskey_to_resname[reskey].add(res_name)
-                if reskey in wanted_altloc_dict:
-                    wanted_altloc = wanted_altloc_dict[reskey]
-                    this_res_allowed_altloc = None
-                else:
-                    wanted_altloc = None
-                    this_res_allowed_altloc = allowed_altloc
-                prody_mol, needed_altloc, not_found_altloc = prody_to_rdkit(
+                requested_altloc = wanted_altloc_dict.get(reskey, None)
+                prody_mol, missed_altloc, needed_altloc = prody_to_rdkit(
                     res,
-                    wanted_altloc,
-                    this_res_allowed_altloc,
+                    requested_altloc=requested_altloc,
+                    allowed_altloc=allowed_altloc,
                 )
-                if needed_altloc:
-                    continue
-                elif wanted_altloc:
-                    continue
-                mol_name = f"{chain_id}:{res_index}:{res_name}:{res_num}:{icode}"
-                prody_mol.SetProp("_Name", mol_name)
+                if prody_mol is not None:
+                    mol_name = f"{chain_id}:{res_index}:{res_name}:{res_num}:{icode}"
+                    prody_mol.SetProp("_Name", mol_name)
                 # we are not sanitizing because protonated LYS don't have the
                 # formal charge set on the N and Chem.SanitizeMol raises error
                 # Chem.SanitizeMol(prody_mol)
-                raw_input_mols[reskey] = (prody_mol, res_name)
+                raw_input_mols[reskey] = (prody_mol, res_name,
+                                          missed_altloc, needed_altloc)
         return raw_input_mols
 
     def to_pdb(self, use_modified_coords: bool = False, modified_coords_index: int = 0):

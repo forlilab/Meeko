@@ -2,6 +2,7 @@ from rdkit import Chem
 from .utils import mini_periodic_table
 from .pdbutils import PDBAtomInfo
 from rdkit.Geometry import Point3D
+from rdkit.Chem import rdDetermineBonds
 
 periodic_table = Chem.GetPeriodicTable()
 
@@ -232,3 +233,41 @@ def build_one_rdkit_mol_per_altloc(atom_fields_list):
         mol, idx_to_rdkit = _build_rdkit_mol_for_altloc(atom_fields_list, altloc)
         rdkit_mol_dict[altloc] = (mol, idx_to_rdkit)
     return rdkit_mol_dict
+
+
+def _aux_altloc_mol_build(atom_field_list, requested_altloc, allowed_altloc):
+    missed_altloc = False
+    needed_altloc = False
+    mols_dict = build_one_rdkit_mol_per_altloc(atom_field_list) 
+    has_altloc = None not in mols_dict
+    if has_altloc and requested_altloc is None and allowed_altloc is None:
+        pdbmol = None
+        missed_altloc = False 
+        needed_altloc = True
+    elif requested_altloc and requested_altloc in mols_dict:
+        pdbmol, idx_to_rdkit = mols_dict[requested_altloc]
+    elif requested_altloc and requested_altloc not in mols_dict:
+        pdbmol = None
+        missed_altloc = True
+        needed_altoc = False
+    elif allowed_altloc and allowed_altloc in mols_dict:
+        pdbmol, idx_to_rdkit = mols_dict[allowed_altloc]
+    elif has_altloc and allowed_altloc not in mols_dict:
+        pdbmol = None
+        needed_altloc = True
+        missed_altloc = False
+    elif not has_altloc and requested_altloc is None:
+        pdbmol, idx_to_rdkit = mols_dict[None]
+    else:
+        raise RuntimeError("programming bug, please post full error on github")
+    if pdbmol is None: 
+        idx_to_rdkit = None
+        return pdbmol, idx_to_rdkit, missed_altloc, needed_altloc
+    else:
+        rdDetermineBonds.DetermineConnectivity(pdbmol)
+        for atom in pdbmol.GetAtoms():
+            if atom.GetAtomicNum() == 7 and len(atom.GetNeighbors()) == 4:
+                atom.SetFormalCharge(1)
+        _ = Chem.SanitizeMol(pdbmol)
+
+    return pdbmol, idx_to_rdkit, missed_altloc, needed_altloc
