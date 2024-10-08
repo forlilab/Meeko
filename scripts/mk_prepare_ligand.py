@@ -413,7 +413,7 @@ class Output:
             self.duplicate_names.add(name)
         self.visited_names.add(name)
         if self.multimol_prefix is not None:
-            name = "%s-%d" % (args.multimol_prefix, self.counter)
+            name = "%s-%d" % (self.multimol_prefix, self.counter)
         for suffix in suffixes:
             if suffix is not None and len(suffix) > 0:
                 name += "_" + suffix
