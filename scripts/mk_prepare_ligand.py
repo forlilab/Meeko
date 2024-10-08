@@ -627,15 +627,26 @@ if __name__ == "__main__":
 
         input_mol_with_failure += int(this_mol_had_failure)
 
+    # Close the last tarf opened
     if output.tarf is not None:
         output.tarf.close()
 
+    # Print final status
+    print(
+        "Input molecules processed: %d, skipped: %d"
+        % (output.counter, input_mol_skipped)
+    )
+    print("PDBQT files written: %d" % (output.num_files_written))
+    print("PDBQT files not written due to error: %d" % (nr_failures))
+    print("Input molecules with errors: %d" % (input_mol_with_failure))
     if output.is_multimol:
-        print(
-            "Input molecules processed: %d, skipped: %d"
-            % (output.counter, input_mol_skipped)
-        )
-        print("PDBQT files written: %d" % (output.num_files_written))
-        print("PDBQT files not written due to error: %d" % (nr_failures))
-        print("Input molecules with errors: %d" % (input_mol_with_failure))
+        # would be None if not is_multimol
         print(output.get_duplicates_info_string())
+
+    # Determine if exit code should be non-zero based on processing results
+    if output.num_files_written == 0:
+        print("No PDBQT files were written due to errors!")
+        sys.exit(1)  # full failure
+    elif input_mol_with_failure > 0:
+        print("Some molecules encountered errors!")
+        sys.exit(2)  # partial failure
