@@ -1999,7 +1999,7 @@ class ResiduePadder:
                 return False
         return True
 
-    def _check_target_mol(self, target_mol):
+    def _check_target_mol(self, target_mol: Chem.Mol):
         """Ensure target_mol contains self.rxn's reactant"""
         # Assumes single reactant
         if target_mol.GetSubstructMatches(self.rxn.GetReactantTemplate(0)):
@@ -2017,7 +2017,7 @@ class ResiduePadder:
 
 # Utility Functions
 
-def get_molAtomMapNumbers(mol: Chem.Mol) -> set:
+def get_molAtomMapNumbers(mol: Chem.Mol) -> set[int]:
     """Return the set of mapping numbers in a molecule."""
     return {atom.GetIntProp("molAtomMapNumber") for atom in mol.GetAtoms() if atom.HasProp("molAtomMapNumber")}
 
