@@ -1883,7 +1883,7 @@ class ResiduePadder:
             # Generate fallback options for reactants
             fallback_reactant_smartsmol = Chem.MolFromSmarts(rdFMCS.FindMCS([reactant_smartsmol, target_mol]).smartsString)
             if fallback_reactant_smartsmol is None:
-                raise RuntimeError(f"target_mol does not contain the expected reactant.")
+                raise RuntimeError(f"There is no common substructure between target_mol and the expected reactant. ")
 
             # Filter fallback options
             # To be accepted, the fallback reactant needs to at least have a match with target_mol
@@ -1892,6 +1892,8 @@ class ResiduePadder:
                 reactant_mol for reactant_mol in apply_atom_mappings(fallback_reactant_smartsmol, reactant_smartsmol)
                 if any(target_required_atom_index in match for match in target_mol.GetSubstructMatches(reactant_mol))
             ]
+            if len(fallback_reactants) == 0:
+                raise RuntimeError(f"The maximum common substructure between target_mol and the expected reactant does not contain the expected linker atom with target_required_atom_index.")
             
             # Take any fallback reactant; actually, they're the same reactant mols having different mapping numbers
             fallback_reactant = fallback_reactants[0]
