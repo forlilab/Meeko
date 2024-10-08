@@ -1885,7 +1885,7 @@ class ResiduePadder:
             if fallback_reactant_smartsmol is None:
                 raise RuntimeError(f"There is no common substructure between target_mol and the expected reactant. ")
 
-            # Filter fallback options
+            # Add mapping number to fallback reactants and filter the fallback options
             # To be accepted, the fallback reactant needs to at least have a match with target_mol
             # containing target_mol's atom with target_required_atom_index
             fallback_reactants = [
