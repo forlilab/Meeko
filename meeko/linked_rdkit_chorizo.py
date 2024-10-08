@@ -1946,9 +1946,9 @@ class ResiduePadder:
 
         # Ensure single outcome
         if len(outcomes) == 0:
-            raise RuntimeError(f"No passing outcomes")
+            raise RuntimeError(f"The padding reaction of target_mol has no outcome that contains the atom with target_required_atom_index")
         elif len(outcomes) > 1:
-            raise RuntimeError(f"Multiple passing outcomes?")
+            raise RuntimeError(f"The padding reaction of target_mol has multiple outcomes that contain the atom with target_required_atom_index")
         padded_mol, idxmap = outcomes[0]
 
         padding_heavy_atoms = [
