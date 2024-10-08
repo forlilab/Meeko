@@ -393,6 +393,8 @@ class Output:
             self.multimol_output_dir,
             f"{prefix}{self.tarf_index:07d}.tar.gz"
         )
+        if self.tarf is not None:
+            self.tarf.close()
         tarf = tarfile.open(tgz_path, "w:gz")
         return tarf
 
@@ -438,7 +440,8 @@ class Output:
                 self._add_to_tar(pdbqt_string, name)
             else:
                 fpath = os.path.join(self.multimol_output_dir, name + ".pdbqt")
-                print(pdbqt_string, end="", file=open(fpath, "w"))
+                with open(fpath, "w") as f:
+                    print(pdbqt_string, end="", file=f)
             self.num_files_written += 1
 
         elif self.redirect_stdout:
@@ -448,7 +451,8 @@ class Output:
                 filename = "%s.pdbqt" % name
             else:
                 filename = self.output_filename
-            print(pdbqt_string, end="", file=open(filename, "w"))
+            with open(filename, "w") as f:
+                print(pdbqt_string, end="", file=f)
             self.num_files_written += 1
 
     def _mkdir(self, multimol_output_dir):
