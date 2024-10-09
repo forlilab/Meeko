@@ -556,15 +556,6 @@ if __name__ == "__main__":
             )
             break
 
-        if args.name_from_prop is not None:
-            if mol.HasProp(args.name_from_prop):
-                name = mol.GetProp(args.name_from_prop)
-            else:
-                continue  # TODO log this event
-        else:
-            name = mol.GetProp("_Name")
-        is_after_first = True
-
         # check that molecule was successfully loaded
         if backend == "rdkit":
             is_valid = mol is not None
@@ -573,6 +564,15 @@ if __name__ == "__main__":
             continue
 
         this_mol_had_failure = False
+
+        if args.name_from_prop is not None:
+            if mol.HasProp(args.name_from_prop):
+                name = mol.GetProp(args.name_from_prop)
+            else:
+                continue  # TODO log this event
+        else:
+            name = mol.GetProp("_Name")
+        is_after_first = True
 
         if is_covalent:
             for cov_lig in covalent_builder.process(
