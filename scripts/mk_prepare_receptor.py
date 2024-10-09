@@ -141,6 +141,8 @@ def get_args():
         action="store_true",
         help="delete residues with missing atoms instead of raising error",
     )
+    config_group.add_argument("--allowed_altloc", help="general default altloc")
+    config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
     config_group.add_argument(
         "-f",
         "--flexres",
@@ -286,6 +288,24 @@ def get_args():
 
 args = get_args()
 
+if args.wanted_altloc is None:
+    wanted_altloc = None
+else:
+    wanted_altloc = parse_cmdline_res_assign(args.wanted_altloc)
+    # Ensure meaningful wanted_altloc
+    for key, value in wanted_altloc.items():
+        if isinstance(value, str) and value.strip() == "":
+            msg = "Wanted atloc cannot be an empty string or a string with just space"
+            print("Command line error: " + msg, file=sys.stderr)
+            sys.exit(2)
+
+
+# Ensure meaningful allowed_altloc
+if args.allowed_altloc is not None and args.allowed_altloc.strip()=="":
+    msg = "Allowed atloc cannot be an empty string or a string with just space"
+    print("Command line error: " + msg, file=sys.stderr)
+    sys.exit(2)
+
 # Default mapping of residue name and reactive atom name
 reactive_atom = {
     "SER": "OG",
@@ -419,8 +439,7 @@ if args.macromol is not None:
     ext = pathlib.Path(args.macromol).suffix[1:].lower()
     if ext in SUPPORTED_PRODY_FORMATS:
         parser = SUPPORTED_PRODY_FORMATS[ext]
-        # we should do something with the header...
-        input_obj, header = parser(args.macromol, header=True)
+        input_obj = parser(args.macromol, altloc="all")
         chorizo = LinkedRDKitChorizo.from_prody(
             input_obj,
             templates,
@@ -429,8 +448,9 @@ if args.macromol is not None:
             del_res,
             args.allow_bad_res,
             blunt_ends=blunt_ends,
+            wanted_altloc=wanted_altloc,
+            allowed_altloc=args.allowed_altloc,
         )
-    # prody_mol = prody.
 else:
     with open(args.pdb) as f:
         pdb_string = f.read()
@@ -442,6 +462,8 @@ else:
         del_res,
         args.allow_bad_res,
         blunt_ends=blunt_ends,
+        wanted_altloc=wanted_altloc,
+        allowed_altloc=args.allowed_altloc,
     )
 
 # Use residue name in the input structure file to find reactive atom name

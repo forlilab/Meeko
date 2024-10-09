@@ -23,6 +23,8 @@ just_three_residues = pkgdir / "test/linked_rdkit_chorizo_data/just-three-residu
 disulfide_bridge = pkgdir / "test/linked_rdkit_chorizo_data/just_a_disulfide_bridge.pdb"
 loop_with_disulfide = pkgdir / "test/linked_rdkit_chorizo_data/loop_with_disulfide.pdb"
 insertion_code = pkgdir / "test/linked_rdkit_chorizo_data/1igy_B_82-83_has-icode.pdb"
+non_sequential_res = pkgdir / "test/linked_rdkit_chorizo_data/non-sequential-res.pdb"
+has_altloc = pkgdir / "test/linked_rdkit_chorizo_data/has-altloc.pdb"
 
 
 # TODO: add checks for untested chorizo fields (e.g. input options not indicated here)
@@ -341,3 +343,60 @@ def test_write_pdb_AHHY():
         mk_prep,
         blunt_ends=[("A:1", 0)],
     )
+
+def test_non_seq_res():
+    """the residue atoms are interrupted (not in contiguous lines)
+        which should cause the parser to throw an error. Here we
+        check the an error is thrown.
+    """
+    with open(non_sequential_res, "r") as f:
+        pdb_text = f.read()
+    with pytest.raises(ValueError) as err_msg:
+        chorizo = LinkedRDKitChorizo.from_pdb_string(
+            pdb_text,
+            chem_templates,
+            mk_prep,
+        )
+    assert str(err_msg.value).startswith("interrupted")
+
+def test_altloc():
+    with open(has_altloc, "r") as f:
+        pdb_text = f.read()
+    with pytest.raises(RuntimeError) as err_msg:
+        chorizo = LinkedRDKitChorizo.from_pdb_string(
+            pdb_text,
+            chem_templates,
+            mk_prep,
+        )
+    assert str(err_msg.value).startswith("Handle AltLocs")
+
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+        allowed_altloc="B",
+    )
+    res = chorizo.residues["A:264"]
+    xyz = res.rdkit_mol.GetConformer().GetPositions()
+    for atom in res.rdkit_mol.GetAtoms():
+        index = atom.GetIdx()
+        name = res.atom_names[index]
+        if name == "OG":
+            break
+    assert abs(xyz[index][0] - 11.220) < 0.001
+
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+        allowed_altloc="B",
+        wanted_altloc={"A:264": "A"}
+    )
+    res = chorizo.residues["A:264"]
+    xyz = res.rdkit_mol.GetConformer().GetPositions()
+    for atom in res.rdkit_mol.GetAtoms():
+        index = atom.GetIdx()
+        name = res.atom_names[index]
+        if name == "OG":
+            break
+    assert abs(xyz[index][0] - 12.346) < 0.001

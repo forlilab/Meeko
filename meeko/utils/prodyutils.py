@@ -1,9 +1,12 @@
 from typing import Union
+from typing import Optional
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import rdDetermineBonds
 from rdkit.Chem.rdchem import Mol
-from rdkit.Geometry import Point3D
+from .rdkitutils import AtomField
+from .rdkitutils import build_one_rdkit_mol_per_altloc
+from .rdkitutils import _aux_altloc_mol_build
 
 from prody.atomic import ATOMIC_FIELDS
 from prody.atomic.atomgroup import AtomGroup
@@ -106,10 +109,10 @@ ALLOWED_PRODY_TYPES = Union[Selection, AtomGroup, Chain, Residue]
 
 def prody_to_rdkit(
     prody_obj: ALLOWED_PRODY_TYPES,
-    name: str = "molecule",
     sanitize: bool = True,
     keep_bonds: bool = False,
-    keep_charges: bool = False,
+    requested_altloc: Optional[str] = None,
+    allowed_altloc: Optional[str] = None,
 ) -> Mol:
     """
     Convert a ProDy selection or atom group into an RDKit molecule.
@@ -137,81 +140,74 @@ def prody_to_rdkit(
     {0: 629, 1: 630, 2: 631, 3: 632, 4: 633, 5: 634, 6: 635, 7: 636, 8: 637, 9:
     638, 10: 6 39, 11: 640}
 
-    If the ProDy object contains a charges atom field, and the flag
-    `keep_charges` is set to True, charges will be extracted
-    (`atom.GetPartialCharge()`) and saved as an RDKit Property
-    ("_prody_charges") for each atom.
-
     By default, even if available, bonds defined in the ProDy object are
-    ignored. In order to use ProDy bond info, the flag `keep_charges` needs to
+    ignored. In order to use ProDy bond info, the flag `keep_bonds` needs to
     be set to True and bonds assigned or perceived prior to the conversion
-    (e.g. `AtomGroup.inferBonds()`, which is usually slow).
+    (e.g. `AtomGroup.inferBonds()`, which is usually slow). As of v2.4.1,
+    Prody's mmCIF parser does not parse bonds.
 
     Parameters
     ----------
     prody_obj : Union[Selection, AtomGroup]
         input molecule (AtomGroup) or subset selection (e.g., Selection
         containign one residue)
-    name : str (default: "molecule" )
-        name assigned to the new molecule
     sanitize : bool (default: True)
         perform the sanitization of the RDKit molecule prior to returning it;
         any exception during this process will be raised as RDKit would do.
     keep_bonds : bool (default: False)
         use bonds defined in the ProDy object, instead of perceiving them with
         RDKit using rdDetermineBonds.DetermineConnectivity()
-    keep_charges : bool (default: False)
-        use partial charges defined in the ProDy object; when True, partial
-        charges are stored as  "_prody_charges" property in the RDKit molecule
+        Note that prody's mmCif parser does not parse bonds as of v2.4.1.
+    wanted_altloc : Optional[str] (default: None)
+        require specified alternate location
+    allowed_altloc : Optional[str] (default: None)
+        if altlocs exist, use this one.
 
     Returns
     -------
-    Mol
+    raw_input_mols : dict of tuples
         RDKit molecule
+    needed_altloc : bool
+        need to know which altloc to use with wanted_altloc or allowed_altloc
+    missed_altloc : bool
+        the requested altloc (with wanted_altloc) does not exist
     """
 
-    atom_count = len(prody_obj)
-    # create rdkit data
-    rdmol = Chem.Mol()
-    mol = Chem.EditableMol(rdmol)
-    conformer = Chem.Conformer(atom_count)
-    # initialize boookkeeping objects
+    atom_field_list = []
+    indices_prody = []
+    for atom in prody_obj:
+        indices_prody.append(int(atom.getIndex()))
+        x, y, z = atom.getCoords()
+        atom_field = AtomField(
+            atomname=str(atom.getName()).strip(),
+            altloc=str(atom.getAltloc()).strip(),
+            resname=str(atom.getResname()).strip(),
+            chain=str(atom.getChid()).strip(),
+            resnum=int(atom.getResnum()),
+            icode=str(atom.getIcode()).strip(),
+            x=float(x),
+            y=float(y),
+            z=float(z),
+            element=str(atom.getElement()).strip(),
+        )
+        atom_field_list.append(atom_field)
+    
+    rdmol, idx_to_rdkit, missed_altloc, needed_altloc = _aux_altloc_mol_build(
+        atom_field_list,
+        requested_altloc,
+        allowed_altloc,
+    )
+
+    if rdmol is None:
+        return None, missed_altloc, needed_altloc
+
     idx_prody_to_rdkit = {}
     idx_rdkit_to_prody = {}
-    idx_rdkit = 0
+    for index_list, index_rdkit in idx_to_rdkit.items():
+        index_prody = indices_prody[index_list]
+        idx_prody_to_rdkit[index_prody] = index_rdkit
+        idx_rdkit_to_prody[index_rdkit] = index_prody
 
-    # start molecule editing
-    mol.BeginBatchEdit()
-    for atom in prody_obj:
-        # gather atom info
-        idx_prody = int(atom.getIndex())
-        element = atom.getData("element")
-        # f8x PDB quirks like Zn/ZN
-        if len(element) > 1:
-            element = f"{element[0]}{element[1].lower()}"
-        atomic_num = periodic_table.GetAtomicNumber(element)
-        rdkit_atom = Chem.Atom(atomic_num)
-        # TODO check which property to use
-        if keep_charges is True:
-            partial_charge = atom.GetPartialCharge()
-            rdkit_atom.SetProp("_prody_charges", partial_charge)
-        x, y, z = atom.getCoords()
-        conformer.SetAtomPosition(idx_rdkit, Point3D(x, y, z))
-        res_info = Chem.rdchem.AtomPDBResidueInfo()
-        res_info.SetResidueName(str(atom.getResname()))
-        res_info.SetName(str(atom.getName()))
-        res_info.SetResidueNumber(int(atom.getResnum()))
-        res_info.SetChainId(str(atom.getChid()))
-        res_info.SetInsertionCode("")
-        res_info.SetTempFactor(0.0)
-        res_info.SetIsHeteroAtom(False)
-        res_info.SetSecondaryStructure(0)
-        res_info.SetSegmentNumber(0)
-        rdkit_atom.SetPDBResidueInfo(res_info)
-        mol.AddAtom(rdkit_atom)
-        idx_prody_to_rdkit[idx_prody] = idx_rdkit
-        idx_rdkit_to_prody[idx_rdkit] = idx_prody
-        idx_rdkit += 1
     # iterate and create bonds
     if keep_bonds is True:
         if isinstance(prody_obj, AtomGroup):
@@ -221,6 +217,9 @@ def prody_to_rdkit(
     else:
         bonds = None
     if bonds is not None:
+        print("THIS CODE PATH IS UNTESTED (bonds in prody_to_rdkit)")
+        mol = Chem.EditableMol(rdmol)
+        mol.BeginBatchEdit()
         for bond in bonds:
             bond_indices = [int(x) for x in bond.getIndices()]
             # bond with atoms outside this selection
@@ -234,12 +233,11 @@ def prody_to_rdkit(
             bond_type = _bondtypes[bond_order]
             print("bonds", bond_indices, bond)
             mol.AddBond(bond_indices[0], bond_indices[1], bond_type)
-    # finalize molecule changes
-    mol.CommitBatchEdit()
-    rdmol = mol.GetMol()
-    # add coordinates
-    rdmol.AddConformer(conformer, assignId=True)
-    # the molecule needs bonds, one way or another
+
+        mol.CommitBatchEdit()
+        rdmol = mol.GetMol()
+
+        # the molecule needs bonds, one way or another
     if bonds is None:
         rdDetermineBonds.DetermineConnectivity(rdmol)
     # sanitize the molecule if necessary
@@ -249,7 +247,7 @@ def prody_to_rdkit(
     # attach the bookkeeping to the molecule
     rdmol._idx_prody_to_rdkit = idx_prody_to_rdkit
     rdmol._idx_rdkit_to_prody = idx_rdkit_to_prody
-    return rdmol
+    return rdmol, missed_altloc, needed_altloc
 
 
 if __name__ == "__main__":

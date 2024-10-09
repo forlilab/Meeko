@@ -12,6 +12,7 @@
 		"CYS": ["CYS", "CYX", "CYX-", "NCYS", "NCYX", "NCYX-", "CCYS", "CCYX", "CCYX-"],
 		"CYX": [       "CYX", "CYX-",         "NCYX", "NCYX-",         "CCYX", "CCYX-"],
 		"CYM": [              "CYX-",                 "NCYX-",                 "CCYX-"],
+		"ALA": ["ALA", "NALA", "CALA"],
 		"ASP": ["ASP", "NASP", "CASP", "ASH", "CASH", "NASH"],
 		"ASH": ["ASH", "NASH", "CASH"],
 		"GLU": ["GLU", "NGLU", "CGLU", "GLH", "NGLH", "CGLH"],
