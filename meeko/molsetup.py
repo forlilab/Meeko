@@ -1296,10 +1296,6 @@ class MoleculeSetup:
             "-----+----------------------------+--------+---+----------+--------------- . . . "
         )
         print("  TOT CHARGE: %3.3f" % total_charge)
-        print("\n======[ DIRECTIONAL VECTORS ]==========")
-        for atom in self.atoms:
-            if atom.interaction_vector:
-                print("% 4d " % atom.index, atom.atom_type, end=" ")
 
         print("\n==============[ BONDS ]================")
         # For sanity users, we won't show those keys for now

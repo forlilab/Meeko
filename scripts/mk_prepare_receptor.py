@@ -23,9 +23,15 @@ from meeko import get_reactive_config
 from meeko import gridbox
 from meeko import __file__ as pkg_init_path
 from rdkit import Chem
-import prody
 
-SUPPORTED_PRODY_FORMATS = {"pdb": prody.parsePDB, "cif": prody.parseMMCIF}
+try:
+    import prody
+except ImportError as import_error:
+    _prody_import_error = import_error
+    _got_prody = False
+else:
+    SUPPORTED_PRODY_FORMATS = {"pdb": prody.parsePDB, "cif": prody.parseMMCIF}
+    _got_prody = True
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
@@ -103,9 +109,14 @@ def get_args():
     io_group = parser.add_argument_group("Input/Output")
     io_group.add_argument(
         "--pdb",
-        help="deprecated, use --macromol, still here as non-prody option, no PDBQT",
+        help="non-prody option, reads PDB (not PDBQT)",
     )
-    io_group.add_argument("--macromol", help="PDB/mmCIF input file")
+    need_prody_msg = ""
+    # if prody is not installed, the help message is extended to tell
+    # the user how to install prody
+    if not _got_prody:
+        need_prody_msg = " which can be installed from PyPI or conda-forge."
+    io_group.add_argument("--macromol", help=f"read PDB/mmCIF input file with Prody{need_prody_msg}")
     io_group.add_argument(
         "-o",
         "--output_filename",
@@ -116,7 +127,7 @@ def get_args():
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
-    config_group.add_argument("--delete_residues", help='e.g. \'["A:350", "B:17"]\'')
+    config_group.add_argument("--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("--blunt_ends", help="e.g. A:123,200=2,A:1=0")
     config_group.add_argument("--chorizo_config", help="[.json]")
     config_group.add_argument("--add_templates", help="[.json]")
@@ -126,6 +137,8 @@ def get_args():
         action="store_true",
         help="delete residues with missing atoms instead of raising error",
     )
+    config_group.add_argument("--allowed_altloc", help="general default altloc")
+    config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
     config_group.add_argument(
         "-f",
         "--flexres",
@@ -271,6 +284,24 @@ def get_args():
 
 args = get_args()
 
+if args.wanted_altloc is None:
+    wanted_altloc = None
+else:
+    wanted_altloc = parse_cmdline_res_assign(args.wanted_altloc)
+    # Ensure meaningful wanted_altloc
+    for key, value in wanted_altloc.items():
+        if isinstance(value, str) and value.strip() == "":
+            msg = "Wanted atloc cannot be an empty string or a string with just space"
+            print("Command line error: " + msg, file=sys.stderr)
+            sys.exit(2)
+
+
+# Ensure meaningful allowed_altloc
+if args.allowed_altloc is not None and args.allowed_altloc.strip()=="":
+    msg = "Allowed atloc cannot be an empty string or a string with just space"
+    print("Command line error: " + msg, file=sys.stderr)
+    sys.exit(2)
+
 # Default mapping of residue name and reactive atom name
 reactive_atom = {
     "SER": "OG",
@@ -367,7 +398,7 @@ if args.blunt_ends is not None:
     j = [(k, int(v)) for k, v in j.items()]
     blunt_ends.extend(j)
 if args.delete_residues is not None:
-    del_res.update(json.loads(args.delete_residues))
+    del_res.extend(parse_cmdline_res(args.delete_residues))
 if args.mk_config is not None:
     with open(args.mk_config) as f:
         mk_config = json.load(f)
@@ -396,11 +427,15 @@ templates = ResidueChemTemplates.from_dict(res_chem_templates)
 print(f"{templates=}")
 # create chorizos
 if args.macromol is not None:
+    if not _got_prody:
+        print(_prody_import_error, file=sys.stderr)
+        print("option --macromol requires Prody, which is not installed.")
+        print("Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)")
+        sys.exit(2)
     ext = pathlib.Path(args.macromol).suffix[1:].lower()
     if ext in SUPPORTED_PRODY_FORMATS:
         parser = SUPPORTED_PRODY_FORMATS[ext]
-        # we should do something with the header...
-        input_obj, header = parser(args.macromol, header=True)
+        input_obj = parser(args.macromol, altloc="all")
         chorizo = LinkedRDKitChorizo.from_prody(
             input_obj,
             templates,
@@ -409,8 +444,9 @@ if args.macromol is not None:
             del_res,
             args.allow_bad_res,
             blunt_ends=blunt_ends,
+            wanted_altloc=wanted_altloc,
+            allowed_altloc=args.allowed_altloc,
         )
-    # prody_mol = prody.
 else:
     with open(args.pdb) as f:
         pdb_string = f.read()
@@ -422,6 +458,8 @@ else:
         del_res,
         args.allow_bad_res,
         blunt_ends=blunt_ends,
+        wanted_altloc=wanted_altloc,
+        allowed_altloc=args.allowed_altloc,
     )
 
 # Use residue name in the input structure file to find reactive atom name
@@ -486,28 +524,11 @@ for res_id in reactive_flexres:
 # Combine nonreactive and reactive flexible residues into one set
 all_flexres = nonreactive_flexres.union(reactive_flexres)
 
-#  mutate_res_dict=mutate_res_dict, termini=termini, deleted_residues=del_res,
-#                                 allow_bad_res=args.allow_bad_res, skip_auto_disulfide=args.skip_auto_disulfide)
-
 for res_id in all_flexres:
     chorizo.flexibilize_sidechain(res_id, mk_prep)
 rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(
     chorizo
 )
-
-# suggested_config = {}
-# if len(chorizo.suggested_mutations):
-#    suggested_config["mutate_res_dict"] = chorizo.suggested_mutations.copy()
-
-# if len(chorizo.get_ignored_residues()) > 0:
-#    removed_residues = chorizo.get_ignored_residues()
-#    print("Automatically deleted %d residues" % len(removed_residues))
-#    print(json.dumps(list(removed_residues.keys()), indent=4))
-#    suggested_config["deleted_residues"] = removed_residues.copy()
-
-# rigid_pdbqt, ok, err = PDBQTWriterLegacy.write_string_static_molsetup(molsetup)
-# ok, err = receptor.assign_types_charges()
-# check(ok, err)
 
 pdbqt = {
     "rigid": rigid_pdbqt,
@@ -571,14 +592,6 @@ written_files_log["filename"].append(rigid_fn)
 written_files_log["description"].append("static (i.e., rigid) receptor input file")
 with open(rigid_fn, "w") as f:
     f.write(pdbqt["rigid"])
-
-# if len(suggested_config):
-#    suggested_fn = str(outpath.with_suffix("")) + "_suggested-config.json"
-#    written_files_log["filename"].append(suggested_fn)
-#    written_files_log["description"].append("log of automated decisions for user inspection")
-#    with open(suggested_fn, "w") as f:
-#        print(suggested_config)
-#        json.dump(list(suggested_config.keys()), f)
 
 # GPF for autogrid4
 if not args.skip_gpf:

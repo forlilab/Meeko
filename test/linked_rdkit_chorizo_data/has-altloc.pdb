@@ -1,0 +1,100 @@
+ATOM      1  N   SER A 261      16.053  -1.300  -0.874  1.00 16.83      A    N  
+ANISOU    1  N   SER A 261     2250   2350   1793   -180    -13    105  A    N  
+ATOM      2  CA ASER A 261      15.221  -0.387  -0.061  0.70 18.11      A    C  
+ANISOU    2  CA ASER A 261     2466   2488   1926   -225     15     77  A    C  
+ATOM      3  CA BSER A 261      15.171  -0.494  -0.038  0.30 16.69      A    C  
+ANISOU    3  CA BSER A 261     2287   2308   1747   -223     14     78  A    C  
+ATOM      4  C   SER A 261      13.922  -0.115  -0.823  1.00 20.49      A    C  
+ANISOU    4  C   SER A 261     2780   2753   2251   -192     64     54  A    C  
+ATOM      5  O   SER A 261      12.828  -0.243  -0.273  1.00 19.34      A    O  
+ANISOU    5  O   SER A 261     2669   2584   2094   -197     87     34  A    O  
+ATOM      6  CB ASER A 261      15.959   0.931   0.154  0.70 22.95      A    C  
+ANISOU    6  CB ASER A 261     3082   3105   2531   -273     13     69  A    C  
+ATOM      7  CB BSER A 261      15.890   0.720   0.522  0.30 18.87      A    C  
+ANISOU    7  CB BSER A 261     2576   2592   2004   -280      7     69  A    C  
+ATOM      8  OG ASER A 261      15.100   1.995   0.547  0.70 26.52      A    O  
+ANISOU    8  OG ASER A 261     3576   3522   2979   -302     49     27  A    O  
+ATOM      9  OG BSER A 261      15.138   1.267   1.593  0.30 18.47      A    O  
+ANISOU    9  OG BSER A 261     2578   2522   1918   -325     29     32  A    O  
+ATOM     10  N   LEU A 262      14.063   0.252  -2.115  1.00 17.11      A    N  
+ANISOU   10  N   LEU A 262     2319   2326   1856   -163     76     60  A    N  
+ATOM     11  CA  LEU A 262      12.881   0.560  -2.930  1.00 16.12      A    C  
+ANISOU   11  CA  LEU A 262     2199   2166   1758   -137    114     49  A    C  
+ATOM     12  C   LEU A 262      11.996  -0.689  -3.069  1.00 18.69      A    C  
+ANISOU   12  C   LEU A 262     2531   2483   2086    -95    118     50  A    C  
+ATOM     13  O   LEU A 262      10.779  -0.607  -2.861  1.00 17.57      A    O  
+ANISOU   13  O   LEU A 262     2416   2307   1951    -93    145     36  A    O  
+ATOM     14  CB  LEU A 262      13.290   1.089  -4.318  1.00 15.84      A    C  
+ANISOU   14  CB  LEU A 262     2123   2148   1748   -124    119     67  A    C  
+ATOM     15  CG  LEU A 262      12.139   1.278  -5.304  1.00 18.00      A    C  
+ANISOU   15  CG  LEU A 262     2396   2394   2051   -101    147     69  A    C  
+ATOM     16  CD1 LEU A 262      11.125   2.270  -4.802  1.00 18.66      A    C  
+ANISOU   16  CD1 LEU A 262     2512   2418   2159   -123    171     50  A    C  
+ATOM     17  CD2 LEU A 262      12.674   1.689  -6.691  1.00 19.17      A    C  
+ANISOU   17  CD2 LEU A 262     2499   2577   2208   -100    144     96  A    C  
+ATOM     18  N   LEU A 263      12.604  -1.837  -3.367  1.00 15.64      A    N  
+ANISOU   18  N   LEU A 263     2118   2122   1701    -65     88     65  A    N  
+ATOM     19  CA  LEU A 263      11.818  -3.060  -3.530  1.00 15.34      A    C  
+ANISOU   19  CA  LEU A 263     2085   2069   1675    -27     83     67  A    C  
+ATOM     20  C   LEU A 263      11.046  -3.386  -2.255  1.00 17.14      A    C  
+ANISOU   20  C   LEU A 263     2355   2278   1881    -53     80     68  A    C  
+ATOM     21  O   LEU A 263       9.858  -3.754  -2.322  1.00 17.40      A    O  
+ANISOU   21  O   LEU A 263     2405   2285   1920    -39     98     66  A    O  
+ATOM     22  CB  LEU A 263      12.700  -4.247  -3.947  1.00 15.70      A    C  
+ANISOU   22  CB  LEU A 263     2091   2138   1738     10     44     75  A    C  
+ATOM     23  CG  LEU A 263      11.944  -5.567  -4.132  1.00 17.09      A    C  
+ANISOU   23  CG  LEU A 263     2269   2288   1935     49     28     76  A    C  
+ATOM     24  CD1 LEU A 263      10.910  -5.483  -5.282  1.00 17.30      A    C  
+ANISOU   24  CD1 LEU A 263     2301   2300   1974     77     62     61  A    C  
+ATOM     25  CD2 LEU A 263      12.896  -6.668  -4.409  1.00 19.54      A    C  
+ANISOU   25  CD2 LEU A 263     2537   2611   2276     86    -13     75  A    C  
+ATOM     26  N   SER A 264      11.710  -3.245  -1.094  1.00 15.25      A    N  
+ANISOU   26  N   SER A 264     2127   2057   1609    -98     58     75  A    N  
+ATOM     27  CA ASER A 264      11.029  -3.530   0.174  0.70 15.83      A    C  
+ANISOU   27  CA ASER A 264     2239   2130   1647   -137     55     77  A    C  
+ATOM     28  CA BSER A 264      11.021  -3.531   0.166  0.30 14.93      A    C  
+ANISOU   28  CA BSER A 264     2125   2016   1534   -136     56     77  A    C  
+ATOM     29  C   SER A 264       9.796  -2.642   0.363  1.00 17.91      A    C  
+ANISOU   29  C   SER A 264     2533   2371   1903   -151    113     42  A    C  
+ATOM     30  O   SER A 264       8.796  -3.082   0.939  1.00 20.01      A    O  
+ANISOU   30  O   SER A 264     2819   2632   2152   -161    126     42  A    O  
+ATOM     31  CB ASER A 264      11.999  -3.414   1.346  0.70 19.61      A    C  
+ANISOU   31  CB ASER A 264     2726   2641   2084   -193     20     90  A    C  
+ATOM     32  CB BSER A 264      11.960  -3.393   1.353  0.30 17.66      A    C  
+ANISOU   32  CB BSER A 264     2480   2393   1836   -193     22     89  A    C  
+ATOM     33  OG ASER A 264      12.346  -2.070   1.638  0.70 21.61      A    O  
+ANISOU   33  OG ASER A 264     2994   2899   2317   -232     44     61  A    O  
+ATOM     34  OG BSER A 264      11.220  -3.648   2.534  0.30 17.69      A    O  
+ANISOU   34  OG BSER A 264     2519   2408   1793   -238     25     91  A    O  
+ATOM     35  N   GLN A 265       9.868  -1.374  -0.086  1.00 15.39      A    N  
+ANISOU   35  N   GLN A 265     2212   2037   1601   -156    144     14  A    N  
+ATOM     36  CA AGLN A 265       8.752  -0.455   0.063  0.60 15.16      A    C  
+ANISOU   36  CA AGLN A 265     2202   1974   1583   -164    196    -23  A    C  
+ATOM     37  CA BGLN A 265       8.738  -0.471   0.069  0.40 15.11      A    C  
+ANISOU   37  CA BGLN A 265     2196   1968   1577   -164    196    -22  A    C  
+ATOM     38  C   GLN A 265       7.635  -0.806  -0.921  1.00 17.43      A    C  
+ANISOU   38  C   GLN A 265     2477   2231   1915   -117    217    -13  A    C  
+ATOM     39  O   GLN A 265       6.463  -0.533  -0.654  1.00 17.74      A    O  
+ANISOU   39  O   GLN A 265     2529   2245   1965   -118    255    -34  A    O  
+ATOM     40  CB AGLN A 265       9.219   1.009  -0.090  0.60 15.80      A    C  
+ANISOU   40  CB AGLN A 265     2282   2037   1686   -186    211    -51  A    C  
+ATOM     41  CB BGLN A 265       9.179   0.991  -0.054  0.40 16.12      A    C  
+ANISOU   41  CB BGLN A 265     2323   2077   1725   -187    212    -51  A    C  
+ATOM     42  CG AGLN A 265      10.249   1.398   0.990  0.60 15.72      A    C  
+ANISOU   42  CG AGLN A 265     2288   2057   1630   -241    189    -64  A    C  
+ATOM     43  CG BGLN A 265      10.002   1.439   1.154  0.40 20.58      A    C  
+ANISOU   43  CG BGLN A 265     2909   2668   2241   -244    198    -73  A    C  
+ATOM     44  CD AGLN A 265      10.428   2.893   1.093  0.60 18.72      A    C  
+ANISOU   44  CD AGLN A 265     2674   2406   2031   -270    206   -103  A    C  
+ATOM     45  CD BGLN A 265      10.728   2.719   0.855  0.40 26.62      A    C  
+ANISOU   45  CD BGLN A 265     3667   3415   3033   -264    194    -87  A    C  
+ATOM     46  NE2AGLN A 265       9.941   3.474   2.151  0.60 22.68      A    N  
+ANISOU   46  NE2AGLN A 265     3208   2899   2509   -309    236   -158  A    N  
+ATOM     47  NE2BGLN A 265      10.007   3.822   0.884  0.40 20.47      A    N  
+ANISOU   47  NE2BGLN A 265     2898   2589   2292   -271    231   -132  A    N  
+ATOM     48  OE1AGLN A 265      11.041   3.541   0.245  0.60 21.43      A    O  
+ANISOU   48  OE1AGLN A 265     2994   2736   2412   -263    192    -86  A    O  
+ATOM     49  OE1BGLN A 265      11.924   2.729   0.547  0.40 20.96      A    O  
+ANISOU   49  OE1BGLN A 265     2929   2722   2311   -272    157    -56  A    O  
+TER   
+END

@@ -23,10 +23,10 @@ try:
     from meeko import CovalentBuilder
 
     _prody_parsers = {"pdb": prody.parsePDB, "mmcif": prody.parseMMCIF}
-    warnings.warn("Prody not available, covalent docking won't work", ImportWarning)
-except:
+except ImportError as err:
     _has_prody = False
     _prody_parsers = {}
+    _prody_import_error = err
 else:
     _has_prody = True
 
@@ -239,7 +239,7 @@ def cmd_lineparser():
 
     need_prody_msg = ""
     if not _has_prody:
-        need_prody_msg = ". Needs Prody which is unavailable"
+        need_prody_msg = ". Needs Prody which can be installed from PyPI or conda-forge"
     covalent_group = parser.add_argument_group(
         "Covalent docking (tethered)%s" % (need_prody_msg)
     )
@@ -328,7 +328,11 @@ def cmd_lineparser():
         sys.exit(2)
     is_covalent = num_required_covalent_args == 3
     if is_covalent and not _has_prody:
-        raise ImportError("Covalent docking requires Prody which is not available")
+        msg = "Covalent docking requires Prody which is not installed." + os.linesep
+        msg += "Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)"
+        print(_prody_import_error, file=sys.stderr)
+        print(msg)
+        sys.exit(2)
     if min(args.tether_smarts_indices) < 1:
         print(
             "--tether_smarts_indices is 1-indexed, all values must be greater than zero",
@@ -389,6 +393,8 @@ class Output:
             self.multimol_output_dir,
             f"{prefix}{self.tarf_index:07d}.tar.gz"
         )
+        if self.tarf is not None:
+            self.tarf.close()
         tarf = tarfile.open(tgz_path, "w:gz")
         return tarf
 
@@ -409,7 +415,7 @@ class Output:
             self.duplicate_names.add(name)
         self.visited_names.add(name)
         if self.multimol_prefix is not None:
-            name = "%s-%d" % (args.multimol_prefix, self.counter)
+            name = "%s-%d" % (self.multimol_prefix, self.counter)
         for suffix in suffixes:
             if suffix is not None and len(suffix) > 0:
                 name += "_" + suffix
@@ -434,7 +440,8 @@ class Output:
                 self._add_to_tar(pdbqt_string, name)
             else:
                 fpath = os.path.join(self.multimol_output_dir, name + ".pdbqt")
-                print(pdbqt_string, end="", file=open(fpath, "w"))
+                with open(fpath, "w") as f:
+                    print(pdbqt_string, end="", file=f)
             self.num_files_written += 1
 
         elif self.redirect_stdout:
@@ -444,7 +451,8 @@ class Output:
                 filename = "%s.pdbqt" % name
             else:
                 filename = self.output_filename
-            print(pdbqt_string, end="", file=open(filename, "w"))
+            with open(filename, "w") as f:
+                print(pdbqt_string, end="", file=f)
             self.num_files_written += 1
 
     def _mkdir(self, multimol_output_dir):
@@ -548,15 +556,6 @@ if __name__ == "__main__":
             )
             break
 
-        if args.name_from_prop is not None:
-            if mol.HasProp(args.name_from_prop):
-                name = mol.GetProp(args.name_from_prop)
-            else:
-                continue  # TODO log this event
-        else:
-            name = mol.GetProp("_Name")
-        is_after_first = True
-
         # check that molecule was successfully loaded
         if backend == "rdkit":
             is_valid = mol is not None
@@ -565,6 +564,15 @@ if __name__ == "__main__":
             continue
 
         this_mol_had_failure = False
+
+        if args.name_from_prop is not None:
+            if mol.HasProp(args.name_from_prop):
+                name = mol.GetProp(args.name_from_prop)
+            else:
+                continue  # TODO log this event
+        else:
+            name = mol.GetProp("_Name")
+        is_after_first = True
 
         if is_covalent:
             for cov_lig in covalent_builder.process(
@@ -609,7 +617,7 @@ if __name__ == "__main__":
                     add_index_map=args.add_index_map,
                 )
                 if success:
-                    output(pdbqt_string, output_filename.replace(".pdbqt",""), (suffix,))
+                    output(pdbqt_string, name, (suffix,))
                     if args.verbose:
                         molsetup.show()
                 else:
@@ -619,15 +627,26 @@ if __name__ == "__main__":
 
         input_mol_with_failure += int(this_mol_had_failure)
 
+    # Close the last tarf opened
     if output.tarf is not None:
         output.tarf.close()
 
+    # Print final status
+    print(
+        "Input molecules processed: %d, skipped: %d"
+        % (output.counter, input_mol_skipped)
+    )
+    print("PDBQT files written: %d" % (output.num_files_written))
+    print("PDBQT files not written due to error: %d" % (nr_failures))
+    print("Input molecules with errors: %d" % (input_mol_with_failure))
     if output.is_multimol:
-        print(
-            "Input molecules processed: %d, skipped: %d"
-            % (output.counter, input_mol_skipped)
-        )
-        print("PDBQT files written: %d" % (output.num_files_written))
-        print("PDBQT files not written due to error: %d" % (nr_failures))
-        print("Input molecules with errors: %d" % (input_mol_with_failure))
+        # would be None if not is_multimol
         print(output.get_duplicates_info_string())
+
+    # Determine if exit code should be non-zero based on processing results
+    if output.num_files_written == 0:
+        print("No PDBQT files were written due to errors!")
+        sys.exit(3)  # full failure
+    elif input_mol_with_failure > 0:
+        print("Some molecules encountered errors!")
+        sys.exit(4)  # partial failure
