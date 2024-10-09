@@ -811,6 +811,10 @@ class LinkedRDKitChorizo:
             wanted_altloc,
             allowed_altloc,
         )
+
+        # from here on it duplicates self.from_prody(), but extracting
+        # this out into a function felt like it sacrificed readibility
+        # so I decided to keep the duplication.
         _delete_residues(residues_to_delete, tmp_raw_input_mols)
         raw_input_mols = {}
         res_needed_altloc = []
@@ -893,6 +897,10 @@ class LinkedRDKitChorizo:
             wanted_altloc,
             allowed_altloc,
         )
+
+        # from here on it duplicates self.from_pdb_string(), but extracting
+        # this out into a function felt like it sacrificed readibility
+        # so I decided to keep the duplication.
         _delete_residues(residues_to_delete, tmp_raw_input_mols)
         raw_input_mols = {}
         res_needed_altloc = []
@@ -1620,23 +1628,20 @@ class LinkedRDKitChorizo:
                 chain_id = str(res.getChid()).strip()
                 res_name = str(res.getResname()).strip()
                 res_num = int(res.getResnum())
-                res_index = int(res.getResnum())
                 icode = str(res.getIcode()).strip()
                 reskey = f"{chain_id}:{res_num}{icode}"
                 reskey_to_resname.setdefault(reskey, set())
                 reskey_to_resname[reskey].add(res_name)
                 requested_altloc = wanted_altloc_dict.get(reskey, None)
-                prody_mol, missed_altloc, needed_altloc = prody_to_rdkit(
-                    res,
-                    requested_altloc=requested_altloc,
-                    allowed_altloc=allowed_altloc,
-                )
-                if prody_mol is not None:
-                    mol_name = f"{chain_id}:{res_index}:{res_name}:{res_num}:{icode}"
-                    prody_mol.SetProp("_Name", mol_name)
                 # we are not sanitizing because protonated LYS don't have the
                 # formal charge set on the N and Chem.SanitizeMol raises error
                 # Chem.SanitizeMol(prody_mol)
+                prody_mol, missed_altloc, needed_altloc = prody_to_rdkit(
+                    res,
+                    sanitize=False,
+                    requested_altloc=requested_altloc,
+                    allowed_altloc=allowed_altloc,
+                )
                 raw_input_mols[reskey] = (prody_mol, res_name,
                                           missed_altloc, needed_altloc)
         return raw_input_mols
