@@ -56,7 +56,8 @@ for filename in docking_results_filenames:
     else:
         with open(filename) as f:
             string = f.read()
-    pdbqt_mol = PDBQTMolecule(string, is_dlg=is_dlg, skip_typing=True)
+    pdbqt_mol = PDBQTMolecule(string, name = os.path.splitext(os.path.basename(filename))[0], 
+                              is_dlg=is_dlg, skip_typing=True)
 
     output_string, failures = RDKitMolCreate.write_sd_string(
             pdbqt_mol, only_cluster_leads=only_cluster_leads)

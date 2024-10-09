@@ -471,6 +471,8 @@ class RDKitMolCreate:
             if len(pdbqt_mol._pose_data[key_in_pdbqt]) == nr_poses:
                 available_properties[key_in_mol] = key_in_pdbqt
         mol_level_data = json.loads(combined_mol.GetProp("meeko"))
+        if pdbqt_mol.name is not None:
+            combined_mol.SetProp("_Name", pdbqt_mol.name)
         for conformer in combined_mol.GetConformers():
             i = conformer.GetId()
             j = pose_idxs[i]
