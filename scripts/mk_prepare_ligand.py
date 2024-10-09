@@ -646,7 +646,7 @@ if __name__ == "__main__":
     # Determine if exit code should be non-zero based on processing results
     if output.num_files_written == 0:
         print("No PDBQT files were written due to errors!")
-        sys.exit(1)  # full failure
+        sys.exit(3)  # full failure
     elif input_mol_with_failure > 0:
         print("Some molecules encountered errors!")
-        sys.exit(2)  # partial failure
+        sys.exit(4)  # partial failure
