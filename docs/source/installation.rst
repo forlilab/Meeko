@@ -46,3 +46,17 @@ Alternatively, it is possible to install with ``pip install -e .``. Then, change
 the source files take immediate effect without requiring further ``pip install .``.
 This is useful for developers. Changes to the command line scripts may still require
 a re-installation.
+
+
+Support for Python 3.12
+-----------------------
+
+Meeko runs on Python 3.12 as long as Prody is not installed. To run on 3.12,
+install all dependencies except Prody and install Meeko from source.
+
+Meeko uses Prody to parse PDB and mmCIF files. Without prody, PDB files
+can be parsed with the command line option ``--read_pdb`` and with the Python
+method ``LinkedRDKitChorizo.from_pdb_string()``. However, without ProDy it
+won't be possible to read mmCIF files or use tethered docking. Prody developers
+are working to support Python 3.12, so it is possible that Prody will work
+on Python 3.12 soon.
