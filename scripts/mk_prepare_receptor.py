@@ -102,38 +102,81 @@ def check(success, error_msg):
         print("Error: " + error_msg, file=sys.stderr)
         sys.exit(2)
 
+def required_length(nmin, nmax):
+    class RequiredLength(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            if not nmin <= len(values) <= nmax:
+                msg = "fargument {self.dest} requires between"
+                msg += " {nmin} and {nmax} arguments"
+                raise argparse.ArgumentTypeError(msg)
+            setattr(namespace, self.dest, values)
+    return RequiredLength
 
 def get_args():
     parser = TalkativeParser()
 
     io_group = parser.add_argument_group("Input/Output")
     io_group.add_argument(
-        "--pdb",
-        help="non-prody option, reads PDB (not PDBQT)",
+        "--read_pdb",
+        metavar="PDB_FILENAME",
+        help="reads PDB, not PDBQT, and does not use ProDy",
     )
     need_prody_msg = ""
     # if prody is not installed, the help message is extended to tell
     # the user how to install prody
     if not _got_prody:
         need_prody_msg = " which can be installed from PyPI or conda-forge."
-    io_group.add_argument("--macromol", help=f"read PDB/mmCIF input file with Prody{need_prody_msg}")
+    io_group.add_argument(
+        "-i",
+        "--read_with_prody",
+        metavar="MACROMOL_FILENAME",
+        help=f"reads PDB/mmCIF file with Prody{need_prody_msg}")
     io_group.add_argument(
         "-o",
-        "--output_filename",
-        required=True,
-        help="adds _rigid/_flex with flexible residues. Always suffixes .pdbqt.",
+        "--output_basename",
+        help="default basename for --write options used without filename",
     )
-    io_group.add_argument("-j", "--write_json", help="dump chorizo to JSON file", action="store_true")
+    io_group.add_argument(
+        "-p", "--write_pdbqt",
+        metavar="PDBQT_FILENAME",
+        nargs="*",
+        help="adds _rigid/_flex with flexible residues (filename defaults to --output_basename when not specified)",
+    )
+    io_group.add_argument(
+        "-j", "--write_json",
+        metavar="JSON_FILENAME",
+        help="parameterized receptor (filename defaults to --output_basename when not specified)",
+        nargs="*",
+        action=required_length(0, 1))
+
+    io_group.add_argument(
+        "--write_pdb",
+        help="prepared receptor (must specify filename)",
+        metavar="PDB_FILENAME",
+    )
+    io_group.add_argument(
+        "-g",
+        "--write_gpf",
+        metavar="GPF_FILENAME",
+        help="autogrid input file (filename defaults to --output_basename when not specified)",
+        nargs="*",
+        action=required_length(0, 1))
+    io_group.add_argument(
+        "-v", "--write_vina_box",
+        metavar="VINA_BOX_FILENAME",
+        help="config file for Vina with box dimensions (filename defaults to --output_basename when not specified_",
+        nargs="*",
+        action=required_length(0, 1))
+
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
-    config_group.add_argument("--delete_residues", help="e.g. A:350,B:15,16,17")
-    config_group.add_argument("--blunt_ends", help="e.g. A:123,200=2,A:1=0")
-    config_group.add_argument("--chorizo_config", help="[.json]")
-    config_group.add_argument("--add_templates", help="[.json]")
-    config_group.add_argument("--mk_config", help="[.json]")
+    config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
+    config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
+    config_group.add_argument("--add_templates", help="[.json]", metavar="JSON_FILENAME")
+    config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
-        "--allow_bad_res",
+        "-a", "--allow_bad_res",
         action="store_true",
         help="delete residues with missing atoms instead of raising error",
     )
@@ -148,17 +191,16 @@ def get_args():
     )
 
     box_group = parser.add_argument_group("Size and center of grid box")
-    # box_group.add_argument('-b', '--gridbox_filename', help="set grid box size and center using a Vina configuration file")
+
     box_group.add_argument(
-        "--skip_gpf", help="do not write a GPF file for autogrid", action="store_true"
-    )
-    box_group.add_argument(
-        "--box_size", help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float
+        "--box_size", help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float,
+        metavar=("X", "Y", "Z"),
     )
     box_group.add_argument(
         "--box_center",
         help="center of grid box (x, y, z) in Angstrom",
         nargs=3,
+        metavar=("X", "Y", "Z"),
         type=float,
     )
     box_group.add_argument(
@@ -168,6 +210,7 @@ def get_args():
     )
     box_group.add_argument(
         "--box_enveloping",
+        metavar="FILENAME",
         help="Box will envelop atoms in this file [.sdf .mol .mol2 .pdb .pdbqt]",
     )
     box_group.add_argument(
@@ -183,7 +226,6 @@ def get_args():
         help='same as --flexres but for reactive residues (max 8)',
     )
     reactive_group.add_argument(
-        "-g",
         "--reactive_name",
         action="append",
         default=[],
@@ -222,17 +264,32 @@ def get_args():
         help="r_eq scaling for 1-4 interaction across reactive atoms",
     )
     args = parser.parse_args()
-
-    if (args.pdb is None) == (args.macromol is None):
-        msg = "need either --pdb or --macromol, but not both"
-        print("Command line error: " + msg, file=sys.stderr)
+    
+    if args.read_pdb is None and args.read_with_prody is None:
+        parser.print_help()
+        msg = "Need input filename: use either -i/--read_with_prody or --read_pdb"
+        print(os_linesep + msg)
         sys.exit(2)
 
-    if not args.skip_gpf:
+    if args.read_pdb is not None and args.read_with_prody is not None:
+        msg = "Can't use both -i/--read_with_prody and --read_pdb"
+        print(os_linesep + msg, file=sys.stderr)
+        sys.exit(2)
+
+    if args.write_gpf is not None and args.write_pdbqt is None:
+        # there's a few of places that assume this condition has been checked
+        msg = "--write_gpf requires --write_pdbqt because autogrid expects"
+        msg += " the GPF file to point to the PDBQT file." 
+        print(os_linesep + msg)
+        sys.exit(2)
+
+    skip_gpf = args.write_gpf is None and args.write_vina_box is None
+    if not skip_gpf:
 
         box_help = f"""
-    either explcitly skip defining a search space with --skip_gpf, or
-    set box center and size with one of the following three combinations:
+    writing a grid parameter file (--write_gpf) or a config file with the
+    box dimensions for vina (-v/--write_vina_box) requires setting the box
+    center and size with one of the following three combinations:
     1) --box_center and --box_size
     2) --box_center_off_reactive_res and --box_size
     3) --box_enveloping and --padding"""
@@ -300,6 +357,25 @@ else:
 if args.allowed_altloc is not None and args.allowed_altloc.strip()=="":
     msg = "Allowed atloc cannot be an empty string or a string with just space"
     print("Command line error: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+# check write options have default if used without argument
+write_flags = [
+    args.write_pdbqt,
+    args.write_json,
+    args.write_gpf,
+    args.write_vina_box,
+]
+needed_default = False
+for flag in write_flags:
+    # flag is none if not used, and is empty list when used without arg
+    if flag is not None and len(flag) == 0:
+        needed_default = True
+        break
+if needed_default and args.output_basename is None:
+    msg = "--write flags require either a filename argument or"
+    msg += " --output_basename to set a default"
+    print(msg)
     sys.exit(2)
 
 # Default mapping of residue name and reactive atom name
@@ -378,33 +454,29 @@ for string in args.flexres:
         if res_id not in reactive_flexres:
             nonreactive_flexres.add(res_id)
 
-# if args.pdb is not None:
+
 set_template = {}
-del_res = []
-blunt_ends = []
-if args.chorizo_config is not None:
-    with open(args.chorizo_config) as f:
-        chorizo_config = json.load(f)
-    set_template.update(chorizo_config.get("set_template", {}))
-    del_res.extend(chorizo_config.get("del_res", []))
-    blunt_ends.extend(chorizo_config.get("blunt_ends", []))
-# direct command line options override config
 if args.set_template is not None:
-    j = parse_cmdline_res_assign(args.set_template)
-    set_template.update(j)
+    set_template = parse_cmdline_res_assign(args.set_template)
+
+blunt_ends = []
 if args.blunt_ends is not None:
     j = parse_cmdline_res_assign(args.blunt_ends)
     # TODO parse also input/raw atom names, easier than indices
     j = [(k, int(v)) for k, v in j.items()]
     blunt_ends.extend(j)
+
+delete_residues = []
 if args.delete_residues is not None:
-    del_res.extend(parse_cmdline_res(args.delete_residues))
+    delete_residues = parse_cmdline_res(args.delete_residues)
+
 if args.mk_config is not None:
     with open(args.mk_config) as f:
         mk_config = json.load(f)
     mk_prep = MoleculePreparation.from_config(mk_config)
 else:
     mk_prep = MoleculePreparation()
+
 # load templates for mapping
 if args.add_templates is not None:
     with open(args.add_templates) as f:
@@ -426,36 +498,36 @@ templates = ResidueChemTemplates.from_dict(res_chem_templates)
 
 print(f"{templates=}")
 # create chorizos
-if args.macromol is not None:
+if args.read_with_prody is not None:
     if not _got_prody:
         print(_prody_import_error, file=sys.stderr)
-        print("option --macromol requires Prody, which is not installed.")
+        print("option --read_with_prody requires Prody, which is not installed.")
         print("Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)")
         sys.exit(2)
-    ext = pathlib.Path(args.macromol).suffix[1:].lower()
+    ext = pathlib.Path(args.read_with_prody).suffix[1:].lower()
     if ext in SUPPORTED_PRODY_FORMATS:
         parser = SUPPORTED_PRODY_FORMATS[ext]
-        input_obj = parser(args.macromol, altloc="all")
+        input_obj = parser(args.read_with_prody, altloc="all")
         chorizo = LinkedRDKitChorizo.from_prody(
             input_obj,
             templates,
             mk_prep,
             set_template,
-            del_res,
+            delete_residues,
             args.allow_bad_res,
             blunt_ends=blunt_ends,
             wanted_altloc=wanted_altloc,
             allowed_altloc=args.allowed_altloc,
         )
 else:
-    with open(args.pdb) as f:
+    with open(args.read_pdb) as f:
         pdb_string = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
         pdb_string,
         templates,  # residue_templates, padders, ambiguous,
         mk_prep,
         set_template,
-        del_res,
+        delete_residues,
         args.allow_bad_res,
         blunt_ends=blunt_ends,
         wanted_altloc=wanted_altloc,
@@ -555,46 +627,81 @@ any_lig_base_types = [
     "B",
 ]
 
-outpath = pathlib.Path(args.output_filename)
+if args.output_basename is not None:
+    outpath = pathlib.Path(args.output_basename)
 
 written_files_log = {"filename": [], "description": []}
 
-if args.write_json:
-    fn = str(outpath.with_suffix("")) + ".json"
+if args.write_json is not None:
+    if args.write_json:
+        fn = args.write_json[0]
+    else:  # args.write_json is empty list (was used without arg)
+        fn = str(outpath) + ".json"
     with open(fn, "w") as f:
         json.dump(chorizo, f, cls=LinkedRDKitChorizoEncoder)
     written_files_log["filename"].append(fn)
-    written_files_log["description"].append("parameterized receptor object")
+    written_files_log["description"].append("parameterized receptor")
 
-if len(all_flexres) == 0:
-    box_center = args.box_center
-    rigid_fn = str(outpath.with_suffix(".pdbqt"))
-    flex_fn = None
-else:
-    print(f"{reactive_flexres=}")
-    all_flex_pdbqt = ""
-    reactive_flexres_count = 0
-    for res_id, flexres_pdbqt in pdbqt["flex"].items():
-        all_flex_pdbqt += flexres_pdbqt
+if args.write_pdb is not None:
+    fn = args.write_pdb[0]
+    with open(fn, "W") as f:
+        f.write(chorizo.to_pdb())
+    written_files_log["filename"].append(fn)
+    written_files_log["description"].append("receptor")
 
-    suffix = outpath.suffix
-    if outpath.suffix == "":
-        suffix = ".pdbqt"
-    rigid_fn = str(outpath.with_suffix("")) + "_rigid" + suffix
-    flex_fn = str(outpath.with_suffix("")) + "_flex" + suffix
+if args.write_pdbqt is not None:
+    if args.write_pdbqt:
+        if args.write_pdbqt.endswith(".pdbqt"):
+            fn_base = args.write_pdbqt.rstrip(".pdbqt")
+        else:
+            fn_base = args.write_pdbqt[0]
+    else:
+        fn_base = str(outpath)
+    if len(all_flexres) == 0:
+        box_center = args.box_center
+        rigid_fn = fn_base + ".pdbqt"
+        flex_fn = None
+    else:
+        print(f"{reactive_flexres=}")
+        all_flex_pdbqt = ""
+        reactive_flexres_count = 0
+        for res_id, flexres_pdbqt in pdbqt["flex"].items():
+            all_flex_pdbqt += flexres_pdbqt
+    
+        rigid_fn = fn_base + "_rigid.pdbqt"
+        flex_fn = fn_base + "_flex.pdbqt"
+    
+        written_files_log["filename"].append(flex_fn)
+        written_files_log["description"].append("flexible receptor input file")
+        with open(flex_fn, "w") as f:
+            f.write(all_flex_pdbqt)
+    
+    written_files_log["filename"].append(rigid_fn)
+    written_files_log["description"].append("static (i.e., rigid) receptor input file")
+    with open(rigid_fn, "w") as f:
+        f.write(pdbqt["rigid"])
 
-    written_files_log["filename"].append(flex_fn)
-    written_files_log["description"].append("flexible receptor input file")
-    with open(flex_fn, "w") as f:
-        f.write(all_flex_pdbqt)
+def warn_flexres_outside_box(chorizo, box_center, box_size):
+    for res_id, res in chorizo.residues.items():
+        if not res.is_movable:
+            continue
+        for atom in res.molsetup.atoms:
+            if not res.is_flexres_atom[atom.index]:
+                continue
+            if gridbox.is_point_outside_box(atom.coord, box_center, box_size, spacing=1.0):
+                print(
+                    "WARNING: Flexible residue outside box." + os_linesep,
+                    file=sys.stderr,
+                )
+                print(
+                    "WARNING: Strongly recommended to use a box that encompasses flexible residues."
+                    + os_linesep,
+                    file=sys.stderr,
+                )
+                break  # only need to warn once
 
-written_files_log["filename"].append(rigid_fn)
-written_files_log["description"].append("static (i.e., rigid) receptor input file")
-with open(rigid_fn, "w") as f:
-    f.write(pdbqt["rigid"])
-
-# GPF for autogrid4
-if not args.skip_gpf:
+skip_gpf = args.write_gpf is None and args.write_vina_box is None
+if not skip_gpf:
     if args.box_center is not None:
         box_center = args.box_center
         box_size = args.box_size
@@ -664,84 +771,85 @@ if not args.skip_gpf:
         print("Error: No box center specified.", file=sys.stderr)
         sys.exit(2)
 
-    # write .dat parameter file for B and Si
-    ff_fn = pathlib.Path(rigid_fn).parents[0] / pathlib.Path(
-        "boron-silicon-atom_par.dat"
-    )
-    written_files_log["filename"].append(str(ff_fn))
-    written_files_log["description"].append(
-        "atomic parameters for B and Si (for autogrid)"
-    )
-    with open(ff_fn, "w") as f:
-        f.write(gridbox.boron_silicon_atompar)
-    rec_types = [
-        "HD",
-        "C",
-        "A",
-        "N",
-        "NA",
-        "OA",
-        "F",
-        "P",
-        "SA",
-        "S",
-        "Cl",
-        "Br",
-        "I",
-        "Mg",
-        "Ca",
-        "Mn",
-        "Fe",
-        "Zn",
-    ]
-    gpf_string, npts = gridbox.get_gpf_string(
-        box_center,
-        box_size,
-        pathlib.Path(rigid_fn).name,
-        rec_types,
-        any_lig_base_types,
-        ff_param_fname=ff_fn.name,
-    )
-    # write GPF
-    gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
-    written_files_log["filename"].append(str(gpf_fn))
-    written_files_log["description"].append("autogrid input file")
-    with open(gpf_fn, "w") as f:
-        f.write(gpf_string)
 
-    # write a PDB for the box
-    box_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
-    written_files_log["filename"].append(box_fn)
-    written_files_log["description"].append("PDB file to visualize the grid box")
-    with open(box_fn, "w") as f:
-        f.write(gridbox.box_to_pdb_string(box_center, npts))
+    if args.write_gpf is not None:
+        if args.write_gpf:
+            gpf_fn = args.write_gpf[0]
+        else:
+            gpf_fn = pathlib.Path(rigid_fn).with_suffix(".gpf")
+        # write .dat parameter file for B and Si
+        ff_fn = pathlib.Path(gpf_fn).parents[0] / pathlib.Path(
+            "boron-silicon-atom_par.dat"
+        )
+        written_files_log["filename"].append(str(ff_fn))
+        written_files_log["description"].append(
+            "atomic parameters for B and Si (for autogrid)"
+        )
+        with open(ff_fn, "w") as f:
+            f.write(gridbox.boron_silicon_atompar)
+
+        rec_types = [
+            "HD",
+            "C",
+            "A",
+            "N",
+            "NA",
+            "OA",
+            "F",
+            "P",
+            "SA",
+            "S",
+            "Cl",
+            "Br",
+            "I",
+            "Mg",
+            "Ca",
+            "Mn",
+            "Fe",
+            "Zn",
+        ]
+        gpf_string, npts = gridbox.get_gpf_string(
+            box_center,
+            box_size,
+            pathlib.Path(rigid_fn).name,  # requires --write_pdbqt
+            rec_types,
+            any_lig_base_types,
+            ff_param_fname=ff_fn.name,
+        )
+
+        written_files_log["filename"].append(str(gpf_fn))
+        written_files_log["description"].append("autogrid input file")
+        with open(gpf_fn, "w") as f:
+            f.write(gpf_string)
 
     # write gridbox vina format
-    box_vina_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.txt"))
-    written_files_log["filename"].append(box_vina_fn)
-    written_files_log["description"].append("Vina-style box dimension file")
-    with open(box_vina_fn, "w") as f:
-        f.write(gridbox.box_to_vina_string(box_center, box_size))
+    if args.write_vina_box is not None:
+        if args.write_vina_box:
+            box_vina_fn = args.write_vina_box[0]
+        else:
+            box_vina_fn = str(outpath) + ".box.txt"
 
-    # check all flexres are inside the box
-    if len(reactive_flexres) > 0:
-        for res_id, res in chorizo.residues.items():
-            if not res.is_movable:
-                continue
-            for atom in res.molsetup.atoms:
-                if not res.is_flexres_atom[atom.index]:
-                    continue
-                if gridbox.is_point_outside_box(atom.coord, box_center, npts):
-                    print(
-                        "WARNING: Flexible residue outside box." + os_linesep,
-                        file=sys.stderr,
-                    )
-                    print(
-                        "WARNING: Strongly recommended to use a box that encompasses flexible residues."
-                        + os_linesep,
-                        file=sys.stderr,
-                    )
-                    break  # only need to warn once
+        written_files_log["filename"].append(box_vina_fn)
+        written_files_log["description"].append("Vina-style box dimension file")
+        with open(box_vina_fn, "w") as f:
+            f.write(gridbox.box_to_vina_string(box_center, box_size))
+
+    # write a PDB for the box
+    if args.write_vina_box is not None or args.write_gpf is not None:
+        if args.output_basename is not None:
+            box_fn = str(outpath) + ".box.pdb" 
+        elif args.write_gpf is not None:
+            # relies on --write_gpf forcing --write_pdbqt which sets rigid_fn
+            box_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
+        else:
+            box_fn = box_vina_fn.replace(".box.txt", ".box.pdb")
+        written_files_log["filename"].append(box_fn)
+        written_files_log["description"].append("PDB file to visualize the grid box")
+        with open(box_fn, "w") as f:
+            f.write(gridbox.box_to_pdb_string(box_center, box_size, spacing=1.0))
+
+    warn_flexres_outside_box(chorizo, box_center, box_size)
+
 
 # configuration info for AutoDock-GPU reactive docking
 if len(reactive_flexres) > 0:
@@ -818,9 +926,21 @@ if len(reactive_flexres) > 0:
     )
     print()
 
-print()
-print("Files written:")
-longest_fn = max([len(fn) for fn in written_files_log["filename"]])
-line = "%%%ds <-- " % longest_fn + "%s"
-for fn, desc in zip(written_files_log["filename"], written_files_log["description"]):
-    print(line % (fn, desc))
+if written_files_log["filename"]:
+    print()
+    print("Files written:")
+    longest_fn = max([len(fn) for fn in written_files_log["filename"]])
+    line = "%%%ds <-- " % longest_fn + "%s"
+    for fn, desc in zip(written_files_log["filename"], written_files_log["description"]):
+        print(line % (fn, desc))
+else:
+    print()
+    print("You have successfully prepared the receptor, but no files were written.")
+    print("Likely, you want to use some of the --write options, for example:")
+    print("  -p/--write_pdbqt, -j/--write_json, -g/--write_gpf, -v/--write_vina_box")
+    print("")
+    print("Recommended for AutoDock-GPU:")
+    print("  -o my_receptor -p -j -g")
+    print("")
+    print("Recommended for AutoDock-Vina:")
+    print("  -o my_receptor -p -j -v")
