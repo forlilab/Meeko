@@ -170,12 +170,12 @@ def build_one_rdkit_mol_per_altloc(atom_fields_list):
     return rdkit_mol_dict
 
 
-def _aux_altloc_mol_build(atom_field_list, requested_altloc, allowed_altloc):
+def _aux_altloc_mol_build(atom_field_list, requested_altloc, default_altloc):
     missed_altloc = False
     needed_altloc = False
     mols_dict = build_one_rdkit_mol_per_altloc(atom_field_list) 
     has_altloc = None not in mols_dict
-    if has_altloc and requested_altloc is None and allowed_altloc is None:
+    if has_altloc and requested_altloc is None and default_altloc is None:
         pdbmol = None
         missed_altloc = False 
         needed_altloc = True
@@ -185,9 +185,9 @@ def _aux_altloc_mol_build(atom_field_list, requested_altloc, allowed_altloc):
         pdbmol = None
         missed_altloc = True
         needed_altoc = False
-    elif allowed_altloc and allowed_altloc in mols_dict:
-        pdbmol, idx_to_rdkit = mols_dict[allowed_altloc]
-    elif has_altloc and allowed_altloc not in mols_dict:
+    elif default_altloc and default_altloc in mols_dict:
+        pdbmol, idx_to_rdkit = mols_dict[default_altloc]
+    elif has_altloc and default_altloc not in mols_dict:
         pdbmol = None
         needed_altloc = True
         missed_altloc = False

@@ -37,6 +37,7 @@ from .linked_rdkit_chorizo import ResidueTemplateEncoder
 from .linked_rdkit_chorizo import ResidueChemTemplatesEncoder
 from .linked_rdkit_chorizo import add_rotamers_to_chorizo_molsetups
 from .linked_rdkit_chorizo import linked_rdkit_chorizo_json_decoder
+from .linked_rdkit_chorizo import ChorizoCreationError
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
 from .reactive import reactive_typer

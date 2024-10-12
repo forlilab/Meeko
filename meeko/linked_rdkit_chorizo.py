@@ -444,6 +444,9 @@ def _delete_residues(res_to_delete, raw_input_mols):
         raise ValueError(msg)
     return
 
+class ChorizoCreationError(RuntimeError):
+    pass
+
 def handle_parsing_situations(
     unmatched_res,
     unparsed_res,
@@ -464,7 +467,7 @@ def handle_parsing_situations(
     if res_needed_altloc: 
         msg = f"Have alternate location {res_needed_altloc}" + os_linesep
         msg += "Either specify an altloc for each with option `wanted_altloc`" + os_linesep
-        msg += "or a general default altloc with option `allowed_altloc`."
+        msg += "or a general default altloc with option `default_altloc`."
         logger.warning(msg)
     if res_missed_altloc:
         msg = f"Failed parsing {res_missed_altloc}. Requested altlocs weren't found."
@@ -478,9 +481,9 @@ def handle_parsing_situations(
     if not allow_bad_res and (unmatched_res or unparsed_res):
         msg += f"These can be ignored with option allow_bad_res" + os_linesep
     if res_missed_altloc or res_needed_altloc:
-        msg += "Handle AltLocs with allowed_altloc or wanted_altloc" + os_linesep
+        msg += "Handle AltLocs with default_altloc or wanted_altloc" + os_linesep
     if msg:
-        raise RuntimeError(msg)
+        raise ChorizoCreationError(msg)
     return
 
 
@@ -718,7 +721,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc=None,
-        allowed_altloc=None
+        default_altloc=None
     ):
         """
 
@@ -733,7 +736,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete
         blunt_ends
         wanted_altloc
-        allowed_altloc
+        default_altloc
 
         Returns
         -------
@@ -743,7 +746,7 @@ class LinkedRDKitChorizo:
         tmp_raw_input_mols = cls._pdb_to_residue_mols(
             pdb_string,
             wanted_altloc,
-            allowed_altloc,
+            default_altloc,
         )
 
         # from here on it duplicates self.from_prody(), but extracting
@@ -804,7 +807,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc: Optional[dict]=None,
-        allowed_altloc: Optional[str]=None,
+        default_altloc: Optional[str]=None,
     ):
         """
 
@@ -819,7 +822,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete
         blunt_ends
         wanted_altloc
-        allowed_altloc
+        default_altloc
 
         Returns
         -------
@@ -829,7 +832,7 @@ class LinkedRDKitChorizo:
         tmp_raw_input_mols = cls._prody_to_residue_mols(
             prody_obj,
             wanted_altloc,
-            allowed_altloc,
+            default_altloc,
         )
 
         # from here on it duplicates self.from_pdb_string(), but extracting
@@ -1438,7 +1441,7 @@ class LinkedRDKitChorizo:
     def _pdb_to_residue_mols(
         pdb_string,
         wanted_altloc: Optional[dict[str, str]]=None,
-        allowed_altloc: Optional[str]=None,
+        default_altloc: Optional[str]=None,
     ):
         """
 
@@ -1527,7 +1530,7 @@ class LinkedRDKitChorizo:
             pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
                 atom_field_list,
                 requested_altloc,
-                allowed_altloc,
+                default_altloc,
             )
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
@@ -1539,7 +1542,7 @@ class LinkedRDKitChorizo:
     def _prody_to_residue_mols(
             prody_obj: ALLOWED_PRODY_TYPES,
             wanted_altloc_dict: Optional[dict] = None,
-            allowed_altloc: Optional[str] = None,
+            default_altloc: Optional[str] = None,
         ) -> dict:
         """
 
@@ -1578,7 +1581,7 @@ class LinkedRDKitChorizo:
                     res,
                     sanitize=False,
                     requested_altloc=requested_altloc,
-                    allowed_altloc=allowed_altloc,
+                    default_altloc=default_altloc,
                 )
                 raw_input_mols[reskey] = (prody_mol, res_name,
                                           missed_altloc, needed_altloc)
