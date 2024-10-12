@@ -229,7 +229,7 @@ def get_args():
         "--reactive_name",
         action="append",
         default=[],
-        help="set name of reactive atom of a residue type, e.g: -g 'TRP:NE1'. Repeat flag for multiple assignments. Overridden by --reactive_name_specific",
+        help="set name of reactive atom of a residue type, e.g: --reactive_name 'TRP:NE1'. Repeat flag for multiple assignments. Overridden by --reactive_name_specific",
     )
     reactive_group.add_argument(
         "-s",
