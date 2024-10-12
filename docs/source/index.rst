@@ -42,6 +42,7 @@ Meeko superseeds the preparation scripts from MGLTools. List advantages here (**
    :caption: Getting started
 
    installation
+   colab_examples
    tutorials
    about
 
