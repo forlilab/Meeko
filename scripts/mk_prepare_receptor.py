@@ -598,14 +598,7 @@ all_flexres = nonreactive_flexres.union(reactive_flexres)
 
 for res_id in all_flexres:
     chorizo.flexibilize_sidechain(res_id, mk_prep)
-rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(
-    chorizo
-)
 
-pdbqt = {
-    "rigid": rigid_pdbqt,
-    "flex": flex_pdbqt_dict,
-}
 
 any_lig_base_types = [
     "HD",
@@ -657,6 +650,10 @@ if args.write_pdbqt is not None:
             fn_base = args.write_pdbqt[0]
     else:
         fn_base = str(outpath)
+
+    pdbqt_tuple = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
+    rigid_pdbqt, flex_pdbqt_dict = pdbqt_tuple
+
     if len(all_flexres) == 0:
         box_center = args.box_center
         rigid_fn = fn_base + ".pdbqt"
@@ -665,7 +662,7 @@ if args.write_pdbqt is not None:
         print(f"{reactive_flexres=}")
         all_flex_pdbqt = ""
         reactive_flexres_count = 0
-        for res_id, flexres_pdbqt in pdbqt["flex"].items():
+        for res_id, flexres_pdbqt in flex_pdbqt_dict.items():
             all_flex_pdbqt += flexres_pdbqt
     
         rigid_fn = fn_base + "_rigid.pdbqt"
@@ -679,14 +676,14 @@ if args.write_pdbqt is not None:
     written_files_log["filename"].append(rigid_fn)
     written_files_log["description"].append("static (i.e., rigid) receptor input file")
     with open(rigid_fn, "w") as f:
-        f.write(pdbqt["rigid"])
+        f.write(rigid_pdbqt)
 
 def warn_flexres_outside_box(chorizo, box_center, box_size):
     for res_id, res in chorizo.residues.items():
         if not res.is_movable:
             continue
         for atom in res.molsetup.atoms:
-            if not res.is_flexres_atom[atom.index]:
+            if not res.is_flexres_atom[atom.index]:  # TODO: not implemented
                 continue
             if gridbox.is_point_outside_box(atom.coord, box_center, box_size, spacing=1.0):
                 print(
@@ -852,7 +849,7 @@ if not skip_gpf:
 
 
 # configuration info for AutoDock-GPU reactive docking
-if len(reactive_flexres) > 0:
+if len(reactive_flexres) > 0 and args.write_pdbqt is not None:
     any_lig_reac_types = []
     for order in (1, 2, 3):
         for t in any_lig_base_types:
