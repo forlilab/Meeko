@@ -478,7 +478,7 @@ for res_id in reactive_flexres:
         if input_resname in reactive_atom:
             reactive_flexres_name[res_id] = reactive_atom[input_resname]
         else:
-            print("no default reactive name for %s, " % resname)
+            print("no default reactive name for %s, " % input_resname)
             print("use --reactive_name or --reactive_name_specific" + os_linesep)
             sys.exit(2)
 
