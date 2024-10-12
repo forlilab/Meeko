@@ -48,14 +48,6 @@ The **basic docking example** is a rewrite based on the original basic docking e
 The **flexible docking example** is a rewrite based on the original flexible docking example in the `Vina documentation <https://autodock-vina.readthedocs.io/en/latest/>`_. In this example, a variant of Imatinib (PDB token `PRC <https://www1.rcsb.org/ligand/PRC>`_) is docked back to a hollow protein structure of mouse c-Abl (PDB token `1FPU <https://www1.rcsb.org/structure/1FPU>`_) to reproduce the complex structure. Additionally, Thr315 is set to be a flexible residue. A docked pose that closely resembles the original position of the ligand and **a flipped Thr315** are expected among the top-ranked poses. 
 
 
-[Vina] Using AD4SF in Vina
----------------
-
-`Run on Colab! <https://colab.research.google.com/drive/1zoSyID2fSoqGz3Zb1_IatUT2uxZ2mCNZ?usp=sharing>`_
-
-The **using AutoDock4 (AD4) scoring function (SF) example** is a rewrite based on the corresponding part of the original basic docking example in the `Vina documentation <https://autodock-vina.readthedocs.io/en/latest/>`_. This example conducts the same redocking experiment as in *Basic docking* with the AutoDock4 scoring function instead of Vina. To do this, Autogrid4 is used to compute the grid maps, as an additional step after receptor preparation. 
-
-
 [Vina] Basic Docking with an RNA Receptor
 ---------------
 
