@@ -496,7 +496,6 @@ if args.add_templates is not None:
         sys.exit(2)
 templates = ResidueChemTemplates.from_dict(res_chem_templates)
 
-print(f"{templates=}")
 # create chorizos
 if args.read_with_prody is not None:
     if not _got_prody:
@@ -930,6 +929,15 @@ if written_files_log["filename"]:
     line = "%%%ds <-- " % longest_fn + "%s"
     for fn, desc in zip(written_files_log["filename"], written_files_log["description"]):
         print(line % (fn, desc))
+    if (
+        args.output_basename is not None and
+        args.output_basename.endswith(".pdbqt") and
+        args.write_pdbqt is None
+    ):
+        print()
+        print("PDBQT files were NOT written. Use -p/--write_pdbqt for that.")
+        print("Note that -o/--output_basename just sets a default for --write flags")
+        print()
 else:
     print()
     print()
