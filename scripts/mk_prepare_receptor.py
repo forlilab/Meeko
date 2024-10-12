@@ -557,6 +557,7 @@ else:
         print("a default altloc variant. Use these at your own risk.")
         print()
         print("Inspecting and fixing the input structure is recommended.")
+        print("Use --wanted_altloc to set variants for specific residues.")
         sys.exit(1)
 
 
