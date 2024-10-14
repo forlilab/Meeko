@@ -460,36 +460,39 @@ def handle_parsing_situations(
     res_missed_altloc,
     res_needed_altloc,
     ):
-    if unparsed_res:
-        msg = f"Failed parsing {unparsed_res}."
-        if allow_bad_res:
-            msg += " Ignored due to allow_bad_res."
-        logger.warning(msg)
-    if unmatched_res:
-        msg = f"Unmatched residues {list(unmatched_res)}"
-        if allow_bad_res:
-            msg += " ignored due to allow_bad_res."
-        logger.warning(msg)
-    if res_needed_altloc: 
-        msg = f"Have alternate location {res_needed_altloc}" + os_linesep
-        msg += "Either specify an altloc for each with option `wanted_altloc`" + os_linesep
-        msg += "or a general default altloc with option `default_altloc`."
-        logger.warning(msg)
-    if res_missed_altloc:
-        msg = f"Failed parsing {res_missed_altloc}. Requested altlocs weren't found."
-        logger.warning(msg)
 
-    msg = ""
-    if not allow_bad_res and unmatched_res:
-        msg += f"Failed matching templates for {list(unmatched_res)}" + os_linesep
-    elif not allow_bad_res and unparsed_res:
-        msg += f"Failed parsing {unparsed_res}." + os_linesep
-    if not allow_bad_res and (unmatched_res or unparsed_res):
-        msg += f"These can be ignored with option allow_bad_res" + os_linesep
-    if res_missed_altloc or res_needed_altloc:
-        msg += "Handle AltLocs with default_altloc or wanted_altloc" + os_linesep
-    if msg:
-        raise ChorizoCreationError(msg)
+    err = ""
+    if unparsed_res:
+        msg = f"- Parsing failed for: {unparsed_res}."
+        if not allow_bad_res:
+            err += msg + os_linesep
+        else: 
+            msg += " Ignored due to allow_bad_res."
+            logger.warning(msg)
+
+    if unmatched_res:
+        msg = f"- Template matching failed for: {list(unmatched_res)}"
+        if not allow_bad_res:
+            err += msg + os_linesep
+        else:
+            msg += " Ignored due to allow_bad_res."
+            logger.warning(msg)
+
+    if err:
+        err += "These residues can be ignored with option allow_bad_res." + os_linesep
+
+    if res_needed_altloc: 
+        msg = f"- Residues with alternate location: {res_needed_altloc}" + os_linesep
+        msg += "Either specify an altloc for each with option wanted_altloc" + os_linesep
+        msg += "or a general default altloc with option default_altloc."
+        err += msg
+
+    if res_missed_altloc:
+        msg = f"- Requested altlocs not found for: {res_missed_altloc}." + os_linesep
+        err += msg
+
+    if err:
+        raise ChorizoCreationError(err)
     return
 
 
