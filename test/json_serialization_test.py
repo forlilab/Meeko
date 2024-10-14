@@ -711,10 +711,19 @@ def check_residue_padder_equality(
     starting_obj_rxn_smarts = rdChemReactions.ReactionToSmarts(starting_obj.rxn)
     assert decoded_obj_rxn_smarts == starting_obj_rxn_smarts
 
-    assert isinstance(decoded_obj.adjacent_smartsmol, Chem.rdchem.Mol)
     assert (
         decoded_obj.adjacent_smartsmol_mapidx == starting_obj.adjacent_smartsmol_mapidx
     )
+
+    decoded_adj = decoded_obj.adjacent_smartsmol
+    starting_adj = starting_obj.adjacent_smartsmol
+    assert isinstance(decoded_adj, Chem.rdchem.Mol) or decoded_adj is None
+    if decoded_adj is None:
+        assert decoded_adj == starting_adj
+    else:
+        decoded_adj_smarts = Chem.MolToSmarts(decoded_adj)
+        starting_adj_smarts = Chem.MolToSmarts(starting_adj)
+        assert decoded_adj_smarts == starting_adj_smarts
     return
 
 
