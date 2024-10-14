@@ -18,6 +18,7 @@ from meeko import ResidueChemTemplates
 from meeko import PDBQTWriterLegacy
 from meeko import LinkedRDKitChorizo
 from meeko import LinkedRDKitChorizoEncoder
+from meeko import ChorizoCreationError
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
@@ -180,7 +181,7 @@ def get_args():
         action="store_true",
         help="delete residues with missing atoms instead of raising error",
     )
-    config_group.add_argument("--allowed_altloc", help="general default altloc")
+    config_group.add_argument("--default_altloc", help="default alternate location (overridden by --wanted_altloc)")
     config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
     config_group.add_argument(
         "-f",
@@ -353,8 +354,8 @@ else:
             sys.exit(2)
 
 
-# Ensure meaningful allowed_altloc
-if args.allowed_altloc is not None and args.allowed_altloc.strip()=="":
+# Ensure meaningful default_altloc
+if args.default_altloc is not None and args.default_altloc.strip()=="":
     msg = "Allowed atloc cannot be an empty string or a string with just space"
     print("Command line error: " + msg, file=sys.stderr)
     sys.exit(2)
@@ -507,31 +508,61 @@ if args.read_with_prody is not None:
     if ext in SUPPORTED_PRODY_FORMATS:
         parser = SUPPORTED_PRODY_FORMATS[ext]
         input_obj = parser(args.read_with_prody, altloc="all")
-        chorizo = LinkedRDKitChorizo.from_prody(
-            input_obj,
-            templates,
+        try:
+            chorizo = LinkedRDKitChorizo.from_prody(
+                input_obj,
+                templates,
+                mk_prep,
+                set_template,
+                delete_residues,
+                args.allow_bad_res,
+                blunt_ends=blunt_ends,
+                wanted_altloc=wanted_altloc,
+                default_altloc=args.default_altloc,
+            )
+        except ChorizoCreationError as err:
+            print()
+            print("Error: Creation of data structure for receptor failed.")
+            print()
+            print("Details: ")
+            print(err)
+            print()
+            print("Recommendations: ")
+            print("1. (for batch processing) Use -a/--allow_bad_res to automatically remove residues")
+            print("that do not match templates, and --default_altloc to set")
+            print("a default altloc variant. Use these at your own risk.")
+            print()
+            print("2. (processing individual structure) Inspecting and fixing the input structure is recommended.")
+            print("Use --wanted_altloc to set variants for specific residues.")
+            sys.exit(1)
+else:
+    with open(args.read_pdb) as f:
+        pdb_string = f.read()
+    try:
+        chorizo = LinkedRDKitChorizo.from_pdb_string(
+            pdb_string,
+            templates,  # residue_templates, padders, ambiguous,
             mk_prep,
             set_template,
             delete_residues,
             args.allow_bad_res,
             blunt_ends=blunt_ends,
             wanted_altloc=wanted_altloc,
-            allowed_altloc=args.allowed_altloc,
+            default_altloc=args.default_altloc,
         )
-else:
-    with open(args.read_pdb) as f:
-        pdb_string = f.read()
-    chorizo = LinkedRDKitChorizo.from_pdb_string(
-        pdb_string,
-        templates,  # residue_templates, padders, ambiguous,
-        mk_prep,
-        set_template,
-        delete_residues,
-        args.allow_bad_res,
-        blunt_ends=blunt_ends,
-        wanted_altloc=wanted_altloc,
-        allowed_altloc=args.allowed_altloc,
-    )
+    except ChorizoCreationError as err:
+        print()
+        print("Creation of data structure for receptor failed.")
+        print()
+        print(err)
+        print("Use -a/--allow_bad_res to automatically remove residues")
+        print("that do not match templates, and --default_altloc to set")
+        print("a default altloc variant. Use these at your own risk.")
+        print()
+        print("Inspecting and fixing the input structure is recommended.")
+        print("Use --wanted_altloc to set variants for specific residues.")
+        sys.exit(1)
+
 
 # Use residue name in the input structure file to find reactive atom name
 # According to the mapping of residue name and reactive atom name

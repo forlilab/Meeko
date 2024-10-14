@@ -112,7 +112,7 @@ def prody_to_rdkit(
     sanitize: bool = True,
     keep_bonds: bool = False,
     requested_altloc: Optional[str] = None,
-    allowed_altloc: Optional[str] = None,
+    default_altloc: Optional[str] = None,
 ) -> Mol:
     """
     Convert a ProDy selection or atom group into an RDKit molecule.
@@ -160,7 +160,7 @@ def prody_to_rdkit(
         Note that prody's mmCif parser does not parse bonds as of v2.4.1.
     wanted_altloc : Optional[str] (default: None)
         require specified alternate location
-    allowed_altloc : Optional[str] (default: None)
+    default_altloc : Optional[str] (default: None)
         if altlocs exist, use this one.
 
     Returns
@@ -168,7 +168,7 @@ def prody_to_rdkit(
     raw_input_mols : dict of tuples
         RDKit molecule
     needed_altloc : bool
-        need to know which altloc to use with wanted_altloc or allowed_altloc
+        need to know which altloc to use with wanted_altloc or default_altloc
     missed_altloc : bool
         the requested altloc (with wanted_altloc) does not exist
     """
@@ -195,7 +195,7 @@ def prody_to_rdkit(
     rdmol, idx_to_rdkit, missed_altloc, needed_altloc = _aux_altloc_mol_build(
         atom_field_list,
         requested_altloc,
-        allowed_altloc,
+        default_altloc,
     )
 
     if rdmol is None:

@@ -450,6 +450,9 @@ def _delete_residues(res_to_delete, raw_input_mols):
         raise ValueError(msg)
     return
 
+class ChorizoCreationError(RuntimeError):
+    pass
+
 def handle_parsing_situations(
     unmatched_res,
     unparsed_res,
@@ -457,36 +460,39 @@ def handle_parsing_situations(
     res_missed_altloc,
     res_needed_altloc,
     ):
-    if unparsed_res:
-        msg = f"Failed parsing {unparsed_res}."
-        if allow_bad_res:
-            msg += " Ignored due to allow_bad_res."
-        logger.warning(msg)
-    if unmatched_res:
-        msg = f"Unmatched residues {list(unmatched_res)}"
-        if allow_bad_res:
-            msg += " ignored due to allow_bad_res."
-        logger.warning(msg)
-    if res_needed_altloc: 
-        msg = f"Have alternate location {res_needed_altloc}" + os_linesep
-        msg += "Either specify an altloc for each with option `wanted_altloc`" + os_linesep
-        msg += "or a general default altloc with option `allowed_altloc`."
-        logger.warning(msg)
-    if res_missed_altloc:
-        msg = f"Failed parsing {res_missed_altloc}. Requested altlocs weren't found."
-        logger.warning(msg)
 
-    msg = ""
-    if not allow_bad_res and unmatched_res:
-        msg += f"Failed matching templates for {list(unmatched_res)}" + os_linesep
-    elif not allow_bad_res and unparsed_res:
-        msg += f"Failed parsing {unparsed_res}." + os_linesep
-    if not allow_bad_res and (unmatched_res or unparsed_res):
-        msg += f"These can be ignored with option allow_bad_res" + os_linesep
-    if res_missed_altloc or res_needed_altloc:
-        msg += "Handle AltLocs with allowed_altloc or wanted_altloc" + os_linesep
-    if msg:
-        raise RuntimeError(msg)
+    err = ""
+    if unparsed_res:
+        msg = f"- Parsing failed for: {unparsed_res}."
+        if not allow_bad_res:
+            err += msg + os_linesep
+        else: 
+            msg += " Ignored due to allow_bad_res."
+            logger.warning(msg)
+
+    if unmatched_res:
+        msg = f"- Template matching failed for: {list(unmatched_res)}"
+        if not allow_bad_res:
+            err += msg + os_linesep
+        else:
+            msg += " Ignored due to allow_bad_res."
+            logger.warning(msg)
+
+    if err:
+        err += "These residues can be ignored with option allow_bad_res." + os_linesep
+
+    if res_needed_altloc: 
+        msg = f"- Residues with alternate location: {res_needed_altloc}" + os_linesep
+        msg += "Either specify an altloc for each with option wanted_altloc" + os_linesep
+        msg += "or a general default altloc with option default_altloc."
+        err += msg
+
+    if res_missed_altloc:
+        msg = f"- Requested altlocs not found for: {res_missed_altloc}." + os_linesep
+        err += msg
+
+    if err:
+        raise ChorizoCreationError(err)
     return
 
 
@@ -724,7 +730,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc=None,
-        allowed_altloc=None
+        default_altloc=None
     ):
         """
 
@@ -739,7 +745,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete
         blunt_ends
         wanted_altloc
-        allowed_altloc
+        default_altloc
 
         Returns
         -------
@@ -749,7 +755,7 @@ class LinkedRDKitChorizo:
         tmp_raw_input_mols = cls._pdb_to_residue_mols(
             pdb_string,
             wanted_altloc,
-            allowed_altloc,
+            default_altloc,
         )
 
         # from here on it duplicates self.from_prody(), but extracting
@@ -810,7 +816,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc: Optional[dict]=None,
-        allowed_altloc: Optional[str]=None,
+        default_altloc: Optional[str]=None,
     ):
         """
 
@@ -825,7 +831,7 @@ class LinkedRDKitChorizo:
         bonds_to_delete
         blunt_ends
         wanted_altloc
-        allowed_altloc
+        default_altloc
 
         Returns
         -------
@@ -835,7 +841,7 @@ class LinkedRDKitChorizo:
         tmp_raw_input_mols = cls._prody_to_residue_mols(
             prody_obj,
             wanted_altloc,
-            allowed_altloc,
+            default_altloc,
         )
 
         # from here on it duplicates self.from_pdb_string(), but extracting
@@ -1446,7 +1452,7 @@ class LinkedRDKitChorizo:
     def _pdb_to_residue_mols(
         pdb_string,
         wanted_altloc: Optional[dict[str, str]]=None,
-        allowed_altloc: Optional[str]=None,
+        default_altloc: Optional[str]=None,
     ):
         """
 
@@ -1535,7 +1541,7 @@ class LinkedRDKitChorizo:
             pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
                 atom_field_list,
                 requested_altloc,
-                allowed_altloc,
+                default_altloc,
             )
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
@@ -1547,7 +1553,7 @@ class LinkedRDKitChorizo:
     def _prody_to_residue_mols(
             prody_obj: ALLOWED_PRODY_TYPES,
             wanted_altloc_dict: Optional[dict] = None,
-            allowed_altloc: Optional[str] = None,
+            default_altloc: Optional[str] = None,
         ) -> dict:
         """
 
@@ -1586,7 +1592,7 @@ class LinkedRDKitChorizo:
                     res,
                     sanitize=False,
                     requested_altloc=requested_altloc,
-                    allowed_altloc=allowed_altloc,
+                    default_altloc=default_altloc,
                 )
                 raw_input_mols[reskey] = (prody_mol, res_name,
                                           missed_altloc, needed_altloc)
@@ -1961,21 +1967,24 @@ class ResiduePadder:
         # Ensure rxn_smarts has single reactant and single product
         self.rxn = self._validate_rxn_smarts(rxn_smarts)
 
+        # Fill in adjacent_smartsmol_mapidx
+        if adjacent_res_smarts is None:
+            self.adjacent_smartsmol = None
+            self.adjacent_smartsmol_mapidx = None
+            return
+
         # Ensure adjacent_res_smarts is None or a valid SMARTS        
         self.adjacent_smartsmol = self._initialize_adj_smartsmol(adjacent_res_smarts)
-        
+
         # Ensure the mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
         self._check_adj_smarts(self.rxn, self.adjacent_smartsmol)
-        
-        # Fill in adjacent_smartsmol_mapidx
-        if self.adjacent_smartsmol is None:
-            self.adjacent_smartsmol_mapidx = None
-        else:
-            self.adjacent_smartsmol_mapidx = {
-                atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
-                for atom in self.adjacent_smartsmol.GetAtoms()
-                if atom.HasProp("molAtomMapNumber")
-            }
+
+        self.adjacent_smartsmol_mapidx = {
+            atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
+            for atom in self.adjacent_smartsmol.GetAtoms()
+            if atom.HasProp("molAtomMapNumber")
+        }
+        return
     
     @staticmethod
     def _validate_rxn_smarts(rxn_smarts: str) -> rdChemReactions.ChemicalReaction:
@@ -1990,8 +1999,6 @@ class ResiduePadder:
     @staticmethod
     def _initialize_adj_smartsmol(adjacent_res_smarts: str) -> Chem.Mol:
         """Validate adjacent_res_smarts and return adjacent_smartsmol"""
-        if adjacent_res_smarts is None:
-            return None
         adjacent_smartsmol = Chem.MolFromSmarts(adjacent_res_smarts)
         if adjacent_smartsmol is None:
             raise RuntimeError("Invalid SMARTS pattern in adjacent_res_smarts")
@@ -2394,13 +2401,17 @@ class ResiduePadderEncoder(json.JSONEncoder):
         object.
         """
         if isinstance(obj, ResiduePadder):
+            if obj.adjacent_smartsmol is None:
+                adjacent_smarts = None
+            else:
+                # do not use JSON because it looses atom labels
+                adjacent_smarts = Chem.MolToSmarts(obj.adjacent_smartsmol)
             output_dict = {
                 "rxn_smarts": rdChemReactions.ReactionToSmarts(obj.rxn),
-                "adjacent_smartsmol": rdMolInterchange.MolToJSON(
-                    obj.adjacent_smartsmol
-                ),
-                "adjacent_smartsmol_mapidx": obj.adjacent_smartsmol_mapidx,
+                "adjacent_smarts": adjacent_smarts,
             }
+            # we are not serializing the adjacent_smartsmol_mapidx as that will
+            # be rebuilt by the ResiduePadder init
             return output_dict
         return json.JSONEncoder.default(self, obj)
 
@@ -2622,18 +2633,14 @@ def residue_padder_json_decoder(obj: dict):
     # check that all the keys we expect are in the object dictionary as a safety measure
     expected_residue_keys = {
         "rxn_smarts",
-        "adjacent_smartsmol",
-        "adjacent_smartsmol_mapidx",
+        "adjacent_smarts",
     }
     if set(obj.keys()) != expected_residue_keys:
         return obj
 
     # Constructs a ResiduePadder object and restores the expected attributes
-    residue_padder = ResiduePadder(obj["rxn_smarts"])
-    residue_padder.adjacent_smartsmol = rdkit_mol_from_json(obj["adjacent_smartsmol"])
-    residue_padder.adjacent_smartsmol_mapidx = {
-        int(k): v for k, v in obj["adjacent_smartsmol_mapidx"].items()
-    }
+    # adjacent_smartsmol_mapidx is rebuilt by ResiduePadder init
+    residue_padder = ResiduePadder(obj["rxn_smarts"], obj["adjacent_smarts"])
 
     return residue_padder
 

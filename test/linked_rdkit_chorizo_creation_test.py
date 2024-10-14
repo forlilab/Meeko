@@ -374,7 +374,7 @@ def test_altloc():
         pdb_text,
         chem_templates,
         mk_prep,
-        allowed_altloc="B",
+        default_altloc="B",
     )
     res = chorizo.residues["A:264"]
     xyz = res.rdkit_mol.GetConformer().GetPositions()
@@ -389,7 +389,7 @@ def test_altloc():
         pdb_text,
         chem_templates,
         mk_prep,
-        allowed_altloc="B",
+        default_altloc="B",
         wanted_altloc={"A:264": "A"}
     )
     res = chorizo.residues["A:264"]
