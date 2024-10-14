@@ -178,6 +178,12 @@ def find_inter_mols_bonds(mols_dict):
             for a2 in mols_dict[keys[j]][0].GetAtoms():
                 vec = p1[a1.GetIdx()] - p2[a2.GetIdx()]
                 distsqr = np.dot(vec, vec)
+
+                # check if atom has implemented covalent radius
+                for atom in [a1, a2]:
+                    if atom.GetAtomicNum() not in covalent_radius:
+                        raise RuntimeError(f"Element {periodic_table.GetElementSymbol(atom.GetAtomicNum())} doesn't have an implemented covalent radius, which was required for the perception of intermolecular bonds. ")
+                    
                 cov_dist = (
                     covalent_radius[a1.GetAtomicNum()]
                     + covalent_radius[a2.GetAtomicNum()]
@@ -1130,6 +1136,8 @@ class LinkedRDKitChorizo:
             elif len(ambiguous[input_resname]) == 1:
                 template_key = ambiguous[input_resname][0]
                 template = residue_templates[template_key]
+                candidate_template_keys = [template_key]
+                candidate_templates = [template]
             else:
                 candidate_template_keys = []
                 candidate_templates = []
