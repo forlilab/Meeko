@@ -1424,6 +1424,22 @@ class LinkedRDKitChorizo:
             residue.molsetup,
             root_atom_index=link_atoms[0],
         )
+
+        molsetup = residue.molsetup
+        is_rigid_atom = [False for _ in molsetup.atoms]
+        graph = molsetup.flexibility_model["rigid_body_graph"]
+        root_body_idx = molsetup.flexibility_model["root"]
+        conn = molsetup.flexibility_model["rigid_body_connectivity"]
+        rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
+        # from the root, use only the atom that is bonded to the only rotatable bond
+        print(graph)
+        print(rigid_index_by_atom)
+        print(len(rigid_index_by_atom))
+        for other_body_idx in graph[root_body_idx]:
+            root_link_atom_idx = conn[(root_body_idx, other_body_idx)][0]
+            for atom_idx, body_idx in rigid_index_by_atom.items():
+                if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
+                    residue.is_flexres_atom[atom_idx] = True
         return
 
     @staticmethod
