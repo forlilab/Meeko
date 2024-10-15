@@ -40,6 +40,7 @@ else:
 
 
 logger = logging.getLogger(__name__)
+rdkit_logger = logging.getLogger("rdkit")
 
 residues_rotamers = {
     "SER": [("C", "CA", "CB", "OG")],
@@ -1921,6 +1922,13 @@ class ChorizoResidue:
         residue = json.loads(json_string, object_hook=cls.chorizo_residue_json_decoder)
         return residue
 
+class NoAtomMapWarning(logging.Filter):
+    def filter(self, record):
+        fields = record.getMessage().split()
+        a = " ".join(fields[1:4]) == "product atom-mapping number"
+        b = " ".join(fields[5:]) == "not found in reactants."
+        is_atom_map_warning = a and b
+        return not is_atom_map_warning
 
 class ResiduePadder:
     """
@@ -2087,9 +2095,15 @@ class ResiduePadder:
                 atom.GetIntProp("molAtomMapNumber"): atom.GetIdx()
                 for atom in adjacent_smartsmol.GetAtoms() if atom.HasProp("molAtomMapNumber")
                 }
+
+        # suppress rdkit warning about product atom map not found in reactants
+        # e.g. in "[C:1]>>[C:1][O:2]" label :2 is missing in reactants
+        filtr = NoAtomMapWarning()
+        rdkit_logger.addFilter(filtr)
         
         # Get padded mol and index map from the rxn
         outcomes = react_and_map((target_mol,), rxn)
+        rdkit_logger.removeFilter(filtr)
 
         # Filter outcomes by target_required_atom_index
         if target_required_atom_index is not None:

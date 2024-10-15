@@ -50,6 +50,15 @@ from .openff_xml_parser import load_openff
 from .openff_xml_parser import get_openff_epsilon_sigma
 from .hydrate import Hydrate
 
+import logging
+from rdkit import rdBase
+rdkit_logger = logging.getLogger("rdkit")
+rdkit_logger.handlers[0].setLevel("WARNING")
+rdkit_logger.handlers[0].setFormatter(
+    logging.Formatter('[RDKit] %(levelname)s:%(message)s'),
+)
+rdBase.LogToPythonLogger()
+
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup', 'MoleculeSetupEncoder',
            'pdbutils', 'geomutils', 'rdkitutils', 'utils',
            'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
