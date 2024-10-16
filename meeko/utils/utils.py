@@ -379,6 +379,75 @@ class HJKRingDetection:
         return chordless_rings
 
 
+def parse_begin_res(string):
+    """
+        "THR A 315" -> "A:315"
+        "THR  5" -> ":5"
+        " A 5" -> "A:5"
+        "THR A 315B" -> "A:5B"
+
+        meeko v0.5-v0.6.0a3 formatting:
+            - "%s %s %s%s" % (resname, chain, resnum, icode)
+            - input strings have been stripped, thus, we got
+              exactly two whitespace in the input string.
+
+        older (probably mgltools) format include more
+        whitespace: "SER A  56".
+
+        This tries to be flexible and parse even:
+        "SER A1234C"
+        " A 123"
+        "SER  123C
+    """
+
+    if len(string.split()) > 3 or len(string) > 12 or len(string) < 3:
+        raise ValueError(f"{string} doesn't look like a BEGIN_RES flexres")
+
+    resnum = ""
+    icode = ""
+    resname_chain = ""
+    is_chain_or_resname = False
+    got_space = False
+    for i, char in enumerate(reversed(string)):
+        #if not resname_chain and char.isspace():
+        #    continue
+
+        if char.isspace():
+            got_space = True
+            
+        if char.isdigit() and not resname_chain and not got_space:
+            resnum = char + resnum
+
+        elif not char.isdigit() and not resnum and not icode and not got_space:
+            icode = char
+        
+        # prevent icode from having more than 1 char
+        elif not char.isdigit() and not resnum and icode:
+            raise ValueError(f"{string=} misses resnum or has len(icode) > 1")
+
+        # if we are here, resnum already exists, so it's resname_chain land
+        elif not char.isdigit() and not resname_chain:
+            resname_chain = char
+
+        else:
+            resname_chain = char + resname_chain
+
+    fields = resname_chain.split()
+    print(fields)
+    if len(fields) == 1 and len(fields[0]) <= 2:
+        chain = fields[0]
+    elif len(fields) == 1 and len(fields[0]) > 2:
+        chain = ""  # assume fields[0] is resname and no chain
+    elif len(fields) == 2 and len(fields[1]) <= 2:
+        chain = fields[1]
+    elif len(fields) == 0 and resnum:
+        chain = ""
+    else:
+        raise ValueError(f"can't parse {string=}")
+
+    return f"{chain}:{resnum}{icode}"
+
+
 # def writeList(filename, inlist, mode = 'w', addNewLine = False):
 #     if addNewLine: nl = "\n"
 #     else: nl = ""
