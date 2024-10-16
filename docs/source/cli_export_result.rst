@@ -31,3 +31,13 @@ but because this is a nearly impossible task.
     obabel -:"C1C=CCO1" -o pdbqt --gen3d | obabel -i pdbqt -o smi
     [C]1=[C][C]=[C]O1
 
+
+Caveats
+-------
+
+If docking does not use explicit Hs, which it often does not, the
+exported positions of hydrogens are calculated from RDKit. This can
+be annoying if a careful forcefield minimization is employed before
+docking, as probably rigorous Hs positions will be replaced by the
+RDKit geometry rules, which are empirical and much simpler than most
+force fields.
