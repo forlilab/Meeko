@@ -661,6 +661,7 @@ class LinkedRDKitChorizo:
             raise ValueError(msg)
         self.residue_chem_templates = residue_chem_templates
         residue_templates = residue_chem_templates.residue_templates
+        print(residue_templates)
         padders = residue_chem_templates.padders
         ambiguous = residue_chem_templates.ambiguous
 
@@ -689,15 +690,33 @@ class LinkedRDKitChorizo:
 
         # check if input assigned residue name in residue_templates
         err = ""
-        unknown_res_from_input = set(res_id for res_id in raw_input_mols if raw_input_mols[res_id][1] not in residue_templates)
+        unknown_res_from_input = set(res_id for res_id in raw_input_mols if raw_input_mols[res_id][1] not in residue_templates.keys() | ambiguous.keys())
         if len(unknown_res_from_input) > 0:
             err += f"Input residue names {set(raw_input_mols[res_id][1] for res_id in unknown_res_from_input)} not in residue_templates" + os_linesep
         if set_template is not None:
-            unknown_res_from_assign = set(res_id for res_id in set_template if set_template[res_id] not in residue_templates)
+            unknown_res_from_assign = set(res_id for res_id in set_template if set_template[res_id] not in residue_templates.keys() | ambiguous.keys())
             if len(unknown_res_from_input) > 0:
                 err += f"Assigned residue names {set(set_template[res_id] for res_id in unknown_res_from_assign)} not in residue_templates" + os_linesep
         if err: 
-            raise ValueError(f"{err}")
+            print(err)
+            import sys, importlib.util
+            script_path = '/Users/amyhe/Desktop/0_forks/gemile/chemtempgen.py'
+            # Load the module dynamically
+            spec = importlib.util.spec_from_file_location("chemtempgen", script_path)
+            chemtempgen = importlib.util.module_from_spec(spec)
+            sys.modules["chemtempgen"] = chemtempgen
+            spec.loader.exec_module(chemtempgen)
+
+            unknown_res =  set(raw_input_mols[res_id][1] for res_id in unknown_res_from_input) | set(set_template[res_id] for res_id in unknown_res_from_assign)
+            for resname in unknown_res: 
+                cc = chemtempgen.make_noncovalent(resname)
+                guess_template_dict = json.loads(chemtempgen.export_chem_templates_to_json([cc]))['residue_templates'][resname]
+                residue_templates.update({resname: 
+                                          ResidueTemplate(
+                                              smiles = guess_template_dict['smiles'],
+                                              atom_names = guess_template_dict['atom_name'],
+                                              link_labels = guess_template_dict['link_labels'])})
+            # raise ValueError(f"{err}")
 
         self.residues, self.log = self._get_residues(
             raw_input_mols,
@@ -2299,6 +2318,8 @@ class ResidueTemplate:
         #    raise ValueError(f"each array in data must have the same length, but got {data_lengths=}")
         # data_length = data_lengths.pop()
         if len(atom_names) != mol.GetNumAtoms():
+            print(Chem.MolToSmiles(mol, allHsExplicit = True))
+            print(atom_names)
             raise ValueError(f"{len(atom_names)=} differs from {mol.GetNumAtoms()=}")
         return
 
