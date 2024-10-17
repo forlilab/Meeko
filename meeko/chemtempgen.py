@@ -513,7 +513,7 @@ def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: 
             f.write(json_str)
         print(f"{json_fname} <-- Json File for New Chemical Templates")
     else:
-        print(str.center(60, " New Template Built "))
+        print(" New Template Built ".center(60, "*"))
         print(json_str)
         print("*"*60)
         return json_str
