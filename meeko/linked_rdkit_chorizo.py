@@ -687,6 +687,18 @@ class LinkedRDKitChorizo:
             raise ValueError(msg)
         bonds = {k: v[0] for k, v in bonds.items()}
 
+        # check if input assigned residue name in residue_templates
+        err = ""
+        unknown_res_from_input = set(res_id for res_id in raw_input_mols if raw_input_mols[res_id][1] not in residue_templates)
+        if len(unknown_res_from_input) > 0:
+            err += f"Input residue names {set(raw_input_mols[res_id][1] for res_id in unknown_res_from_input)} not in residue_templates" + os_linesep
+        if set_template is not None:
+            unknown_res_from_assign = set(res_id for res_id in set_template if set_template[res_id] not in residue_templates)
+            if len(unknown_res_from_input) > 0:
+                err += f"Assigned residue names {set(set_template[res_id] for res_id in unknown_res_from_assign)} not in residue_templates" + os_linesep
+        if err: 
+            raise ValueError(f"{err}")
+
         self.residues, self.log = self._get_residues(
             raw_input_mols,
             ambiguous,
