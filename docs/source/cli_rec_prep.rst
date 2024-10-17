@@ -73,3 +73,31 @@ It is also possible to combine the two types of usage:
     --write_vina_box box_for_myenzyme.txt
 
 in which case the specified filenames have priority over the default basename.
+
+
+Templates
+---------
+
+The templates contain SMILES strings that are used to create the RDKit
+molecules that constitute every residue in the processed model. In this way,
+the chemistry of the processed model is fully defined by the templates,
+and the only thing that is preserved from the input are the atom positions
+and the connectivity between residues.
+
+The SMILES strings contain all atoms that exist in the final model,
+and none that do not exist. This also applies to hydrogens,
+meaning that the SMILES are expected to have real hydrogens. Note that
+real hydrogens are different from explicit hydrogens. Real hydrogens will be
+represented as an actual atom in an RDKit molecule, while explicit hydrogens
+are a just property of heavy atoms. In the SMILES, real hydrogens are defined
+with square brackets "[H]" and explicit hydrogens without, e.g. "[nH]" to set
+the number of explicit hydrogens on an aromatic nitrogen to one.
+
+Residues that are part of a polymer, which is often all of them, will have
+bonds to adjacent residues. The heavy atoms involved in the bonds will miss
+a real hydrogen and have an implicit (or explicit) one instead. As an
+example, consider modeling an alkyl chain as a polymer, in which the monomer
+is a single carbon atom. Our template SMILES would be "[H]C[H]". The RDKit
+molecule will have three atoms and the carbon will have two implicit hydrogens.
+The implicit hydrogens correspond to bonds to adjacent residues in the
+processed polymer.
