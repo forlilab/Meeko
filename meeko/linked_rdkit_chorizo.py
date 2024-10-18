@@ -21,6 +21,8 @@ from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
 from .utils.rdkitutils import _aux_altloc_mol_build
 from .utils.pdbutils import PDBAtomInfo
 
+from .chemtempgen import *
+
 import numpy as np
 
 periodic_table = Chem.GetPeriodicTable()
@@ -451,8 +453,29 @@ def _delete_residues(res_to_delete, raw_input_mols):
         raise ValueError(msg)
     return
 
+
 class ChorizoCreationError(RuntimeError):
-    pass
+
+    def __init__(self, error: str, recommendations: str = None): 
+        super().__init__(error) # main error message to pass to RuntimeError
+        self.error = error
+        self.recommendations = recommendations
+
+    def __str__(self):
+        msg = "" + os_linesep
+        msg += "Error: Creation of data structure for receptor failed." + os_linesep
+        msg += "" + os_linesep
+        msg += "Details:" + os_linesep
+        msg += self.error + os_linesep
+        msg += "" + os_linesep
+
+        if self.recommendations: 
+            msg += "Recommendations:" + os_linesep
+            msg += self.recommendations + os_linesep
+            msg += "" + os_linesep
+        
+        return msg
+
 
 def handle_parsing_situations(
     unmatched_res,
@@ -493,7 +516,13 @@ def handle_parsing_situations(
         err += msg
 
     if err:
-        raise ChorizoCreationError(err)
+        recs = "1. (for batch processing) Use -a/--allow_bad_res to automatically remove residues" + os_linesep
+        recs += "that do not match templates, and --default_altloc to set" + os_linesep
+        recs += "a default altloc variant. Use these at your own risk." + os_linesep
+        recs += "" + os_linesep
+        recs += "2. (processing individual structure) Inspecting and fixing the input structure is recommended." + os_linesep
+        recs += "Use --wanted_altloc to set variants for specific residues."
+        raise ChorizoCreationError(err, recs)
     return
 
 
@@ -686,6 +715,41 @@ class LinkedRDKitChorizo:
                     msg += f" {key}"
             raise ValueError(msg)
         bonds = {k: v[0] for k, v in bonds.items()}
+
+        # check if input assigned residue name in residue_templates
+        err = ""
+        supported_resnames = residue_templates.keys()
+        unknown_res_from_input = {res_id: raw_input_mols[res_id][1] for res_id in raw_input_mols if raw_input_mols[res_id][1] not in supported_resnames}
+        if len(unknown_res_from_input) > 0:
+            err += f"Input residues {unknown_res_from_input} not in residue_templates" + os_linesep
+        unknown_res_from_assign = set()
+        if set_template:
+            unknown_res_from_assign = {res_id: set_template[res_id] for res_id in set_template if set_template[res_id] not in supported_resnames}
+            if len(unknown_res_from_assign) > 0:
+                err += f"Assigned residues {unknown_res_from_assign} not in residue_templates" + os_linesep
+        if err: 
+            print(err)
+            print("Trying to resolve unknown residues by building chemical templates... " + os_linesep)
+
+            all_unknown_res = unknown_res_from_input.copy()
+            all_unknown_res.update(unknown_res_from_assign)
+
+            bonded_unknown_res = {res_id: all_unknown_res[res_id] for res_id in all_unknown_res if any(tup for tup in bonds if res_id in bonds)}
+            if bonded_unknown_res:
+                raise NotImplementedError(f"Unknown residues: {bonded_unknown_res} appear to be linking fragments. " + os_linesep
+                                          + "Guessing chemical templates with linker_labels are not currently supported. ")
+
+            try: 
+                for resname in all_unknown_res.values(): 
+                    cc = build_noncovalent_CC(resname)
+                    fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][resname]
+                    residue_templates.update({resname: 
+                                            ResidueTemplate(
+                                                smiles = fetch_template_dict['smiles'],
+                                                atom_names = fetch_template_dict['atom_name'],
+                                                link_labels = fetch_template_dict['link_labels'])})
+            except Exception as e: 
+                raise ChorizoCreationError(str(e))
 
         self.residues, self.log = self._get_residues(
             raw_input_mols,
