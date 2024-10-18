@@ -870,7 +870,8 @@ if not skip_gpf:
             # relies on --write_gpf forcing --write_pdbqt which sets rigid_fn
             box_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
         else:
-            box_fn = box_vina_fn.replace(".box.txt", ".box.pdb")
+            # suffix .pdb even if box_vina_fn does not end with ".txt"
+            box_fn = box_vina_fn.replace(".txt", "") + ".pdb"
         written_files_log["filename"].append(box_fn)
         written_files_log["description"].append("PDB file to visualize the grid box")
         with open(box_fn, "w") as f:
