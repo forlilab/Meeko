@@ -1,6 +1,6 @@
 import gemmi
 import json
-from pathlib import Path
+import pathlib
 import copy
 import urllib.request
 import time
@@ -16,35 +16,34 @@ import sys, logging
 logging.basicConfig(stream=sys.stdout, level=logging.WARNING)
 
 
-# Constants from Meeko
+# Constants from linked_rdkit_chorizo
 covalent_radius = {  # from wikipedia
-    1: 0.31,
-    5: 0.84,
-    6: 0.76,
-    7: 0.71,
-    8: 0.66,
-    9: 0.57,
-    12: 0.00,  # hack to avoid bonds with metals
-    14: 1.11,
-    15: 1.07,
-    16: 1.05,
-    17: 1.02,
-    # 19: 2.03,
-    20: 0.00,
-    # 24: 1.39,
-    25: 0.00,  # hack to avoid bonds with metals
-    26: 0.00,
-    30: 0.00,  # hack to avoid bonds with metals
-    # 34: 1.20,
-    35: 1.20,
-    53: 1.39,
-}
+        1: 0.31,
+        5: 0.84,
+        6: 0.76,
+        7: 0.71,
+        8: 0.66,
+        9: 0.57,
+        12: 0.00,  # hack to avoid bonds with metals
+        14: 1.11,
+        15: 1.07,
+        16: 1.05,
+        17: 1.02,
+        # 19: 2.03,
+        20: 0.00,
+        # 24: 1.39,
+        25: 0.00,  # hack to avoid bonds with metals
+        26: 0.00,
+        30: 0.00,  # hack to avoid bonds with metals
+        # 34: 1.20,
+        35: 1.20,
+        53: 1.39,
+    }
 list_of_AD_elements_as_AtomicNum = list(covalent_radius.keys())
-
 
 # Utility Functions
 def mol_contains_unexpected_element(mol: Chem.Mol, allowed_elements: list[str] = list_of_AD_elements_as_AtomicNum) -> bool:
-    """Check if rwmol contains unexpected elements"""
+    """Check if mol contains unexpected elements"""
     for atom in mol.GetAtoms():
         if atom.GetAtomicNum() not in allowed_elements:
             return True
@@ -81,7 +80,7 @@ def get_atom_idx_by_patterns(mol: Chem.Mol, allowed_smarts: str,
         logging.warning(f"Molecule contain multiple copies of allowed_smarts: {allowed_smarts} -> no pattern-based action will be made. ")
         return set()
     if len(match_allowed) > 1 and allow_multiple:
-        match_allowed = set(item for sublist in match_allowed for item in sublist)
+        match_allowed = {item for sublist in match_allowed for item in sublist}
     else:
         match_allowed = match_allowed[0]
     
@@ -198,7 +197,9 @@ def deprotonate(mol, acidic_proton_loc: dict[str, int] = None) -> Chem.Mol:
         acidic_protons_idx.update(match[idx] for match in mol.GetSubstructMatches(qmol))
     
     if not acidic_protons_idx:
-        logging.warning(f"Molecule doesn't contain matching  with acidic_proton_loc {acidic_proton_loc} -> deprotonate returning original mol... ")
+        logging.warning(f"Molecule doesn't contain matching atoms for acidic_proton_loc:" + 
+                        f"{acidic_proton_loc}" + 
+                        f"-> deprotonate returning original mol... ")
         return mol
      
     rwmol = Chem.RWMol(mol)
@@ -213,7 +214,7 @@ def deprotonate(mol, acidic_proton_loc: dict[str, int] = None) -> Chem.Mol:
     return rwmol.GetMol()
 
 
-# Output Formatters
+# Attribute Formatters
 def get_smiles_with_atom_names(mol: Chem.Mol) -> tuple[str, list[str]]:
     """Generate SMILES with atom names in the order of SMILES output."""
     # allHsExplicit may expose the implicit Hs of linker atoms to Smiles; the implicit Hs don't have names
@@ -263,6 +264,11 @@ def get_pretty_smiles(smi: str) -> str:
         if is_chemical_element(content) or is_chemical_element(H_stripped):
             smi = smi.replace(f"[{content}]", f"{H_stripped}" if 'H' in content else f"{content}")
     return smi
+
+
+class ChemTempCreationError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
 
 
 class ChemicalComponent_LoggingControler:
@@ -445,24 +451,23 @@ class ChemicalComponent:
 
         return self
     
-    def meeko_check(self):
-        smiles, link_labels, atom_names = [self.smiles_exh, self.link_labels, self.atom_name]
+    def ResidueTemplate_check(self) -> bool:
+        # ResidueTemplate.check from linked_rdkit_chorizo
         ps = Chem.SmilesParserParams()
         ps.removeHs = False
-        mol = Chem.MolFromSmiles(smiles, ps)
-            
-        have_implicit_hs = set()
-        for atom in mol.GetAtoms():
-            if atom.GetNumImplicitHs() > 0:
-                have_implicit_hs.add(atom.GetIdx())
-        if set(int(atom_idx) for atom_idx in link_labels) != have_implicit_hs:
+        mol = Chem.MolFromSmiles(self.smiles_exh, ps)
+        have_implicit_hs = set(atom.GetIdx() for atom in mol.GetAtoms() if atom.GetTotalNumHs() > 0)
+
+        if self.link_labels and set(self.link_labels) != have_implicit_hs:
             raise ValueError(
-                f"expected any atom with non-real Hs ({have_implicit_hs}) to be in {link_labels=}"
+                f"expected any atom with non-real Hs ({have_implicit_hs}) to be in {self.link_labels=}"
             )
-        if atom_names is None:
+        
+        if not self.atom_name: 
             return
-        if len(atom_names) != mol.GetNumAtoms():
-            raise ValueError(f"{len(atom_names)=} differs from {mol.GetNumAtoms()=}")
+        
+        if len(self.atom_name) != mol.GetNumAtoms():
+            raise ValueError(f"{len(self.atom_name)=} differs from {mol.GetNumAtoms()=}")
         return
 
 
@@ -509,7 +514,7 @@ def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: 
             json_str = json_str.replace(json.dumps(data_to_export["residue_templates"][cc.resname]["link_labels"], indent = 4), single_line_link_labels)
 
     if json_fname:
-        with open(Path(json_fname), 'w') as f:
+        with open(pathlib.Path(json_fname), 'w') as f:
             f.write(json_str)
         print(f"{json_fname} <-- Json File for New Chemical Templates")
     else:
@@ -540,12 +545,7 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
                 logging.error(f"Max retries reached. Could not download CIF file for {resname}. Error: {e}")
                 return None
 
-
-class ChemTempCreationError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-# Constants
+# Constants for deprotonate
 acidic_proton_loc_canonical = {
         # any carboxylic acid, sulfuric/sulfonic acid/ester, phosphoric/phosphinic acid/ester
         '[H][O]['+atom+'](=O)': 0 for atom in ('CX3', 'SX4', 'SX3', 'PX4', 'PX3')
@@ -565,7 +565,7 @@ def build_noncovalent_CC(basename: str) -> ChemicalComponent:
             return None
 
         cc = copy.deepcopy(cc_from_cif)
-        logger.info(f"*** using CCD residue {basename} to construct {cc.resname} ***")
+        logger.info(f"*** using CCD ligand {basename} to construct residue {cc.resname} ***")
 
         cc = cc.make_canonical(acidic_proton_loc = acidic_proton_loc_canonical)
         if len(rdmolops.GetMolFrags(cc.rdkit_mol))>1:
@@ -575,11 +575,11 @@ def build_noncovalent_CC(basename: str) -> ChemicalComponent:
 
         cc = cc.make_pretty_smiles()
 
-        # Try Meeko check
+        # Check
         try:
-            cc.meeko_check()
+            cc.ResidueTemplate_check()
         except Exception as e:
-            err = f"Template {cc.resname} Failed to pass Meeko check. Error: {e}"
+            err = f"Template {cc.resname} Failed to pass ResidueTemplate check. Error: {e}"
             logging.error(err)
             raise ChemTempCreationError(err)
             
@@ -598,8 +598,6 @@ def main():
     #    sys.exit(2)
 
     """Download components.cif"""
-    import urllib.request
-
     url = "https://files.wwpdb.org/pub/pdb/data/monomers/components.cif"
     source_cif = file_path = "components.cif"
 
