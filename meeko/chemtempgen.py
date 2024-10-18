@@ -162,7 +162,7 @@ def cap(mol: Chem.Mol, allowed_smarts: str,
     
     def get_max_Hid(mol: Chem.Mol) -> int:
         all_Hids = (atom.GetProp('atom_id') for atom in mol.GetAtoms() if atom.GetAtomicNum()==1)
-        regular_ids = (Hid for Hid in all_Hids if Hid[0]=='H' and Hid[1:].isdigit())
+        regular_ids = {Hid for Hid in all_Hids if Hid[0]=='H' and Hid[1:].isdigit()}
         if len(regular_ids) > 0:
             return max(int(x[1:]) for x in regular_ids)
         else:
