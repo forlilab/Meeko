@@ -409,8 +409,6 @@ def parse_begin_res(string):
     is_chain_or_resname = False
     got_space = False
     for i, char in enumerate(reversed(string)):
-        #if not resname_chain and char.isspace():
-        #    continue
 
         if char.isspace():
             got_space = True
@@ -433,7 +431,6 @@ def parse_begin_res(string):
             resname_chain = char + resname_chain
 
     fields = resname_chain.split()
-    print(fields)
     if len(fields) == 1 and len(fields[0]) <= 2:
         chain = fields[0]
     elif len(fields) == 1 and len(fields[0]) > 2:

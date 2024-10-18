@@ -667,7 +667,7 @@ if args.write_json is not None:
 
 if args.write_pdb is not None:
     fn = args.write_pdb[0]
-    with open(fn, "W") as f:
+    with open(fn, "w") as f:
         f.write(chorizo.to_pdb())
     written_files_log["filename"].append(fn)
     written_files_log["description"].append("receptor")
