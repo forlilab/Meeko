@@ -85,7 +85,7 @@ def get_atom_idx_by_patterns(mol: Chem.Mol, allowed_smarts: str,
     else:
         match_allowed = match_allowed[0]
     
-    atoms_in_mol = (atom for atom in mol.GetAtoms())
+    atoms_in_mol = [atom for atom in mol.GetAtoms()]
     for wanted_smarts in wanted_smarts_loc: 
         lmol = Chem.MolFromSmarts(wanted_smarts)
         match_wanted = mol.GetSubstructMatches(lmol)
@@ -123,7 +123,7 @@ def embed(mol: Chem.Mol, allowed_smarts: str,
         leaving_atoms_idx.update(get_atom_idx_by_patterns(mol, allowed_smarts, leaving_smarts_loc))
 
     if leaving_atoms_idx and alsoHs:
-        atoms_in_mol = (atom for atom in mol.GetAtoms())
+        atoms_in_mol = [atom for atom in mol.GetAtoms()]
         leaving_Hs = (ne for atom_idx in leaving_atoms_idx for ne in atoms_in_mol[atom_idx].GetNeighbors() if ne.GetAtomicNum() == 1)
         leaving_atoms_idx.update(atom.GetIdx() for atom in leaving_Hs)
 
@@ -170,7 +170,7 @@ def cap(mol: Chem.Mol, allowed_smarts: str,
     
     rwmol = Chem.RWMol(mol)
     new_Hid = get_max_Hid(mol) + 1
-    atoms_in_mol = (atom for atom in mol.GetAtoms())
+    atoms_in_mol = [atom for atom in mol.GetAtoms()]
     for atom_idx in capping_atoms_idx:
         needed_Hs = atoms_in_mol[atom_idx].GetNumImplicitHs()
         if needed_Hs == 0:
@@ -422,7 +422,7 @@ class ChemicalComponent:
         for pattern in pattern_to_label_mapping:
             atom_idx = get_atom_idx_by_patterns(self.rdkit_mol, allowed_smarts = Chem.MolToSmarts(self.rdkit_mol), 
                                                 wanted_smarts_loc = {pattern: {0}})
-            atoms_in_mol = (atom for atom in self.rdkit_mol.GetAtoms())
+            atoms_in_mol = [atom for atom in self.rdkit_mol.GetAtoms()]
             if not atom_idx:
                 logging.warning(f"Molecule doesn't contain pattern: {pattern} -> linker label for {pattern_to_label_mapping[pattern]} will not be made. ")
             elif len(atom_idx) > 1:
