@@ -21,7 +21,6 @@ from .utils.rdkitutils import AtomField
 from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
 from .utils.rdkitutils import _aux_altloc_mol_build
 from .utils.pdbutils import PDBAtomInfo
-from .utils.utils import parse_begin_res
 
 import numpy as np
 
@@ -973,6 +972,16 @@ class LinkedRDKitChorizo:
         )
 
         return chorizo
+
+    @classmethod
+    def from_json(cls, json_string):
+        return json.loads(
+            json_string,
+            object_hook=linked_rdkit_chorizo_json_decoder,
+        )
+
+    def to_json(self):
+        return json.dumps(self, cls=LinkedRDKitChorizoEncoder)
 
     def parameterize(self, mk_prep):
         """
@@ -2843,55 +2852,3 @@ def linked_rdkit_chorizo_json_decoder(obj: dict):
 
     return linked_rdkit_chorizo
 # endregion
-
-def sidechain_to_mol(pdbqt_atoms):
-    tiny_periodic_table = {"C": 6, "N": 7, "O": 8, "H": 1, "S": 16, "P": 15} 
-    positions = []
-    mol = Chem.EditableMol(Chem.Mol())
-    mol.BeginBatchEdit()
-    for row in pdbqt_atoms:
-        atomic_nr = tiny_periodic_table[row["name"][0]]  # using PDB name
-        atom = Chem.Atom(atomic_nr)
-        mol.AddAtom(atom)
-        x, y, z = row["xyz"]
-        positions.append(Point3D(float(x), float(y), float(z)))
-    mol.CommitBatchEdit()
-    mol = mol.GetMol()
-    conformer = Chem.Conformer(mol.GetNumAtoms())
-    for index, position in enumerate(positions):
-        conformer.SetAtomPosition(index, position)
-    mol.AddConformer(conformer, assignId=True)
-    from rdkit.Chem import rdDetermineBonds
-    rdDetermineBonds.DetermineConnectivity(mol)
-    Chem.SanitizeMol(mol)
-    return mol
-
-def export_full(chorizo, pdbqt_mol):
-    flexres_id = pdbqt_mol._pose_data["mol_index_to_flexible_residue"]
-    new_positions = {}
-    for mol_idx, atom_idxs in pdbqt_mol._atom_annotations["mol_index"].items():
-        if flexres_id[mol_idx] is not None:
-            res_id = parse_begin_res(flexres_id[mol_idx])
-            atoms = pdbqt_mol.atoms(atom_idxs)
-            mol = sidechain_to_mol(atoms)
-
-            key = chorizo.residues[res_id].residue_template_key
-            molsetup_to_template = chorizo.residues[res_id].molsetup_mapidx
-            template_to_molsetup = {j: i for i, j in molsetup_to_template.items()}
-            template = chorizo.residue_chem_templates.residue_templates[key]
-            result = template.match(mol)
-            template_to_mol = result[-1]
-            rdkitmol_to_pdbqt = {}
-            sidechain_positions = {}
-            molsetup_matched = set()
-            for i, j in template_to_mol.items():
-                molsetup_matched.add(template_to_molsetup[i])
-                rdkitmol_to_pdbqt[i] = j
-                sidechain_positions[i] = tuple(atoms["xyz"][j])
-            if len(molsetup_matched) != len(template_to_mol):
-                raise RuntimeError
-            is_flexres_atom = chorizo.residues[res_id].is_flexres_atom 
-            hit_count = sum([is_flexres_atom[i] for i in molsetup_matched])
-            new_positions[res_id] = sidechain_positions
-    pdbstr = chorizo.to_pdb(new_positions)
-    return pdbstr

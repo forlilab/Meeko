@@ -453,10 +453,10 @@ class RDKitMolCreate:
         return rdmol, energy
 
     @staticmethod
-    def write_sd_string(pdbqt_mol, only_cluster_leads=False):
+    def write_sd_string(pdbqt_mol, only_cluster_leads=False, skip_flexres=False):
         sio = io.StringIO()
         f = Chem.SDWriter(sio)
-        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads)
+        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads, skip_flexres)
         failures = [i for i, mol in enumerate(mol_list) if mol is None]
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
         if combined_mol is None:
