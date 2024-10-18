@@ -230,7 +230,8 @@ def get_smiles_with_atom_names(mol: Chem.Mol) -> tuple[str, list[str]]:
         smiles_atom_output_order = smiles_atom_output_order.replace(delimiter, ' ')
     smiles_output_order = (int(x) for x in smiles_atom_output_order.split())
 
-    atom_name = [mol.GetAtomWithIdx(atom_i).GetProp('atom_id') for atom_i in smiles_output_order]
+    atom_id_dict = {atom.GetIdx(): atom.GetProp('atom_id') for atom in mol.GetAtoms()}
+    atom_name = [atom_id_dict[atom_i] for atom_i in smiles_output_order]
 
     return smiles_exh, atom_name
 
@@ -537,8 +538,9 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
                 logging.info(f"Download failed for {resname}. Error: {e}. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
             else:
-                logging.error(f"Max retries reached. Could not download CIF file for {resname}. Error: {e}")
-                return None
+                err = f"Max retries reached. Could not download CIF file for {resname}. Error: {e}"
+                logging.error(err)
+                raise ChemTempCreationError(err)
 
 # Constants for deprotonate
 acidic_proton_loc_canonical = {
