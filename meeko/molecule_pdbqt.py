@@ -70,6 +70,7 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
         'rank_in_cluster': [],
         'cluster_leads_sorted': [],
         'cluster_size': [],
+        "mol_index_to_flexible_residue": {},
     }
 
     tmp_cluster_data = {}
@@ -78,6 +79,7 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
     buffer_smiles = None
     buffer_smiles_index_map = []
     buffer_smiles_h_parent = []
+    buffer_flexres_id = None
 
     lines = pdbqt_string.split('\n')
     if len(lines[-1]) == 0: lines = lines[:-1]
@@ -169,10 +171,12 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             pose_data["smiles"][mol_index] = buffer_smiles
             pose_data["smiles_index_map"][mol_index] = buffer_smiles_index_map
             pose_data["smiles_h_parent"][mol_index] = buffer_smiles_h_parent
+            pose_data["mol_index_to_flexible_residue"][mol_index] = buffer_flexres_id
             buffer_index_map = {}
             buffer_smiles = None
             buffer_smiles_index_map = []
             buffer_smiles_h_parent = []
+            buffer_flexres_id = None
         elif line.startswith('REMARK INDEX MAP') and is_first_pose:
             integers = [int(integer) for integer in line.split()[3:]]
             if len(integers) % 2 == 1:
@@ -220,6 +224,7 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
             pose_data['internal_energies'].append(float(line[45:].split()[0]))
         elif line.startswith('BEGIN_RES'):
             location = 'flexible_residue'
+            buffer_flexres_id = " ".join(line.strip().split()[1:])
         elif line.startswith('END_RES'):
             # We never know if there is a molecule just after the flexible residue...
             location = 'ligand'

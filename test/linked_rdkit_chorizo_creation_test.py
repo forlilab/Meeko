@@ -74,7 +74,10 @@ def test_flexres_pdbqt():
         set_templates,
         blunt_ends=[(":5", 0), (":18", 2)],
     )
+    res11 = chorizo.residues[":11"]
+    assert sum(res11.is_flexres_atom) == 0
     chorizo.flexibilize_sidechain(":11", mk_prep)
+    assert sum(res11.is_flexres_atom) == 9
     rigid, flex_dict = PDBQTWriterLegacy.write_from_linked_rdkit_chorizo(chorizo)
     nr_rigid_atoms = len(rigid.splitlines())
     assert nr_rigid_atoms == 124
@@ -368,7 +371,7 @@ def test_altloc():
             chem_templates,
             mk_prep,
         )
-    assert str(err_msg.value).startswith("Handle AltLocs")
+    assert "altloc" in str(err_msg.value).lower()
 
     chorizo = LinkedRDKitChorizo.from_pdb_string(
         pdb_text,

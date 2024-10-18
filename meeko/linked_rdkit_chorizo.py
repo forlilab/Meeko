@@ -10,6 +10,7 @@ from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
 from rdkit.Chem import rdMolInterchange
+from rdkit.Geometry import Point3D
 
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetupEncoder
@@ -341,6 +342,88 @@ def rectify_charges(q_list, net_charge=None, decimals=3) -> list[float]:
         charges_dec[i] += 10**-decimals * increment
 
     return charges_dec
+
+
+def get_updated_positions(residue, new_positions: dict): 
+    """
+    Returns full set of positions for the rdkit_mol in residue given a partial
+    set of new_positions. Hydrogens not specified in new_positions will
+    have their position reset by RDKit if they satisfy either A or B defined
+    below. n1 is the heavy atom that the hydrogen is bonded two, and n2 is
+    another heavy atom bonded to n1 (i.e., two bonds aways from the hydrogen).
+    Conditions:
+      (A) max one n2 absent from new_positions, and n1 is in new_positions
+      (B) max one n2 absent from new_positions, and at least one n2 in
+      new_positions, and if there is an n2 absent from new_positions the bond
+      between n1 and that n2 must be rotatable
+
+    Parameters
+    ----------
+    residue: ChorizoResidue
+        molecule associated with new positions
+    new_positions: dict (int -> (float, float, float))
+                         |      |
+                atom_index      |
+                                new_position
+    """
+
+    h_to_update = []
+    mol = Chem.Mol(residue.rdkit_mol)  # avoids side effects
+    conformer = mol.GetConformer()
+    idx_to_molsetup = {j: i for i, j in residue.molsetup_mapidx.items()}
+    for atom in mol.GetAtoms():
+        index = atom.GetIdx()
+        if atom.GetAtomicNum() != 1 or index in new_positions:
+            continue
+        to_update = False
+        # n1 -> neighbor
+        # n2 -> neighbor of neighbor
+        if len(atom.GetNeighbors()) != 1:
+            raise RuntimeError("expected hydrogen to have exactly 1 neighbor")
+        n1 = atom.GetNeighbors()[0]
+        num_n2_in_new = 0
+        num_n2_not_in_new = 0
+        num_n2_not_in_new_rotatable = 0
+        n1_in_new = False
+        if n1.GetIdx() in new_positions:
+            n1_in_new = True
+        for n2 in n1.GetNeighbors():
+            # n2 could be same as atom (circle back) but
+            # continue statements above and below prevent trouble
+            if n2.GetAtomicNum() == 1:
+                continue
+            num_n2_in_new += n2.GetIdx() in new_positions
+            if not n2.GetIdx() in new_positions:
+                num_n2_not_in_new += 1
+                i = idx_to_molsetup[n1.GetIdx()]
+                j = idx_to_molsetup[n2.GetIdx()]
+                bond_id = (min(i, j), max(i, j))
+                rotatable = residue.molsetup.bond_info[bond_id].rotatable
+                num_n2_not_in_new_rotatable += rotatable
+        # link atom same as not_in_new (even if blunt, to keep simple)
+        if n1.GetTotalNumHs(includeNeighbors=False):
+            num_n2_not_in_new += 1
+
+        # condition A
+        if n1_in_new and num_n2_not_in_new <= 1:
+            h_to_update.append(index)
+        # condition B
+        elif (
+            num_n2_in_new > 0 and
+            num_n2_not_in_new <= 1 and
+            num_n2_not_in_new_rotatable == num_n2_not_in_new
+        ):
+            h_to_update.append(index)
+    for atom in mol.GetAtoms():
+        index = atom.GetIdx()
+        if index in new_positions:
+            x, y, z = new_positions[index]
+            p = Point3D(float(x), float(y), float(z))
+            conformer.SetAtomPosition(index, p)
+    if h_to_update:
+        update_H_positions(mol, h_to_update)
+    return mol.GetConformer().GetPositions()
+
 
 
 def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
@@ -890,6 +973,16 @@ class LinkedRDKitChorizo:
 
         return chorizo
 
+    @classmethod
+    def from_json(cls, json_string):
+        return json.loads(
+            json_string,
+            object_hook=linked_rdkit_chorizo_json_decoder,
+        )
+
+    def to_json(self):
+        return json.dumps(self, cls=LinkedRDKitChorizoEncoder)
+
     def parameterize(self, mk_prep):
         """
 
@@ -1424,6 +1517,19 @@ class LinkedRDKitChorizo:
             residue.molsetup,
             root_atom_index=link_atoms[0],
         )
+
+        molsetup = residue.molsetup
+        is_rigid_atom = [False for _ in molsetup.atoms]
+        graph = molsetup.flexibility_model["rigid_body_graph"]
+        root_body_idx = molsetup.flexibility_model["root"]
+        conn = molsetup.flexibility_model["rigid_body_connectivity"]
+        rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
+        # from the root, use only the atom that is bonded to the only rotatable bond
+        for other_body_idx in graph[root_body_idx]:
+            root_link_atom_idx = conn[(root_body_idx, other_body_idx)][0]
+            for atom_idx, body_idx in rigid_index_by_atom.items():
+                if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
+                    residue.is_flexres_atom[atom_idx] = True
         return
 
     @staticmethod
@@ -1599,45 +1705,48 @@ class LinkedRDKitChorizo:
                                           missed_altloc, needed_altloc)
         return raw_input_mols
 
-    def to_pdb(self, use_modified_coords: bool = False, modified_coords_index: int = 0):
-        """
 
+
+    def to_pdb(self, new_positions: Optional[dict]=None):
+        """
         Parameters
         ----------
-        use_modified_coords: bool
-        modified_coords_index: int
-
+        new_positions: dict (str -> dict (int -> (float, float, float)))
+                             |            |      |
+                    residue_id            |      |
+                                 atom_index      |
+                                                 new_position
         Returns
-        -------
+        _______
+        pdb_string: str
+        """    
 
-        """
+        if new_positions is None:
+            new_positions = {}
+        valid_residues = self.get_valid_residues()
+
+        # check that residue IDs passed in new_positions are valid
+        unknown_res_ids = set()
+        for res_id in new_positions:
+            if res_id not in valid_residues:
+                unknown_res_ids.add(res_id)
+        if unknown_res_ids:
+            msg = f"Residue IDs not in valid residues: {unknown_res_ids}"
+            raise ValueError(msg)
+
         pdbout = ""
         atom_count = 0
         pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                       {:2s} "
         pdb_line += pathlib.os.linesep
         for res_id in self.get_valid_residues():
-            resmol = self.residues[res_id].rdkit_mol
-            if use_modified_coords and self.residues[res_id].molsetup is not None:
-                molsetup = self.residues[res_id].molsetup
-                if len(molsetup.modified_atom_positions) <= modified_coords_index:
-                    errmsg = "Requesting pose %d but only got %d in molsetup of %s" % (
-                        modified_coords_index,
-                        len(molsetup.modified_atom_positions),
-                        res_id,
-                    )
-                    raise RuntimeError(errmsg)
-                p = molsetup.modified_atom_positions[modified_coords_index]
-                modified_positions = molsetup.get_conformer_with_modified_positions(
-                    p
-                ).GetPositions()
-                positions = {}
-                for i, j in self.residues[res_id].molsetup_mapidx.items():
-                    positions[j] = modified_positions[i]
+            rdkit_mol = self.residues[res_id].rdkit_mol
+            if res_id in new_positions:
+                positions = get_updated_positions(
+                    self.residues[res_id],
+                    new_positions[res_id],
+                )
             else:
-                positions = {
-                    i: xyz
-                    for (i, xyz) in enumerate(resmol.GetConformer().GetPositions())
-                }
+                positions = rdkit_mol.GetConformer().GetPositions()
 
             chain, resnum = res_id.split(":")
             if resnum[-1].isalpha():
@@ -1647,10 +1756,10 @@ class LinkedRDKitChorizo:
                 icode = ""
             resnum = int(resnum)
 
-            for i, atom in enumerate(resmol.GetAtoms()):
+            for i, atom in enumerate(rdkit_mol.GetAtoms()):
                 atom_count += 1
                 props = atom.GetPropsAsDict()
-                atom_name = props.get("atom_name", "")
+                atom_name = self.residues[res_id].atom_names[i]
                 x, y, z = positions[i]
                 element = mini_periodic_table[atom.GetAtomicNum()]
                 pdbout += pdb_line.format(
@@ -2612,7 +2721,8 @@ def residue_template_json_decoder(obj: dict):
 
     # Converting ResidueTemplate init values that need conversion
     deserialized_mol = rdkit_mol_from_json(obj["mol"])
-    mol_smiles = rdkit.Chem.MolToSmiles(deserialized_mol)
+    # do not write canonical smiles to preserve original atom order
+    mol_smiles = rdkit.Chem.MolToSmiles(deserialized_mol, canonical=False)
     link_labels = {int(k): v for k, v in obj["link_labels"].items()}
 
     # Construct a ResidueTemplate object

@@ -667,15 +667,16 @@ if args.write_json is not None:
 
 if args.write_pdb is not None:
     fn = args.write_pdb[0]
-    with open(fn, "W") as f:
+    with open(fn, "w") as f:
         f.write(chorizo.to_pdb())
     written_files_log["filename"].append(fn)
     written_files_log["description"].append("receptor")
 
 if args.write_pdbqt is not None:
     if args.write_pdbqt:
-        if args.write_pdbqt.endswith(".pdbqt"):
-            fn_base = args.write_pdbqt.rstrip(".pdbqt")
+        if args.write_pdbqt[0].endswith(".pdbqt"):
+            # may need to suffix _rigid/_flex with flexres
+            fn_base = str(pathlib.Path(args.write_pdbqt[0]).with_suffix(""))
         else:
             fn_base = args.write_pdbqt[0]
     else:
@@ -713,7 +714,7 @@ def warn_flexres_outside_box(chorizo, box_center, box_size):
         if not res.is_movable:
             continue
         for atom in res.molsetup.atoms:
-            if not res.is_flexres_atom[atom.index]:  # TODO: not implemented
+            if not res.is_flexres_atom[atom.index]:
                 continue
             if gridbox.is_point_outside_box(atom.coord, box_center, box_size, spacing=1.0):
                 print(
@@ -869,7 +870,8 @@ if not skip_gpf:
             # relies on --write_gpf forcing --write_pdbqt which sets rigid_fn
             box_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
         else:
-            box_fn = box_vina_fn.replace(".box.txt", ".box.pdb")
+            # suffix .pdb even if box_vina_fn does not end with ".txt"
+            box_fn = box_vina_fn.replace(".txt", "") + ".pdb"
         written_files_log["filename"].append(box_fn)
         written_files_log["description"].append("PDB file to visualize the grid box")
         with open(box_fn, "w") as f:
