@@ -139,7 +139,8 @@ def embed(mol: Chem.Mol, allowed_smarts: str,
 
 
 def cap(mol: Chem.Mol, allowed_smarts: str, 
-        capping_names: set[str] = None, capping_smarts_loc: dict[str, set[int]] = None) -> Chem.Mol:
+        capping_names: set[str] = None, capping_smarts_loc: dict[str, set[int]] = None, 
+        protonate: bool = False) -> Chem.Mol:
     """Add hydrogens to atoms with implicit hydrogens based on the union of
     (a) capping_names: list of atom IDs (names), and
     (b) capping_smarts_loc: dict to map substructure SMARTS patterns with 
@@ -172,9 +173,12 @@ def cap(mol: Chem.Mol, allowed_smarts: str,
     new_Hid = get_max_Hid(mol) + 1
     atoms_in_mol = [atom for atom in mol.GetAtoms()]
     for atom_idx in capping_atoms_idx:
-        needed_Hs = atoms_in_mol[atom_idx].GetNumImplicitHs()
+        parent_atom  = atoms_in_mol[atom_idx]
+        if protonate: 
+            parent_atom.SetFormalCharge(parent_atom.GetFormalCharge() + 1)
+        needed_Hs = parent_atom.GetNumImplicitHs()
         if needed_Hs == 0:
-            logging.warning(f"Atom # {atom_idx} ({atoms_in_mol[atom_idx].GetProp('atom_id')}) in mol doesn't have implicit Hs -> continue with next atom... ")
+            logging.warning(f"Atom # {atom_idx} ({parent_atom.GetProp('atom_id')}) in mol doesn't have implicit Hs -> continue with next atom... ")
         else:
             new_atom = Chem.Atom("H")
             new_atom.SetProp('atom_id', f"H{new_Hid}")
@@ -402,10 +406,11 @@ class ChemicalComponent:
                                leaving_names = leaving_names, leaving_smarts_loc = leaving_smarts_loc)
         return self
         
-    def make_capped(self, allowed_smarts, capping_names = None, capping_smarts_loc = None):
+    def make_capped(self, allowed_smarts, capping_names = None, capping_smarts_loc = None, protonate = None):
         """Build and name explicit hydrogens for atoms with implicit Hs by atom names and/or patterns."""
         self.rdkit_mol = cap(self.rdkit_mol, allowed_smarts = allowed_smarts, 
-                             capping_names = capping_names, capping_smarts_loc = capping_smarts_loc)
+                             capping_names = capping_names, capping_smarts_loc = capping_smarts_loc,
+                             protonate = protonate)
         return self
         
     def make_pretty_smiles(self):
@@ -555,6 +560,9 @@ acidic_proton_loc_canonical = {
         '[H][SX2][a]': 0, # thiophenol
     }
 
+AA_embed_allowed_smarts = "[NX3]([H])[CX4][CX2](=O)[OX2][H]"
+NA_embed_allowed_smarts = "[O][PX4](=O)([O])[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]"
+
 # Make free (noncovalent) CC
 def build_noncovalent_CC(basename: str) -> ChemicalComponent: 
 
@@ -582,6 +590,90 @@ def build_noncovalent_CC(basename: str) -> ChemicalComponent:
             
         logger.info(f"*** finish making {cc.resname} ***")
     return cc
+
+
+def build_linked_CCs(basename: str, AA: bool = False, NA: bool = False, 
+                     embed_allowed_smarts: str = None, 
+                     cap_allowed_smarts: str = None, cap_protonate: bool = False, 
+                     pattern_to_label_mapping_standard = dict[str, str], 
+                     variant_dict = dict[str, tuple]) -> list[ChemicalComponent]: 
+
+    with ChemicalComponent_LoggingControler(): 
+        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename), basename)
+        if cc_from_cif is None:
+            return None
+
+        cc = copy.deepcopy(cc_from_cif)
+        logger.info(f"*** using CCD ligand {basename} to construct residue {cc.resname} ***")
+
+        if AA or cc.rdkit_mol.GetSubstructMatch(Chem.MolFromSmarts(AA_embed_allowed_smarts)): 
+            embed_allowed_smarts = AA_embed_allowed_smarts
+            cap_allowed_smarts = "[NX3]([H])[CX4][CX2](=O)"
+            cap_protonate = True
+            pattern_to_label_mapping_standard = {'[NX3h1]': 'N-term', '[CX2h1]': 'C-term'}
+
+            variant_dict = {
+                    "_":  ({"[NX3]([H])[CX4][CX2](=O)[OX2][H]": {1, 5, 6}}, None), # embedded amino acid
+                    "_N": ({"[NX3]([H])[CX4][CX2](=O)[OX2][H]": {5, 6}}, {"[NX3]([H])[CX4][CX2](=O)": {0}}), # N-term amino acid
+                    "_C": ({"[NX3]([H])[CX4][CX2](=O)[OX2][H]": {1}}, None), # C-term amino acid
+                }
+        elif NA or cc.rdkit_mol.GetSubstructMatch(Chem.MolFromSmarts(NA_embed_allowed_smarts)): 
+            embed_allowed_smarts = NA_embed_allowed_smarts
+            cap_allowed_smarts = "[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]"
+            cap_protonate = False
+            pattern_to_label_mapping_standard = {'[PX4h1]': '5-prime', '[O+0X2h1:1]': '3-prime'}
+            variant_dict = {
+                    "_":  ({"[O][PX4](=O)([O])[OX2][CX4]": {0} ,"[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, None), # embedded nucleotide 
+                    "_3": ({"[O][PX4](=O)([O])[OX2][CX4]": {0}}, None), # 3' end nucleotide 
+                    "_5p": ({"[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, None), # 5' end nucleotide (extra phosphate than canonical X5)
+                    "_5": ({"[O][PX4](=O)([O])[OX2][CX4]": {0,1,2,3}, "[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, {"[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]": {0}}), # 5' end nucleoside (canonical X5 in Amber)
+                }
+
+        editable = cc_from_cif.rdkit_mol.GetSubstructMatches(Chem.MolFromSmarts(embed_allowed_smarts))
+        if not editable:
+            logging.warning(f"Molecule doesn't contain embed_allowed_smarts: {embed_allowed_smarts} -> no templates will be made. ")
+            return None
+
+        cc_variants = []
+        for suffix in variant_dict:
+            cc = copy.deepcopy(cc_from_cif)
+            cc.resname += suffix
+            logging.info(f"*** using CCD residue {basename} to construct {cc.resname} ***")
+
+            cc = (
+                cc
+                .make_canonical(acidic_proton_loc = acidic_proton_loc_canonical) 
+                .make_embedded(allowed_smarts = embed_allowed_smarts, 
+                            leaving_smarts_loc = variant_dict[suffix][0])
+                )
+            if len(rdmolops.GetMolFrags(cc.rdkit_mol))>1:
+                logging.warning(f"Molecule breaks into fragments during the deleterious editing of {cc.resname} -> skipping the vaiant... ")
+                continue
+
+            cc = (
+                cc
+                .make_capped(allowed_smarts = cap_allowed_smarts, 
+                            capping_smarts_loc = variant_dict[suffix][1],
+                            protonate = cap_protonate) 
+                .make_pretty_smiles()
+                .make_link_labels_from_patterns(pattern_to_label_mapping = pattern_to_label_mapping_standard)
+                )
+
+            try:
+                cc.ResidueTemplate_check()
+            except Exception as e:
+                err = f"Template {cc.resname} Failed to pass ResidueTemplate check. Error: {e}"
+                logging.error(err)
+                continue
+            
+            # Check redundancy
+            if any(cc == other_variant for other_variant in cc_variants):
+                logging.error(f"Template Failed to pass redundancy check -> skipping the template... ")
+                continue
+
+            cc_variants.append(cc)
+            logging.info(f"*** finish making {cc.resname} ***")
+    return cc_variants
 
 
 # This is an Example to make standard NA templates
