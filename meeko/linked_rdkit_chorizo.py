@@ -2330,12 +2330,11 @@ def remove_atoms_with_mapping(product: Chem.Mol, mapping_numbers: set) -> Chem.M
     """Remove atoms with specific atom mapping numbers from a molecule."""
     editable_product = Chem.RWMol(product)
 
-    atoms_to_remove = []
-    for atom in editable_product.GetAtoms():
-        if atom.HasProp("molAtomMapNumber"):
-            map_num = int(atom.GetProp("molAtomMapNumber"))
-            if map_num in mapping_numbers:
-                atoms_to_remove.append(atom.GetIdx())
+    atoms_to_remove = [
+        atom.GetIdx() 
+        for atom in editable_product.GetAtoms() 
+        if atom.HasProp("molAtomMapNumber") and int(atom.GetProp("molAtomMapNumber")) in mapping_numbers
+    ]
     for idx in sorted(atoms_to_remove, reverse=True):
         editable_product.RemoveAtom(idx)
     
