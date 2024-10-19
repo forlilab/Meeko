@@ -11,6 +11,7 @@ import meeko
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
 just_three_residues = pkgdir / "test/linked_rdkit_chorizo_data/just-three-residues.pdb"
 j3r_docked = pkgdir / "test/linked_rdkit_chorizo_data/just-three-residues_vina_flexres.pdbqt"
+j3r_idx_docked = pkgdir / "test/linked_rdkit_chorizo_data/just-three-residues_vina_flexres_idxmap.pdbqt"
 
 meekodir = pathlib.Path(meeko.__file__).parents[0]
 
@@ -45,7 +46,7 @@ def get_x_from_pdb_str(pdbstr, wanted_chain, wanted_resnum, wanted_name):
             return float(line[30:38])
     return None
 
-def test_export_sidechains():
+def test_export_sidechains_no_idxmap():
     with open(just_three_residues) as f:
         pdb_string = f.read()
     chorizo = LinkedRDKitChorizo.from_pdb_string(
@@ -68,6 +69,29 @@ def test_export_sidechains():
     pdb_string = export_pdb_updated_flexres(chorizo, pdbqt_mol)
     x = get_x_from_pdb_str(pdb_string, "", 16, "HG")
     assert abs(x - 18.724) < 0.0001
+
+    # rebuilding chorizo can fail if structure is mangled
+    chorizo = LinkedRDKitChorizo.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+    )
+    chorizo.flexibilize_sidechain(":15", mk_prep)
+    chorizo.flexibilize_sidechain(":16", mk_prep)
+    assert len(chorizo.get_valid_residues()) == 3
+
+    # with INDEX MAP in flexres PDBQT
+    with open(j3r_idx_docked) as f:
+        docked_pdbqt_string = f.read()
+    pdbqt_mol = PDBQTMolecule(docked_pdbqt_string, skip_typing=True)
+    pdbqt_mol._current_pose = 0
+    pdb_string = export_pdb_updated_flexres(chorizo, pdbqt_mol)
+    x = get_x_from_pdb_str(pdb_string, "", 15, "SD")
+    assert abs(x - 10.577) < 0.0001
+    pdbqt_mol._current_pose = 1
+    pdb_string = export_pdb_updated_flexres(chorizo, pdbqt_mol)
+    x = get_x_from_pdb_str(pdb_string, "", 16, "HG")
+    assert abs(x - 18.690) < 0.0001
 
     # rebuilding chorizo can fail if structure is mangled
     chorizo = LinkedRDKitChorizo.from_pdb_string(

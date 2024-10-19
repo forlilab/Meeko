@@ -535,7 +535,7 @@ class PDBQTWriterLegacy:
                 for atom_idx, is_flex in enumerate(residue.is_flexres_atom):
                         molsetup.atoms[atom_idx].is_ignore = not is_flex
                 this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
-                    molsetup, remove_smiles=True
+                    molsetup, remove_smiles=True, add_index_map=True
                 )
                 for atom in molsetup.atoms:
                     atom.is_ignore = original_ignore[atom.index]

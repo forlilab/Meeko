@@ -38,6 +38,8 @@ def cmd_lineparser():
                         help="receptor written by mk_prepare_receptor -j/--write_json")
     parser.add_argument('--all_dlg_poses', action='store_true',
                         help="write all AutoDock-GPU poses, not just cluster leads.")
+    parser.add_argument('-k', '--keep_flexres_sdf', action='store_true',
+                        help="add flexres, if any, to SDF ouput")
     parser.add_argument('-', '--',  dest='redirect_stdout', action='store_true',
                         help="do not write SDF file, just print it to STDOUT")
     return parser.parse_args()
@@ -50,6 +52,7 @@ write_pdb = args.write_pdb
 read_json = args.read_json
 suffix = args.suffix
 all_dlg_poses = args.all_dlg_poses
+keep_flexres_sdf = args.keep_flexres_sdf
 redirect_stdout = args.redirect_stdout
 
 if (
@@ -92,7 +95,7 @@ for filename in docking_results_filenames:
     sdf_string, failures = RDKitMolCreate.write_sd_string(
             pdbqt_mol,
             only_cluster_leads=only_cluster_leads,
-            skip_flexres=read_json is not None,  # sidechains will go to pdb
+            keep_flexres=keep_flexres_sdf,
     )
     for i in failures:
         warnings.warn("molecule %d not converted to RDKit/SD File" % i)
