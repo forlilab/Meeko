@@ -718,7 +718,7 @@ class LinkedRDKitChorizo:
 
         # check if input assigned residue name in residue_templates
         err = ""
-        supported_resnames = residue_templates.keys()
+        supported_resnames = residue_templates.keys() | ambiguous.keys()
         unknown_res_from_input = {res_id: raw_input_mols[res_id][1] for res_id in raw_input_mols if raw_input_mols[res_id][1] not in supported_resnames}
         if len(unknown_res_from_input) > 0:
             err += f"Input residues {unknown_res_from_input} not in residue_templates" + os_linesep
@@ -729,15 +729,17 @@ class LinkedRDKitChorizo:
                 err += f"Assigned residues {unknown_res_from_assign} not in residue_templates" + os_linesep
         if err: 
             print(err)
-            print("Trying to resolve unknown residues by building chemical templates... " + os_linesep)
+            print("Trying to resolve unknown residues by building chemical templates... ")
 
             all_unknown_res = unknown_res_from_input.copy()
             all_unknown_res.update(unknown_res_from_assign)
 
-            bonded_unknown_res = {res_id: all_unknown_res[res_id] for res_id in all_unknown_res if any(tup for tup in bonds if res_id in bonds)}
+            bonded_unknown_res = {res_id: all_unknown_res[res_id] for res_id in all_unknown_res if any(tup for tup in bonds if res_id in tup)}
             if bonded_unknown_res:
-                raise NotImplementedError(f"Unknown residues: {bonded_unknown_res} appear to be linking fragments. " + os_linesep
-                                          + "Guessing chemical templates with linker_labels are not currently supported. ")
+                raise ChorizoCreationError(f"Unknown residues: {bonded_unknown_res} appear to be linking fragments. " + os_linesep
+                                          + "Guessing chemical templates with linker_labels are not currently supported. ", 
+                                          "1. (to parameterize the residues) Use --add_templates to pass the additional templates with valid linker_labels, " + os_linesep
+                                          + "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. ")
 
             try: 
                 for resname in all_unknown_res.values(): 
