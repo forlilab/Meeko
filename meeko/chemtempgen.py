@@ -452,9 +452,9 @@ class ChemicalComponent:
         ps = Chem.SmilesParserParams()
         ps.removeHs = False
         mol = Chem.MolFromSmiles(self.smiles_exh, ps)
-        have_implicit_hs = set(atom.GetIdx() for atom in mol.GetAtoms() if atom.GetTotalNumHs() > 0)
+        have_implicit_hs = {atom.GetIdx() for atom in mol.GetAtoms() if atom.GetTotalNumHs() > 0}
 
-        if self.link_labels and set(self.link_labels) != have_implicit_hs:
+        if self.link_labels and {int(atom_id) for atom_id in self.link_labels} != have_implicit_hs:
             raise ValueError(
                 f"expected any atom with non-real Hs ({have_implicit_hs}) to be in {self.link_labels=}"
             )
