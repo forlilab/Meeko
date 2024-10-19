@@ -735,43 +735,50 @@ class LinkedRDKitChorizo:
             all_unknown_res.update(unknown_res_from_assign)
 
             bonded_unknown_res = {res_id: all_unknown_res[res_id] for res_id in all_unknown_res if any(tup for tup in bonds if res_id in tup)}
+            
+            unbound_unknown_res = all_unknown_res.copy()
+            for key in bonded_unknown_res:
+                unbound_unknown_res.pop(key, None) 
+
+            if unbound_unknown_res: 
+                try: 
+                    for resname in unbound_unknown_res.values(): 
+                        cc = build_noncovalent_CC(resname)
+                        fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
+                        residue_templates.update({resname: ResidueTemplate(
+                                                    smiles = fetch_template_dict['smiles'],
+                                                    atom_names = fetch_template_dict['atom_name'],
+                                                    link_labels = fetch_template_dict['link_labels'])})
+                        ambiguous[resname] = [cc.resname]
+                except Exception as e: 
+                    raise ChorizoCreationError(str(e))
+
             if bonded_unknown_res: 
                 failed_build = set()
-                for resname in bonded_unknown_res.values(): 
-                    cc_list = build_linked_CCs(resname)
-                    if not cc_list: 
-                        failed_build.add(resname)
-                    else:
-                        for cc in cc_list:
-                            fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
-                            residue_templates.update({cc.resname: ResidueTemplate(
-                                                        smiles = fetch_template_dict['smiles'],
-                                                        atom_names = fetch_template_dict['atom_name'],
-                                                        link_labels = {int(key): value for key,value in fetch_template_dict['link_labels'].items()})})
-                            if resname in ambiguous: 
-                                ambiguous[resname].append[cc.resname]
-                            else:
-                                ambiguous[resname] = [cc.resname]
+                try: 
+                    for resname in bonded_unknown_res.values(): 
+                        cc_list = build_linked_CCs(resname)
+                        if not cc_list: 
+                            failed_build.add(resname)
+                        else:
+                            for cc in cc_list:
+                                fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
+                                residue_templates.update({cc.resname: ResidueTemplate(
+                                                            smiles = fetch_template_dict['smiles'],
+                                                            atom_names = fetch_template_dict['atom_name'],
+                                                            link_labels = {int(key): value for key,value in fetch_template_dict['link_labels'].items()})})
+                                if resname in ambiguous: 
+                                    ambiguous[resname].append[cc.resname]
+                                else:
+                                    ambiguous[resname] = [cc.resname]
+                except Exception as e: 
+                    raise ChorizoCreationError(str(e))
                             
                 if failed_build: 
                     raise ChorizoCreationError(f"Template generation failed for unknown residues: {failed_build}, which appear to be linking fragments. " + os_linesep
                                             + "Guessing chemical templates with linker_labels are not currently supported. ", 
                                             "1. (to parameterize the residues) Use --add_templates to pass the additional templates with valid linker_labels, " + os_linesep
                                             + "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. ")
-
-            unbound_unknown_res = all_unknown_res.copy()
-            for key in bonded_unknown_res:
-                unbound_unknown_res.pop(key, None) 
-            try: 
-                for resname in unbound_unknown_res.values(): 
-                    cc = build_noncovalent_CC(resname)
-                    fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
-                    residue_templates.update({resname: ResidueTemplate(
-                                                smiles = fetch_template_dict['smiles'],
-                                                atom_names = fetch_template_dict['atom_name'],
-                                                link_labels = fetch_template_dict['link_labels'])})
-            except Exception as e: 
-                raise ChorizoCreationError(str(e))
 
         self.residues, self.log = self._get_residues(
             raw_input_mols,
