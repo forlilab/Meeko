@@ -453,10 +453,15 @@ class ChemicalComponent:
         ps.removeHs = False
         mol = Chem.MolFromSmiles(self.smiles_exh, ps)
         have_implicit_hs = {atom.GetIdx() for atom in mol.GetAtoms() if atom.GetTotalNumHs() > 0}
+        
+        if self.link_labels: 
+            int_labels = {int(atom_id) for atom_id in self.link_labels}
+        else:
+            int_labels = set()
 
-        if self.link_labels and {int(atom_id) for atom_id in self.link_labels} != have_implicit_hs:
+        if int_labels != have_implicit_hs:
             raise ValueError(
-                f"expected any atom with non-real Hs ({have_implicit_hs}) to be in {self.link_labels=}"
+                f"expected any atom with non-real Hs ({have_implicit_hs}) to tagged in link_labels ({int_labels})"
             )
         
         if not self.atom_name: 
@@ -471,15 +476,13 @@ class ChemicalComponent:
 def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: str=""):
     """Export list of chem templates to json"""
 
-    basenames = []
+    basenames = [cc.parent for cc in cc_list]
+    ambiguous_dict = {basename: [] for basename in basenames}
     for cc in cc_list:
-        if cc.parent and cc.parent not in basenames:
-            basenames.append(cc.parent)
-    ambiguous_dict = {basename:[] for basename in basenames}
-    for cc in cc_list:
-        ambiguous_dict[cc.parent].append(cc.resname)
+        if cc.resname not in ambiguous_dict[cc.parent]:
+            ambiguous_dict[cc.parent].append(cc.resname)
 
-    data_to_export = {"ambiguous": {}}
+    data_to_export = {"ambiguous": {basename: basename+".ambiguous" for basename in basenames}}
 
     residue_templates = {}
     for cc in cc_list:
@@ -498,7 +501,7 @@ def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: 
 
     # format ambiguous resnames to one line
     for basename in data_to_export["ambiguous"]:
-        single_line_resnames = json.dumps(data_to_export["ambiguous"][basename], separators=(', ', ': '))
+        single_line_resnames = json.dumps(ambiguous_dict[basename], separators=(', ', ': '))
         json_str = json_str.replace(json.dumps(data_to_export["ambiguous"][basename], indent = 4), single_line_resnames)
 
     # format link_labels and atom_name to one line
