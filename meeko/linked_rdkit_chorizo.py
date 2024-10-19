@@ -1194,6 +1194,10 @@ class LinkedRDKitChorizo:
             if set_template is not None and residue_key in set_template:
                 excess_H_ok = True  # e.g. allow set LYN (NH2) from LYS (NH3+)
                 template_key = set_template[residue_key]  # e.g. HID, NALA
+                if template_key not in residue_templates: 
+                    if template_key in ambiguous: 
+                        raise RuntimeError(f"Can't assign an ambiguous tamplate_key ({template_key}) to residue ({residue_key}). ")
+                    raise RuntimeError(f"Assigned tamplate_key ({template_key}) for residue ({residue_key}) is not in residue_templates. ")
                 template = residue_templates[template_key]
                 candidate_template_keys = [set_template[residue_key]]
                 candidate_templates = [template]
