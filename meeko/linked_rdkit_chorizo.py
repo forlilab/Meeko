@@ -742,7 +742,7 @@ class LinkedRDKitChorizo:
 
             if unbound_unknown_res: 
                 try: 
-                    for resname in unbound_unknown_res.values(): 
+                    for resname in set(unbound_unknown_res.values()): 
                         cc = build_noncovalent_CC(resname)
                         fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
                         residue_templates.update({resname: ResidueTemplate(
@@ -756,7 +756,7 @@ class LinkedRDKitChorizo:
             if bonded_unknown_res: 
                 failed_build = set()
                 try: 
-                    for resname in bonded_unknown_res.values(): 
+                    for resname in set(bonded_unknown_res.values()): 
                         cc_list = build_linked_CCs(resname)
                         if not cc_list: 
                             failed_build.add(resname)
