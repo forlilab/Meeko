@@ -768,7 +768,7 @@ class LinkedRDKitChorizo:
                                                             atom_names = fetch_template_dict['atom_name'],
                                                             link_labels = {int(key): value for key,value in fetch_template_dict['link_labels'].items()})})
                                 if resname in ambiguous: 
-                                    ambiguous[resname].append[cc.resname]
+                                    ambiguous[resname].append(cc.resname)
                                 else:
                                     ambiguous[resname] = [cc.resname]
                 except Exception as e: 

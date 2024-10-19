@@ -560,7 +560,7 @@ acidic_proton_loc_canonical = {
         '[H][SX2][a]': 0, # thiophenol
     }
 
-AA_embed_allowed_smarts = "[NX3]([H])[CX4][CX2](=O)[OX2][H]"
+AA_embed_allowed_smarts = "[NX3]([H])([H])[CX4][CX3](=O)[O]"
 NA_embed_allowed_smarts = "[O][PX4](=O)([O])[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]"
 
 # Make free (noncovalent) CC
@@ -603,25 +603,22 @@ def build_linked_CCs(basename: str, AA: bool = False, NA: bool = False,
         if cc_from_cif is None:
             return None
 
-        cc = copy.deepcopy(cc_from_cif)
-        logger.info(f"*** using CCD ligand {basename} to construct residue {cc.resname} ***")
-
-        if AA or cc.rdkit_mol.GetSubstructMatch(Chem.MolFromSmarts(AA_embed_allowed_smarts)): 
+        if AA or cc_from_cif.rdkit_mol.GetSubstructMatch(Chem.MolFromSmarts(AA_embed_allowed_smarts)): 
             embed_allowed_smarts = AA_embed_allowed_smarts
-            cap_allowed_smarts = "[NX3]([H])[CX4][CX2](=O)"
+            cap_allowed_smarts = "[NX3][CX4][CX3](=O)"
             cap_protonate = True
-            pattern_to_label_mapping_standard = {'[NX3h1]': 'N-term', '[CX2h1]': 'C-term'}
+            pattern_to_label_mapping_standard = {'[NX3h1]': 'N-term', '[CX3h1]': 'C-term'}
 
             variant_dict = {
-                    "_":  ({"[NX3]([H])[CX4][CX2](=O)[OX2][H]": {1, 5, 6}}, None), # embedded amino acid
-                    "_N": ({"[NX3]([H])[CX4][CX2](=O)[OX2][H]": {5, 6}}, {"[NX3]([H])[CX4][CX2](=O)": {0}}), # N-term amino acid
-                    "_C": ({"[NX3]([H])[CX4][CX2](=O)[OX2][H]": {1}}, None), # C-term amino acid
+                    "_":  ({"[NX3]([H])([H])[CX4][CX3](=O)[O]": {1, 6}}, None), # embedded amino acid
+                    "_N": ({"[NX3]([H])([H])[CX4][CX3](=O)[O]": {6}}, {"[NX3][CX4][CX3](=O)": {0}}), # N-term amino acid
+                    "_C": ({"[NX3]([H])([H])[CX4][CX3](=O)[O]": {1}}, None), # C-term amino acid
                 }
-        elif NA or cc.rdkit_mol.GetSubstructMatch(Chem.MolFromSmarts(NA_embed_allowed_smarts)): 
+        elif NA or cc_from_cif.rdkit_mol.GetSubstructMatch(Chem.MolFromSmarts(NA_embed_allowed_smarts)): 
             embed_allowed_smarts = NA_embed_allowed_smarts
             cap_allowed_smarts = "[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]"
             cap_protonate = False
-            pattern_to_label_mapping_standard = {'[PX4h1]': '5-prime', '[O+0X2h1:1]': '3-prime'}
+            pattern_to_label_mapping_standard = {'[PX4h1]': '5-prime', '[O+0X2h1]': '3-prime'}
             variant_dict = {
                     "_":  ({"[O][PX4](=O)([O])[OX2][CX4]": {0} ,"[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, None), # embedded nucleotide 
                     "_3": ({"[O][PX4](=O)([O])[OX2][CX4]": {0}}, None), # 3' end nucleotide 
@@ -629,7 +626,7 @@ def build_linked_CCs(basename: str, AA: bool = False, NA: bool = False,
                     "_5": ({"[O][PX4](=O)([O])[OX2][CX4]": {0,1,2,3}, "[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, {"[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]": {0}}), # 5' end nucleoside (canonical X5 in Amber)
                 }
 
-        editable = cc_from_cif.rdkit_mol.GetSubstructMatches(Chem.MolFromSmarts(embed_allowed_smarts))
+        editable = cc_from_cif.rdkit_mol.GetSubstructMatch(Chem.MolFromSmarts(embed_allowed_smarts))
         if not editable:
             logging.warning(f"Molecule doesn't contain embed_allowed_smarts: {embed_allowed_smarts} -> no templates will be made. ")
             return None
