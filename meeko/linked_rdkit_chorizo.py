@@ -376,8 +376,8 @@ def get_updated_positions(residue, new_positions: dict):
                 h_to_update.add(n2.GetIdx())
                 # updating all n1h is forced 
             else:
-                if n2 not in new_positions: 
-                    h_to_update.update(set(n2h.GetIdx() for n2h in n2.GetNeighbors() if n2h.AtomicNum() == 1))
+                if n2.GetIdx() not in new_positions: 
+                    h_to_update.update(set(n2h.GetIdx() for n2h in n2.GetNeighbors() if n2h.GetAtomicNum() == 1))
                     # n1-induced updating of n2h 
 
     for index in new_positions:
@@ -387,7 +387,6 @@ def get_updated_positions(residue, new_positions: dict):
     if h_to_update:
         update_H_positions(mol, list(h_to_update))
     return mol.GetConformer().GetPositions()
-
 
 
 def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
