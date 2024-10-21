@@ -350,12 +350,11 @@ def get_updated_positions(residue, new_positions: dict):
     set of new_positions. Hydrogens not specified in new_positions will
     have their position reset by RDKit if they satisfy either A or B defined
     below. n1 is the heavy atom that the hydrogen is bonded two, and n2 is
-    another heavy atom bonded to n1 (i.e., two bonds aways from the hydrogen).
+    another atom bonded to n1 (i.e., two bonds aways from the hydrogen).
     Conditions:
-      (A) max one n2 absent from new_positions, and n1 is in new_positions
-      (B) max one n2 absent from new_positions, and at least one n2 in
-      new_positions, and if there is an n2 absent from new_positions the bond
-      between n1 and that n2 must be rotatable
+      (A) n1 is in new_positions
+      (B) n1 is not in a new_position, but the hydrogens need to undergo
+      induced re-arrangement because n2 is in new_positions
 
     Parameters
     ----------
@@ -367,61 +366,26 @@ def get_updated_positions(residue, new_positions: dict):
                                 new_position
     """
 
-    h_to_update = []
+    h_to_update = set()
     mol = Chem.Mol(residue.rdkit_mol)  # avoids side effects
     conformer = mol.GetConformer()
-    idx_to_molsetup = {j: i for i, j in residue.molsetup_mapidx.items()}
-    for atom in mol.GetAtoms():
-        index = atom.GetIdx()
-        if atom.GetAtomicNum() != 1 or index in new_positions:
-            continue
-        to_update = False
-        # n1 -> neighbor
-        # n2 -> neighbor of neighbor
-        if len(atom.GetNeighbors()) != 1:
-            raise RuntimeError("expected hydrogen to have exactly 1 neighbor")
-        n1 = atom.GetNeighbors()[0]
-        num_n2_in_new = 0
-        num_n2_not_in_new = 0
-        num_n2_not_in_new_rotatable = 0
-        n1_in_new = False
-        if n1.GetIdx() in new_positions:
-            n1_in_new = True
-        for n2 in n1.GetNeighbors():
-            # n2 could be same as atom (circle back) but
-            # continue statements above and below prevent trouble
-            if n2.GetAtomicNum() == 1:
-                continue
-            num_n2_in_new += n2.GetIdx() in new_positions
-            if not n2.GetIdx() in new_positions:
-                num_n2_not_in_new += 1
-                i = idx_to_molsetup[n1.GetIdx()]
-                j = idx_to_molsetup[n2.GetIdx()]
-                bond_id = (min(i, j), max(i, j))
-                rotatable = residue.molsetup.bond_info[bond_id].rotatable
-                num_n2_not_in_new_rotatable += rotatable
-        # link atom same as not_in_new (even if blunt, to keep simple)
-        if n1.GetTotalNumHs(includeNeighbors=False):
-            num_n2_not_in_new += 1
 
-        # condition A
-        if n1_in_new and num_n2_not_in_new <= 1:
-            h_to_update.append(index)
-        # condition B
-        elif (
-            num_n2_in_new > 0 and
-            num_n2_not_in_new <= 1 and
-            num_n2_not_in_new_rotatable == num_n2_not_in_new
-        ):
-            h_to_update.append(index)
-    for atom in mol.GetAtoms():
-        index = atom.GetIdx()
-        if index in new_positions:
-            x, y, z = new_positions[index]
-            p = Point3D(float(x), float(y), float(z))
-            conformer.SetAtomPosition(index, p)
+    for n1 in (mol.GetAtomWithIdx(idx) for idx in new_positions):
+        for n2 in n1.GetNeighbors():
+            if n2.GetAtomicNum() == 1: # n1h: n1's hydrogens 
+                h_to_update.add(n2.GetIdx())
+                # updating all n1h is forced 
+            else:
+                if n2 not in new_positions: 
+                    h_to_update.update(set(n2h.GetIdx() for n2h in n2.GetNeibors() if n2h.AtomicNum() == 1))
+                    # n1-induced updating of n2h 
+
+    for index in new_positions:
+        x, y, z = new_positions[index]
+        p = Point3D(float(x), float(y), float(z))
+        conformer.SetAtomPosition(index, p)
     if h_to_update:
-        update_H_positions(mol, h_to_update)
+        update_H_positions(mol, list(h_to_update))
     return mol.GetConformer().GetPositions()
 
 
