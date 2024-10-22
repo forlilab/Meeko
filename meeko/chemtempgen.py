@@ -226,7 +226,7 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
     # Recharging metal complexes
     metal_AtomicNums = {12, 20, 25, 26, 30}  # Mg: 12, Ca: 20, Mn: 25, Fe: 26, Zn: 30
     metal_atoms = set(atom for atom in rwmol.GetAtoms() if atom.GetAtomicNum() in metal_AtomicNums)
-    ligation_valence = {v: k for k, v_set in {
+    coord_valence = {v: k for k, v_set in {
             1: {1, 9, 17, 53}, # monovalent: H, halogens
             2: {8, 16}, # divalent: O, S
             3: {7, 15}, # trivalent: N, P (phospine)
@@ -243,23 +243,25 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
         return rwmol
     else:
         # Method a: If charge is ignored at metal center
-        # -> charge up ligated atoms 
-        # (metal ox state will be interpreted from valence of ligated atom)
-        ligated_atoms = set(atom for metal in metal_atoms for atom in metal.GetNeighbors() )
+        # -> charge up coordinated atoms 
+        # (metal ox state will be interpreted from valence of coordinated atom)
+        coordinated_atoms = set(atom for metal in metal_atoms for atom in metal.GetNeighbors() )
         #if 1:
         if any(atom.GetFormalCharge() == 0 for atom in metal_atoms): 
-            logging.warning(f"Molecule contains metal with unspecified charge state -> neutralizing metalas and recharging ligated atoms... ")
+            logging.warning(f"Molecule contains metal with unspecified charge state -> charging coordinated atoms...")
+            logging.warning(f"All metals will be neutralized and the coordinated atoms will be charged according to their explicit valence. ")
             for atom in metal_atoms: 
                 atom.SetFormalCharge(0)
-            for atom in ligated_atoms: 
+            for atom in coordinated_atoms: 
                 bond_sum = sum(bond_order_mapping.get(bond.GetBondType(), 0) for bond in atom.GetBonds())
-                atom.SetFormalCharge(bond_sum - ligation_valence[atom.GetAtomicNum()])
+                atom.SetFormalCharge(bond_sum - coord_valence[atom.GetAtomicNum()])
   
         # Method b: If charge (ox) state is specified for all metal centers
-        # -> ionize (break bonds w/) and charge down ligated atoms
+        # -> ionize (break bonds w/) and charge down coordinated atoms
         # (metal ox state will be from input charge state)
         else: 
-            logging.warning(f"Molecule contains metal specified charge state -> recharing ligated atoms... ")
+            logging.warning(f"Molecule contains metal specified charge state -> ionizing metal-nonmental coordinated bonds...")
+            logging.warning(f"All metal-nonmental coordinate bonds will be polarized. ")
             metal_to_nonmetal_neighbors = {metal: {atom for atom in metal.GetNeighbors() 
                                            if atom.GetAtomicNum() not in metal_AtomicNums} for metal in metal_atoms}
             metal_bonds = {bond.GetIdx(): (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) 
@@ -268,9 +270,9 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
             for bond_idx in sorted(metal_bonds, reverse=True):
                 rwmol.RemoveBond(metal_bonds[bond_idx][0], metal_bonds[bond_idx][1])
 
-            for atom in ligated_atoms: 
+            for atom in coordinated_atoms: 
                 bond_sum = sum(bond_order_mapping.get(bond.GetBondType(), 0) for bond in atom.GetBonds())
-                atom.SetFormalCharge(bond_sum - ligation_valence[atom.GetAtomicNum()])
+                atom.SetFormalCharge(bond_sum - coord_valence[atom.GetAtomicNum()])
 
             # to avoid fragmentation, rebuild all metal-nonmetal bonds
             for metal in metal_atoms: 
@@ -278,6 +280,8 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
                     rwmol.AddBond(metal.GetIdx(), nei.GetIdx(), Chem.BondType.SINGLE)
                     metal.SetFormalCharge(metal.GetFormalCharge() - 1)
                     nei.SetFormalCharge(nei.GetFormalCharge() + 1)
+
+        logging.warning(f"Total charge of the molecule after recharging: {sum(atom.GetFormalCharge() for atom in rwmol.GetAtoms())}")
 
     return rwmol
 
