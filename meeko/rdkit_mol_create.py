@@ -180,11 +180,20 @@ class RDKitMolCreate:
     }
 
     @classmethod
-    def from_pdbqt_mol(cls, pdbqt_mol, only_cluster_leads=False): # TODO add pseudo-water (W atoms, variable nr each pose)
+    def from_pdbqt_mol(
+        cls,
+        pdbqt_mol,
+        only_cluster_leads=False,
+        keep_flexres=False,
+    ):
+        # todo: add pseudo-water (W atoms, variable nr each pose)
         if only_cluster_leads and len(pdbqt_mol._pose_data["cluster_leads_sorted"]) == 0:
             raise RuntimeError("no cluster_leads in pdbqt_mol but only_cluster_leads=True")
         mol_list = []
         for mol_index in pdbqt_mol._atom_annotations["mol_index"]:
+            flexres_id = pdbqt_mol._pose_data["mol_index_to_flexible_residue"][mol_index]
+            if flexres_id is not None and not keep_flexres:
+                continue
             smiles = pdbqt_mol._pose_data['smiles'][mol_index]
             index_map = pdbqt_mol._pose_data['smiles_index_map'][mol_index]
             h_parent = pdbqt_mol._pose_data['smiles_h_parent'][mol_index]
@@ -444,10 +453,10 @@ class RDKitMolCreate:
         return rdmol, energy
 
     @staticmethod
-    def write_sd_string(pdbqt_mol, only_cluster_leads=False):
+    def write_sd_string(pdbqt_mol, only_cluster_leads=False, keep_flexres=False):
         sio = io.StringIO()
         f = Chem.SDWriter(sio)
-        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads)
+        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads, keep_flexres)
         failures = [i for i, mol in enumerate(mol_list) if mol is None]
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
         if combined_mol is None:

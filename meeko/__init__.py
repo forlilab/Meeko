@@ -40,6 +40,7 @@ from .linked_rdkit_chorizo import linked_rdkit_chorizo_json_decoder
 from .linked_rdkit_chorizo import ChorizoCreationError
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
+from .export_flexres import export_pdb_updated_flexres
 from .reactive import reactive_typer
 from .reactive import get_reactive_config
 from .writer import PDBQTWriterLegacy
