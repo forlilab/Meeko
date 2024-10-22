@@ -41,6 +41,7 @@ covalent_radius = {  # from wikipedia
         53: 1.39,
     }
 list_of_AD_elements_as_AtomicNum = list(covalent_radius.keys())
+metal_AtomicNums = {12, 20, 25, 26, 30}  # Mg: 12, Ca: 20, Mn: 25, Fe: 26, Zn: 30
 
 # Utility Functions
 def mol_contains_unexpected_element(mol: Chem.Mol, allowed_elements: list[str] = list_of_AD_elements_as_AtomicNum) -> bool:
@@ -224,7 +225,6 @@ def deprotonate(mol: Chem.Mol, acidic_proton_loc: dict[str, int] = None) -> Chem
 
 def recharge(rwmol: Chem.RWMol) -> Chem.RWMol: 
     # Recharging metal complexes
-    metal_AtomicNums = {12, 20, 25, 26, 30}  # Mg: 12, Ca: 20, Mn: 25, Fe: 26, Zn: 30
     metal_atoms = set(atom for atom in rwmol.GetAtoms() if atom.GetAtomicNum() in metal_AtomicNums)
     coord_valence = {v: k for k, v_set in {
             1: {1, 9, 17, 53}, # monovalent: H, halogens
@@ -309,10 +309,10 @@ def get_pretty_smiles(smi: str) -> str:
     # collect the inside square brackets contents
     contents = set(re.findall(r'\[([^\]]+)\]', smi))
 
-    def is_chemical_element(symbol: str) -> bool:
+    def is_nonmetal_element(symbol: str) -> bool:
         """Check if a string represents a valid chemical element."""
         try:
-            return Chem.GetPeriodicTable().GetAtomicNumber(symbol) > 0
+            return Chem.GetPeriodicTable().GetAtomicNumber(symbol) not in metal_AtomicNums
         # rdkit throws RuntimeError if invalid
         except RuntimeError:
             return False
@@ -323,8 +323,8 @@ def get_pretty_smiles(smi: str) -> str:
             continue
         # drop H in the content to hide implicit Hs
         H_stripped = content.split('H')[0]
-        # drop [ ] if the content is an uncharged element symbol
-        if is_chemical_element(content) or is_chemical_element(H_stripped):
+        # drop [ ] if the content is an uncharged nonmental element symbol 
+        if is_nonmetal_element(content) or is_nonmetal_element(H_stripped):
             smi = smi.replace(f"[{content}]", f"{H_stripped}" if 'H' in content else f"{content}")
     return smi
 
