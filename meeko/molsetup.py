@@ -1653,7 +1653,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
                     atom.SetAtomicNum(16)
             rdPartialCharges.ComputeGasteigerCharges(copy_mol)
             charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
-            charges = [1e-6 if np.isnan(x) else x for x in charges]
+            charges = [1e-6 if np.isnan(x) or np.isinf(x) else x for x in charges]
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
         # register atom
