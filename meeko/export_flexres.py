@@ -72,5 +72,25 @@ def export_pdb_updated_flexres(chorizo, pdbqt_mol):
             if hit_count != sum(is_flexres_atom):
                 raise RuntimeError(f"{hit_count=} {sum(is_flexres_atom)=}")
             new_positions[res_id] = sidechain_positions
+
+            # remove root atom(s) (often C-alpha) and first atom after bond
+            flex_model = chorizo.residues[res_id].molsetup.flexibility_model
+            root_body_idx = flex_model["root"]
+            graph = flex_model["rigid_body_graph"]
+            conn = flex_model["rigid_body_connectivity"]
+            rigid_index_by_atom = flex_model["rigid_index_by_atom"]
+            first_after_root = set()
+            for other_body_idx in graph[root_body_idx]:
+                first_after_root.add(conn[(root_body_idx, other_body_idx)][1])
+            to_pop = set()
+            for index in sidechain_positions:
+                index_molsetup = template_to_molsetup[index]
+                if (
+                    rigid_index_by_atom[index_molsetup] == root_body_idx or 
+                    index_molsetup in first_after_root
+                ): 
+                    to_pop.add(index) 
+            for index in to_pop:
+                sidechain_positions.pop(index)
     pdbstr = chorizo.to_pdb(new_positions)
     return pdbstr
