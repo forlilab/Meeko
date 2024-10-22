@@ -189,7 +189,7 @@ def cap(mol: Chem.Mol, allowed_smarts: str,
     return rwmol.GetMol()
 
 
-def deprotonate(mol, acidic_proton_loc: dict[str, int] = None) -> Chem.Mol:
+def deprotonate(mol: Chem.Mol, acidic_proton_loc: dict[str, int] = None) -> Chem.Mol:
     """Remove acidic protons from the molecule based on acidic_proton_loc"""
     # acidic_proton_loc is a mapping 
     # keys: smarts pattern of a fragment
@@ -220,6 +220,66 @@ def deprotonate(mol, acidic_proton_loc: dict[str, int] = None) -> Chem.Mol:
     
     rwmol.UpdatePropertyCache()
     return rwmol.GetMol()
+
+
+def recharge(rwmol: Chem.RWMol) -> Chem.RWMol: 
+    # Recharging metal complexes
+    metal_AtomicNums = {12, 20, 25, 26, 30}  # Mg: 12, Ca: 20, Mn: 25, Fe: 26, Zn: 30
+    metal_atoms = set(atom for atom in rwmol.GetAtoms() if atom.GetAtomicNum() in metal_AtomicNums)
+    ligation_valence = {v: k for k, v_set in {
+            1: {1, 9, 17, 53}, # monovalent: H, halogens
+            2: {8, 16}, # divalent: O, S
+            3: {7, 15}, # trivalent: N, P (phospine)
+            4: {6}, # tetravalent carbon
+            }.items() for v in v_set}
+    bond_order_mapping = {
+        Chem.BondType.SINGLE: 1,
+        Chem.BondType.DOUBLE: 2,
+        Chem.BondType.TRIPLE: 3,
+        Chem.BondType.AROMATIC: 1.5  
+    }
+
+    if not metal_atoms: 
+        return rwmol
+    else:
+        # Method a: If charge is ignored at metal center
+        # -> charge up ligated atoms 
+        # (metal ox state will be interpreted from valence of ligated atom)
+        ligated_atoms = set(atom for metal in metal_atoms for atom in metal.GetNeighbors() )
+        #if 1:
+        if any(atom.GetFormalCharge() == 0 for atom in metal_atoms): 
+            logging.warning(f"Molecule contains metal with unspecified charge state -> neutralizing metalas and recharging ligated atoms... ")
+            for atom in metal_atoms: 
+                atom.SetFormalCharge(0)
+            for atom in ligated_atoms: 
+                bond_sum = sum(bond_order_mapping.get(bond.GetBondType(), 0) for bond in atom.GetBonds())
+                atom.SetFormalCharge(bond_sum - ligation_valence[atom.GetAtomicNum()])
+  
+        # Method b: If charge (ox) state is specified for all metal centers
+        # -> ionize (break bonds w/) and charge down ligated atoms
+        # (metal ox state will be from input charge state)
+        else: 
+            logging.warning(f"Molecule contains metal specified charge state -> recharing ligated atoms... ")
+            metal_to_nonmetal_neighbors = {metal: {atom for atom in metal.GetNeighbors() 
+                                           if atom.GetAtomicNum() not in metal_AtomicNums} for metal in metal_atoms}
+            metal_bonds = {bond.GetIdx(): (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) 
+                               for metal in metal_atoms for bond in metal.GetBonds()}
+
+            for bond_idx in sorted(metal_bonds, reverse=True):
+                rwmol.RemoveBond(metal_bonds[bond_idx][0], metal_bonds[bond_idx][1])
+
+            for atom in ligated_atoms: 
+                bond_sum = sum(bond_order_mapping.get(bond.GetBondType(), 0) for bond in atom.GetBonds())
+                atom.SetFormalCharge(bond_sum - ligation_valence[atom.GetAtomicNum()])
+
+            # to avoid fragmentation, rebuild all metal-nonmetal bonds
+            for metal in metal_atoms: 
+                for nei in metal_to_nonmetal_neighbors[metal]:
+                    rwmol.AddBond(metal.GetIdx(), nei.GetIdx(), Chem.BondType.SINGLE)
+                    metal.SetFormalCharge(metal.GetFormalCharge() - 1)
+                    nei.SetFormalCharge(nei.GetFormalCharge() + 1)
+
+    return rwmol
 
 
 # Attribute Formatters
@@ -360,6 +420,15 @@ class ChemicalComponent:
         bond_table = block.find(bond_category, bond_attributes)
         bond_cols = {attr: bond_table.find_column(f"{bond_category}{attr}") for attr in bond_attributes}
 
+        # Populate bond table
+        bond_category = '_chem_comp_bond.'
+        bond_attributes = ['atom_id_1', # atom name 1
+                           'atom_id_2', # atom name 2
+                           'value_order', # bond order
+                           ]
+        bond_table = block.find(bond_category, bond_attributes)
+        bond_cols = {attr: bond_table.find_column(f"{bond_category}{attr}") for attr in bond_attributes}
+
         # Connect atoms by bonds
         bond_type_mapping = {
             'SING': Chem.BondType.SINGLE,
@@ -373,6 +442,13 @@ class ChemicalComponent:
             rwmol.AddBond(name_to_idx_mapping[bond_cols['atom_id_1'][bond_i].strip('"')], 
                           name_to_idx_mapping[bond_cols['atom_id_2'][bond_i].strip('"')], 
                           bond_type_mapping.get(bond_type, Chem.BondType.UNSPECIFIED))
+
+        # Try recharging mol (for metals)
+        try:
+            rwmol = recharge(rwmol)
+        except Exception as e:
+            logging.error(f"Failed to recharge rdkitmol. Error: {e} -> template for {resname} will be None. ")
+            return None
 
         # Finish eidting mol 
         try:    
@@ -673,7 +749,7 @@ def build_linked_CCs(basename: str, AA: bool = False, NA: bool = False,
     return cc_variants
 
 
-# This is an Example to make standard NA templates
+# This is an Example to make Fe-containing templates
 def main(): 
 
     # """Download components.cif"""
@@ -683,19 +759,19 @@ def main():
     #    print(f"Unable to download components.cif from files.wwpdb.org")
     #    sys.exit(2)
 
-    """Download components.cif"""
-    url = "https://files.wwpdb.org/pub/pdb/data/monomers/components.cif"
+    # """Download components.cif"""
+    # url = "https://files.wwpdb.org/pub/pdb/data/monomers/components.cif"
     source_cif = file_path = "components.cif"
-
-    try:
-        urllib.request.urlretrieve(url, file_path)
-        logging.info(f"File downloaded successfully: {file_path}")
-    except Exception as e:
-        logging.error(f"Failed to download file. Error: {e}")
+ 
+    # try:
+    #     urllib.request.urlretrieve(url, file_path)
+    #     logging.info(f"File downloaded successfully: {file_path}")
+    # except Exception as e:
+    #     logging.error(f"Failed to download file. Error: {e}")
 
     """Make chemical templates"""
-    basenames = ['A', 'U', 'C', 'G', 'DA', 'DT', 'DC', 'DG']
-    NA_ccs = []
+    basenames = ['HEM', 'FDD', '0UE', 'FES']
+    my_ccs = []
 
     acidic_proton_loc_canonical = {
         # any carboxylic acid, sulfuric/sulfonic acid/ester, phosphoric/phosphinic acid/ester
@@ -706,43 +782,22 @@ def main():
     } | {
         '[H][SX2][a]': 0, # thiophenol
     } 
-    embed_allowed_smarts = "[O][PX4](=O)([O])[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]"
-    cap_allowed_smarts = "[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]"
-    pattern_to_label_mapping_standard = {'[PX4h1]': '5-prime', '[O+0X2h1]': '3-prime'}
-
-    variant_recipe = {
-        # embedded nucleotide 
-        "":  ({"[O][PX4](=O)([O])[OX2][CX4]": {0} ,"[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, None), 
-        # 3' end nucleotide 
-        "3": ({"[O][PX4](=O)([O])[OX2][CX4]": {0}}, None), 
-        # 5' end nucleotide (extra phosphate than canonical X5)
-        "5p": ({"[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, None), 
-        # 5' end nucleoside (canonical X5 in Amber)
-        "5": ({"[O][PX4](=O)([O])[OX2][CX4]": {0,1,2,3}, "[CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]": {6}}, {"[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]": {0}}), 
-    }
 
     for basename in basenames:
-        for suffix in variant_recipe:
-            cc = ChemicalComponent.from_cif(source_cif, basename)
-            cc.resname += suffix
-            print(f"*** using CCD residue {basename} to construct {cc.resname} ***")
+        cc = ChemicalComponent.from_cif(source_cif, basename)
+        print(f"*** using CCD residue {basename} to construct {cc.resname} ***")
+        print(cc.smiles_exh)
+        cc = (
+            cc
+            .make_canonical(acidic_proton_loc = acidic_proton_loc_canonical)
+            # .make_pretty_smiles()
+            )
 
-            cc = (
-                cc
-                .make_canonical(acidic_proton_loc = acidic_proton_loc_canonical)
-                .make_embedded(allowed_smarts = embed_allowed_smarts, 
-                               leaving_smarts_loc = variant_recipe[suffix][0])
-                .make_capped(allowed_smarts = cap_allowed_smarts, 
-                             capping_smarts_loc = variant_recipe[suffix][1]) 
-                .make_pretty_smiles()
-                .make_link_labels_from_patterns(pattern_to_label_mapping = pattern_to_label_mapping_standard)
-                )
-
-            print(f"*** finish making {cc.resname} ***")
-            NA_ccs.append(cc)
+        print(f"*** finish making {cc.resname} ***")
+        my_ccs.append(cc)
 
     """Export to one json file"""
-    export_chem_templates_to_json(NA_ccs, 'standard_NA_templates.json')
+    export_chem_templates_to_json(my_ccs, 'my_templates.json')
 
 
 if __name__ == '__main__':
