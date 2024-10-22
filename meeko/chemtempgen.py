@@ -260,8 +260,8 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
         # -> ionize (break bonds w/) and charge down coordinated atoms
         # (metal ox state will be from input charge state)
         else: 
-            logging.warning(f"Molecule contains metal specified charge state -> ionizing metal-nonmental coordinated bonds...")
-            logging.warning(f"All metal-nonmental coordinate bonds will be polarized. ")
+            logging.warning(f"Molecule contains metal specified charge state -> ionizing metal-nonmetal coordinated bonds...")
+            logging.warning(f"All metal-nonmetal coordinate bonds will be polarized. ")
             metal_to_nonmetal_neighbors = {metal: {atom for atom in metal.GetNeighbors() 
                                            if atom.GetAtomicNum() not in metal_AtomicNums} for metal in metal_atoms}
             metal_bonds = {bond.GetIdx(): (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) 
@@ -323,7 +323,7 @@ def get_pretty_smiles(smi: str) -> str:
             continue
         # drop H in the content to hide implicit Hs
         H_stripped = content.split('H')[0]
-        # drop [ ] if the content is an uncharged nonmental element symbol 
+        # drop [ ] if the content is an uncharged nonmetal element symbol 
         if is_nonmetal_element(content) or is_nonmetal_element(H_stripped):
             smi = smi.replace(f"[{content}]", f"{H_stripped}" if 'H' in content else f"{content}")
     return smi
