@@ -748,6 +748,7 @@ class LinkedRDKitChorizo:
             invmap2 = {j: i for i, j in res2.mapidx_to_raw.items()}
             _bonds[key] = (invmap1[bond[0]], invmap2[bond[1]])
         bonds = _bonds
+        self.bonds = bonds
 
         # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
         padded_mols = self._build_padded_mols(self.residues, bonds, padders)
@@ -760,6 +761,42 @@ class LinkedRDKitChorizo:
             self.parameterize(mk_prep)
 
         return
+
+    def stitch(self):
+        """returns a single rdkit molecule that results from adding bonds
+            between every chorizo residue. It may contain multiple fragments
+            if there are multiple chains or gaps.
+        """
+
+        indexed_bonds = {}
+        for r1, r2 in self.bonds.keys():
+            indexed_bonds.setdefault(r1, [])
+            indexed_bonds.setdefault(r2, [])
+            indexed_bonds[r1].append((r1, r2))
+            indexed_bonds[r2].append((r1, r2))
+        # can index by residue pair id because we currently allow only one bond per residue pair
+        bonds_spent = set()
+        residues_added = {}
+        mol = Chem.Mol()
+        for r_id, res in self.get_valid_residues().items():
+            offset = mol.GetNumAtoms()
+            mol = Chem.CombineMols(mol, res.rdkit_mol)
+            residues_added[r_id] = offset
+            edit_mol = Chem.EditableMol(mol)
+            for bond_key in indexed_bonds.get(r_id, []):
+                if bond_key in bonds_spent:
+                    continue
+                if bond_key[0] not in residues_added or bond_key[1] not in residues_added:
+                    continue
+                bonds_spent.add(bond_key)
+                i, j = self.bonds[bond_key]
+                offset_i = residues_added[bond_key[0]]
+                offset_j = residues_added[bond_key[1]]
+                edit_mol.AddBond(i+offset_i, j+offset_j, order=Chem.rdchem.BondType.SINGLE)
+            mol = edit_mol.GetMol()
+        if len(bonds_spent) != len(self.bonds):
+            raise RuntimeError("nr of bonds added differs from self.bonds")
+        return mol
 
     @classmethod
     def from_pdb_string(
