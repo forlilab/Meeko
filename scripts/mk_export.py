@@ -62,7 +62,7 @@ if (
     msg = "With multiple input files, the output filenames are based on the"
     msg += "input filename. The suffix can be controlled with option --suffix."
     msg += "--write options are incompatible with multiple input files"
-    print("F--write options incompatible with multiple input files", file=sys.stderr)
+    print("--write options incompatible with multiple input files", file=sys.stderr)
     sys.exit(2)
 
 if redirect_stdout and len(docking_results_filenames) > 1:
@@ -75,6 +75,10 @@ if read_json is not None:
     polymer = LinkedRDKitChorizo.from_json(json_string)
 else:
     polymer = None
+    if write_pdb is not None:
+        print("option -p (write pdb) requires -j (receptor receptor file)", file=sys.stderr)
+        sys.exit(2)
+
 
 for filename in docking_results_filenames:
     is_dlg = filename.endswith('.dlg') or filename.endswith(".dlg.gz")
