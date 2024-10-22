@@ -23,7 +23,7 @@ def check_rdkit_bond_lengths(fpath, nr_expected_none, is_dlg, skip_typing):
     return run_from_pdbqtmol(pdbqtmol, nr_expected_none)
 
 def run_from_pdbqtmol(pdbqtmol, nr_expected_none=0):
-    mols = RDKitMolCreate.from_pdbqt_mol(pdbqtmol) 
+    mols = RDKitMolCreate.from_pdbqt_mol(pdbqtmol, keep_flexres=True)
     assert(mols.count(None) == nr_expected_none)
     nr_conformers = set()
     for mol in mols:
@@ -158,7 +158,7 @@ def test_offsite_charges():
     assert is_ok
     assert "LP" in pdbqt
     pmol = PDBQTMolecule(pdbqt, skip_typing=True)
-    rdkit_mols = RDKitMolCreate.from_pdbqt_mol(pmol)
+    rdkit_mols = RDKitMolCreate.from_pdbqt_mol(pmol, keep_flexres=True)
     assert len(rdkit_mols) == 1
     smiles = Chem.MolToSmiles(rdkit_mols[0])
     assert type(smiles) == str
