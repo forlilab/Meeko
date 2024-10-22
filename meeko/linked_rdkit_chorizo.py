@@ -348,13 +348,8 @@ def get_updated_positions(residue, new_positions: dict):
     """
     Returns full set of positions for the rdkit_mol in residue given a partial
     set of new_positions. Hydrogens not specified in new_positions will
-    have their position reset by RDKit if they satisfy either A or B defined
-    below. n1 is the heavy atom that the hydrogen is bonded two, and n2 is
-    another atom bonded to n1 (i.e., two bonds aways from the hydrogen).
-    Conditions:
-      (A) n1 is in new_positions
-      (B) n1 is not in a new_position, but the hydrogens need to undergo
-      induced re-arrangement because n2 is in new_positions
+    have their position reset by RDKit if they are one or two bonds away
+    from an atom in new_positions.
 
     Parameters
     ----------
@@ -372,13 +367,14 @@ def get_updated_positions(residue, new_positions: dict):
 
     for n1 in (mol.GetAtomWithIdx(idx) for idx in new_positions):
         for n2 in n1.GetNeighbors():
-            if n2.GetAtomicNum() == 1: # n1h: n1's hydrogens 
+            if n2.GetAtomicNum() == 1:  # 1 bond away
                 h_to_update.add(n2.GetIdx())
-                # updating all n1h is forced 
             else:
-                if n2.GetIdx() not in new_positions: 
+                if n2.GetIdx() not in new_positions:  # 2 bonds away
                     h_to_update.update(set(n2h.GetIdx() for n2h in n2.GetNeighbors() if n2h.GetAtomicNum() == 1))
-                    # n1-induced updating of n2h 
+
+    # hydrogens in new_positions shall not be updated by RDKit
+    h_to_update -= set(new_positions)
 
     for index in new_positions:
         x, y, z = new_positions[index]
