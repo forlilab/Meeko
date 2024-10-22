@@ -227,10 +227,10 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
     # Recharging metal complexes
     metal_atoms = set(atom for atom in rwmol.GetAtoms() if atom.GetAtomicNum() in metal_AtomicNums)
     coord_valence = {v: k for k, v_set in {
-            1: {1, 9, 17, 53}, # monovalent: H, halogens
+            1: {1, 9, 17, 35, 53}, # monovalent: H, halogens
             2: {8, 16}, # divalent: O, S
-            3: {7, 15}, # trivalent: N, P (phospine)
-            4: {6}, # tetravalent carbon
+            3: {5, 7, 15}, # trivalent: B, N, P (phosphine)
+            4: {6, 14}, # tetravalent: C, Si
             }.items() for v in v_set}
     bond_order_mapping = {
         Chem.BondType.SINGLE: 1,
@@ -243,34 +243,34 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
         return rwmol
     else:
         # Method a: If charge is ignored at metal center
-        # -> charge up coordinated atoms 
-        # (metal ox state will be interpreted from valence of coordinated atom)
-        coordinated_atoms = set(atom for metal in metal_atoms for atom in metal.GetNeighbors() )
+        # -> charge up nonmetal coordinated atoms 
+        # (metal ox state will be interpreted from valence of nonmetal coordinated atom)
+        metal_to_nonmetal_neighbors = {metal: {atom for atom in metal.GetNeighbors() 
+                                               if atom.GetAtomicNum() not in metal_AtomicNums} for metal in metal_atoms}
+        nonmetal_coord_atoms = set(atom for v_set in metal_to_nonmetal_neighbors.values() for atom in v_set)
         #if 1:
         if any(atom.GetFormalCharge() == 0 for atom in metal_atoms): 
-            logging.warning(f"Molecule contains metal with unspecified charge state -> charging coordinated atoms...")
-            logging.warning(f"All metals will be neutralized and the coordinated atoms will be charged according to their explicit valence. ")
+            logging.warning(f"Molecule contains metal with unspecified charge state -> charging nonmetal coordinated atoms...")
+            logging.warning(f"All metals will be neutralized and the nonmetal coordinated atoms will be charged according to their explicit valence. ")
             for atom in metal_atoms: 
                 atom.SetFormalCharge(0)
-            for atom in coordinated_atoms: 
+            for atom in nonmetal_coord_atoms: 
                 bond_sum = sum(bond_order_mapping.get(bond.GetBondType(), 0) for bond in atom.GetBonds())
                 atom.SetFormalCharge(bond_sum - coord_valence[atom.GetAtomicNum()])
   
         # Method b: If charge (ox) state is specified for all metal centers
-        # -> ionize (break bonds w/) and charge down coordinated atoms
+        # -> ionize (break bonds w/) and charge down nonmetal coordinated atoms
         # (metal ox state will be from input charge state)
         else: 
-            logging.warning(f"Molecule contains metal specified charge state -> ionizing metal-nonmetal coordinated bonds...")
+            logging.warning(f"Molecule contains metal specified charge state -> ionizing metal-nonmetal coordinate bonds...")
             logging.warning(f"All metal-nonmetal coordinate bonds will be polarized. ")
-            metal_to_nonmetal_neighbors = {metal: {atom for atom in metal.GetNeighbors() 
-                                           if atom.GetAtomicNum() not in metal_AtomicNums} for metal in metal_atoms}
             metal_bonds = {bond.GetIdx(): (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) 
                                for metal in metal_atoms for bond in metal.GetBonds()}
 
             for bond_idx in sorted(metal_bonds, reverse=True):
                 rwmol.RemoveBond(metal_bonds[bond_idx][0], metal_bonds[bond_idx][1])
 
-            for atom in coordinated_atoms: 
+            for atom in nonmetal_coord_atoms: 
                 bond_sum = sum(bond_order_mapping.get(bond.GetBondType(), 0) for bond in atom.GetBonds())
                 atom.SetFormalCharge(bond_sum - coord_valence[atom.GetAtomicNum()])
 
