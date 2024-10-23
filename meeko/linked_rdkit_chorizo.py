@@ -503,7 +503,11 @@ class ChorizoCreationError(RuntimeError):
         super().__init__(error) # main error message to pass to RuntimeError
         self.error = error
         self.recommendations = recommendations
-        self.traceback = ''.join(traceback.format_exception(*sys.exc_info()))
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        if exc_value is not None: 
+            self.traceback = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        else:
+            self.traceback = None
 
     def __str__(self):
         msg = "" + os_linesep
@@ -511,10 +515,9 @@ class ChorizoCreationError(RuntimeError):
         msg += "" + os_linesep
         msg += "Details:" + os_linesep
         msg += self.error + os_linesep
-        msg += "" + os_linesep
 
-        msg += self.traceback + os_linesep
-        msg += "" + os_linesep
+        if self.traceback:
+            msg += self.traceback + os_linesep
 
         if self.recommendations: 
             msg += "Recommendations:" + os_linesep
@@ -766,15 +769,27 @@ class LinkedRDKitChorizo:
         # check if input assigned residue name in residue_templates
         err = ""
         supported_resnames = residue_templates.keys() | ambiguous.keys()
-        unknown_res_from_input = {res_id: raw_input_mols[res_id][1] for res_id in raw_input_mols if raw_input_mols[res_id][1] not in supported_resnames}
+        unknown_res_from_input = {res_id: raw_input_mols[res_id][1] for res_id in raw_input_mols if res_id not in set_template and raw_input_mols[res_id][1] not in supported_resnames}
         if len(unknown_res_from_input) > 0:
             err += f"Input residues {unknown_res_from_input} not in residue_templates" + os_linesep
+            UNL_from_input = {k: v for k, v in unknown_res_from_input.items() if v == "UNL"}
+            if len(UNL_from_input) > 0: 
+                err += f"Input residues {UNL_from_input} do not have a concrete definition" + os_linesep
         unknown_res_from_assign = set()
         if set_template:
             unknown_res_from_assign = {res_id: set_template[res_id] for res_id in set_template if set_template[res_id] not in supported_resnames}
             if len(unknown_res_from_assign) > 0:
                 err += f"Assigned residues {unknown_res_from_assign} not in residue_templates" + os_linesep
-        if err: 
+                UNL_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v == "UNL"}
+                if len(UNL_from_assign) > 0: 
+                    err += f"Assigned residues {UNL_from_assign} do not have a concrete definition" + os_linesep
+        if err:
+            if "UNL" in err: 
+                err += "Resdiues that are named UNL can't be parameterized. " + os_linesep
+                rec = "1. (to parameterize the residues) Use --set_template to specify valid residue names, " + os_linesep
+                rec += "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. "
+                raise ChorizoCreationError(err, rec)
+
             print(err)
             print("Trying to resolve unknown residues by building chemical templates... ")
 
@@ -823,7 +838,7 @@ class LinkedRDKitChorizo:
                             
                 if failed_build: 
                     raise ChorizoCreationError(f"Template generation failed for unknown residues: {failed_build}, which appear to be linking fragments. " + os_linesep
-                                            + "Guessing chemical templates with linker_labels are not currently supported. ", 
+                                            + "Generation of chemical templates with modified backbones, which involves guessing of linker positions and types, are not currently supported. ", 
                                             "1. (to parameterize the residues) Use --add_templates to pass the additional templates with valid linker_labels, " + os_linesep
                                             + "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. ")
 
