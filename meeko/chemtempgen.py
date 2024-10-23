@@ -6,6 +6,8 @@ import urllib.request
 import time
 import tempfile
 import re
+import atexit
+import os
 
 from rdkit import Chem
 from rdkit.Chem import rdmolops
@@ -609,6 +611,7 @@ def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: 
 
 
 def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str: 
+    
     url = f"https://files.rcsb.org/ligands/download/{resname}.cif"
     file_path = f"{resname}.cif"
     for retry in range(max_retries):
@@ -618,7 +621,12 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
             logging.info(f"File downloaded successfully: {file_path}")
             with tempfile.NamedTemporaryFile(delete=False, suffix=".cif") as temp_file:
                 temp_file.write(content)
-                return temp_file.name 
+            atexit.register(
+                lambda: os.remove(temp_file.name) 
+                if temp_file.name and os.path.exists(temp_file.name) 
+                else None
+            )
+            return temp_file.name 
             
         except Exception as e:
             if retry < max_retries - 1: 
