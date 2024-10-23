@@ -769,20 +769,30 @@ class LinkedRDKitChorizo:
         # check if input assigned residue name in residue_templates
         err = ""
         supported_resnames = residue_templates.keys() | ambiguous.keys()
-        unknown_res_from_input = {res_id: raw_input_mols[res_id][1] for res_id in raw_input_mols if res_id not in set_template and raw_input_mols[res_id][1] not in supported_resnames}
-        if len(unknown_res_from_input) > 0:
-            err += f"Input residues {unknown_res_from_input} not in residue_templates" + os_linesep
+        unknown_res_from_input = {res_id: raw_input_mols[res_id][1] 
+                                  for res_id in raw_input_mols 
+                                  if res_id not in set_template and raw_input_mols[res_id][1] not in supported_resnames
+                                  }
+        
+        if unknown_res_from_input:
+            unknown_valid_res_from_input = {k: v for k, v in unknown_res_from_input.items() if v != "UNL"}
+            if unknown_valid_res_from_input: 
+                err += f"Input residues {unknown_valid_res_from_input} not in residue_templates" + os_linesep
             UNL_from_input = {k: v for k, v in unknown_res_from_input.items() if v == "UNL"}
-            if len(UNL_from_input) > 0: 
+            if UNL_from_input: 
                 err += f"Input residues {UNL_from_input} do not have a concrete definition" + os_linesep
-        unknown_res_from_assign = set()
+        
         if set_template:
-            unknown_res_from_assign = {res_id: set_template[res_id] for res_id in set_template if set_template[res_id] not in supported_resnames}
-            if len(unknown_res_from_assign) > 0:
-                err += f"Assigned residues {unknown_res_from_assign} not in residue_templates" + os_linesep
-                UNL_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v == "UNL"}
-                if len(UNL_from_assign) > 0: 
-                    err += f"Assigned residues {UNL_from_assign} do not have a concrete definition" + os_linesep
+            unknown_res_from_assign = {res_id: set_template[res_id] for res_id in set_template if res_id not in supported_resnames}
+            
+            if unknown_res_from_assign:
+                unknown_valid_res_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v != "UNL"}
+            if unknown_valid_res_from_assign: 
+                err += f"Input residues {unknown_valid_res_from_assign} not in residue_templates" + os_linesep
+            UNL_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v == "UNL"}
+            if UNL_from_assign: 
+                err += f"Input residues {UNL_from_assign} do not have a concrete definition" + os_linesep
+        
         if err:
             if "UNL" in err: 
                 err += "Resdiues that are named UNL can't be parameterized. " + os_linesep
