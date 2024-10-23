@@ -331,11 +331,6 @@ def get_pretty_smiles(smi: str) -> str:
     return smi
 
 
-class ChemTempCreationError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-
 class ChemicalComponent_LoggingControler:
 
     def __init__(self):
@@ -635,7 +630,7 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
                 time.sleep(wait_time)
             else:
                 err = f"Max retries reached. Could not download CIF file for {resname}. Error: {e}"
-                raise ChemTempCreationError(err)
+                raise RuntimeError(err)
 
 # Constants for deprotonate
 acidic_proton_loc_canonical = {
@@ -665,7 +660,7 @@ def build_noncovalent_CC(basename: str) -> ChemicalComponent:
         cc = cc.make_canonical(acidic_proton_loc = acidic_proton_loc_canonical)
         if len(rdmolops.GetMolFrags(cc.rdkit_mol))>1:
             err = f"Template Generation failed for {cc.resname}. Error: Molecule breaks into fragments during the deleterious editing. "
-            raise ChemTempCreationError(err)
+            raise RuntimeError(err)
 
         cc = cc.make_pretty_smiles()
 
@@ -674,7 +669,7 @@ def build_noncovalent_CC(basename: str) -> ChemicalComponent:
             cc.ResidueTemplate_check()
         except Exception as e:
             err = f"Template {cc.resname} Failed to pass ResidueTemplate check. Error: {e}"
-            raise ChemTempCreationError(err)
+            raise RuntimeError(err)
             
         logger.info(f"*** finish making {cc.resname} ***")
     return cc
