@@ -782,6 +782,7 @@ class LinkedRDKitChorizo:
             if UNL_from_input: 
                 err += f"Input residues {UNL_from_input} do not have a concrete definition" + os_linesep
         
+        unknown_res_from_assign = {}
         if set_template:
             unknown_res_from_assign = {res_id: set_template[res_id] for res_id in set_template if res_id not in supported_resnames}
             
