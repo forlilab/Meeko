@@ -1,6 +1,7 @@
 import pathlib
 import json
 import logging
+import traceback
 from os import linesep as os_linesep
 from typing import Union
 from typing import Optional
@@ -502,6 +503,7 @@ class ChorizoCreationError(RuntimeError):
         super().__init__(error) # main error message to pass to RuntimeError
         self.error = error
         self.recommendations = recommendations
+        self.traceback = ''.join(traceback.format_exception(*sys.exc_info()))
 
     def __str__(self):
         msg = "" + os_linesep
@@ -509,6 +511,9 @@ class ChorizoCreationError(RuntimeError):
         msg += "" + os_linesep
         msg += "Details:" + os_linesep
         msg += self.error + os_linesep
+        msg += "" + os_linesep
+
+        msg += self.traceback + os_linesep
         msg += "" + os_linesep
 
         if self.recommendations: 
