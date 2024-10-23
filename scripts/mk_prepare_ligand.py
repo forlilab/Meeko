@@ -644,7 +644,7 @@ if __name__ == "__main__":
         print(output.get_duplicates_info_string())
 
     # Determine if exit code should be non-zero based on processing results
-    if output.num_files_written == 0:
+    if output.num_files_written == 0 and not output.redirect_stdout:
         print("No PDBQT files were written due to errors!")
         sys.exit(3)  # full failure
     elif input_mol_with_failure > 0:
