@@ -1631,7 +1631,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         return molsetup
 
     @staticmethod
-    def remove_elements(mol, to_rm=(12, 26, 25, 30)):
+    def remove_elements(mol, to_rm=(12, 20, 25, 26, 30)):
         idx_to_rm = {}
         neigh_idx_to_nr_h = {}
         rm_to_neigh = {}
@@ -1644,7 +1644,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
                     neigh_idx_to_nr_h[neigh.GetIdx()] = n
                     rm_to_neigh[atom.GetIdx()].add(neigh.GetIdx())
         if not idx_to_rm:
-            return Chem.Mol(mol), idx_to_rm
+            return Chem.Mol(mol), idx_to_rm, rm_to_neigh
         rwmol = Chem.EditableMol(mol)
         for idx in sorted(idx_to_rm, reverse=True):
             rwmol.RemoveAtom(idx)
