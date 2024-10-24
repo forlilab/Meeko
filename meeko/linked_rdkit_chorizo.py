@@ -1256,11 +1256,23 @@ class LinkedRDKitChorizo:
                     all_stats["heavy_missing"][i]
                     or all_stats["heavy_excess"][i]
                     or (all_stats["H_excess"][i] and not excess_H_ok)
-                    #or len(all_stats["bonded_atoms_missing"][i])
+                    or len(all_stats["bonded_atoms_missing"][i])
                     or len(all_stats["bonded_atoms_excess"][i])
                 ):
                     continue
                 passed.append(i)
+
+            if len(passed) == 0: # forgive residues neaby a gap
+                for i in range(len(all_stats["H_excess"])):
+                    if (
+                        all_stats["heavy_missing"][i]
+                        or all_stats["heavy_excess"][i]
+                        or (all_stats["H_excess"][i] and not excess_H_ok)
+                        #or len(all_stats["bonded_atoms_missing"][i])
+                        or len(all_stats["bonded_atoms_excess"][i])
+                    ):
+                        continue
+                    passed.append(i)
 
             if len(passed) == 0:
                 template_key = None
