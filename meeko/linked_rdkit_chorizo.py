@@ -1267,7 +1267,7 @@ class LinkedRDKitChorizo:
                     if (
                         all_stats["heavy_missing"][i]
                         or all_stats["heavy_excess"][i]
-                        or (all_stats["H_excess"][i] and not excess_H_ok)
+                        #or (all_stats["H_excess"][i] and not excess_H_ok)
                         #or len(all_stats["bonded_atoms_missing"][i])
                         or len(all_stats["bonded_atoms_excess"][i])
                     ):
