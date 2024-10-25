@@ -520,20 +520,8 @@ if args.read_with_prody is not None:
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
             )
-        except ChorizoCreationError as err:
-            print()
-            print("Error: Creation of data structure for receptor failed.")
-            print()
-            print("Details: ")
-            print(err)
-            print()
-            print("Recommendations: ")
-            print("1. (for batch processing) Use -a/--allow_bad_res to automatically remove residues")
-            print("that do not match templates, and --default_altloc to set")
-            print("a default altloc variant. Use these at your own risk.")
-            print()
-            print("2. (processing individual structure) Inspecting and fixing the input structure is recommended.")
-            print("Use --wanted_altloc to set variants for specific residues.")
+        except ChorizoCreationError as e:
+            print(e)
             sys.exit(1)
 else:
     with open(args.read_pdb) as f:
@@ -550,17 +538,8 @@ else:
             wanted_altloc=wanted_altloc,
             default_altloc=args.default_altloc,
         )
-    except ChorizoCreationError as err:
-        print()
-        print("Creation of data structure for receptor failed.")
-        print()
-        print(err)
-        print("Use -a/--allow_bad_res to automatically remove residues")
-        print("that do not match templates, and --default_altloc to set")
-        print("a default altloc variant. Use these at your own risk.")
-        print()
-        print("Inspecting and fixing the input structure is recommended.")
-        print("Use --wanted_altloc to set variants for specific residues.")
+    except ChorizoCreationError as e:
+        print(e)
         sys.exit(1)
 
 

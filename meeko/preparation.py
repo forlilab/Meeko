@@ -170,7 +170,7 @@ class MoleculePreparation:
         self.dihedral_model = dihedral_model
         self.dihedral_params = dihedral_list
 
-        if dihedral_model == "espaloma" or charge_model == "espaloma":
+        if dihedral_model == "espaloma" or charge_model in ["espaloma", "zero"]:
             self.espaloma_model = EspalomaTyper()
 
         self.reactive_smarts = reactive_smarts

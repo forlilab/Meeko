@@ -1,7 +1,9 @@
 import pathlib
 import json
 import logging
+import traceback
 from os import linesep as os_linesep
+from sys import exc_info
 from typing import Union
 from typing import Optional
 
@@ -20,7 +22,11 @@ from .utils.rdkitutils import react_and_map
 from .utils.rdkitutils import AtomField
 from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
 from .utils.rdkitutils import _aux_altloc_mol_build
+from .utils.rdkitutils import covalent_radius
 from .utils.pdbutils import PDBAtomInfo
+from .chemtempgen import export_chem_templates_to_json
+from .chemtempgen import build_noncovalent_CC
+from .chemtempgen import build_linked_CCs
 
 import numpy as np
 
@@ -125,28 +131,7 @@ def find_inter_mols_bonds(mols_dict):
     -------
 
     """
-    covalent_radius = {  # from wikipedia
-        1: 0.31,
-        5: 0.84,
-        6: 0.76,
-        7: 0.71,
-        8: 0.66,
-        9: 0.57,
-        12: 0.00,  # hack to avoid bonds with metals
-        14: 1.11,
-        15: 1.07,
-        16: 1.05,
-        17: 1.02,
-        # 19: 2.03,
-        20: 0.00,
-        # 24: 1.39,
-        25: 0.00,  # hack to avoid bonds with metals
-        26: 0.00,
-        30: 0.00,  # hack to avoid bonds with metals
-        # 34: 1.20,
-        35: 1.20,
-        53: 1.39,
-    }
+
     allowance = 1.2  # vina uses 1.1 but covalent radii are shorter here
     max_possible_covalent_radius = (
         2 * allowance * max([r for k, r in covalent_radius.items()])
@@ -493,8 +478,36 @@ def _delete_residues(res_to_delete, raw_input_mols):
         raise ValueError(msg)
     return
 
+
 class ChorizoCreationError(RuntimeError):
-    pass
+
+    def __init__(self, error: str, recommendations: str = None): 
+        super().__init__(error) # main error message to pass to RuntimeError
+        self.error = error
+        self.recommendations = recommendations
+        exc_type, exc_value, exc_traceback = exc_info()
+        if exc_value is not None: 
+            self.traceback = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        else:
+            self.traceback = None
+
+    def __str__(self):
+        msg = "" + os_linesep
+        msg += "Error: Creation of data structure for receptor failed." + os_linesep
+        msg += "" + os_linesep
+        msg += "Details:" + os_linesep
+        msg += self.error + os_linesep
+
+        if self.traceback:
+            msg += self.traceback + os_linesep
+
+        if self.recommendations: 
+            msg += "Recommendations:" + os_linesep
+            msg += self.recommendations + os_linesep
+            msg += "" + os_linesep
+        
+        return msg
+
 
 def handle_parsing_situations(
     unmatched_res,
@@ -535,7 +548,13 @@ def handle_parsing_situations(
         err += msg
 
     if err:
-        raise ChorizoCreationError(err)
+        recs = "1. (for batch processing) Use -a/--allow_bad_res to automatically remove residues" + os_linesep
+        recs += "that do not match templates, and --default_altloc to set" + os_linesep
+        recs += "a default altloc variant. Use these at your own risk." + os_linesep
+        recs += "" + os_linesep
+        recs += "2. (processing individual structure) Inspecting and fixing the input structure is recommended." + os_linesep
+        recs += "Use --wanted_altloc to set variants for specific residues."
+        raise ChorizoCreationError(err, recs)
     return
 
 
@@ -706,8 +725,9 @@ class LinkedRDKitChorizo:
         padders = residue_chem_templates.padders
         ambiguous = residue_chem_templates.ambiguous
 
-        # make sure all resiude_id in set_template exist
-        if set_template is not None:
+        if set_template is None:
+            set_template = {}
+        else:  # make sure all resiude_id in set_template exist
             missing = set(
                 [
                     residue_id
@@ -728,6 +748,91 @@ class LinkedRDKitChorizo:
                     msg += f" {key}"
             raise ValueError(msg)
         bonds = {k: v[0] for k, v in bonds.items()}
+
+        # check if input assigned residue name in residue_templates
+        err = ""
+        supported_resnames = residue_templates.keys() | ambiguous.keys()
+        unknown_res_from_input = {res_id: raw_input_mols[res_id][1] 
+                                  for res_id in raw_input_mols 
+                                  if res_id not in set_template and raw_input_mols[res_id][1] not in supported_resnames
+                                  }
+        
+        if unknown_res_from_input:
+            unknown_valid_res_from_input = {k: v for k, v in unknown_res_from_input.items() if v != "UNL"}
+            if unknown_valid_res_from_input: 
+                err += f"Input residues {unknown_valid_res_from_input} not in residue_templates" + os_linesep
+            UNL_from_input = {k: v for k, v in unknown_res_from_input.items() if v == "UNL"}
+            if UNL_from_input: 
+                err += f"Input residues {UNL_from_input} do not have a concrete definition" + os_linesep
+        
+        unknown_res_from_assign = {}
+        if set_template:
+            unknown_res_from_assign = {res_id: resn for res_id, resn in set_template.items() if resn not in supported_resnames}
+            unknown_valid_res_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v != "UNL"}
+            if unknown_valid_res_from_assign: 
+                err += f"Input residues {unknown_valid_res_from_assign} not in residue_templates" + os_linesep
+            UNL_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v == "UNL"}
+            if UNL_from_assign: 
+                err += f"Input residues {UNL_from_assign} do not have a concrete definition" + os_linesep
+        
+        if err:
+            if "UNL" in err: 
+                err += "Resdiues that are named UNL can't be parameterized. " + os_linesep
+                rec = "1. (to parameterize the residues) Use --set_template to specify valid residue names, " + os_linesep
+                rec += "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. "
+                raise ChorizoCreationError(err, rec)
+
+            print(err)
+            print("Trying to resolve unknown residues by building chemical templates... ")
+
+            all_unknown_res = unknown_res_from_input.copy()
+            all_unknown_res.update(unknown_res_from_assign)
+
+            bonded_unknown_res = {res_id: all_unknown_res[res_id] for res_id in all_unknown_res if any(tup for tup in bonds if res_id in tup)}
+            
+            unbound_unknown_res = all_unknown_res.copy()
+            for key in bonded_unknown_res:
+                unbound_unknown_res.pop(key, None) 
+
+            if unbound_unknown_res: 
+                try: 
+                    for resname in set(unbound_unknown_res.values()): 
+                        cc = build_noncovalent_CC(resname)
+                        fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
+                        residue_templates.update({resname: ResidueTemplate(
+                                                    smiles = fetch_template_dict['smiles'],
+                                                    atom_names = fetch_template_dict['atom_name'],
+                                                    link_labels = fetch_template_dict['link_labels'])})
+                        ambiguous[resname] = [cc.resname]
+                except Exception as e: 
+                    raise ChorizoCreationError(str(e))
+
+            if bonded_unknown_res: 
+                failed_build = set()
+                try: 
+                    for resname in set(bonded_unknown_res.values()): 
+                        cc_list = build_linked_CCs(resname)
+                        if not cc_list: 
+                            failed_build.add(resname)
+                        else:
+                            for cc in cc_list:
+                                fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
+                                residue_templates.update({cc.resname: ResidueTemplate(
+                                                            smiles = fetch_template_dict['smiles'],
+                                                            atom_names = fetch_template_dict['atom_name'],
+                                                            link_labels = {int(key): value for key,value in fetch_template_dict['link_labels'].items()})})
+                                if resname in ambiguous: 
+                                    ambiguous[resname].append(cc.resname)
+                                else:
+                                    ambiguous[resname] = [cc.resname]
+                except Exception as e: 
+                    raise ChorizoCreationError(str(e))
+                            
+                if failed_build: 
+                    raise ChorizoCreationError(f"Template generation failed for unknown residues: {failed_build}, which appear to be linking fragments. " + os_linesep
+                                            + "Generation of chemical templates with modified backbones, which involves guessing of linker positions and types, are not currently supported. ", 
+                                            "1. (to parameterize the residues) Use --add_templates to pass the additional templates with valid linker_labels, " + os_linesep
+                                            + "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. ")
 
         self.residues, self.log = self._get_residues(
             raw_input_mols,
@@ -1180,6 +1285,10 @@ class LinkedRDKitChorizo:
             if set_template is not None and residue_key in set_template:
                 excess_H_ok = True  # e.g. allow set LYN (NH2) from LYS (NH3+)
                 template_key = set_template[residue_key]  # e.g. HID, NALA
+                if template_key not in residue_templates: 
+                    if template_key in ambiguous: 
+                        raise RuntimeError(f"Can't assign an ambiguous tamplate_key ({template_key}) to residue ({residue_key}). ")
+                    raise RuntimeError(f"Assigned tamplate_key ({template_key}) for residue ({residue_key}) is not in residue_templates. ")
                 template = residue_templates[template_key]
                 candidate_template_keys = [set_template[residue_key]]
                 candidate_templates = [template]
@@ -2301,12 +2410,11 @@ def remove_atoms_with_mapping(product: Chem.Mol, mapping_numbers: set) -> Chem.M
     """Remove atoms with specific atom mapping numbers from a molecule."""
     editable_product = Chem.RWMol(product)
 
-    atoms_to_remove = []
-    for atom in editable_product.GetAtoms():
-        if atom.HasProp("molAtomMapNumber"):
-            map_num = int(atom.GetProp("molAtomMapNumber"))
-            if map_num in mapping_numbers:
-                atoms_to_remove.append(atom.GetIdx())
+    atoms_to_remove = [
+        atom.GetIdx() 
+        for atom in editable_product.GetAtoms() 
+        if atom.HasProp("molAtomMapNumber") and int(atom.GetProp("molAtomMapNumber")) in mapping_numbers
+    ]
     for idx in sorted(atoms_to_remove, reverse=True):
         editable_product.RemoveAtom(idx)
     

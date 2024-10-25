@@ -1630,6 +1630,35 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
 
         return molsetup
 
+    @staticmethod
+    def remove_elements(mol, to_rm=(12, 20, 25, 26, 30)):
+        idx_to_rm = {}
+        neigh_idx_to_nr_h = {}
+        rm_to_neigh = {}
+        for atom in mol.GetAtoms():
+            if atom.GetAtomicNum() in to_rm:
+                idx_to_rm[atom.GetIdx()] = atom.GetFormalCharge()
+                rm_to_neigh[atom.GetIdx()] = set()
+                for neigh in atom.GetNeighbors():
+                    n = neigh.GetNumExplicitHs()
+                    neigh_idx_to_nr_h[neigh.GetIdx()] = n
+                    rm_to_neigh[atom.GetIdx()].add(neigh.GetIdx())
+        if not idx_to_rm:
+            return Chem.Mol(mol), idx_to_rm, rm_to_neigh
+        rwmol = Chem.EditableMol(mol)
+        for idx in sorted(idx_to_rm, reverse=True):
+            rwmol.RemoveAtom(idx)
+        mol = rwmol.GetMol()
+        for idx in neigh_idx_to_nr_h:
+            n = neigh_idx_to_nr_h[idx]
+            newidx = idx - sum([i < idx for i in idx_to_rm]) 
+            mol.GetAtomWithIdx(newidx).SetNumExplicitHs(n + 1)
+        mol.UpdatePropertyCache()
+        Chem.SanitizeMol(mol)
+        mol = Chem.AddHs(mol)
+        return mol, idx_to_rm, rm_to_neigh
+         
+
     def init_atom(self, assign_charges: bool, coords: list[np.ndarray]):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
@@ -1647,12 +1676,46 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit):
         """
         # extract/generate charges
         if assign_charges:
-            copy_mol = Chem.Mol(self.mol)
+            things = self.remove_elements(self.mol)
+            copy_mol, idx_rm_to_formal_charge, rm_to_neigh = things
             for atom in copy_mol.GetAtoms():
                 if atom.GetAtomicNum() == 34:
                     atom.SetAtomicNum(16)
             rdPartialCharges.ComputeGasteigerCharges(copy_mol)
             charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
+            if idx_rm_to_formal_charge:
+                ok_charges = charges.copy()
+                for i in sorted(idx_rm_to_formal_charge, reverse=True):
+                    ok_charges.insert(i, 0.0)
+                nr_rm = len(idx_rm_to_formal_charge)
+                nr_added_h = copy_mol.GetNumAtoms() - self.mol.GetNumAtoms() + nr_rm
+                ok_charges = ok_charges[:-nr_added_h]
+                # print(f"{nr_added_h=}")
+                # print(f"{nr_rm=}")
+                # print(f"{idx_rm_to_formal_charge=}")
+                # print(f"{len(charges)=}")
+                # print(f"{len(ok_charges)=}")
+                # print(f"{copy_mol.GetNumAtoms()=}")
+                # print(f"{self.mol.GetNumAtoms()=}")
+                chrg_by_heavy_atom = {}
+                for i in range(nr_added_h):
+                    added_H_idx = self.mol.GetNumAtoms() + i - nr_rm
+                    # print(f"{added_H_idx=}")
+                    neighs = copy_mol.GetAtomWithIdx(added_H_idx).GetNeighbors()
+                    if len(neighs) != 1:
+                        raise RuntimeError("H should have 1 neighbor")
+                    if neighs[0].GetIdx() in chrg_by_heavy_atom:
+                        raise RuntimeError("expected only 1 added H per heavy atom, maybe deleted element had double bond to this heavy atom")
+                    chrg_by_heavy_atom[neighs[0].GetIdx()] = charges[added_H_idx]
+                # print(f"{chrg_by_heavy_atom=}")
+                for i, neighs in rm_to_neigh.items():
+                    # print(f"{i=}, {neighs=}")
+                    ok_charges[i] += idx_rm_to_formal_charge[i]
+                    for idx in neighs:
+                        newidx = idx - sum([i <= idx for i in idx_rm_to_formal_charge]) 
+                        # print(f"{idx=} {newidx=}")
+                        ok_charges[i] += chrg_by_heavy_atom[newidx]
+                charges = ok_charges
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
         # register atom
