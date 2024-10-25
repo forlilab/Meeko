@@ -3,6 +3,7 @@ import json
 import logging
 import traceback
 from os import linesep as os_linesep
+from sys import exc_info
 from typing import Union
 from typing import Optional
 
@@ -484,7 +485,7 @@ class ChorizoCreationError(RuntimeError):
         super().__init__(error) # main error message to pass to RuntimeError
         self.error = error
         self.recommendations = recommendations
-        exc_type, exc_value, exc_traceback = sys.exc_info()
+        exc_type, exc_value, exc_traceback = exc_info()
         if exc_value is not None: 
             self.traceback = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
         else:
@@ -724,8 +725,9 @@ class LinkedRDKitChorizo:
         padders = residue_chem_templates.padders
         ambiguous = residue_chem_templates.ambiguous
 
-        # make sure all resiude_id in set_template exist
-        if set_template is not None:
+        if set_template is None:
+            set_template = {}
+        else:  # make sure all resiude_id in set_template exist
             missing = set(
                 [
                     residue_id
@@ -765,10 +767,8 @@ class LinkedRDKitChorizo:
         
         unknown_res_from_assign = {}
         if set_template:
-            unknown_res_from_assign = {res_id: set_template[res_id] for res_id in set_template if res_id not in supported_resnames}
-            
-            if unknown_res_from_assign:
-                unknown_valid_res_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v != "UNL"}
+            unknown_res_from_assign = {res_id: resn for res_id, resn in set_template.items() if resn not in supported_resnames}
+            unknown_valid_res_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v != "UNL"}
             if unknown_valid_res_from_assign: 
                 err += f"Input residues {unknown_valid_res_from_assign} not in residue_templates" + os_linesep
             UNL_from_assign = {k: v for k, v in unknown_res_from_assign.items() if v == "UNL"}

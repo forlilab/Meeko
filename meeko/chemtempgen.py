@@ -603,13 +603,15 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
             return temp_file.name 
             
         except Exception as e:
-            if retry < max_retries - 1: 
+            if isinstance(e, urllib.error.HTTPError) and e.getcode() == 404:
+                raise RuntimeError(f"Ligand {resname} not available from rcsb.org") from e
+            elif retry < max_retries - 1: 
                 wait_time = backoff_factor ** retry  
                 logging.info(f"Download failed for {resname}. Error: {e}. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
             else:
                 err = f"Max retries reached. Could not download CIF file for {resname}. Error: {e}"
-                raise RuntimeError(err)
+                raise RuntimeError(err) from e
 
 # Constants for deprotonate
 acidic_proton_loc_canonical = {
