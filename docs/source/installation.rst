@@ -9,6 +9,21 @@ If you use other package managers, please use the ``-c conda-forge`` option.
 To get micromamba, visit https://mamba.readthedocs.io/en/latest/
 
 
+Dependencies
+-----------------------
+
+Meeko requires the following dependencies: 
+- Python 3.9 or later
+- numpy
+- scipy
+- RDKit
+- gemmi
+
+Additionally, the following optional dependencies are required for some functionalities: 
+- ProDy (Ensure your Python version is <3.12 if using ProDy. See details in the section below: :ref:`suport-py312`. )
+- espaloma (See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_)
+
+
 From conda-forge
 ----------------
 
@@ -56,7 +71,7 @@ the source files take immediate effect without requiring further ``pip install .
 This is useful for developers. Changes to the command line scripts may still require
 a re-installation.
 
-
+.. _suport-py312:
 Support for Python 3.12
 -----------------------
 
@@ -69,3 +84,24 @@ method ``Polymer.from_pdb_string()``. However, without ProDy it
 won't be possible to read mmCIF files or use tethered docking. Prody developers
 are working to support Python 3.12, so it is possible that Prody will work
 on Python 3.12 soon.
+
+
+Support for Python 3.8
+-----------------------
+
+As of v0.6.1, Meeko starts to use features that are only available in Python 3.9 or later. 
+These features are: 
+
+- Dictionary Union Operators
+- Py39 Type Hints
+- `importlib.resources.files` (Details in `PR #223 <https://github.com/forlilab/Meeko/pull/223>`_)
+
+However, they are not essential for the code structure or function. To adapt Meeko to a Python 3.8 
+environment, consider the respective workarounds, such as: 
+
+- Replace dictionary union operators with dictionary unpacking (`{**dict1, **dict2}`), or the `update()` method.
+- Use `List`, `Set`, `Dict`, and `Tuple` from `typing` for type hints.
+- Use `Path` from `pathlib`, or `importlib_resources` backport package for `importlib.resources.files`.
+
+See a diff report of these changes in `Issue #313 <https://github.com/forlilab/Meeko/issues/313#issuecomment-2612000768>`_. 
+
