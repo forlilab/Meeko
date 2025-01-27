@@ -22,7 +22,7 @@ Overview
 *Major Python packages used* 
 
 * **RDKit** `https://rdkit.org/ <https://rdkit.org/>`_ 
-* **Molscrub** `https://github.com/forlilab/molscrub <https://github.com/forlilab/molscrub>`_ 
+* **Molscrub (formerly scrubber)** `https://github.com/forlilab/molscrub <https://github.com/forlilab/molscrub>`_ 
 * **Meeko** `https://github.com/forlilab/Meeko <https://github.com/forlilab/Meeko>`_ 
 * **ProDy** `http://www.bahargroup.org/prody/ <http://www.bahargroup.org/prody/>`_ 
 * **cctbx-base** (for reduce2) `https://github.com/cctbx/cctbx_project <https://github.com/cctbx/cctbx_project>`_ 
