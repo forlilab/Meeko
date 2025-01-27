@@ -23,24 +23,24 @@ Install the required Python packages through ``conda-forge``
 
 .. code-block:: bash
 
-   micromamba install -c conda-forge numpy scipy rdkit gemmi vina -y
+   micromamba install -c conda-forge meeko numpy scipy rdkit gemmi vina -y
 
-Install the additional packages and data from GitHub repositories
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install the additional packages and data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- (Python package) scrubber 
+- (Python package) Molscrub
+Git reposirtoy: `Forlilab Molscrub <https://github.com/forlilab/molscrub>`_
 
 .. code-block:: bash
 
-   git clone --single-branch --branch develop https://github.com/forlilab/scrubber.git
-   cd scrubber; pip install --use-pep517 -e .; cd ..
+   pip install molscrub
 
 - (Example files for this tutorial) Meeko/example/tutorial1
 Originally from `Forlilab tutorials <https://github.com/forlilab/tutorials>`_
 
 .. code-block:: bash
 
-  git clone --branch docwork --depth=1 --filter=tree:0 https://github.com/rwxayheee/Meeko.git
+  git clone --branch docwork --depth=1 --filter=tree:0 https://github.com/forlilab/Meeko.git
   cd Meeko; git sparse-checkout set --no-cone example; git checkout; cd ..
 
 Ligand Preparation
@@ -53,7 +53,7 @@ Prepare a Single Ligand from a Smiles String
 
 `Imatinib <https://pubchem.ncbi.nlm.nih.gov/compound/Imatinib>`_ is a small-molecule drug. You can find the SMILES string for Imatinib from various reliable chemical databases and resources, including but not limited to `PubChem <https://pubchem.ncbi.nlm.nih.gov/>`_ and `DrugBank <https://go.drugbank.com/>`_. 
 
-``scrub.py`` is a command-line script in Scrubber that generates 3D conformers of protomers and tautomers for given small molecules at a specified (range of) pH. Given a pH range of 5 to 9, the output protomers will include those which make up no less than 1% of the total population at pH = 7. Based on the reference pKa values, the amine nitrogens and the pyridine nitrogen will be considered for acid/base enumeration. With the ``meeko_tutorial_py39`` micromamba environment active, run ``scrub.py`` to generate 3D conformers of Imatinib from the SMILES string. 
+``scrub.py`` is a command-line script in Molscrub that generates 3D conformers of protomers and tautomers for given small molecules at a specified (range of) pH. Given a pH range of 5 to 9, the output protomers will include those which make up no less than 1% of the total population at pH = 7. Based on the reference pKa values, the amine nitrogens and the pyridine nitrogen will be considered for acid/base enumeration. With the ``meeko_tutorial_py39`` micromamba environment active, run ``scrub.py`` to generate 3D conformers of Imatinib from the SMILES string. 
 
 .. code-block:: bash
 

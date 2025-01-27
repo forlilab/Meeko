@@ -27,7 +27,7 @@ Additionally, the following optional dependencies are required for some function
 
 - ProDy
 
-If using ProDy, please ensure that your Python version is <3.12 if using ProDy. 
+If using ProDy, please ensure that your Python version is <3.12. 
 For more details see :ref:`suport-py312`. 
 
 - espaloma
