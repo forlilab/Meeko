@@ -172,7 +172,9 @@ And to run the docking calculation, the ligand PDBQT file (``HIE_AMP.pdbqt``) an
    --ffile 3kgd_receptorH_rigid.maps.fld \
    --resnam HIE_AMP
 
-If you're running these calculations on Google T4 backends, here are the pre-compiled executables of autogrid4 and adgpu specifically for T4: :ref:`T4_executables` 
+If you're running these calculations on Google T4 backends, here are the pre-compiled executables of autogrid4 v4.2.6 and adgpu v1.5.3 specifically for T4: :ref:`T4_executables`. 
+
+To setup the latest version of AutoGrid4, visit the Git repository `here <https://github.com/ccsb-scripps/AutoGrid>`_.
 
 Export the Docking Poses
 ========================
