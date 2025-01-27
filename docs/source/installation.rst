@@ -13,6 +13,7 @@ Dependencies
 -----------------------
 
 Meeko requires the following dependencies: 
+
 - Python 3.9 or later
 - numpy
 - scipy
@@ -20,6 +21,7 @@ Meeko requires the following dependencies:
 - gemmi
 
 Additionally, the following optional dependencies are required for some functionalities: 
+
 - ProDy (Ensure your Python version is <3.12 if using ProDy. See details in the section below: :ref:`suport-py312`. )
 - espaloma (See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_)
 
