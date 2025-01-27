@@ -35,17 +35,17 @@ Install the required Python packages through ``conda-forge``
 
 .. code-block:: bash
 
-   micromamba install -c conda-forge cctbx-base numpy scipy rdkit gemmi -y
+   micromamba install -c conda-forge cctbx-base meeko numpy scipy rdkit gemmi -y
 
 Install the additional packages and data from GitHub repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- (Python package) scrubber 
+- (Python package) Molscrub
+Git Repository: `Forlilab Molscrub <https://github.com/forlilab/molscrub>`_
 
 .. code-block:: bash
 
-   git clone --single-branch --branch develop https://github.com/forlilab/scrubber.git
-   cd scrubber; pip install --use-pep517 -e .; cd ..
+   pip install molscrub
 
 - (Python package) ProDy 
 

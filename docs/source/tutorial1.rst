@@ -29,7 +29,7 @@ Install the additional packages and data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - (Python package) Molscrub
-Git reposirtoy: `Forlilab Molscrub <https://github.com/forlilab/molscrub>`_
+Git Repository: `Forlilab Molscrub <https://github.com/forlilab/molscrub>`_
 
 .. code-block:: bash
 
