@@ -289,6 +289,8 @@ If you're running these calculations on Google T4 backends, here are the pre-com
 - autogrid v4.2.6
 `autogrid4 <https://github.com/rwxayheee/Colabs/blob/acd2972f4afbf8c5299ebf0686534f466bf6f81b/Compiled_for_Colab/AutoGird_v4.2.6/autogrid4>`_
 
+To setup the latest version of AutoGrid4, visit the Git repository `here <https://github.com/ccsb-scripps/AutoGrid>`_.
+
 Export the Docking Poses
 ========================
 

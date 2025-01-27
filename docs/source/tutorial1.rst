@@ -179,7 +179,7 @@ To compute the grid maps, the GPF file (``rec_1iep.gpf``) will be the input comm
 For AutoDock-GPU
 ~~~~~~~~~~~~~~~~
 
-At present, AutoDock-GPU also needs the pre-computed grid maps from AutoGrid. Therefore, Receptor Preparation for docking calculations with AutoDock-GPU is similar to preparation in the previous section :ref:`receptor_preparation_for_vina_with_adf4sf`. But in this case, we can drop the ``-v`` option as the Vina-style box definition TXT file is no longer needed for AutoGrid-GPU. 
+At present, AutoDock-GPU also needs the pre-computed grid maps from AutoGrid. Therefore, Receptor Preparation for docking calculations with AutoDock-GPU is similar to preparation in the previous section :ref:`receptor_preparation_for_vina_with_adf4sf`. But in this case, we can drop the ``-v`` option as the Vina-style box definition TXT file is no longer needed for AutoDock-GPU. 
 
 Below is the sample command: 
 
