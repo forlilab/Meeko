@@ -15,6 +15,9 @@ Dependencies
 Meeko requires the following dependencies: 
 
 - Python 3.9 or later
+
+If using Python 3.8, please see :ref:`suport-py38` for details. 
+
 - numpy
 - scipy
 - RDKit
@@ -22,8 +25,13 @@ Meeko requires the following dependencies:
 
 Additionally, the following optional dependencies are required for some functionalities: 
 
-- ProDy (Ensure your Python version is <3.12 if using ProDy. See details in the section below: :ref:`suport-py312`. )
-- espaloma (See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_)
+- ProDy
+
+If using ProDy, please ensure that your Python version is <3.12 if using ProDy. 
+For more details see :ref:`suport-py312`. 
+
+- espaloma
+See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_
 
 
 From conda-forge
@@ -78,7 +86,7 @@ won't be possible to read mmCIF files or use tethered docking. Prody developers
 are working to support Python 3.12, so it is possible that Prody will work
 on Python 3.12 soon.
 
-
+.. _suport-py38:
 Support for Python 3.8
 -----------------------
 
@@ -87,14 +95,14 @@ These features are:
 
 - Dictionary Union Operators
 - Py39 Type Hints
-- `importlib.resources.files` (Details in `PR #223 <https://github.com/forlilab/Meeko/pull/223>`_)
+- ``importlib.resources.files`` (Details in `PR #223 <https://github.com/forlilab/Meeko/pull/223>`_)
 
 However, they are not essential for the code structure or function. To adapt Meeko to a Python 3.8 
 environment, consider the respective workarounds, such as: 
 
 - Replace dictionary union operators with dictionary unpacking (`{**dict1, **dict2}`), or the `update()` method.
-- Use `List`, `Set`, `Dict`, and `Tuple` from `typing` for type hints.
-- Use `Path` from `pathlib`, or `importlib_resources` backport package for `importlib.resources.files`.
+- Use ``List``, ``Set``, ``Dict``, and ``Tuple`` from ``typing`` for type hints.
+- Use ``Path`` from ``pathlib``, or ``importlib_resources`` backport package for ``importlib.resources.files``.
 
 See a diff report of these changes in `Issue #313 <https://github.com/forlilab/Meeko/issues/313#issuecomment-2612000768>`_. 
 
