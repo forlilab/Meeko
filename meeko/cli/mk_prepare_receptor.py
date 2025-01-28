@@ -192,9 +192,9 @@ def get_args():
     )
     config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "zero"),
-        help="default is 'gasteiger', 'zero' sets all zeros",
-        default="gasteiger",
+        choices=("gasteiger", "espaloma", "zero", "read"),
+        help="default is None (unspecified), 'zero' sets all zeros, 'read' requires --read_pqr",
+        default=None,
     )
 
     box_group = parser.add_argument_group("Size and center of grid box")
@@ -479,12 +479,22 @@ def main():
     if args.delete_residues is not None:
         delete_residues = parse_cmdline_res(args.delete_residues)
     
+    # initialize MoleculePreparation from config if provided
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
         mk_prep = MoleculePreparation.from_config(mk_config)
     else:
-        mk_prep = MoleculePreparation(charge_model=args.charge_model)
+        mk_prep = MoleculePreparation()
+    
+    # arguments that override config
+    if args.charge_model is not None: 
+        mk_prep.charge_model=args.charge_model
+        if mk_prep.charge_model=="read": 
+            if args.read_pqr is None:
+                print("Error: --charge_model read requires --read_pqr")
+                sys.exit(2)
+            mk_prep.charge_atom_prop="PQRCharge"
     
     # load templates for mapping
     templates = ResidueChemTemplates.create_from_defaults()
@@ -539,9 +549,16 @@ def main():
         with open(args.read_pqr) as f:
             pdb_string = f.read()
         try:
-            mk_prep = MoleculePreparation(charge_model="read", charge_atom_prop="PQRCharge")
-            print("Reading stuctures and partial charges from PQR. ") 
-            print("Options --charge_model, --default_altloc and --wanted_altloc will be ignored. ")
+            print("Reading a PQR file. The following options or configurations will be ignored: ")
+            print("  - default_altloc")
+            print("  - wanted_altloc")
+
+            if mk_prep.charge_model!="read":
+                print(f"Only reading structures from PQR. ")
+                print(f"Charge model of choice: {mk_prep.charge_model}")
+            else:
+                print("Reading structures and partial charges from PQR. ") 
+            
             polymer = Polymer.from_pqr_string(
                 pdb_string,
                 templates,  # residue_templates, padders, ambiguous,
