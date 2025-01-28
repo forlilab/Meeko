@@ -119,7 +119,7 @@ def get_args():
     io_group.add_argument(
         "--read_pqr",
         metavar="PQR_FILENAME",
-        help="reads PQR with assigned partial charges, and does not use ProDy",
+        help="reads PQR and does not use ProDy",
     )
     need_prody_msg = ""
     # if prody is not installed, the help message is extended to tell
@@ -193,7 +193,7 @@ def get_args():
     config_group.add_argument(
         "--charge_model",
         choices=("gasteiger", "espaloma", "zero", "read"),
-        help="default is None (unspecified), 'zero' sets all zeros, 'read' requires --read_pqr",
+        help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
         default=None,
     )
 
