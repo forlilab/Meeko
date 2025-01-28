@@ -479,22 +479,24 @@ def main():
     if args.delete_residues is not None:
         delete_residues = parse_cmdline_res(args.delete_residues)
     
-    # initialize MoleculePreparation from config if provided
+    # read mk_config if provided
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
-        mk_prep = MoleculePreparation.from_config(mk_config)
     else:
-        mk_prep = MoleculePreparation()
+        mk_config = {}
     
-    # arguments that override config
+    # update config by inputs from arguments
     if args.charge_model is not None: 
-        mk_prep.charge_model=args.charge_model
-        if mk_prep.charge_model=="read": 
+        mk_config["charge_model"]=args.charge_model
+        if mk_config["charge_model"]=="read": 
             if args.read_pqr is None:
                 print("Error: --charge_model read requires --read_pqr")
                 sys.exit(2)
-            mk_prep.charge_atom_prop="PQRCharge"
+            mk_config["charge_atom_prop"]="PQRCharge"
+
+    # initialize MoleculePreparation with config
+    mk_prep = MoleculePreparation.from_config(mk_config)
     
     # load templates for mapping
     templates = ResidueChemTemplates.create_from_defaults()
