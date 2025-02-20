@@ -503,6 +503,7 @@ def main():
     ext = ext[1:].lower()
     if backend == "rdkit":
         parsers = {
+            "pdb": rdkitutils.PdbMolSupplier,
             "sdf": Chem.SDMolSupplier,
             "mol2": rdkitutils.Mol2MolSupplier,
             "mol": Chem.SDMolSupplier,
@@ -575,7 +576,7 @@ def main():
             else:
                 continue  # TODO log this event
         else:
-            name = mol.GetProp("_Name")
+            name = mol.GetPropsAsDict().get("_Name", input_fname)
         is_after_first = True
 
         if is_covalent:
@@ -610,6 +611,8 @@ def main():
                         print(error_msg, file=sys.stderr)
 
         else:
+            if ext == "pdb":
+                mol = Chem.rdmolops.AddHs(mol)
             molsetups = preparator.prepare(mol)
             if len(molsetups) > 1:
                 output.is_multimol = True

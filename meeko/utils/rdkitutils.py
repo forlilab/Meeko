@@ -94,6 +94,32 @@ class Mol2MolSupplier:
         self.buff = [line]
         return mol
 
+class PdbMolSupplier:
+    """RDKit Mol2 molecule supplier.
+    Parameters
+        sanitize: perform RDKit sanitization of Mol2 molecule"""
+
+    def __init__(
+        self, filename, sanitize=True, removeHs=False, cleanupSubstructures=True
+    ):
+        self.filename = filename
+        self._opts = {
+            "sanitize": sanitize,
+            "removeHs": removeHs,
+        }
+        self.done = False
+        
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        """iterator step"""
+        if not self.done:
+            self.done = True
+            return Chem.rdmolfiles.MolFromPDBFile(self.filename, **self._opts)
+        else:
+            raise StopIteration
+    
 class AtomField:
     """Stores data parsed from PDB or mmCIF"""
 
