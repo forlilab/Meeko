@@ -1025,8 +1025,16 @@ class Polymer(BaseJSONParsable):
         res_needed_altloc = []
         res_missed_altloc = []
         unparsed_res = []
+
+        charmm_to_amber_histidine = {"HSD": "HID", "HSE": "HIE", "HSP": "HIP"}
+
         for res_id, stuff in tmp_raw_input_mols.items():
             mol, resname, missed_altloc, needed_altloc = stuff
+
+            # Convert CHARMM histidine names before assignment
+            if resname in charmm_to_amber_histidine:
+                resname = charmm_to_amber_histidine[resname]
+
             if mol is None and missed_altloc:
                 res_missed_altloc.append(res_id)
             elif mol is None and needed_altloc:
