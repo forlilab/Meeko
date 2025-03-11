@@ -1652,7 +1652,7 @@ class Polymer:
                 x = float(line[30:38])
                 y = float(line[38:46])
                 z = float(line[46:54])
-                element = line[76:78].strip()
+                element = line[76:78].strip() or atomname[0] # charmm workaround
                 reskey = f"{chainid}:{resnum}{icode}"  # e.g. ":42", "A:42B"
                 reskey_to_resname.setdefault(reskey, set())
                 reskey_to_resname[reskey].add(resname)
