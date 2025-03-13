@@ -1831,7 +1831,7 @@ class Polymer(BaseJSONParsable):
 
         pdbout = ""
         atom_count = 0
-        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                       {:2s} "
+        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                      {:2s} "
         pdb_line += eol
         for res_id in self.get_valid_monomers():
             rdkit_mol = self.monomers[res_id].rdkit_mol
