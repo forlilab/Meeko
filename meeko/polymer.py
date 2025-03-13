@@ -3,10 +3,11 @@ import json
 import logging
 import traceback
 from importlib.resources import files
-from os import linesep as eol
+eol="\n"
 from sys import exc_info
 from typing import Union
 from typing import Optional
+from typing import Any
 
 import rdkit.Chem
 from rdkit import Chem
@@ -16,8 +17,11 @@ from rdkit.Chem import rdMolInterchange
 from rdkit.Geometry import Point3D
 
 from .molsetup import RDKitMoleculeSetup
-from .molsetup import MoleculeSetupEncoder
+from .molsetup import MoleculeSetup
+from .utils.jsonutils import BaseJSONParsable
+from .utils.jsonutils import serialize_optional
 from .utils.jsonutils import rdkit_mol_from_json
+from .utils.jsonutils import convert_to_int_keyed_dict
 from .utils.rdkitutils import react_and_map
 from .utils.rdkitutils import AtomField
 from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
@@ -94,6 +98,7 @@ residues_rotamers = {
         ("CG", "CD", "CE", "NZ"),
     ],
 }
+
 
 def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=()):
     """
@@ -178,10 +183,9 @@ def find_inter_mols_bonds(mols_dict):
             for a2 in mols_dict[keys[j]][0].GetAtoms():
                 if is_metal(a2.GetAtomicNum()) or is_noble(a2.GetAtomicNum()): 
                     continue
-
                 vec = p1[a1.GetIdx()] - p2[a2.GetIdx()]
                 distsqr = np.dot(vec, vec)
-                    
+
                 cov_dist = (
                     covalent_radius[periodic_table.GetElementSymbol(a1.GetAtomicNum())]
                     + covalent_radius[periodic_table.GetElementSymbol(a2.GetAtomicNum())]
@@ -569,7 +573,7 @@ def handle_parsing_situations(
     return
 
 
-class ResidueChemTemplates:
+class ResidueChemTemplates(BaseJSONParsable):
     """Holds template data required to initialize Polymer
 
     Attributes
@@ -593,46 +597,48 @@ class ResidueChemTemplates:
         self.padders = padders
         self.ambiguous = ambiguous
 
+    # region JSON-interchange functions
     @classmethod
-    def from_dict(cls, alldata):
-        """
-        constructs ResidueTemplates and ResiduePadders from a dictionary
-        with raw data such as that in data/residue_chem_templates.json
-        This is pretty much a JSON deserializer that takes a dictionary
-        as input to allow users to modify the input dict in Python
-        """
+    def json_encoder(cls, obj: "ResidueChemTemplates") -> Optional[dict[str, Any]]:
 
-        ambiguous = {k: v.copy() for k, v in alldata["ambiguous"].items()}
-        residue_templates = {}
-        padders = {}
-        for key, data in alldata["residue_templates"].items():
-            res_template = cls.residue_template_from_dict(data)
-            residue_templates[key] = res_template
-        for link_label, data in alldata["padders"].items():
-            padders[link_label] = cls.padder_from_dict(data)
-        return cls(residue_templates, padders, ambiguous)
+        output_dict = {
+            "residue_templates": {
+                k: ResidueTemplate.json_encoder(v)
+                for k, v in obj.residue_templates.items()
+            },
+            "ambiguous": obj.ambiguous,
+            "padders": {
+                k: ResiduePadder.json_encoder(v)
+                for k, v in obj.padders.items()
+            },
+        }
+        return output_dict
+    
+    # Keys to check for deserialized JSON 
+    expected_json_keys = {
+        "residue_templates",
+        "ambiguous",
+        "padders",
+    }
 
-    @staticmethod
-    def residue_template_from_dict(data):
-        if "link_labels" in data:
-            link_labels = {int(k): v for k, v in data["link_labels"].items()}
-        else:
-            link_labels = None
-        atom_names = data.get("atom_name", None)
-        return ResidueTemplate(data["smiles"], link_labels, atom_names)
+    @classmethod
+    def _decode_object(cls, obj: dict[str, Any]):
 
-    @staticmethod
-    def padder_from_dict(data):
-        rxn_smarts = data["rxn_smarts"]
-        adjacent_res_smarts = data.get("adjacent_res_smarts", None)
-        auto_blunt = data.get("auto_blunt", False)
-        padder = ResiduePadder(rxn_smarts, adjacent_res_smarts, auto_blunt)
-        return padder
+        # Extracting the constructor args from the json representation and creating a ResidueChemTemplates instance
+        templates = {
+            k: ResidueTemplate.from_dict(v) for k, v in obj["residue_templates"].items()
+        }
+        padders = {k: ResiduePadder.from_dict(v) for k, v in obj["padders"].items()}
+
+        residue_chem_templates = cls(templates, padders, obj["ambiguous"])
+
+        return residue_chem_templates
+    # endregion
 
     def add_dict(self, data, overwrite=False):
         bad_keys = set(data) - {"ambiguous", "residue_templates", "padders"}
         if bad_keys:
-            raise ValueError("unexpected keys: {bad_keys}")
+            logging.warning(f"Ignore unexpected keys: {bad_keys}")
         new_ambiguous = data.get("ambiguous", {}) 
         if overwrite:
             self.ambiguous.update(new_ambiguous)
@@ -642,11 +648,11 @@ class ResidueChemTemplates:
             self.ambiguous = new_ambiguous
         for key, value in data.get("residue_templates", {}).items():
             if overwrite or key not in self.residue_templates:
-                res_template = self.residue_template_from_dict(value)
+                res_template = ResidueTemplate.from_dict(value)
                 self.residue_templates[key] = res_template
         for link_label, value in data.get("padders", {}).items():
             if overwrite or key not in self.padders:
-                padder = self.padder_from_dict(data)
+                padder = ResiduePadder.from_dict(data)
                 self.padders[link_label] = padder
         return
 
@@ -667,9 +673,18 @@ class ResidueChemTemplates:
         filename = cls.lookup_filename(filename, data_path)
         with open(filename) as f:
             jsonstr = f.read()
-        data = json.loads(jsonstr)
-        return cls.from_dict(data)
+        alldata = json.loads(jsonstr)
 
+        ambiguous = {k: v.copy() for k,v in alldata.get("ambiguous", {}).items()}
+        residue_templates = {}
+        padders = {}
+        for key, data in alldata.get("residue_templates", {}).items():
+            res_template = ResidueTemplate.from_dict(data)
+            residue_templates[key] = res_template
+        for link_label, data in alldata.get("padders", {}).items():
+            padders[link_label] = ResiduePadder.from_dict(data)
+        return cls(residue_templates, padders, ambiguous)
+ 
     @classmethod
     def create_from_defaults(cls):
         return cls.from_json_file("residue_chem_templates")
@@ -723,7 +738,7 @@ class ResidueChemTemplates:
         return
 
 
-class Polymer:
+class Polymer(BaseJSONParsable):
     """Represents polymer with its subunits as individual RDKit molecules.
 
     Used for proteins and nucleic acids. The key class is Monomer,
@@ -851,6 +866,7 @@ class Polymer:
 
             bonded_unknown_res = {res_id: all_unknown_res[res_id] for res_id in all_unknown_res 
                                   if any(res_id in respair for respair in bonds)}
+            
             single_atom_res= set()
             for res_id in bonded_unknown_res: 
                 raw_input_mol = raw_input_mols[res_id][0]
@@ -894,7 +910,7 @@ class Polymer:
                                 residue_templates.update({cc.resname: ResidueTemplate(
                                                             smiles = fetch_template_dict['smiles'],
                                                             atom_names = fetch_template_dict['atom_name'],
-                                                            link_labels = {int(key): value for key,value in fetch_template_dict['link_labels'].items()})})
+                                                            link_labels = convert_to_int_keyed_dict(fetch_template_dict['link_labels']))})
                                 if resname in ambiguous: 
                                     ambiguous[resname].append(cc.resname)
                                 else:
@@ -939,7 +955,49 @@ class Polymer:
             self.parameterize(mk_prep)
 
         return
+    
+    # region JSON-interchange functions
+    @classmethod
+    def json_encoder(cls, obj: "Polymer") -> Optional[dict[str, Any]]:
+        
+        output_dict = {
+            "residue_chem_templates": ResidueChemTemplates.json_encoder(
+                obj.residue_chem_templates
+            ),
+            "monomers": {
+                k: Monomer.json_encoder(v)
+                for k, v in obj.monomers.items()
+            },
+            "log": obj.log,
+        }
+        return output_dict
+    
+    # Keys to check for deserialized JSON 
+    expected_json_keys = {
+        "residue_chem_templates",
+        "monomers",
+        "log",
+    }
 
+    @classmethod
+    def _decode_object(cls, obj: dict[str, Any]): 
+
+        # Deserializes ResidueChemTemplates from the dict to use as an input, then constructs a Polymer object
+        # and sets its values using deserialized JSON values.
+        residue_chem_templates = ResidueChemTemplates.from_dict(
+            obj["residue_chem_templates"]
+        )
+
+        polymer = cls({}, {}, residue_chem_templates)
+
+        polymer.monomers = {
+            k: Monomer.from_dict(v) for k, v in obj["monomers"].items()
+        }
+        polymer.log = obj["log"]
+
+        return polymer
+    # endregion
+    
     @classmethod
     def from_pdb_string(
         cls,
@@ -1124,16 +1182,6 @@ class Polymer:
         )
 
         return polymer
-
-    @classmethod
-    def from_json(cls, json_string):
-        return json.loads(
-            json_string,
-            object_hook=polymer_json_decoder,
-        )
-
-    def to_json(self):
-        return json.dumps(self, cls=PolymerEncoder)
 
     def parameterize(self, mk_prep):
         """
@@ -1804,7 +1852,7 @@ class Polymer:
 
         pdbout = ""
         atom_count = 0
-        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                      {:2s} "
+        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s} {:8.3f}{:8.3f}{:8.3f} {:2s} "                       {:2s} "
         pdb_line += eol
         for res_id in self.get_valid_monomers():
             rdkit_mol = self.monomers[res_id].rdkit_mol
@@ -1979,7 +2027,7 @@ def add_rotamers_to_polymer_molsetups(rotamer_states_list, polymer):
     return state_indices_list
 
 
-class Monomer:
+class Monomer(BaseJSONParsable):
     """Individual subunit in a Polymer. Often called residue.
 
     Attributes
@@ -2021,7 +2069,8 @@ class Monomer:
         template_key=None,
         atom_names=None,
     ):
-
+        
+        # Initializer attributes 
         self.raw_rdkit_mol = raw_input_mol
         self.rdkit_mol = rdkit_mol
         self.mapidx_to_raw = mapidx_to_raw
@@ -2031,33 +2080,114 @@ class Monomer:
             atom_names  # same order as atoms in rdkit_mol, used in rotamers
         )
 
-        # TODO convert link indices/labels in template to rdkit_mol indices herein
-        # self.link_labels = {}
-        self.template = None
-
-        if mapidx_to_raw is not None:
-            self.mapidx_from_raw = {j: i for (i, j) in mapidx_to_raw.items()}
-            if len(self.mapidx_from_raw) != len(self.mapidx_to_raw):
-                raise RuntimeError(f"index mapping not invertable {mapidx_to_raw=}")
-        else:
-            self.mapidx_from_raw = None
-
+        # (JSON-bound) computed attributes
         self.padded_mol = None
         self.molsetup = None
         self.molsetup_mapidx = None
         self.is_flexres_atom = None  # Check about these data types/Do we want the default to be None or empty
         self.is_movable = False
+        self.mapidx_from_raw = self._invert_mapping(self.mapidx_to_raw)
+
+        # (JSON-unbound) computed attributes
+        # TODO convert link indices/labels in template to rdkit_mol indices herein
+        # self.link_labels = {}
+        self.template = None
+
+    @staticmethod
+    def _invert_mapping(mapping):
+        if mapping is None:
+            return None
+        inverted = {}
+        for key, value in mapping.items():
+            if value in inverted:
+                raise RuntimeError(f"Mapping is not invertible: {mapping}")
+            inverted[value] = key
+        return inverted
+    
+    # region JSON-interchange functions
+    @classmethod
+    def json_encoder(cls, obj: "Monomer") -> Optional[dict[str, Any]]:
+
+        try: 
+            molsetup = serialize_optional(RDKitMoleculeSetup.json_encoder, obj.molsetup)
+        except KeyError: 
+            molsetup = serialize_optional(MoleculeSetup.json_encoder, obj.molsetup)
+
+        return {
+            "raw_rdkit_mol": serialize_optional(rdMolInterchange.MolToJSON, obj.raw_rdkit_mol),
+            "rdkit_mol": serialize_optional(rdMolInterchange.MolToJSON, obj.rdkit_mol),
+            "mapidx_to_raw": obj.mapidx_to_raw,
+            "residue_template_key": obj.residue_template_key,
+            "input_resname": obj.input_resname,
+            "atom_name": obj.atom_names,
+            "mapidx_from_raw": obj.mapidx_from_raw,
+            "padded_mol": serialize_optional(rdMolInterchange.MolToJSON, obj.padded_mol),
+            "molsetup": molsetup,
+            "is_flexres_atom": obj.is_flexres_atom,
+            "is_movable": obj.is_movable,
+            "molsetup_mapidx": obj.molsetup_mapidx,
+        }
+    
+    # Keys to check for deserialized JSON 
+    expected_json_keys = frozenset({
+        "raw_rdkit_mol",
+        "rdkit_mol",
+        "mapidx_to_raw",
+        "residue_template_key",
+        "input_resname",
+        "atom_name",
+        "padded_mol",
+        "molsetup",
+        "molsetup_mapidx",
+        "is_flexres_atom",
+        "is_movable",
+        "mapidx_from_raw",
+    })
+
+    @classmethod
+    def _decode_object(cls, obj: dict[str, Any]): 
+
+        raw_rdkit_mol = rdkit_mol_from_json(obj["raw_rdkit_mol"])
+        rdkit_mol = rdkit_mol_from_json(obj["rdkit_mol"])
+        padded_mol = rdkit_mol_from_json(obj["padded_mol"])
+
+        molsetup = RDKitMoleculeSetup.from_dict(obj["molsetup"])
+        if not isinstance(molsetup, RDKitMoleculeSetup):
+            molsetup = MoleculeSetup.from_dict(obj["molsetup"])
+    
+        mapidx_to_raw = convert_to_int_keyed_dict(obj["mapidx_to_raw"])
+        molsetup_mapidx = convert_to_int_keyed_dict(obj["molsetup_mapidx"])
+        mapidx_from_raw = convert_to_int_keyed_dict(obj["mapidx_from_raw"])
+
+        atom_name = cls.access_with_deprecated_key(
+            obj, old_key="atom_names", new_key="atom_name"
+        )
+        monomer = cls(
+            raw_input_mol=raw_rdkit_mol,
+            rdkit_mol=rdkit_mol,
+            mapidx_to_raw=mapidx_to_raw,
+            input_resname=obj["input_resname"],
+            template_key=obj["residue_template_key"],
+            atom_names=atom_name,
+        )
+
+        monomer.padded_mol=padded_mol
+        monomer.molsetup=molsetup
+        monomer.molsetup_mapidx=molsetup_mapidx
+        monomer.is_flexres_atom=obj["is_flexres_atom"]
+        monomer.is_movable=obj["is_movable"]
+        monomer.mapidx_from_raw = mapidx_from_raw
+
+        return monomer
+    # endregion
 
     def set_atom_names(self, atom_names_list):
         """
-
         Parameters
         ----------
         atom_names_list
-
         Returns
         -------
-
         """
         if self.rdkit_mol is None:
             raise RuntimeError("can't set atom_names if rdkit_mol is not set yet")
@@ -2070,30 +2200,6 @@ class Monomer:
             raise ValueError(f"atom names must be str but {name_types=}")
         self.atom_names = atom_names_list
         return
-
-    def to_json(self):
-        """
-
-        Returns
-        -------
-
-        """
-        return json.dumps(self, cls=MonomerEncoder)
-
-    @classmethod
-    def from_json(cls, json_string):
-        """
-
-        Parameters
-        ----------
-        json_string
-
-        Returns
-        -------
-
-        """
-        monomer = json.loads(json_string, object_hook=cls.monomer_json_decoder)
-        return monomer
 
     def parameterize(self, mk_prep, residue_id):
 
@@ -2163,7 +2269,7 @@ class NoAtomMapWarning(logging.Filter):
         is_atom_map_warning = a and b
         return not is_atom_map_warning
 
-class ResiduePadder:
+class ResiduePadder(BaseJSONParsable):
     """
     A class for padding RDKit molecules of residues with parts from adjacent residues.
 
@@ -2413,13 +2519,36 @@ class ResiduePadder:
         else:
             return False
 
+    # region JSON-interchange functions
     @classmethod
-    def from_json(cls, string):
-        d = json.loads(string)
-        return cls(**d)
+    def json_encoder(cls, obj: "ResiduePadder") -> Optional[dict[str, Any]]:
+        output_dict = {
+            "rxn_smarts": rdChemReactions.ReactionToSmarts(obj.rxn),
+            "adjacent_res_smarts": serialize_optional(Chem.MolToSmarts, obj.adjacent_smartsmol),
+            "auto_blunt": obj.auto_blunt,
+        }
+        # we are not serializing the adjacent_smartsmol_mapidx as that will
+        # be rebuilt by the ResiduePadder init
+        return output_dict
     
-    def to_json(self):
-        return json.dumps(self, default=lambda o: o.__dict__)
+    # Keys to check for deserialized JSON 
+    expected_json_keys = {
+        "rxn_smarts",
+        "adjacent_res_smarts",
+        "auto_blunt",
+    }
+
+    @classmethod
+    def _decode_object(cls, obj: dict[str, Any]): 
+
+        adjacent_res_smarts = cls.access_with_deprecated_key(
+            obj, old_key="adjacent_smarts", new_key="adjacent_res_smarts"
+        )
+
+        residue_padder = cls(obj["rxn_smarts"], adjacent_res_smarts, obj.get("auto_blunt", False))
+    
+        return residue_padder
+    # endregion
 
 # Utility Functions
 
@@ -2481,7 +2610,7 @@ def remove_atoms_with_mapping(product: Chem.Mol, mapping_numbers: set) -> Chem.M
     return editable_product.GetMol()
 
 
-class ResidueTemplate:
+class ResidueTemplate(BaseJSONParsable):
     """
     Data and methods to pad rdkit molecules of polymer residues with parts of adjacent residues.
 
@@ -2498,14 +2627,55 @@ class ResidueTemplate:
     """
 
     def __init__(self, smiles, link_labels=None, atom_names=None):
+
+        # Initializer attributes 
+        self.link_labels = link_labels
+        self.atom_names = atom_names
+
+        # (JSON-bound) computed attributes
         ps = Chem.SmilesParserParams()
         ps.removeHs = False
         mol = Chem.MolFromSmiles(smiles, ps)
         self.check(mol, link_labels, atom_names)
         self.mol = mol
-        self.link_labels = link_labels
-        self.atom_names = atom_names
-        return
+    
+    # region JSON-interchange functions
+    @classmethod
+    def json_encoder(cls, obj: "ResidueTemplate") -> Optional[dict[str, Any]]:
+        output_dict = {
+            "mol": rdMolInterchange.MolToJSON(obj.mol),
+            "link_labels": obj.link_labels,
+            "atom_name": obj.atom_names,
+        }
+        return output_dict
+    
+    # Keys to check for deserialized JSON 
+    expected_json_keys = {"mol", "link_labels", "atom_name"}
+    
+    @classmethod
+    def _decode_object(cls, obj: dict[str, Any]): 
+
+        # Converting ResidueTemplate init values that need conversion
+        deserialized_mol = rdkit_mol_from_json(obj.get("mol"))
+        # do not write canonical smiles to preserve original atom order
+        if deserialized_mol: 
+            mol_smiles = rdkit.Chem.MolToSmiles(deserialized_mol, canonical=False)
+        # if dry json (data) is supplied
+        else:
+            mol_smiles = obj.get("smiles")
+
+        link_labels = convert_to_int_keyed_dict(obj.get("link_labels"))
+
+        atom_name = cls.access_with_deprecated_key(obj, old_key="atom_names", new_key="atom_name")
+
+        # Construct a ResidueTemplate object
+        residue_template = cls(mol_smiles, None, atom_name)
+        # Separately ensure that link_labels is restored to the value we expect it to be so there are not errors in
+        # the constructor
+        residue_template.link_labels = link_labels
+
+        return residue_template
+    # endregion
 
     def check(self, mol, link_labels, atom_names):
         have_implicit_hs = set()
@@ -2556,435 +2726,3 @@ class ResidueTemplate:
                     result[element]["excess"] += 1
         return result, mapping
 
-def rdkit_or_none_to_json(rdkit_mol):
-    if rdkit_mol is None:
-        return None
-    return rdMolInterchange.MolToJSON(rdkit_mol)
-
-
-# region JSON Encoders
-class MonomerEncoder(json.JSONEncoder):
-    """
-    JSON Encoder class for Monomer objects.
-    """
-
-    molecule_setup_encoder = MoleculeSetupEncoder()
-
-    def default(self, obj):
-        """
-        Overrides the default JSON encoder for data structures for Monomer objects.
-
-        Parameters
-        ----------
-        obj: object
-            Can take any object as input, but will only create the Monomer JSON format for Monomer objects.
-            For all other objects will return the default json encoding.
-
-        Returns
-        -------
-        A JSON serializable object that represents the Monomer class or the default JSONEncoder output for an
-        object.
-        """
-        if isinstance(obj, Monomer):
-            if obj.molsetup is None:
-                molsetup_json = None
-            else:
-                molsetup_json = self.molecule_setup_encoder.default(obj.molsetup)
-            return {
-                "raw_rdkit_mol": rdkit_or_none_to_json(obj.raw_rdkit_mol),
-                "rdkit_mol": rdkit_or_none_to_json(obj.rdkit_mol),
-                "mapidx_to_raw": obj.mapidx_to_raw,
-                "residue_template_key": obj.residue_template_key,
-                "input_resname": obj.input_resname,
-                "atom_names": obj.atom_names,
-                "mapidx_from_raw": obj.mapidx_from_raw,
-                "padded_mol": rdkit_or_none_to_json(obj.padded_mol),
-                "molsetup": molsetup_json,
-                "is_flexres_atom": obj.is_flexres_atom,
-                "is_movable": obj.is_movable,
-                "molsetup_mapidx": obj.molsetup_mapidx,
-            }
-        return json.JSONEncoder.default(self, obj)
-
-
-class ResidueTemplateEncoder(json.JSONEncoder):
-    """
-    JSON Encoder class for ResidueTemplate objects.
-    """
-
-    def default(self, obj):
-        """
-        Overrides the default JSON encoder for data structures for ResidueTemplate objects.
-
-        Parameters
-        ----------
-        obj: object
-            Can take any object as input, but will only create the ResidueTemplate JSON format for ResidueTemplate
-            objects. For all other objects will return the default json encoding.
-
-        Returns
-        -------
-        A JSON serializable object that represents the ResidueTemplate class or the default JSONEncoder output for an
-        object.
-        """
-        if isinstance(obj, ResidueTemplate):
-            output_dict = {
-                "mol": rdMolInterchange.MolToJSON(obj.mol),
-                "link_labels": obj.link_labels,
-                "atom_names": obj.atom_names,
-            }
-            return output_dict
-        return json.JSONEncoder.default(self, obj)
-
-
-class ResiduePadderEncoder(json.JSONEncoder):
-    """
-    JSON Encoder class for ResiduePadder objects.
-    """
-
-    def default(self, obj):
-        """
-        Overrides the default JSON encoder for data structures for ResiduePadder objects.
-
-        Parameters
-        ----------
-        obj: object
-            Can take any object as input, but will only create the ResiduePadder JSON format for ResiduePadder
-            objects. For all other objects will return the default json encoding.
-
-        Returns
-        -------
-        A JSON serializable object that represents the ResiduePadder class or the default JSONEncoder output for an
-        object.
-        """
-        if isinstance(obj, ResiduePadder):
-            if obj.adjacent_smartsmol is None:
-                adjacent_smarts = None
-            else:
-                # do not use JSON because it looses atom labels
-                adjacent_smarts = Chem.MolToSmarts(obj.adjacent_smartsmol)
-            output_dict = {
-                "rxn_smarts": rdChemReactions.ReactionToSmarts(obj.rxn),
-                "adjacent_smarts": adjacent_smarts,
-                "auto_blunt": obj.auto_blunt,
-            }
-            # we are not serializing the adjacent_smartsmol_mapidx as that will
-            # be rebuilt by the ResiduePadder init
-            return output_dict
-        return json.JSONEncoder.default(self, obj)
-
-
-class ResidueChemTemplatesEncoder(json.JSONEncoder):
-    """
-    JSON Encoder class for ResidueChemTemplates objects.
-    """
-
-    residue_padder_encoder = ResiduePadderEncoder()
-    residue_template_encoder = ResidueTemplateEncoder()
-
-    def default(self, obj):
-        """
-        Overrides the default JSON encoder for data structures for ResidueChemTemplates objects.
-
-        Parameters
-        ----------
-        obj: object
-            Can take any object as input, but will only create the ResidueChemTemplates JSON format for
-            ResidueChemTemplates objects. For all other objects will return the default json encoding.
-
-        Returns
-        -------
-        A JSON serializable object that represents the ResidueChemTemplates class or the default JSONEncoder output for
-        an object.
-        """
-        if isinstance(obj, ResidueChemTemplates):
-            output_dict = {
-                "residue_templates": {
-                    k: self.residue_template_encoder.default(v)
-                    for k, v in obj.residue_templates.items()
-                },
-                "ambiguous": obj.ambiguous,
-                "padders": {
-                    k: self.residue_padder_encoder.default(v)
-                    for k, v in obj.padders.items()
-                },
-            }
-            return output_dict
-        return json.JSONEncoder.default(self, obj)
-
-
-class PolymerEncoder(json.JSONEncoder):
-    """
-    JSON Encoder class for Polymer objects.
-    """
-
-    residue_chem_templates_encoder = ResidueChemTemplatesEncoder()
-    monomer_encoder = MonomerEncoder()
-
-    def default(self, obj):
-        """
-        Overrides the default JSON encoder for data structures for Polymer objects.
-
-        Parameters
-        ----------
-        obj: object
-            Can take any object as input, but will only create the Polymer JSON format for Polymer
-            objects. For all other objects will return the default json encoding.
-
-        Returns
-        -------
-        A JSON serializable object that represents the Polymer class or the default JSONEncoder output for an
-        object.
-        """
-        if isinstance(obj, Polymer):
-            output_dict = {
-                "residue_chem_templates": self.residue_chem_templates_encoder.default(
-                    obj.residue_chem_templates
-                ),
-                "monomers": {
-                    k: self.monomer_encoder.default(v)
-                    for k, v in obj.monomers.items()
-                },
-                "log": obj.log,
-            }
-            return output_dict
-        return json.JSONEncoder.default(self, obj)
-
-
-# endregion
-
-# region JSON Decoders
-
-
-def monomer_json_decoder(obj: dict):
-    """
-    Takes an object and attempts to decode it into a Monomer object.
-
-    Parameters
-    ----------
-    obj: Object
-        This can be any object, but it should be a dictionary generated by deserializing a JSON of a Monomer
-        object.
-
-    Returns
-    -------
-    If the input is a dictionary corresponding to a Monomer, will return a Monomer with data
-    populated from the dictionary. Otherwise, returns the input object.
-
-    """
-    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
-    # safe data, so we should ignore it.
-    if type(obj) is not dict:
-        return obj
-
-    # check that all the keys we expect are in the object dictionary as a safety measure
-    expected_monomer_keys = {
-        "raw_rdkit_mol",
-        "rdkit_mol",
-        "mapidx_to_raw",
-        "residue_template_key",
-        "input_resname",
-        "atom_names",
-        "mapidx_from_raw",
-        "padded_mol",
-        "molsetup",
-        "is_flexres_atom",
-        "is_movable",
-        "molsetup_mapidx",
-    }
-
-    if set(obj.keys()) != expected_monomer_keys:
-        return obj
-    # Extracts init mols for Monomer:
-    raw_rdkit_mol = rdkit_mol_from_json(obj["raw_rdkit_mol"])
-    rdkit_mol = rdkit_mol_from_json(obj["rdkit_mol"])
-    if obj["mapidx_to_raw"] is None:
-        mapidx_to_raw = None
-    else:
-        mapidx_to_raw = {int(k): v for k, v in obj["mapidx_to_raw"].items()}
-
-    monomer = Monomer(raw_rdkit_mol, rdkit_mol, mapidx_to_raw)
-
-    # sets remaining properties from JSON
-    monomer.residue_template_key = obj["residue_template_key"]
-    monomer.input_resname = obj["input_resname"]
-    monomer.atom_names = obj["atom_names"]
-
-    if obj["mapidx_from_raw"] is None:
-        monomer.mapidx_from_raw = None
-    else:
-        monomer.mapidx_from_raw = {int(k): v for k, v in obj["mapidx_from_raw"].items()}
-
-    monomer.padded_mol = rdkit_mol_from_json(obj["padded_mol"])
-    monomer.molsetup = RDKitMoleculeSetup.from_json(obj["molsetup"])
-    if obj["molsetup_mapidx"] is None:
-        monomer.molsetup_mapidx = None
-    else:
-        monomer.molsetup_mapidx = {int(k): v for k, v in obj["molsetup_mapidx"].items()}
-
-    # boolean values
-    monomer.is_flexres_atom = obj["is_flexres_atom"]
-    monomer.is_movable = obj["is_movable"]
-
-    return monomer
-
-
-def residue_template_json_decoder(obj: dict):
-    """
-    Takes an object and attempts to decode it into a ResidueTemplate object.
-
-    Parameters
-    ----------
-    obj: Object
-        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
-        ResidueTemplate object.
-
-    Returns
-    -------
-    If the input is a dictionary corresponding to a ResidueTemplate, will return a ResidueTemplate with data populated
-    from the dictionary. Otherwise, returns the input object.
-    """
-    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
-    # safe data, so we should ignore it.
-    if type(obj) is not dict:
-        return obj
-
-    # check that all the keys we expect are in the object dictionary as a safety measure
-    expected_residue_keys = {"mol", "link_labels", "atom_names"}
-    if set(obj.keys()) != expected_residue_keys:
-        return obj
-
-    # Converting ResidueTemplate init values that need conversion
-    deserialized_mol = rdkit_mol_from_json(obj["mol"])
-    # do not write canonical smiles to preserve original atom order
-    mol_smiles = rdkit.Chem.MolToSmiles(deserialized_mol, canonical=False)
-    link_labels = {int(k): v for k, v in obj["link_labels"].items()}
-
-    # Construct a ResidueTemplate object
-    residue_template = ResidueTemplate(mol_smiles, None, obj["atom_names"])
-    # Separately ensure that link_labels is restored to the value we expect it to be so there are not errors in
-    # the constructor
-    residue_template.link_labels = link_labels
-
-    return residue_template
-
-
-def residue_padder_json_decoder(obj: dict):
-    """
-    Takes an object and attempts to decode it into a ResiduePadder object.
-
-    Parameters
-    ----------
-    obj: Object
-        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
-        ResiduePadder object.
-
-    Returns
-    -------
-    If the input is a dictionary corresponding to a ResiduePadder, will return a ResiduePadder with data populated
-    from the dictionary. Otherwise, returns the input object.
-    """
-    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
-    # safe data, so we should ignore it.
-    if type(obj) is not dict:
-        return obj
-
-    # check that all the keys we expect are in the object dictionary as a safety measure
-    expected_residue_keys = {
-        "rxn_smarts",
-        "adjacent_smarts",
-        "auto_blunt",
-    }
-    if set(obj.keys()) != expected_residue_keys:
-        return obj
-
-    # Constructs a ResiduePadder object and restores the expected attributes
-    # adjacent_smartsmol_mapidx is rebuilt by ResiduePadder init
-    residue_padder = ResiduePadder(obj["rxn_smarts"], obj["adjacent_smarts"], obj["auto_blunt"])
-
-    return residue_padder
-
-
-def residue_chem_templates_json_decoder(obj: dict):
-    """
-    Takes an object and attempts to decode it into a ResiduePadder object.
-
-    Parameters
-    ----------
-    obj: Object
-        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
-        ResiduePadder object.
-
-    Returns
-    -------
-    If the input is a dictionary corresponding to a ResiduePadder, will return a ResiduePadder with data populated
-    from the dictionary. Otherwise, returns the input object.
-    """
-    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
-    # safe data, so we should ignore it.
-    if type(obj) is not dict:
-        return obj
-
-    # Check that all the keys we expect are in the object dictionary as a safety measure
-    expected_residue_keys = {
-        "residue_templates",
-        "ambiguous",
-        "padders",
-    }
-    if set(obj.keys()) != expected_residue_keys:
-        return obj
-
-    # Extracting the constructor args from the json representation and creating a ResidueChemTemplates instance
-    templates = {
-        k: residue_template_json_decoder(v) for k, v in obj["residue_templates"].items()
-    }
-    padders = {k: residue_padder_json_decoder(v) for k, v in obj["padders"].items()}
-
-    residue_chem_templates = ResidueChemTemplates(templates, padders, obj["ambiguous"])
-
-    return residue_chem_templates
-
-
-def polymer_json_decoder(obj: dict):
-    """
-    Takes an object and attempts to deserialize it into a Polymer object.
-
-    Parameters
-    ----------
-    obj: Object
-        This can be any object, but it should be a dictionary constructed by deserializing the JSON representation of a
-        Polymer object.
-
-    Returns
-    -------
-    If the input is a dictionary corresponding to a Polymer, will return a Polymer with data
-    populated from the dictionary. Otherwise, returns the input object.
-    """
-    # if the input object is not a dict, we know that it will not be parsable and is unlikely to be usable or
-    # safe data, so we should ignore it.
-    if type(obj) is not dict:
-        return obj
-
-    # Check that all the keys we expect are in the object dictionary as a safety measure
-    expected_json_keys = {
-        "residue_chem_templates",
-        "monomers",
-        "log",
-    }
-    if set(obj.keys()) != expected_json_keys:
-        return obj
-
-    # Deserializes ResidueChemTemplates from the dict to use as an input, then constructs a Polymer object
-    # and sets its values using deserialized JSON values.
-    residue_chem_templates = residue_chem_templates_json_decoder(
-        obj["residue_chem_templates"]
-    )
-
-    polymer = Polymer({}, {}, residue_chem_templates)
-    polymer.monomers = {
-        k: monomer_json_decoder(v) for k, v in obj["monomers"].items()
-    }
-    polymer.log = obj["log"]
-
-    return polymer
-# endregion

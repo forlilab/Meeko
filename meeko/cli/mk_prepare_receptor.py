@@ -3,7 +3,7 @@
 import argparse
 import json
 import math
-from os import linesep as eol
+eol="\n"
 import pathlib
 import sys
 
@@ -17,7 +17,6 @@ from meeko import MoleculeSetup
 from meeko import ResidueChemTemplates
 from meeko import PDBQTWriterLegacy
 from meeko import Polymer
-from meeko import PolymerEncoder
 from meeko import PolymerCreationError
 from meeko import reactive_typer
 from meeko import get_reactive_config
@@ -509,7 +508,6 @@ def main():
         else:
             print(f"Unsupported input file format '{ext}'. Supported formats: {SUPPORTED_PRODY_FORMATS.keys()}.")
             sys.exit(1)
-
     else:
         with open(args.read_pdb) as f:
             pdb_string = f.read()
@@ -608,9 +606,7 @@ def main():
         "SA",
         "S",
         "Cl",
-        "CL",
         "Br",
-        "BR",
         "I",
         "Si",
         "B",
@@ -627,7 +623,7 @@ def main():
         else:  # args.write_json is empty list (was used without arg)
             fn = str(outpath) + ".json"
         with open(fn, "w") as f:
-            json.dump(polymer, f, cls=PolymerEncoder)
+            f.write(polymer.to_json())
         written_files_log["filename"].append(fn)
         written_files_log["description"].append("parameterized receptor")
     

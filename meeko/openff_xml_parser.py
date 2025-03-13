@@ -1,9 +1,11 @@
-from rdkit import Chem
 import math
 import pathlib
 import xml.etree.ElementTree as ET
 
+from rdkit import Chem
 periodic_table = Chem.GetPeriodicTable()
+
+from .utils.utils import mini_periodic_table
 
 
 def load_openff():

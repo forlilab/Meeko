@@ -15,7 +15,6 @@ autodock4_elements = {v for k,v in autodock4_atom_types_elements.items()}
 
 from rdkit import Chem
 from rdkit.Chem import rdmolops
-periodic_table = Chem.GetPeriodicTable()
 
 from rdkit import RDLogger
 import sys, logging

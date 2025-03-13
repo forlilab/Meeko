@@ -7,7 +7,7 @@
 import sys
 import json
 import math
-from os import linesep as eol
+eol="\n"
 
 import numpy as np
 from rdkit import Chem
@@ -404,7 +404,7 @@ class PDBQTWriterLegacy:
             raise RuntimeError("Cannot write PDBQT file. The following atom does not have an atom type: " + eol +
                              pdbqt_line + eol + 
                              "Consider declaring a custom atom type in the parameter file or revising the input structure. ")
-
+        
         pdbqt_line = atom.format(
             record_type,
             count,

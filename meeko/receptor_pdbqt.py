@@ -6,7 +6,7 @@
 
 from collections import defaultdict
 import json
-from os import linesep as eol
+eol="\n"
 
 import numpy as np
 from scipy import spatial
@@ -101,7 +101,7 @@ def _identify_bonds(atom_idx, positions, atom_types):
         if autodock4_atom_types_elements[atom_type] not in covalent_radius:
             continue
         r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
-        
+
         nei_cov_list = []
         for i in indices[1:]: 
             nei_atom_type = atom_types[i]
