@@ -94,6 +94,472 @@ residues_rotamers = {
 }
 
 
+def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=()):
+    """
+    Recursively finds all paths between start and end nodes.
+
+    Parameters
+    ----------
+    graph
+    start_node
+    end_nodes
+    current_path
+    paths_found
+
+    Returns
+    -------
+
+    """
+    current_path = current_path + (start_node,)
+    paths_found = list(paths_found)
+    for node in graph[start_node]:
+        if node in current_path:
+            continue
+        if node in end_nodes:
+            paths_found.append(list(current_path) + [node])
+        more_paths = find_graph_paths(graph, node, end_nodes, current_path)
+        paths_found.extend(more_paths)
+    return paths_found
+
+
+def find_inter_mols_bonds(mols_dict):
+    """
+
+    Parameters
+    ----------
+    mols_dict:
+
+    Returns
+    -------
+
+    """
+
+    allowance = 1.2  # vina uses 1.1 but covalent radii are shorter here
+    max_possible_covalent_radius = (
+        2 * allowance * max([r for k, r in covalent_radius.items()])
+    )
+    cubes_min = []
+    cubes_max = []
+    for key, (mol, _) in mols_dict.items():
+        positions = mol.GetConformer().GetPositions()
+        cubes_min.append(np.min(positions, axis=0))
+        cubes_max.append(np.max(positions, axis=0))
+    tmp = np.array([0, 0, 1, 1])
+    pairs_to_consider = []
+    keys = list(mols_dict)
+    for i in range(len(mols_dict)):
+        for j in range(i + 1, len(mols_dict)):
+            do_consider = True
+            for d in range(3):
+                x = (cubes_min[i][d], cubes_max[i][d], cubes_min[j][d], cubes_max[j][d])
+                idx = np.argsort(x)
+                has_overlap = tmp[idx][0] != tmp[idx][1]
+                close_enough = abs(x[idx[1]] - x[idx[2]]) < max_possible_covalent_radius
+                do_consider &= close_enough or has_overlap
+            if do_consider:
+                pairs_to_consider.append((i, j))
+
+    bonds = {}  # key is pair mol indices, valuei is list of pairs of atom indices
+    for i, j in pairs_to_consider:
+        p1 = mols_dict[keys[i]][0].GetConformer().GetPositions()
+        p2 = mols_dict[keys[j]][0].GetConformer().GetPositions()
+        for a1 in mols_dict[keys[i]][0].GetAtoms():
+            for a2 in mols_dict[keys[j]][0].GetAtoms():
+                vec = p1[a1.GetIdx()] - p2[a2.GetIdx()]
+                distsqr = np.dot(vec, vec)
+
+                # check if atom has implemented covalent radius
+                for atom in [a1, a2]:
+                    if atom.GetAtomicNum() not in covalent_radius:
+                        raise RuntimeError(f"Element {periodic_table.GetElementSymbol(atom.GetAtomicNum())} doesn't have an implemented covalent radius, which was required for the perception of intermolecular bonds. ")
+                    
+                cov_dist = (
+                    covalent_radius[a1.GetAtomicNum()]
+                    + covalent_radius[a2.GetAtomicNum()]
+                )
+                if distsqr < (allowance * cov_dist) ** 2:
+                    key = (keys[i], keys[j])
+                    value = (a1.GetIdx(), a2.GetIdx())
+                    bonds.setdefault(key, [])
+                    bonds[key].append(value)
+    return bonds
+
+
+def mapping_by_mcs(mol, ref):
+    """
+
+    Parameters
+    ----------
+    mol
+    ref
+
+    Returns
+    -------
+
+    """
+    mcs_result = rdFMCS.FindMCS([mol, ref], bondCompare=rdFMCS.BondCompare.CompareAny)
+    mcs_mol = Chem.MolFromSmarts(mcs_result.smartsString)
+
+    mol_idxs = mol.GetSubstructMatch(mcs_mol)
+    ref_idxs = ref.GetSubstructMatch(mcs_mol)
+
+    atom_map = {i: j for (i, j) in zip(mol_idxs, ref_idxs)}
+    return atom_map
+
+
+def _snap_to_int(value, tolerance=0.12):
+    """
+
+    Parameters
+    ----------
+    value
+    tolerance
+
+    Returns
+    -------
+
+    """
+    for inc in [-1, 0, 1]:
+        if abs(value - int(value) - inc) <= tolerance:
+            return int(value) + inc
+    return None
+
+
+def divide_int_gracefully(integer, weights, allow_equal_weights_to_differ=False):
+    """
+
+    Parameters
+    ----------
+    integer
+    weights
+    allow_equal_weights_to_differ
+
+    Returns
+    -------
+
+    """
+    for weight in weights:
+        if type(weight) not in [int, float] or weight < 0:
+            raise ValueError("weights must be numeric and non-negative")
+    if type(integer) is not int:
+        raise ValueError("integer must be integer")
+    inv_total_weight = 1.0 / sum(weights)
+    shares = [w * inv_total_weight for w in weights]  # normalize
+    result = [_snap_to_int(integer * s, tolerance=0.5) for s in shares]
+    surplus = integer - sum(result)
+    if surplus == 0:
+        return result
+    data = [(i, w) for (i, w) in enumerate(weights)]
+    data = sorted(data, key=lambda x: x[1], reverse=True)
+    idxs = [i for (i, _) in data]
+    if allow_equal_weights_to_differ:
+        groups = [1 for _ in weights]
+    else:
+        groups = []
+        last_weight = None
+        for i in idxs:
+            if weights[i] == last_weight:
+                groups[-1] += 1
+            else:
+                groups.append(1)
+            last_weight = weights[i]
+
+    # iterate over all possible combinations of groups
+    # this is potentially very slow
+    nr_groups = len(groups)
+    for j in range(1, 2**nr_groups):
+        n_changes = 0
+        combo = []
+        for grpidx in range(nr_groups):
+            is_changed = bool(j & 2**grpidx)
+            combo.append(is_changed)
+            n_changes += is_changed * groups[grpidx]
+        if n_changes == abs(surplus):
+            break
+
+    # add or subtract 1 to distribute surplus
+    increment = surplus / abs(surplus)
+    index = 0
+    for i, is_changed in enumerate(combo):
+        if is_changed:
+            for j in range(groups[i]):
+                result[idxs[index]] += increment
+                index += 1
+
+    return result
+
+
+def rectify_charges(q_list, net_charge=None, decimals=3) -> list[float]:
+    """
+    Makes charges 3 decimals in length and ensures they sum to an integer
+
+    Parameters
+    ----------
+    q_list
+    net_charge
+    decimals
+
+    Returns
+    -------
+    charges_dec: list[float]
+
+    """
+
+    fstr = "%%.%df" % decimals
+    charges_dec = [float(fstr % q) for q in q_list]
+
+    if net_charge is None:
+        net_charge = _snap_to_int(sum(charges_dec), tolerance=0.15)
+        if net_charge is None:
+            msg = "net charge could not be predicted from input q_list. (residual is beyond tolerance) "
+            msg = "Please set the net_charge argument directly"
+            raise RuntimeError(msg)
+    elif type(net_charge) != int:
+        raise TypeError("net charge must be an integer")
+
+    surplus = net_charge - sum(charges_dec)
+    surplus_int = _snap_to_int(10**decimals * surplus)
+
+    if surplus_int == 0:
+        return charges_dec
+
+    weights = [abs(q) for q in q_list]
+    surplus_int_splits = divide_int_gracefully(surplus_int, weights)
+    for i, increment in enumerate(surplus_int_splits):
+        charges_dec[i] += 10**-decimals * increment
+
+    return charges_dec
+
+
+def get_updated_positions(monomer, new_positions: dict): 
+    """
+    Returns full set of positions for the rdkit_mol in monomer given a partial
+    set of new_positions. Hydrogens not specified in new_positions will
+    have their position reset by RDKit if they are one or two bonds away
+    from an atom in new_positions.
+
+    Parameters
+    ----------
+    monomer: Monomer
+        rdkit_mol in monomer is associated with new positions
+    new_positions: dict (int -> (float, float, float))
+                         |      |
+                atom_index      |
+                                new_position
+    """
+
+    h_to_update = set()
+    mol = Chem.Mol(monomer.rdkit_mol)  # avoids side effects
+    conformer = mol.GetConformer()
+
+    for n1 in (mol.GetAtomWithIdx(idx) for idx in new_positions):
+        for n2 in n1.GetNeighbors():
+            if n2.GetAtomicNum() == 1:  # 1 bond away
+                h_to_update.add(n2.GetIdx())
+            else:
+                if n2.GetIdx() not in new_positions:  # 2 bonds away
+                    h_to_update.update(set(n2h.GetIdx() for n2h in n2.GetNeighbors() if n2h.GetAtomicNum() == 1))
+
+    # hydrogens in new_positions shall not be updated by RDKit
+    h_to_update -= set(new_positions)
+
+    for index in new_positions:
+        x, y, z = new_positions[index]
+        p = Point3D(float(x), float(y), float(z))
+        conformer.SetAtomPosition(index, p)
+    if h_to_update:
+        update_H_positions(mol, list(h_to_update))
+    return mol.GetConformer().GetPositions()
+
+
+def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
+    """
+    Re-calculates the position of some hydrogens already existing in the mol. Does not guarantee that chirality can be
+    preserved.
+
+    Parameters
+    ----------
+    mol: Chem.Mol
+        RDKit Mol object with hydrogens
+    indices_to_update: list[int]
+        Hydrogen indices to update
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    RuntimeError:
+        If a provided index in indices_to_update is not a Hydrogen, if a Hydrogen only has Hydrogen neighbors, or if the
+        number of visited Hydrogens does not match the number of Hydrogens marked to be deleted.
+    """
+
+    # Gets the conformer and a readable and writable version of the Mol using RDKit
+    conf = mol.GetConformer()
+    tmpmol = Chem.RWMol(mol)
+    # Sets up data structures to manage Hydrogens to delete and add
+    to_del = {}
+    to_add_h = []
+    # Loops through input indices_to_update, checks index validity, adds data to the addition and deletion data structs
+    for h_index in indices_to_update:
+        # Checks that the atom at this index is a Hydrogen
+        atom = tmpmol.GetAtomWithIdx(h_index)
+        if atom.GetAtomicNum() != 1:
+            raise RuntimeError("only H positions can be updated")
+        # Ensures that all Hydrogens have at least 1 non-Hydrogen neighbor
+        heavy_neighbors = []
+        for neigh_atom in atom.GetNeighbors():
+            if neigh_atom.GetAtomicNum() != 1:
+                heavy_neighbors.append(neigh_atom)
+        if len(heavy_neighbors) != 1:
+            raise RuntimeError(
+                f"hydrogens must have 1 non-H neighbor, got {len(heavy_neighbors)}"
+            )
+        # Adds the first neighbor to the addition and deletion data structures.
+        to_add_h.append(heavy_neighbors[0])
+        to_del[h_index] = heavy_neighbors[0]
+    # Loops through the delete list and deletes the
+    for i in sorted(to_del, reverse=True):
+        tmpmol.RemoveAtom(i)
+        to_del[i].SetNumExplicitHs(to_del[i].GetNumExplicitHs() + 1)
+    to_add_h = list(set([atom.GetIdx() for atom in to_add_h]))
+    tmpmol = tmpmol.GetMol()
+    tmpmol.UpdatePropertyCache()
+    Chem.SanitizeMol(tmpmol)
+    tmpmol = Chem.AddHs(tmpmol, onlyOnAtoms=to_add_h, addCoords=True)
+    tmpconf = tmpmol.GetConformer()
+    used_h = (
+        set()
+    )  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
+    for h_index, parent in to_del.items():
+        for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
+            has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
+            if atom.GetAtomicNum() == 1 and has_new_position:
+                if atom.GetIdx() not in used_h:
+                    # print(h_index, tuple(tmpconf.GetAtomPosition(atom.GetIdx())))
+                    conf.SetAtomPosition(
+                        h_index, tmpconf.GetAtomPosition(atom.GetIdx())
+                    )
+                    used_h.add(atom.GetIdx())
+                    break  # h_index coords copied, don't look into further H bound to parent
+                    # no guarantees about preserving chirality, which we don't need
+
+    if len(used_h) != len(to_del):
+        raise RuntimeError(
+            f"Updated {len(used_h)} H positions but deleted {len(to_del)}"
+        )
+
+    return
+
+def _delete_residues(res_to_delete, raw_input_mols):
+    """
+
+    Parameters
+    ----------
+    res_to_delete: list (str) or None
+        residue IDs to delete in format <chain>:<resnum><icode>
+    raw_input_mols: dict (str -> RDKit mol)
+        keys are residue IDs
+
+    Returns
+    -------
+    None
+    (modifies raw_input_mols in-place)
+
+    """
+    if res_to_delete is None:
+        return
+    missing = set()
+    for res in res_to_delete:
+        if res not in raw_input_mols:
+            missing.add(res)
+        raw_input_mols.pop(res, None)
+    if len(missing) > 0:
+        msg = "can't find the following residues to delete: " + " ".join(missing)
+        raise ValueError(msg)
+    return
+
+
+class PolymerCreationError(RuntimeError):
+
+    def __init__(self, error: str, recommendations: str = None): 
+        super().__init__(error) # main error message to pass to RuntimeError
+        self.error = error
+        self.recommendations = recommendations
+        exc_type, exc_value, exc_traceback = exc_info()
+        if exc_value is not None: 
+            self.traceback = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        else:
+            self.traceback = None
+
+    def __str__(self):
+        msg = "" + eol
+        msg += "Error: Creation of data structure for receptor failed." + eol
+        msg += "" + eol
+        msg += "Details:" + eol
+        msg += self.error + eol
+
+        if self.traceback:
+            msg += self.traceback + eol
+
+        if self.recommendations: 
+            msg += "Recommendations:" + eol
+            msg += self.recommendations + eol
+            msg += "" + eol
+        
+        return msg
+
+
+def handle_parsing_situations(
+    unmatched_res,
+    unparsed_res,
+    allow_bad_res,
+    res_missed_altloc,
+    res_needed_altloc,
+    ):
+
+    err = ""
+    if unparsed_res:
+        msg = f"- Parsing failed for: {unparsed_res}."
+        if not allow_bad_res:
+            err += msg + eol
+        else: 
+            msg += " Ignored due to allow_bad_res."
+            logger.warning(msg)
+
+    if unmatched_res:
+        msg = f"- Template matching failed for: {list(unmatched_res)}"
+        if not allow_bad_res:
+            err += msg + eol
+        else:
+            msg += " Ignored due to allow_bad_res."
+            logger.warning(msg)
+
+    if err:
+        err += "These residues can be ignored with option allow_bad_res." + eol
+
+    if res_needed_altloc: 
+        msg = f"- Residues with alternate location: {res_needed_altloc}" + eol
+        msg += "Either specify an altloc for each with option wanted_altloc" + eol
+        msg += "or a general default altloc with option default_altloc."
+        err += msg
+
+    if res_missed_altloc:
+        msg = f"- Requested altlocs not found for: {res_missed_altloc}." + eol
+        err += msg
+
+    if err:
+        recs = "1. (for batch processing) Use -a/--allow_bad_res to automatically remove residues" + eol
+        recs += "that do not match templates, and --default_altloc to set" + eol
+        recs += "a default altloc variant. Use these at your own risk." + eol
+        recs += "" + eol
+        recs += "2. (processing individual structure) Inspecting and fixing the input structure is recommended." + eol
+        recs += "Use --wanted_altloc to set variants for specific residues."
+        raise PolymerCreationError(err, recs)
+    return
+
+
 class ResidueChemTemplates:
     """Holds template data required to initialize Polymer
 
