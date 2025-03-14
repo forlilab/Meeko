@@ -246,3 +246,4 @@ class ResidueChemTemplates:
         if len(missing):
             raise ValueError(f"missing residue templates for ambiguous: {missing}")
         return
+
