@@ -1,3 +1,4 @@
+import logging
 import math
 import pathlib
 import xml.etree.ElementTree as ET
@@ -5,6 +6,8 @@ import xml.etree.ElementTree as ET
 from rdkit import Chem
 
 from .utils.utils import mini_periodic_table
+
+logger = logging.getLogger(__name__)
 
 
 def load_openff():
@@ -288,7 +291,7 @@ def parse_offxml(offxml_filename):
     vdw_list = []
     for child in vdw:
         if child.tag != "Atom":
-            print(" SKIPPING: %s" % child.tag)
+            logger.info(" SKIPPING: %s" % child.tag)
             continue
         v = make_vdw_entry(child.attrib)
         vdw_list.append(v)
@@ -298,7 +301,7 @@ def parse_offxml(offxml_filename):
     dihedral_list = []
     for child in torsions:
         if child.tag != "Proper":
-            print(" SKIPPING: %s" % child.tag)
+            logger.info(" SKIPPING: %s" % child.tag)
             continue
         d = make_dihedral_entry(child.attrib)
         dihedral_list.append(d)

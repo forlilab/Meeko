@@ -10,6 +10,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 import json
 eol="\n"
+import logging
 import sys
 import warnings
 from typing import Union
@@ -40,6 +41,8 @@ else:
 
 
 from .utils import rdkitutils
+
+logger = logging.getLogger(__name__)
 
 # region DEFAULT VALUES
 DEFAULT_PDBINFO = None
@@ -1631,12 +1634,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         rdkit_conformer = mol.GetConformer(conformer_id)
         if not rdkit_conformer.Is3D():
             warnings.warn(
-                "RDKit molecule not labeled as 3D. This warning won't show again."
+                "RDKit molecule not labeled as 3D. This warning won't show again.", RuntimeWarning
             )
             RDKitMoleculeSetup.warned_not3D = True
         if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one."
-            print(msg, file=sys.stderr)
+            warnings.warn(msg, RuntimeWarning)
         if len(Chem.GetMolFrags(mol)) != 1:
             raise ValueError(f"RDKit molecule has {len(Chem.GetMolFrags(mol))} fragments. Must have 1.")
         if mol.HasQuery():
@@ -1766,7 +1769,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             if None in charges: 
                 for idx, charge in enumerate(charges):
                     if charge is None:
-                        print(f"Charge at index {idx} is None.")
+                        logger.error(f"Charge at index {idx} is None.")
                 raise ValueError(
                     f"The list of charges based on atom property name {read_charges_from_prop} contains None. "
                 )  
@@ -2063,13 +2066,13 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 molname = mol.GetProp("_Name")
             else:
                 molname = ""
-            print(
-                "warning: found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd"
-                % max_matches
+            warnings.warn(
+                "Found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd"
+                % max_matches, RuntimeWarning
             )
-            print(
-                'Maybe this molecule is "too" symmetric? %s' % molname,
-                Chem.MolToSmiles(mol_noHs),
+            warnings.warn(
+                'Maybe this molecule is "too" symmetric? %s %s' % (molname, Chem.MolToSmiles(mol_noHs)),
+                RuntimeWarning
             )
         return matches
 

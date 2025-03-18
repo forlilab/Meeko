@@ -4,6 +4,7 @@
 # Meeko
 #
 
+import logging
 import os
 from collections import defaultdict
 
@@ -13,6 +14,7 @@ from scipy import spatial
 from .utils.covalent_radius_table import covalent_radius
 from .utils.autodock4_atom_types_elements import autodock4_atom_types_elements
 
+logger = logging.getLogger(__name__)
 
 atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P': 'vdw', 'S': 'vdw',
                              'Br': 'vdw', 'I': 'vdw', 'F': 'vdw', 'Cl': 'vdw',
@@ -674,7 +676,7 @@ class PDBQTMolecule:
             as_model (bool): Qdd MODEL/ENDMDL keywords to the output PDBQT string (default: False)
 
         """
-        print(overwrite and os.path.isfile(output_pdbqtfilename))
+        logger.debug(overwrite and os.path.isfile(output_pdbqtfilename))
         if not overwrite and os.path.isfile(output_pdbqtfilename):
             raise RuntimeError('Output PDBQT file %s already exists' % output_pdbqtfilename)
 
