@@ -523,7 +523,7 @@ class PDBQTWriterLegacy:
                 original_ignore = {atom.index: atom.is_ignore for atom in molsetup.atoms}
                 graph = molsetup.flexibility_model["rigid_body_graph"]
                 root = molsetup.flexibility_model["root"]
-                if len(graph[root]) != 1:
+                if len(graph[root]) > 1:
                     raise RuntimeError(
                         f"flexible residue {res_id} has {len(graph[root])}"
                         " rotatable bonds from root, but PDBQT is limited to 1"
