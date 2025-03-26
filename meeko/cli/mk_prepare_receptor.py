@@ -554,6 +554,33 @@ def main():
                 print("no default reactive name for %s, " % input_resname)
                 print("use --reactive_name or --reactive_name_specific" + eol)
                 sys.exit(2)
+
+    # Use residue name in input file to confirm
+    # requested rotatable terminal group residues are eligible
+    rotatable_termgrp_residues_allowed = [
+        "SER",
+        "LYS",
+        "TYR",
+        "CYS",
+        "HIS",
+        "HIE",
+        "HID",
+        "HIP",
+        "ASN",
+        "GLN",
+        "THR",
+        "MET",
+    ]
+    for res_id in rot_term_res:
+        if res_id not in polymer.monomers:
+            print("resid %s not found in input receptor file" % res_id)
+            sys.exit(2)
+        input_resname = polymer.monomers[res_id].input_resname
+        if input_resname not in rotatable_termgrp_residues_allowed:
+            print(f"{input_resname} (resid {res_id}) is not a valid residue for use with --rot_terminal_group."+ eol)
+            print("Available residues are: ")
+            print(", ".join(rotatable_termgrp_residues_allowed))
+            sys.exit(2)
     
     # Print nonreactive and reactive flexible residues specs
     if len(nonreactive_flexres) + len(reactive_flexres) + len(rot_term_res) > 0:
@@ -572,7 +599,7 @@ def main():
             for res_id in rot_term_res:
                 chain, resnum = res_id.split(":")
                 react_atom = ""
-                print(string % (chain, resnum, False, react_atom), "(rotable terminal group)")
+                print(string % (chain, resnum, False, react_atom), "(rotatable terminal group)")
     
         if len(reactive_flexres) > 0:
             for res_id in reactive_flexres_name:
