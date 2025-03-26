@@ -185,6 +185,13 @@ def get_args():
         default=[],
         help='specify the flexible residues by the chain ID and residue number, e.g. -f ":42,B:23" is equivalent to -f ":42" -f "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
     )
+    config_group.add_argument(
+        "-t",
+        "--rot_terminal_group",
+        action="append",
+        default=[],
+        help='specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
+    )
 
     box_group = parser.add_argument_group("Size and center of grid box")
 
@@ -450,6 +457,13 @@ def main():
         for res_id in parse_cmdline_res(string):
             if res_id not in reactive_flexres:
                 nonreactive_flexres.add(res_id)
+
+    # Process residue ID of residues with rotatable terminal group
+    rot_term_res = set()
+    for string in args.rot_terminal_group:
+        for res_id in parse_cmdline_res(string):
+            if res_id not in reactive_flexres and res_id not in nonreactive_flexres:
+                rot_term_res.add(res_id)
     
     
     set_template = {}
@@ -542,7 +556,7 @@ def main():
                 sys.exit(2)
     
     # Print nonreactive and reactive flexible residues specs
-    if len(nonreactive_flexres) + len(reactive_flexres) > 0:
+    if len(nonreactive_flexres) + len(reactive_flexres) + len(rot_term_res) > 0:
         print()
         print("Flexible residues:")
         print("chain resnum is_reactive reactive_atom")
@@ -553,6 +567,12 @@ def main():
                 chain, resnum = res_id.split(":")
                 react_atom = ""
                 print(string % (chain, resnum, False, react_atom))
+
+        if len(rot_term_res) > 0:
+            for res_id in rot_term_res:
+                chain, resnum = res_id.split(":")
+                react_atom = ""
+                print(string % (chain, resnum, False, react_atom), "(rotable terminal group)")
     
         if len(reactive_flexres) > 0:
             for res_id in reactive_flexres_name:
@@ -589,6 +609,16 @@ def main():
     
     for res_id in all_flexres:
         polymer.flexibilize_sidechain(res_id, mk_prep)
+
+    # add rotatable terminal groups
+    mk_prep_rigid_nonTerm = MoleculePreparation(
+        rigidify_bonds_smarts=["[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"],
+        rigidify_bonds_indices=[(0, 1)],
+    )
+
+    for res_id in rot_term_res:
+        polymer.monomers[res_id].parameterize(mk_prep_rigid_nonTerm, res_id)
+        polymer.flexibilize_sidechain(res_id, mk_prep_rigid_nonTerm)
     
     
     any_lig_base_types = [
@@ -644,7 +674,7 @@ def main():
         pdbqt_tuple = PDBQTWriterLegacy.write_from_polymer(polymer)
         rigid_pdbqt, flex_pdbqt_dict = pdbqt_tuple
     
-        if len(all_flexres) == 0:
+        if len(all_flexres) + len(rot_term_res) == 0:
             box_center = args.box_center
             rigid_fn = fn_base + ".pdbqt"
             flex_fn = None
