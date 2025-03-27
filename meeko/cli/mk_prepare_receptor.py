@@ -649,7 +649,6 @@ def main():
             rigid_fn = fn_base + ".pdbqt"
             flex_fn = None
         else:
-            print(f"{reactive_flexres=}")
             all_flex_pdbqt = ""
             reactive_flexres_count = 0
             for res_id, flexres_pdbqt in flex_pdbqt_dict.items():
@@ -658,10 +657,11 @@ def main():
             rigid_fn = fn_base + "_rigid.pdbqt"
             flex_fn = fn_base + "_flex.pdbqt"
         
-            written_files_log["filename"].append(flex_fn)
-            written_files_log["description"].append("flexible receptor input file")
-            with open(flex_fn, "w") as f:
-                f.write(all_flex_pdbqt)
+            if all_flex_pdbqt:
+                written_files_log["filename"].append(flex_fn)
+                written_files_log["description"].append("flexible receptor input file")
+                with open(flex_fn, "w") as f:
+                    f.write(all_flex_pdbqt)
         
         written_files_log["filename"].append(rigid_fn)
         written_files_log["description"].append("static (i.e., rigid) receptor input file")
