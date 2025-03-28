@@ -4,6 +4,7 @@
 # Meeko PDBQT writer
 #
 
+import logging
 import sys
 import json
 import math
@@ -16,6 +17,8 @@ from .utils.rdkitutils import mini_periodic_table
 
 from .molsetup import Bond
 
+
+logger = logging.getLogger(__name__)
 
 def oids_json_from_setup(molsetup, name="LigandFromMeeko"):
     if len(molsetup.restraints):
@@ -523,33 +526,38 @@ class PDBQTWriterLegacy:
                 original_ignore = {atom.index: atom.is_ignore for atom in molsetup.atoms}
                 graph = molsetup.flexibility_model["rigid_body_graph"]
                 root = molsetup.flexibility_model["root"]
-                if len(graph[root]) != 1:
+                if len(graph[root]) > 1:
                     raise RuntimeError(
                         f"flexible residue {res_id} has {len(graph[root])}"
                         " rotatable bonds from root, but PDBQT is limited to 1"
                     )
-                # set ignore to True for static atoms of flexible sidechains
-                # to exclude them from the PDBQT string
-                for atom_idx, is_flex in enumerate(monomer.is_flexres_atom):
-                        molsetup.atoms[atom_idx].is_ignore = not is_flex
-                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
-                    molsetup, remove_smiles=True, add_index_map=True
-                )
-                for atom in molsetup.atoms:
-                    atom.is_ignore = original_ignore[atom.index]
-                if not ok:
-                    raise RuntimeError(err)
-                this_flex_pdbqt, flex_atom_count = (
-                    cls.adapt_pdbqt_for_autodock4_flexres(
-                        this_flex_pdbqt,
-                        resname,
-                        chain,
-                        int(resnum),
-                        skip_rename_ca_cb=True,
-                        atom_count=flex_atom_count,
+                elif len(graph[root]) == 0:
+                    logger.warning(
+                        f"flexible residue {res_id} has no movable atoms, omitting from flexres PDBQT"
                     )
-                )
-                flex_pdbqt_dict[res_id] = this_flex_pdbqt
+                else:
+                    # set ignore to True for static atoms of flexible sidechains
+                    # to exclude them from the PDBQT string
+                    for atom_idx, is_flex in enumerate(monomer.is_flexres_atom):
+                            molsetup.atoms[atom_idx].is_ignore = not is_flex
+                    this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
+                        molsetup, remove_smiles=True, add_index_map=True
+                    )
+                    for atom in molsetup.atoms:
+                        atom.is_ignore = original_ignore[atom.index]
+                    if not ok:
+                        raise RuntimeError(err)
+                    this_flex_pdbqt, flex_atom_count = (
+                        cls.adapt_pdbqt_for_autodock4_flexres(
+                            this_flex_pdbqt,
+                            resname,
+                            chain,
+                            int(resnum),
+                            skip_rename_ca_cb=True,
+                            atom_count=flex_atom_count,
+                        )
+                    )
+                    flex_pdbqt_dict[res_id] = this_flex_pdbqt
 
             for atom_idx, atom in enumerate(molsetup.atoms):
                 if atom.is_ignore or monomer.is_flexres_atom[atom_idx]:
