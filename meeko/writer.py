@@ -535,29 +535,29 @@ class PDBQTWriterLegacy:
                     logger.warning(
                         f"flexible residue {res_id} has no movable atoms, omitting from flexres PDBQT"
                     )
-                    continue
-                # set ignore to True for static atoms of flexible sidechains
-                # to exclude them from the PDBQT string
-                for atom_idx, is_flex in enumerate(monomer.is_flexres_atom):
-                        molsetup.atoms[atom_idx].is_ignore = not is_flex
-                this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
-                    molsetup, remove_smiles=True, add_index_map=True
-                )
-                for atom in molsetup.atoms:
-                    atom.is_ignore = original_ignore[atom.index]
-                if not ok:
-                    raise RuntimeError(err)
-                this_flex_pdbqt, flex_atom_count = (
-                    cls.adapt_pdbqt_for_autodock4_flexres(
-                        this_flex_pdbqt,
-                        resname,
-                        chain,
-                        int(resnum),
-                        skip_rename_ca_cb=True,
-                        atom_count=flex_atom_count,
+                else:
+                    # set ignore to True for static atoms of flexible sidechains
+                    # to exclude them from the PDBQT string
+                    for atom_idx, is_flex in enumerate(monomer.is_flexres_atom):
+                            molsetup.atoms[atom_idx].is_ignore = not is_flex
+                    this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
+                        molsetup, remove_smiles=True, add_index_map=True
                     )
-                )
-                flex_pdbqt_dict[res_id] = this_flex_pdbqt
+                    for atom in molsetup.atoms:
+                        atom.is_ignore = original_ignore[atom.index]
+                    if not ok:
+                        raise RuntimeError(err)
+                    this_flex_pdbqt, flex_atom_count = (
+                        cls.adapt_pdbqt_for_autodock4_flexres(
+                            this_flex_pdbqt,
+                            resname,
+                            chain,
+                            int(resnum),
+                            skip_rename_ca_cb=True,
+                            atom_count=flex_atom_count,
+                        )
+                    )
+                    flex_pdbqt_dict[res_id] = this_flex_pdbqt
 
             for atom_idx, atom in enumerate(molsetup.atoms):
                 if atom.is_ignore or monomer.is_flexres_atom[atom_idx]:

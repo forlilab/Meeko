@@ -155,6 +155,24 @@ def test_AHHY_flex_residues():
     assert len(rigid_part) == 2923
     assert len(movable_part) == 809
 
+    # and now with a fully rigid sidechain, to make sure it goes in rigid
+    rigid_prep = MoleculePreparation(
+        rigidify_bonds_smarts=["[*]~[*]"],
+        rigidify_bonds_indices=[(0, 1)],
+    )
+    polymer.monomers["A:2"].parameterize(rigid_prep, "A:2")
+    polymer.flexibilize_sidechain("A:2", rigid_prep)
+    pdbqt_strings = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+    rigid_part, movable_part = pdbqt_strings
+
+    print()
+    print(rigid_part)
+    print(movable_part)
+    # remove newline chars because Windows/Unix differ
+    rigid_part = "".join(rigid_part.splitlines())
+
+    assert len(rigid_part) == 3555
+    assert len(movable_part) == 0
 
 
 def test_AHHY_padding():
