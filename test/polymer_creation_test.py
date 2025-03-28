@@ -165,9 +165,6 @@ def test_AHHY_flex_residues():
     pdbqt_strings = PDBQTWriterLegacy.write_string_from_polymer(polymer)
     rigid_part, movable_part = pdbqt_strings
 
-    print()
-    print(rigid_part)
-    print(movable_part)
     # remove newline chars because Windows/Unix differ
     rigid_part = "".join(rigid_part.splitlines())
 
