@@ -634,7 +634,7 @@ def main():
         with open(fn, "w") as f:
             f.write(polymer.to_pdb())
         written_files_log["filename"].append(fn)
-        written_files_log["description"].append("receptor")
+        written_files_log["description"].append("processed receptor PDB")
     
     if args.write_pdbqt is not None:
         if args.write_pdbqt:
