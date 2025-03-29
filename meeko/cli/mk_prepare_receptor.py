@@ -630,7 +630,7 @@ def main():
         if args.write_pdb:
             fn = args.write_pdb[0]
         else:  
-            fn = str(outpath) + ".pdb"
+            raise ValueError("--write_pdb requires a filename")
         with open(fn, "w") as f:
             f.write(polymer.to_pdb())
         written_files_log["filename"].append(fn)
