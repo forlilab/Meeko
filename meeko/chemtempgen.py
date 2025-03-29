@@ -395,28 +395,31 @@ class ChemicalComponent:
                            'value_order', # bond order
                            ]
         bond_table = block.find(bond_category, bond_attributes)
-        bond_cols = {attr: bond_table.find_column(f"{bond_category}{attr}") for attr in bond_attributes}
+        
+        # If bond table is empty (single-atom residues), skip bond creation
+        if bond_table: 
+            bond_cols = {attr: bond_table.find_column(f"{bond_category}{attr}") for attr in bond_attributes}
 
-        # Connect atoms by bonds
-        bond_type_mapping = {
-            'SING': Chem.BondType.SINGLE,
-            'DOUB': Chem.BondType.DOUBLE,
-            'TRIP': Chem.BondType.TRIPLE,
-            'AROM': Chem.BondType.AROMATIC
-        }
-        bond_types = bond_cols['value_order']
+            # Connect atoms by bonds
+            bond_type_mapping = {
+                'SING': Chem.BondType.SINGLE,
+                'DOUB': Chem.BondType.DOUBLE,
+                'TRIP': Chem.BondType.TRIPLE,
+                'AROM': Chem.BondType.AROMATIC
+            }
+            bond_types = bond_cols['value_order']
 
-        for bond_i, bond_type in enumerate(bond_types):
-            rwmol.AddBond(name_to_idx_mapping[bond_cols['atom_id_1'][bond_i].strip('"')], 
-                          name_to_idx_mapping[bond_cols['atom_id_2'][bond_i].strip('"')], 
-                          bond_type_mapping.get(bond_type, Chem.BondType.UNSPECIFIED))
+            for bond_i, bond_type in enumerate(bond_types):
+                rwmol.AddBond(name_to_idx_mapping[bond_cols['atom_id_1'][bond_i].strip('"')], 
+                            name_to_idx_mapping[bond_cols['atom_id_2'][bond_i].strip('"')], 
+                            bond_type_mapping.get(bond_type, Chem.BondType.UNSPECIFIED))
 
-        # Try recharging mol (for metals)
-        try:
-            rwmol = recharge(rwmol)
-        except Exception as e:
-            logger.error(f"Failed to recharge rdkitmol. Error: {e} -> template for {resname} will be None. ")
-            return None
+            # Try recharging mol (for metals)
+            try:
+                rwmol = recharge(rwmol)
+            except Exception as e:
+                logger.error(f"Failed to recharge rdkitmol. Error: {e} -> template for {resname} will be None. ")
+                return None
 
         # Finish eidting mol 
         try:    

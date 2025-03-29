@@ -625,11 +625,14 @@ def main():
         written_files_log["description"].append("parameterized receptor")
     
     if args.write_pdb is not None:
-        fn = args.write_pdb[0]
+        if args.write_pdb:
+            fn = args.write_pdb[0]
+        else:  
+            raise ValueError("--write_pdb requires a filename")
         with open(fn, "w") as f:
             f.write(polymer.to_pdb())
         written_files_log["filename"].append(fn)
-        written_files_log["description"].append("receptor")
+        written_files_log["description"].append("processed receptor PDB")
     
     if args.write_pdbqt is not None:
         if args.write_pdbqt:
