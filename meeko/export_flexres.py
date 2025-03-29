@@ -56,8 +56,8 @@ def export_pdb_updated_flexres(polymer, pdbqt_mol):
                 orig_resmol = Chem.Mol(polymer.monomers[res_id].rdkit_mol)
                 orig_atomnames = polymer.monomers[res_id].atom_names
                 
-                backbone_SMARTS = "[NX3]([H])[CX4][CX3](=O)"
-                expected_names = ('N', 'H', 'CA', 'C', 'O')
+                backbone_SMARTS = "[NX3]([H])[CX4]([H])[CX3](=O)"
+                expected_names = ('N', 'H', 'CA', 'HA', 'C', 'O')
 
                 backbone_qmol = Chem.MolFromSmarts(backbone_SMARTS)
                 backbone_matches = orig_resmol.GetSubstructMatches(backbone_qmol)
@@ -105,7 +105,10 @@ def export_pdb_updated_flexres(polymer, pdbqt_mol):
                 for neighbor_idx, bond_type in bonds_to_recover: 
                     new_CA_idx = covres_mol.GetNumAtoms() + expected_names.index('CA')
                     combined_res.AddBond(new_CA_idx, neighbor_idx, bond_type)
-                combined_res.RemoveAtom(CA_index)
+
+                CA_h_idx = [nei.GetIdx() for nei in combined_res.GetAtomWithIdx(CA_index).GetNeighbors() if nei.GetAtomicNum()==1]
+                for atom_idx in sorted(CA_h_idx + [CA_index], reverse=True): 
+                    combined_res.RemoveAtom(atom_idx)
                 combined_res = combined_res.GetMol()
 
                 polymer.monomers[res_id].rdkit_mol = combined_res

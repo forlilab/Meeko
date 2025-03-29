@@ -15,6 +15,7 @@ import numpy as np
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
 
 ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
+nphe_ser_example = pkgdir / "test/polymer_data/NPHE_SER.pdb"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
@@ -170,6 +171,27 @@ def test_AHHY_flex_residues():
 
     assert len(rigid_part) == 3555
     assert len(movable_part) == 0
+
+
+def test_protonated_Nterm_residue():
+    f = open(nphe_ser_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("A:2", 0)],
+    )
+    # Asserts that the residues have been imported in a way that makes sense, and that all the
+    # private functions we expect to have run as expected.
+    assert len(polymer.monomers) == 2
+    assert len(polymer.get_ignored_monomers()) == 0
+    assert len(polymer.get_valid_monomers()) == 2
+    assert polymer.monomers["A:1"].residue_template_key == "NPHE"
+    assert polymer.monomers["A:2"].residue_template_key == "SER"
+
+    check_charge(polymer.monomers["A:1"], 1.0)
+    check_charge(polymer.monomers["A:2"], 0.0)
 
 
 def test_AHHY_padding():

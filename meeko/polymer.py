@@ -29,6 +29,7 @@ from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
 from .utils.rdkitutils import _aux_altloc_mol_build
 from .utils.rdkitutils import covalent_radius
 from .utils.pdbutils import PDBAtomInfo
+from .utils.rdkitutils import getPdbInfoNoNull
 from .chemtempgen import export_chem_templates_to_json
 from .chemtempgen import build_noncovalent_CC
 from .chemtempgen import build_linked_CCs
@@ -1404,7 +1405,7 @@ class Polymer(BaseJSONParsable):
                     passed.append(i)
 
             # 3rd round
-            if len(passed) == 0: 
+            if len(passed) == 0 or any(all_stats["H_excess"][i] for i in passed): 
                 for i in range(len(candidate_templates)):
                     if (
                         all_stats["heavy_missing"][i]
@@ -1414,7 +1415,8 @@ class Polymer(BaseJSONParsable):
                         or len(all_stats["bonded_atoms_excess"][i])
                     ):
                         continue
-                    passed.append(i)
+                    if i not in passed:
+                        passed.append(i)
 
             if len(passed) == 0:
                 template_key = None
@@ -1453,20 +1455,24 @@ class Polymer(BaseJSONParsable):
                         best_idxs.append(index)
 
                 if len(best_idxs) > 1:
-                    tied = " ".join(candidate_template_keys[i] for i in best_idxs)
-                    m = f"for {residue_key=}, {len(passed)} have passed: "
-                    tkeys = [candidate_template_keys[i] for i in passed]
-                    m += f"{tkeys} and tied for fewest missing H: {tied} "
-                    raise RuntimeError(m)
-                elif len(best_idxs) == 0:
-                    raise RuntimeError("unexpected situation")
-                else:
-                    index = best_idxs[0]
-                    template_key = candidate_template_keys[index]
-                    template = residue_templates[template_key]
-                    mapping = mappings[index]
-                    H_miss = all_stats["H_missing"][index]
-                    log["chosen_by_fewest_missing_H"][residue_key] = template_key
+                    number_excess_H = [len(all_stats["H_excess"][index]) for index in passed]
+                    min_excess_H = min(number_excess_H)
+                    best_idxs = [index for index in passed if len(all_stats["H_excess"][index]) == min_excess_H]
+                    
+                    if len(best_idxs) > 1: 
+                        tied = " ".join(candidate_template_keys[i] for i in best_idxs)
+                        m = f"for {residue_key=}, {len(passed)} have passed: "
+                        tkeys = [candidate_template_keys[i] for i in passed]
+                        m += f"{tkeys} and tied for fewest missing and excess H: {tied} "
+
+                        raise RuntimeError(m)
+                
+                index = best_idxs[0]
+                template_key = candidate_template_keys[index]
+                template = residue_templates[template_key]
+                mapping = mappings[index]
+                H_miss = all_stats["H_missing"][index]
+                log["chosen_by_fewest_missing_H"][residue_key] = template_key
             if template is None:
                 rdkit_mol = None
                 atom_names = None
@@ -2695,13 +2701,21 @@ class ResidueTemplate(BaseJSONParsable):
         for atom in input_mol.GetAtoms():
             element = "H" if atom.GetAtomicNum() == 1 else "heavy"
             if atom.GetIdx() not in mapping_inv:
-                if element == "H": 
-                    nei_idx = atom.GetNeighbors()[0].GetIdx()
-                    if nei_idx in mapping_inv: 
-                        result[element]["excess"].append(mapping_inv[nei_idx])
-                    else:
-                        result[element]["excess"].append(-1)
-                else:
+                if element == "H":
+                    if atom.GetNeighbors(): 
+                        nei_idx = atom.GetNeighbors()[0].GetIdx()
+                        if nei_idx in mapping_inv: 
+                            result[element]["excess"].append(mapping_inv[nei_idx])
+                        else:
+                            result[element]["excess"].append(-1)
+                    else: # lone hydrogen found in monomer
+                        monomer_info = getPdbInfoNoNull(atom)
+                        if monomer_info:
+                            logger.warning(f"WARNING: Lone hydrogen is ignored: \n" 
+                                            f"  {monomer_info} \n")
+                        else:
+                            logger.warning(f"WARNING: A lone hydrogen is ignored during monomer-template matching. \n")
+                else: 
                     result[element]["excess"] += 1
         return result, mapping
 
