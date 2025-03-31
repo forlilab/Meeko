@@ -938,13 +938,13 @@ class Polymer:
             but the indices need to based on rdkit_mol. 
         """
         
-        # stitching all monomers by default
-        residues_to_add = residues_to_add or self.monomers.keys()
+        # stitching all valid monomers by default
+        valid_monomers = set(self.get_valid_monomers().keys())
+        residues_to_add = residues_to_add or valid_monomers
         residues_to_add = set(residues_to_add)
         bonds_to_use = bonds_to_use or {k: v for k, v in self.bonds.items() if k[0] in residues_to_add and k[1] in residues_to_add}
 
         # verify if requested monomers are valid (have rdkit_mol)
-        valid_monomers = set(self.get_valid_monomers().keys())
         invalid_monomers = residues_to_add - valid_monomers
         if invalid_monomers: 
             raise ValueError(f"Residue IDs not in valid monomers: {invalid_monomers}")
