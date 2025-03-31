@@ -16,6 +16,7 @@ pkgdir = pathlib.Path(meeko.__file__).parents[1]
 
 ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
 pqr_example = pkgdir / "test/polymer_data/1FAS_dry.pqr"
+nphe_ser_example = pkgdir / "test/polymer_data/NPHE_SER.pdb"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
@@ -122,6 +123,76 @@ def test_AHHY_all_static_residues():
 
     assert len(rigid_part) == 3555
     assert len(movable_part) == 0
+
+def test_AHHY_flex_residues():
+    f = open(ahhy_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+    )
+    polymer.flexibilize_sidechain("A:2", mk_prep)
+    # Asserts that the residues have been imported in a way that makes sense, and that all the
+    # private functions we expect to have run as expected.
+    assert len(polymer.monomers) == 4
+    assert len(polymer.get_ignored_monomers()) == 0
+    assert len(polymer.get_valid_monomers()) == 4
+    assert polymer.monomers["A:1"].residue_template_key == "ALA"
+    assert polymer.monomers["A:2"].residue_template_key == "HID"
+    assert polymer.monomers["A:3"].residue_template_key == "HIE"
+    assert polymer.monomers["A:4"].residue_template_key == "CTYR"
+
+    check_charge(polymer.monomers["A:1"], 0.0)
+    check_charge(polymer.monomers["A:2"], 0.0)
+    check_charge(polymer.monomers["A:3"], 0.0)
+    check_charge(polymer.monomers["A:4"], -1.0)
+
+    pdbqt_strings = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+    rigid_part, movable_part = pdbqt_strings
+
+    # remove newline chars because Windows/Unix differ
+    rigid_part = "".join(rigid_part.splitlines())
+
+    assert len(rigid_part) == 2923
+    assert len(movable_part) == 809
+
+    # and now with a fully rigid sidechain, to make sure it goes in rigid
+    rigid_prep = MoleculePreparation(
+        rigidify_bonds_smarts=["[*]~[*]"],
+        rigidify_bonds_indices=[(0, 1)],
+    )
+    polymer.monomers["A:2"].parameterize(rigid_prep, "A:2")
+    polymer.flexibilize_sidechain("A:2", rigid_prep)
+    pdbqt_strings = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+    rigid_part, movable_part = pdbqt_strings
+
+    # remove newline chars because Windows/Unix differ
+    rigid_part = "".join(rigid_part.splitlines())
+
+    assert len(rigid_part) == 3555
+    assert len(movable_part) == 0
+
+
+def test_protonated_Nterm_residue():
+    f = open(nphe_ser_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("A:2", 0)],
+    )
+    # Asserts that the residues have been imported in a way that makes sense, and that all the
+    # private functions we expect to have run as expected.
+    assert len(polymer.monomers) == 2
+    assert len(polymer.get_ignored_monomers()) == 0
+    assert len(polymer.get_valid_monomers()) == 2
+    assert polymer.monomers["A:1"].residue_template_key == "NPHE"
+    assert polymer.monomers["A:2"].residue_template_key == "SER"
+
+    check_charge(polymer.monomers["A:1"], 1.0)
+    check_charge(polymer.monomers["A:2"], 0.0)
 
 
 def test_AHHY_padding():
