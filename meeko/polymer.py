@@ -1996,9 +1996,9 @@ class Polymer(BaseJSONParsable):
                 requested_altloc,
                 default_altloc,
             )
-            pqr_charges_per_atom = [item[0] for item in blocks_qr[reskey]]
-            for atom, charge in zip(pdbmol.GetAtoms(), pqr_charges_per_atom):
-                atom.SetDoubleProp("PQRCharge", charge)
+            for atom, pqr_prop in zip(pdbmol.GetAtoms(), blocks_qr[reskey]):
+                atom.SetDoubleProp("PQRCharge", pqr_prop[0])
+                atom.SetDoubleProp("PQRRadius", pqr_prop[1])
 
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
