@@ -1149,6 +1149,14 @@ class Polymer(BaseJSONParsable):
             get_atomprop_from_raw = {"PQRCharge": 0.},
         )
 
+        if polymer.log["matched_with_H_anomaly"]:
+            msg = ""
+            for res_id, (template_name, h_info) in polymer.log["matched_with_H_anomaly"].items():
+                h_miss = h_info.get('H_miss', 0)
+                h_excess = h_info.get('H_excess', 0)
+                msg += f"Residue {res_id} matched with template '{template_name}' has H discrepancy: {h_miss} missing, {h_excess} excess. \n"
+            raise PolymerCreationError(msg + "These discrepancies may compromise the validity of the charge assignment from PQR, making the charges inapplicable to the processed receptor. \n")
+
         unmatched_res = polymer.get_ignored_monomers()
         handle_parsing_situations(
             unmatched_res,
@@ -1370,6 +1378,7 @@ class Polymer(BaseJSONParsable):
         log = {
             "chosen_by_fewest_missing_H": {},
             "chosen_by_default": {},
+            "matched_with_H_anomaly": {},
             "no_match": [],
             "no_mol": [],
             "msg": "",
@@ -1564,6 +1573,15 @@ class Polymer(BaseJSONParsable):
                 mapping = mappings[index]
                 H_miss = all_stats["H_missing"][index]
                 log["chosen_by_fewest_missing_H"][residue_key] = template_key
+
+            H_miss = all_stats["H_missing"][index]
+            H_excess = all_stats["H_excess"][index]
+            if H_miss or H_excess: 
+                log["matched_with_H_anomaly"][residue_key] = (
+                    template_key, 
+                    {"H_miss": H_miss, "H_excess": len(H_excess)}
+                )
+
             if template is None:
                 rdkit_mol = None
                 atom_names = None
