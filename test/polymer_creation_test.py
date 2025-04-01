@@ -467,3 +467,22 @@ def test_disulfide_adjacent():
         chem_templates,
         mk_prep,
     )
+
+def test_stitch_polymer():
+    with open(disulfide_adjacent, "r") as f:
+        pdb_text = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+    )
+    adjacent_disulfide = Chem.MolFromSmarts("S1CCNCCCS1")
+    disulfide_then_proline = Chem.MolFromSmarts("CSSCCC(=O)N1CCCC1")
+    stitched_mol = polymer.stitch()
+    assert stitched_mol.HasSubstructMatch(adjacent_disulfide)
+    assert stitched_mol.HasSubstructMatch(disulfide_then_proline)
+    # after serialization
+    polymer = Polymer.from_json(polymer.to_json())
+    stitched_mol = polymer.stitch()
+    assert stitched_mol.HasSubstructMatch(adjacent_disulfide)
+    assert stitched_mol.HasSubstructMatch(disulfide_then_proline)
