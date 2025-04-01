@@ -907,7 +907,6 @@ class Polymer:
             invmap2 = {j: i for i, j in monomer2.mapidx_to_raw.items()}
             _bonds[key] = [(invmap1[b[0]], invmap2[b[1]]) for b in bond_list]
         bonds = _bonds
-        self.bonds = bonds
 
         # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
         padded_mols = self._build_padded_mols(self.monomers, bonds, padders)
@@ -942,7 +941,17 @@ class Polymer:
         valid_monomers = set(self.get_valid_monomers().keys())
         residues_to_add = residues_to_add or valid_monomers
         residues_to_add = set(residues_to_add)
-        bonds_to_use = bonds_to_use or {k: v for k, v in self.bonds.items() if k[0] in residues_to_add and k[1] in residues_to_add}
+        if bonds_to_use is None:
+            bonds_to_use = {}
+            resid_to_rawmols = {res_id: (self.monomers[res_id].raw_rdkit_mol, self.monomers[res_id].input_resname) for res_id in residues_to_add}
+            bonds_indexed_in_raw = find_inter_mols_bonds(resid_to_rawmols)
+            invmaps = {
+                res_id: {j: i for i, j in self.monomers[res_id].mapidx_to_raw.items()}
+                for res_id in residues_to_add
+            }
+            for (res1, res2), bond_list in bonds_indexed_in_raw.items():
+                invmap1, invmap2 = invmaps[res1], invmaps[res2]
+                bonds_to_use[(res1, res2)] = [(invmap1[b[0]], invmap2[b[1]]) for b in bond_list]
 
         # verify if requested monomers are valid (have rdkit_mol)
         invalid_monomers = residues_to_add - valid_monomers
