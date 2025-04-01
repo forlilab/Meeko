@@ -941,6 +941,12 @@ class Polymer:
         valid_monomers = set(self.get_valid_monomers().keys())
         residues_to_add = residues_to_add or valid_monomers
         residues_to_add = set(residues_to_add)
+
+        # verify if requested monomers are valid (have rdkit_mol)
+        invalid_monomers = residues_to_add - valid_monomers
+        if invalid_monomers: 
+            raise ValueError(f"Residue IDs not in valid monomers: {invalid_monomers}")
+
         if bonds_to_use is None:
             bonds_to_use = {}
             resid_to_rawmols = {res_id: (self.monomers[res_id].raw_rdkit_mol, self.monomers[res_id].input_resname) for res_id in residues_to_add}
@@ -952,11 +958,6 @@ class Polymer:
             for (res1, res2), bond_list in bonds_indexed_in_raw.items():
                 invmap1, invmap2 = invmaps[res1], invmaps[res2]
                 bonds_to_use[(res1, res2)] = [(invmap1[b[0]], invmap2[b[1]]) for b in bond_list]
-
-        # verify if requested monomers are valid (have rdkit_mol)
-        invalid_monomers = residues_to_add - valid_monomers
-        if invalid_monomers: 
-            raise ValueError(f"Residue IDs not in valid monomers: {invalid_monomers}")
         
         # initialize mol and residue/bond tracking
         mol = Chem.Mol()
