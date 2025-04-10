@@ -20,12 +20,27 @@ import sys, logging
 logger = logging.getLogger(__name__)
 
 
+# Constants
 list_of_AD_elements_as_AtomicNum = list(covalent_radius.keys())
 metal_AtomicNums = {12, 20, 25, 26, 30}  # Mg: 12, Ca: 20, Mn: 25, Fe: 26, Zn: 30
 
 # Utility Functions
 def mol_contains_unexpected_element(mol: Chem.Mol, allowed_elements: list[str] = list_of_AD_elements_as_AtomicNum) -> bool:
-    """Check if mol contains unexpected elements"""
+    """
+    Check if mol contains unexpected elements
+    
+    Parameters
+    ---------
+    mol : Chem.Mol
+        Input molecule
+    allowed_elements : list[str]
+        List of allowed elements (atomic numbers)
+    
+    Returns
+    -------
+    bool
+        True if mol contains unexpected elements, False otherwise
+    """
     for atom in mol.GetAtoms():
         if atom.GetAtomicNum() not in allowed_elements:
             return True
@@ -33,7 +48,21 @@ def mol_contains_unexpected_element(mol: Chem.Mol, allowed_elements: list[str] =
 
 
 def get_atom_idx_by_names(mol: Chem.Mol, wanted_names: set[str] = set()) -> set[int]:
+    """
+    Get atom idx by atom names
     
+    Parameters
+    ----------
+    mol : Chem.Mol
+        Input molecule
+    wanted_names : set[str]
+        Set of atom names to search for
+    
+    Returns
+    -------
+    set[int]
+        Set of atom indices that match the wanted names
+    """
     if not wanted_names:
         return set()
     
@@ -47,7 +76,25 @@ def get_atom_idx_by_names(mol: Chem.Mol, wanted_names: set[str] = set()) -> set[
 def get_atom_idx_by_patterns(mol: Chem.Mol, allowed_smarts: str, 
                              wanted_smarts_loc: dict[str, set[int]] = None,
                              allow_multiple: bool=False) -> set[int]:
+    """
+    Get atom idx by patterns
     
+    Parameters
+    ----------
+    mol : Chem.Mol
+        Input molecule
+    allowed_smarts : str
+        Allowed SMARTS pattern
+    wanted_smarts_loc : dict[str, set[int]]
+        Dictionary mapping SMARTS patterns to sets of atom indices
+    allow_multiple : bool
+        Flag to allow multiple matches
+    
+    Returns
+    -------
+    set[int]
+        Set of atom indices that match the wanted patterns
+    """
     if wanted_smarts_loc is None:
         return set()
     
@@ -91,6 +138,24 @@ def embed(mol: Chem.Mol, allowed_smarts: str,
     (a) leaving_names: list of atom IDs (names), and
     (b) leaving_smarts_loc: dict to map substructure SMARTS patterns with 
     tuple of 0-based indicies for atoms to delete (restricted by allowed_smarts)
+
+    Parameters
+    ----------
+    mol : Chem.Mol
+        Input molecule
+    allowed_smarts : str
+        Allowed SMARTS pattern
+    leaving_names : set[str]
+        Set of atom names to remove
+    leaving_smarts_loc : dict[str, set[int]]
+        Dictionary mapping SMARTS patterns to sets of atom indices
+    alsoHs : bool
+        Flag to also remove H atoms bonded to the leaving atoms
+    
+    Returns
+    -------
+    Chem.Mol
+        Modified molecule with specified atoms removed
     """
     if leaving_names is None and leaving_smarts_loc is None:
         return mol
@@ -122,11 +187,30 @@ def embed(mol: Chem.Mol, allowed_smarts: str,
 def cap(mol: Chem.Mol, allowed_smarts: str, 
         capping_names: set[str] = None, capping_smarts_loc: dict[str, set[int]] = None, 
         protonate: bool = False) -> Chem.Mol:
-    """Add hydrogens to atoms with implicit hydrogens based on the union of
+    """
+    Add hydrogens to atoms with implicit hydrogens based on the union of
     (a) capping_names: list of atom IDs (names), and
     (b) capping_smarts_loc: dict to map substructure SMARTS patterns with 
-    tuple of 0-based indicies for atoms."""
-   
+    tuple of 0-based indicies for atoms.
+    
+    Parameters
+    ----------
+    mol : Chem.Mol
+        Input molecule
+    allowed_smarts : str
+        Allowed SMARTS pattern
+    capping_names : set[str]
+        Set of atom names to cap
+    capping_smarts_loc : dict[str, set[int]]
+        Dictionary mapping SMARTS patterns to sets of atom indices
+    protonate : bool
+        Flag to add a proton to the atom's formal charge
+    
+    Returns
+    -------
+    Chem.Mol
+        Modified molecule with specified atoms capped
+    """
     if capping_names is None and capping_smarts_loc is None:
         return mol
     
@@ -171,10 +255,23 @@ def cap(mol: Chem.Mol, allowed_smarts: str,
 
 
 def deprotonate(mol: Chem.Mol, acidic_proton_loc: dict[str, int] = None) -> Chem.Mol:
-    """Remove acidic protons from the molecule based on acidic_proton_loc"""
-    # acidic_proton_loc is a mapping 
-    # keys: smarts pattern of a fragment
-    # value: the index (order in smarts) of the leaving proton
+    """
+    Remove acidic protons from the molecule based on acidic_proton_loc
+    
+    Parameters
+    ----------
+    mol : Chem.Mol
+        Input molecule
+    acidic_proton_loc : dict[str, int]
+        Dictionary mapping SMARTS patterns to indices of acidic protons to remove
+        keys: smarts pattern of a fragment
+        value: the index (order in smarts) of the leaving proton
+    
+    Returns
+    -------
+    Chem.Mol
+        Modified molecule with specified protons removed
+    """
 
     if acidic_proton_loc is None:
         return mol
@@ -204,6 +301,19 @@ def deprotonate(mol: Chem.Mol, acidic_proton_loc: dict[str, int] = None) -> Chem
 
 
 def recharge(rwmol: Chem.RWMol) -> Chem.RWMol: 
+    """
+    Recharges the molecule by adjusting the formal charges of metal complexes and their coordinated atoms
+
+    Parameters
+    ----------
+    rwmol : Chem.RWMol
+        Input molecule
+    
+    Returns
+    -------
+    Chem.RWMol
+        Modified molecule with adjusted formal charges
+    """
     # Recharging metal complexes
     metal_atoms = set(atom for atom in rwmol.GetAtoms() if atom.GetAtomicNum() in metal_AtomicNums)
     coord_valence = {v: k for k, v_set in {
@@ -268,7 +378,19 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
 
 # Attribute Formatters
 def get_smiles_with_atom_names(mol: Chem.Mol) -> tuple[str, list[str]]:
-    """Generate SMILES with atom names in the order of SMILES output."""
+    """
+    Generate SMILES with atom names in the order of SMILES output
+    
+    Parameters
+    ----------
+    mol : Chem.Mol
+        Input molecule
+        
+    Returns
+    -------
+    tuple[str, list[str]]
+        Tuple containing the SMILES string and a list of atom names in the order of SMILES output
+    """
     # allHsExplicit may expose the implicit Hs of linker atoms to Smiles; the implicit Hs don't have names
     smiles_exh = Chem.MolToSmiles(mol, allHsExplicit=True)
 
@@ -285,7 +407,19 @@ def get_smiles_with_atom_names(mol: Chem.Mol) -> tuple[str, list[str]]:
 
 
 def get_pretty_smiles(smi: str) -> str: 
-    """Convert Smiles with allHsExplicit to pretty Smiles to be put on chem templates"""
+    """
+    Convert Smiles with allHsExplicit to pretty Smiles to be put on chem templates
+    
+    Parameters
+    ----------
+    smi : str
+        Input SMILES string
+        
+    Returns
+    -------
+    str
+        Pretty SMILES string with implicit Hs removed
+    """
     # collect the inside square brackets contents
     contents = set(re.findall(r'\[([^\]]+)\]', smi))
 
@@ -309,14 +443,21 @@ def get_pretty_smiles(smi: str) -> str:
     return smi
 
 class ChemicalComponent_LoggingControler:
+    """Context manager to control logging level for RDKit and Meeko during the creation of chemical components."""
 
     def __init__(self):
+        """
+        Initialize the logging controller.
+        
+        Sets the original logging level for RDKit and Meeko, and prepares a stream handler.
+        """
         self.original_level = logger.level
         self.rdkit_logger = RDLogger.logger()
         self.default_rdkit_level = RDLogger.WARNING
         self.handler = None
 
     def __enter__(self):
+        """Enter the context manager, setting the logging levels."""
         self.rdkit_logger.setLevel(RDLogger.CRITICAL)
         logger.setLevel(logging.WARNING)
         self.handler = logging.StreamHandler(sys.stdout)
@@ -324,13 +465,31 @@ class ChemicalComponent_LoggingControler:
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
+        """Exit the context manager, restoring the original logging levels."""
         self.rdkit_logger.setLevel(self.default_rdkit_level)
         logger.setLevel(self.original_level)
         logger.removeHandler(self.handler)
 
 
 class ChemicalComponent:
-
+    """
+    Class representing a chemical component with its properties and methods for manipulation.
+    
+    Attributes
+    ----------
+    rdkit_mol : Chem.Mol
+        The RDKit molecule object representing the chemical component.
+    resname : str
+        The residue name of the chemical component.
+    parent : str
+        The name of its parent chemical component (default is the same as resname).
+    smiles_exh : str
+        The SMILES representation of the chemical component with explicit hydrogens.
+    atom_name : list[str]
+        A list of atom names in the order of SMILES output.
+    link_labels : dict
+        A dictionary mapping atom indices to link labels (default is empty).
+    """
     def __init__(self, rdkit_mol: Chem.Mol, resname: str, smiles_exh: str, atom_name: list[str]):
         self.rdkit_mol = rdkit_mol
         self.resname = resname
@@ -346,8 +505,21 @@ class ChemicalComponent:
 
     @classmethod
     def from_cif(cls, source_cif: str, resname: str):
-        """Create ChemicalComponent from a chemical component dict file and a searchable residue name in file."""
+        """
+        Create ChemicalComponent from a chemical component dict file and a searchable residue name in file.
         
+        Parameters
+        ----------
+        source_cif : str
+            Path to the CIF file containing the chemical component data.
+        resname : str
+            The residue name to search for in the CIF file.
+        
+        Returns
+        -------
+        ChemicalComponent
+            An instance of the ChemicalComponent class.
+        """
         # Locate block by resname
         doc = gemmi.cif.read(source_cif)
         block = doc.find_block(resname)
@@ -443,18 +615,66 @@ class ChemicalComponent:
 
 
     def make_canonical(self, acidic_proton_loc):
-        """Deprotonate acidic groups til the canonical (most deprotonated) state."""
+        """
+        Deprotonate acidic groups til the canonical (most deprotonated) state.
+        
+        Parameters
+        ----------
+        acidic_proton_loc : dict[str, int]
+            Dictionary mapping SMARTS patterns to indices of acidic protons to remove
+            keys: smarts pattern of a fragment
+            value: the index (order in smarts) of the leaving proton
+        
+        Returns
+        -------
+        ChemicalComponent
+            The modified ChemicalComponent instance with the canonicalized molecule.
+        """
         self.rdkit_mol = deprotonate(self.rdkit_mol, acidic_proton_loc = acidic_proton_loc)
         return self
 
     def make_embedded(self, allowed_smarts, leaving_names = None, leaving_smarts_loc = None):
-        """Remove leaving atoms from the molecule by atom names and/or patterns."""
+        """
+        Remove leaving atoms from the molecule by atom names and/or patterns.
+        
+        Parameters
+        ----------
+        allowed_smarts : str
+            Allowed SMARTS pattern
+        leaving_names : set[str]
+            Set of atom names to remove
+        leaving_smarts_loc : dict[str, set[int]]
+            Dictionary mapping SMARTS patterns to sets of atom indices
+        
+        Returns
+        -------
+        ChemicalComponent
+            The modified ChemicalComponent instance with the embedded molecule.
+        """
         self.rdkit_mol = embed(self.rdkit_mol, allowed_smarts = allowed_smarts, 
                                leaving_names = leaving_names, leaving_smarts_loc = leaving_smarts_loc)
         return self
         
     def make_capped(self, allowed_smarts, capping_names = None, capping_smarts_loc = None, protonate = None):
-        """Build and name explicit hydrogens for atoms with implicit Hs by atom names and/or patterns."""
+        """
+        Build and name explicit hydrogens for atoms with implicit Hs by atom names and/or patterns.
+        
+        Parameters
+        ----------
+        allowed_smarts : str
+            Allowed SMARTS pattern
+        capping_names : set[str]
+            Set of atom names to cap
+        capping_smarts_loc : dict[str, set[int]]
+            Dictionary mapping SMARTS patterns to sets of atom indices
+        protonate : bool
+            Flag to add a proton to the atom's formal charge
+
+        Returns
+        -------
+        ChemicalComponent
+            The modified ChemicalComponent instance with the capped molecule.
+        """
         self.rdkit_mol = cap(self.rdkit_mol, allowed_smarts = allowed_smarts, 
                              capping_names = capping_names, capping_smarts_loc = capping_smarts_loc,
                              protonate = protonate)
@@ -467,7 +687,16 @@ class ChemicalComponent:
         return self
 
     def make_link_labels_from_patterns(self, pattern_to_label_mapping = {}):
-        """Map patterns to link labels based on a given mapping."""
+        """
+        Map patterns to link labels based on a given mapping.
+        
+        Parameters
+        ----------
+        pattern_to_label_mapping : dict[str, str]
+            Dictionary mapping patterns to link labels
+            keys: pattern to search for in the molecule
+            values: label to assign to the atom matching the pattern
+        """
         if not pattern_to_label_mapping:
             return self
 
@@ -487,7 +716,21 @@ class ChemicalComponent:
         return self
     
     def make_link_labels_from_names(self, name_to_label_mapping = {}):
-        """Map atom names to link labels based on a given mapping."""
+        """
+        Map atom names to link labels based on a given mapping.
+
+        Parameters
+        ----------
+        name_to_label_mapping : dict[str, str]
+            Dictionary mapping atom names to link labels
+            keys: atom names to search for in the molecule
+            values: label to assign to the atom matching the name
+
+        Returns
+        -------
+        ChemicalComponent
+            The modified ChemicalComponent instance with updated link labels.
+        """
         if not name_to_label_mapping:
             return self
 
@@ -500,7 +743,11 @@ class ChemicalComponent:
         return self
     
     def ResidueTemplate_check(self) -> bool:
-        # ResidueTemplate.check from polymer
+        """
+        Check if the chemical component is a valid residue template.
+
+        This is the same ResidueTemplate.check from meeko.polymer
+        """ 
         ps = Chem.SmilesParserParams()
         ps.removeHs = False
         mol = Chem.MolFromSmiles(self.smiles_exh, ps)
@@ -526,8 +773,21 @@ class ChemicalComponent:
 
 # Export/Writer Function
 def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: str=""):
-    """Export list of chem templates to json"""
-
+    """
+    Export list of chem templates to json
+    
+    Parameters
+    ----------
+    cc_list : list[ChemicalComponent]
+        List of ChemicalComponent instances to export
+    json_fname : str
+        Filename for the output JSON file (default is empty string, which prints to console)
+        
+    Returns
+    -------
+    str
+        JSON string representation of the chemical templates
+    """
     basenames = [cc.parent for cc in cc_list]
     ambiguous_dict = {basename: [] for basename in basenames}
     for cc in cc_list:
@@ -576,7 +836,28 @@ def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: 
 
 
 def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str: 
+    """
+    Fetch a CIF file from the RCSB PDB website for a given residue name.
+
+    Parameters
+    ----------
+    resname : str
+        The residue name to fetch from the PDB.
+    max_retries : int
+        Maximum number of retries for downloading the file (default is 5).
+    backoff_factor : int
+        Factor to increase the wait time between retries (default is 2).
     
+    Returns
+    -------
+    str
+        Path to the downloaded CIF file.
+
+    Raises
+    -------
+    RuntimeError
+        If the ligand is not available from rcsb.org or if the maximum number of retries is reached.
+    """
     url = f"https://files.rcsb.org/ligands/download/{resname}.cif"
     file_path = f"{resname}.cif"
     for retry in range(max_retries):
@@ -604,7 +885,7 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
                 err = f"Max retries reached. Could not download CIF file for {resname}. Error: {e}"
                 raise RuntimeError(err) from e
 
-# Constants for deprotonate
+# Default chemical groups for deprotonate
 acidic_proton_loc_canonical = {
         # any carboxylic acid, sulfuric/sulfonic acid/ester, phosphoric/phosphinic acid/ester
         '[H][O]['+atom+'](=O)': 0 for atom in ('CX3', 'SX4', 'SX3', 'PX4', 'PX3')
@@ -615,9 +896,21 @@ acidic_proton_loc_canonical = {
         '[H][SX2][a]': 0, # thiophenol
     }
 
-# Make free (noncovalent) CC
+# Standard pipelines
 def build_noncovalent_CC(basename: str) -> ChemicalComponent: 
+    """
+    Build a noncovalent chemical component from a CIF file.
 
+    Parameters
+    ----------
+    basename : str
+        The name of the chemical component to build.
+    
+    Returns
+    -------
+    ChemicalComponent
+        The constructed ChemicalComponent instance.
+    """
     with ChemicalComponent_LoggingControler(): 
         cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename), basename)
         if cc_from_cif is None:
@@ -648,52 +941,78 @@ def add_variants(cc_orig: ChemicalComponent, cc_list: list[ChemicalComponent] = 
                  embed_allowed_smarts: str = None, 
                  cap_allowed_smarts: str = None, cap_protonate: bool = False, 
                  pattern_to_label_mapping_standard = dict[str, str], 
-                 variant_dict = dict[str, tuple]) -> list[ChemicalComponent]: 
+                 variant_dict = dict[str, tuple]) -> list[ChemicalComponent]:
+    """
+    Add variants to a chemical component based on the provided variant dictionary.
 
-        for suffix in variant_dict:
-            cc = copy.deepcopy(cc_orig)
-            cc.resname += suffix
-            logger.info(f"*** using CCD residue {cc.parent} to construct {cc.resname} ***")
+    Parameters
+    ----------
+    cc_orig : ChemicalComponent
+        The original chemical component to which variants will be added.
+    cc_list : list[ChemicalComponent]
+        List of existing chemical components to check for redundancy (default is empty list).
+    embed_allowed_smarts : str
+        Allowed SMARTS pattern for embedding (default is None).
+    cap_allowed_smarts : str
+        Allowed SMARTS pattern for capping (default is None).
+    cap_protonate : bool
+        Flag to add a proton to the atom's formal charge (default is False).
+    pattern_to_label_mapping_standard : dict[str, str]
+        Dictionary mapping patterns to link labels (default is empty dictionary).
+    variant_dict : dict[str, tuple]
+        Dictionary mapping suffixes to tuples of embedding and capping SMARTS patterns.
+        keys: suffixes for the variants
+        values: tuples containing the embedding and capping SMARTS patterns (embedding smarts, capping smarts)
+    
+    Returns
+    -------
+    list[ChemicalComponent]
+        List of ChemicalComponent instances with the added variants.
+    """
+    for suffix in variant_dict:
+        cc = copy.deepcopy(cc_orig)
+        cc.resname += suffix
+        logger.info(f"*** using CCD residue {cc.parent} to construct {cc.resname} ***")
 
-            cc = (
-                cc
-                .make_canonical(acidic_proton_loc = acidic_proton_loc_canonical) 
-                .make_embedded(allowed_smarts = embed_allowed_smarts, 
-                            leaving_smarts_loc = variant_dict[suffix][0])
-                )
-            if len(rdmolops.GetMolFrags(cc.rdkit_mol))>1:
-                logger.warning(f"Molecule breaks into fragments during the deleterious editing of {cc.resname} -> skipping the vaiant... ")
-                continue
+        cc = (
+            cc
+            .make_canonical(acidic_proton_loc = acidic_proton_loc_canonical) 
+            .make_embedded(allowed_smarts = embed_allowed_smarts, 
+                        leaving_smarts_loc = variant_dict[suffix][0])
+            )
+        if len(rdmolops.GetMolFrags(cc.rdkit_mol))>1:
+            logger.warning(f"Molecule breaks into fragments during the deleterious editing of {cc.resname} -> skipping the vaiant... ")
+            continue
 
-            cc = (
-                cc
-                .make_capped(allowed_smarts = cap_allowed_smarts, 
-                            capping_smarts_loc = variant_dict[suffix][1],
-                            protonate = cap_protonate) 
-                .make_pretty_smiles()
-                .make_link_labels_from_patterns(pattern_to_label_mapping = pattern_to_label_mapping_standard)
-                )
+        cc = (
+            cc
+            .make_capped(allowed_smarts = cap_allowed_smarts, 
+                        capping_smarts_loc = variant_dict[suffix][1],
+                        protonate = cap_protonate) 
+            .make_pretty_smiles()
+            .make_link_labels_from_patterns(pattern_to_label_mapping = pattern_to_label_mapping_standard)
+            )
 
-            try:
-                cc.ResidueTemplate_check()
-            except Exception as e:
-                err = f"Template {cc.resname} Failed to pass ResidueTemplate check. Error: {e}"
-                logger.error(err)
-                continue
+        try:
+            cc.ResidueTemplate_check()
+        except Exception as e:
+            err = f"Template {cc.resname} Failed to pass ResidueTemplate check. Error: {e}"
+            logger.error(err)
+            continue
             
-            # Check redundancy
-            if any(cc == other_variant for other_variant in cc_list):
-                logger.error(f"Template Failed to pass redundancy check -> skipping the template... ")
-                continue
+        # Check redundancy
+        if any(cc == other_variant for other_variant in cc_list):
+            logger.error(f"Template Failed to pass redundancy check -> skipping the template... ")
+            continue
 
-            cc_list.append(cc)
-            logger.info(f"*** finish making {cc.resname} ***")
+        cc_list.append(cc)
+        logger.info(f"*** finish making {cc.resname} ***")
 
-        return cc_list
+    return cc_list
 
-
+# Default recipes
 class AA_recipe: 
-
+    """Class representing the recipe for amino acids"""
     embed_allowed_smarts = "[NX3]([H])([H])[CX4][CX3](=O)[O]"
     cap_allowed_smarts = "[NX3][CX4][CX3](=O)"
     cap_protonate = True
@@ -704,9 +1023,9 @@ class AA_recipe:
             "_N": ({"[NX3]([H])([H])[CX4][CX3](=O)[O]": {6}}, {"[NX3][CX4][CX3](=O)": {0}}), # N-term amino acid
             "_C": ({"[NX3]([H])([H])[CX4][CX3](=O)[O]": {1}}, None), # C-term amino acid
         }
-    
-class NA_recipe: 
 
+class NA_recipe: 
+    """Class representing the recipe for nucleic acids"""
     embed_allowed_smarts = "[O][PX4](=O)([O])[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]"
     cap_allowed_smarts = "[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]"
     cap_protonate = False
@@ -722,6 +1041,31 @@ def build_linked_CCs(basename: str, embed_allowed_smarts: str = None,
                      cap_allowed_smarts: str = None, cap_protonate: bool = False, 
                      pattern_to_label_mapping_standard = dict[str, str], 
                      variant_dict = dict[str, tuple]) -> list[ChemicalComponent]: 
+    """
+    Build a linked chemical component from a CIF file.
+
+    Parameters
+    ----------
+    basename : str
+        The name of the chemical component to build.
+    embed_allowed_smarts : str
+        Allowed SMARTS pattern for embedding (default is None).
+    cap_allowed_smarts : str
+        Allowed SMARTS pattern for capping (default is None).
+    cap_protonate : bool
+        Flag to add a proton to the atom's formal charge (default is False).
+    pattern_to_label_mapping_standard : dict[str, str]
+        Dictionary mapping patterns to link labels (default is empty dictionary).
+    variant_dict : dict[str, tuple]
+        Dictionary mapping suffixes to tuples of embedding and capping SMARTS patterns.
+        keys: suffixes for the variants
+        values: tuples containing the embedding and capping SMARTS patterns (embedding smarts, capping smarts)
+    
+    Returns
+    -------
+    list[ChemicalComponent]
+        List of ChemicalComponent instances with the added variants.
+    """
 
     with ChemicalComponent_LoggingControler(): 
         cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename), basename)
@@ -768,5 +1112,5 @@ def build_linked_CCs(basename: str, embed_allowed_smarts: str = None,
             
     return cc_variants
 
-
+# Not implemented: 
 # XXX read from prepared? enumerate in stepwise? all protonation state variants, alter charge and update smiles/idx
