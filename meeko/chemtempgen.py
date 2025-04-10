@@ -272,7 +272,6 @@ def deprotonate(mol: Chem.Mol, acidic_proton_loc: dict[str, int] = None) -> Chem
     Chem.Mol
         Modified molecule with specified protons removed
     """
-
     if acidic_proton_loc is None:
         return mol
 
@@ -490,7 +489,22 @@ class ChemicalComponent:
     link_labels : dict
         A dictionary mapping atom indices to link labels (default is empty).
     """
+    
     def __init__(self, rdkit_mol: Chem.Mol, resname: str, smiles_exh: str, atom_name: list[str]):
+        """
+        Initialize a ChemicalComponent instance.
+        
+        Parameters
+        ----------
+        rdkit_mol : Chem.Mol
+            The RDKit molecule object representing the chemical component.
+        resname : str
+            The residue name of the chemical component.
+        smiles_exh : str
+            The SMILES representation of the chemical component with explicit hydrogens.
+        atom_name : list[str]
+            A list of atom names in the order of SMILES output.
+        """
         self.rdkit_mol = rdkit_mol
         self.resname = resname
         self.parent = resname # default parent to itself
@@ -499,6 +513,7 @@ class ChemicalComponent:
         self.link_labels = {} # default to empty dict (free molecular form)
 
     def __eq__(self, other):
+        """Check equality of two ChemicalComponent instances based on their SMILES and atom names."""
         if isinstance(other, ChemicalComponent):
             return self.smiles_exh == other.smiles_exh and self.atom_name == other.atom_name
         return False
@@ -1013,6 +1028,7 @@ def add_variants(cc_orig: ChemicalComponent, cc_list: list[ChemicalComponent] = 
 # Default recipes
 class AA_recipe: 
     """Class representing the recipe for amino acids"""
+
     embed_allowed_smarts = "[NX3]([H])([H])[CX4][CX3](=O)[O]"
     cap_allowed_smarts = "[NX3][CX4][CX3](=O)"
     cap_protonate = True
@@ -1026,6 +1042,7 @@ class AA_recipe:
 
 class NA_recipe: 
     """Class representing the recipe for nucleic acids"""
+
     embed_allowed_smarts = "[O][PX4](=O)([O])[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2][H]"
     cap_allowed_smarts = "[OX2][CX4][CX4]1[OX2][CX4][CX4][CX4]1[OX2]"
     cap_protonate = False
@@ -1066,7 +1083,6 @@ def build_linked_CCs(basename: str, embed_allowed_smarts: str = None,
     list[ChemicalComponent]
         List of ChemicalComponent instances with the added variants.
     """
-
     with ChemicalComponent_LoggingControler(): 
         cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename), basename)
         if cc_from_cif is None:
