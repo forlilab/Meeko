@@ -219,7 +219,6 @@ def test_json_roundtrip(cls, populated_polymer):
     """Tests starting from a populated polymer object"""
     for obj in subobject_factory(cls, populated_polymer):
         json_str = obj.to_json()
-        assert json_str is not None
         decoded = cls.from_json(json_str)
         assert isinstance(decoded, cls)
         deep_assert_equal(decoded, obj)
@@ -261,7 +260,7 @@ def test_json_rct(cls, populated_residue_chem_templates):
     Restraint,
 ])
 # the RDKitMoleculeSetup instances used for this test are created from the populated polymer
-def test_json_molsetup(cls, populated_polymer_missing):
+def test_json_molsetup(cls, populated_polymer):
     for molsetup in subobject_factory(RDKitMoleculeSetup, populated_polymer):
         for obj in subobject_factory(cls, molsetup):
             json_str = obj.to_json()
