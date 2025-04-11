@@ -1,41 +1,37 @@
-import collections
-import json
-import meeko
 import numpy as np
 import pathlib
 import pytest
+from rdkit import Chem
+from rdkit.Chem import rdChemReactions
+import meeko
+from meeko import MoleculePreparation
 
+# JSONParsable classes subject to serialization tests
 from meeko import (
     Monomer,
     Polymer,
-    MoleculePreparation,
-    MoleculeSetup,
     RDKitMoleculeSetup,
     ResiduePadder,
     ResidueTemplate,
     ResidueChemTemplates,
-    PDBQTWriterLegacy,
 )
+from meeko.molsetup import Atom, Bond, Ring, Restraint
 
-from meeko import polymer
-from meeko.molsetup import Atom, Bond, Ring, RingClosureInfo, Restraint
+# Registry of class : set of attributes to skip for testing
+EQUALITY_SKIP_FIELDS = { 
+    RDKitMoleculeSetup: {"atom_true_count" },
+    Monomer: {"template", "link_labels"},
+}
 
-from rdkit import Chem
-from rdkit.Chem import rdChemReactions
-
-from meeko.utils.pdbutils import PDBAtomInfo
-
+# Optional dependency for test_dihedral_equality
 try:
     import openforcefields
     _got_openff = True
 except ImportError as err:
     _got_openff = False
 
-# from ..meeko.utils.pdbutils import PDBAtomInfo
-
+# Test data: starting files for polymer creation
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
-
-# Test Data
 ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
@@ -49,18 +45,19 @@ mk_prep = MoleculePreparation()
 # region Fixtures
 @pytest.fixture
 def populated_polymer():
-    file = open(ahhy_example)
-    pdb_str = file.read()
+    """fixture for a populated polymer object"""
+    with open(ahhy_example) as file:
+        pdb_str = file.read()
     polymer = Polymer.from_pdb_string(
         pdb_str, chem_templates, mk_prep, blunt_ends=[("A:1", 0)]
     )
     return polymer
 
-
 @pytest.fixture
 def populated_polymer_missing():
-    file = open(just_one_ALA_missing)
-    pdb_str = file.read()
+    """fixture for a populated polymer object, with one residue missing"""
+    with open(just_one_ALA_missing) as file: 
+        pdb_str = file.read()
     polymer = Polymer.from_pdb_string(
         pdb_str,
         chem_templates,
@@ -72,80 +69,33 @@ def populated_polymer_missing():
 
 @pytest.fixture
 def populated_residue_chem_templates():
+    """fixture for a populated ResidueChemTemplates object from default"""
     return ResidueChemTemplates.create_from_defaults()
 # endregion
 
-# region Standard Tests
-EQUALITY_SKIP_FIELDS = { # Registry of attributes to skip per class
-    RDKitMoleculeSetup: {"atom_true_count" },
-    Monomer: {"template", "link_labels"},
-}
 
-def deep_assert_equal(decoded, original, path="root"):
-    """Recursively compares two objects with support for type-aware handling and skip lists."""
-    if type(decoded) != type(original):
-        raise AssertionError(f"[{path}] Type mismatch: {type(decoded)} != {type(original)}")
-
-    # Basic types
-    if isinstance(decoded, (int, float, bool, str)):
-        assert decoded == original, f"[{path}] Value mismatch: {decoded} != {original}"
-        return
-
-    # Dicts
-    if isinstance(decoded, dict):
-        assert decoded.keys() == original.keys(), f"[{path}] Dict keys mismatch"
-        for key in decoded:
-            deep_assert_equal(decoded[key], original[key], path=f"{path}.{key}")
-        return
-
-    # Lists or Tuples
-    if isinstance(decoded, (list, tuple)):
-        assert len(decoded) == len(original), f"[{path}] Length mismatch"
-        for i, (d_item, o_item) in enumerate(zip(decoded, original)):
-            deep_assert_equal(d_item, o_item, path=f"{path}[{i}]")
-        return
-
-    # Numpy arrays
-    if isinstance(decoded, np.ndarray):
-        assert np.allclose(decoded, original), f"[{path}] Numpy arrays not equal"
-        return
-
-    # RDKit Molecules
-    if isinstance(decoded, Chem.Mol):
-        decoded_smiles = Chem.MolToSmiles(decoded)
-        original_smiles = Chem.MolToSmiles(original)
-        if decoded_smiles != original_smiles:
-            print(f"[DEBUG] Mol mismatch at {path}")
-            print(f"Original: {original_smiles}")
-            print(f"Decoded:  {decoded_smiles}")
-            #import pdb; pdb.set_trace()  # Optional: step through interactively
-        assert decoded_smiles == original_smiles, f"[{path}] Mol SMILES mismatch"
-
-    # RDKit Reactions
-    if isinstance(decoded, rdChemReactions.ChemicalReaction):
-        assert rdChemReactions.ReactionToSmarts(decoded) == rdChemReactions.ReactionToSmarts(original), f"[{path}] Reaction SMARTS mismatch"
-        return
-
-    # Custom objects with attributes
-    if hasattr(decoded, "__dict__"):
-        cls = type(decoded)
-        skip_attrs = EQUALITY_SKIP_FIELDS.get(cls, set())
-
-        for attr in vars(original):
-            if attr in skip_attrs:
-                continue
-            if not hasattr(decoded, attr):
-                raise AssertionError(f"[{path}] Missing attribute: {attr}")
-            decoded_val = getattr(decoded, attr)
-            original_val = getattr(original, attr)
-            deep_assert_equal(decoded_val, original_val, path=f"{path}.{attr}")
-        return
-
-    # Fallback
-    assert decoded == original, f"[{path}] Fallback mismatch: {decoded} != {original}"
-
-# region Standard Tests
+# region Helper Functions
 def subobject_factory(cls, root):
+    """
+    Factory function to create subobjects based on the class and root object.
+
+    Parameters
+    ----------
+    cls : type
+        The class of the subobject to create.
+    root : object
+        The root object from which to create the subobject.
+    
+    Returns
+    -------
+    iterable
+        An iterable of subobjects of the specified class.
+    
+    Raises
+    ------
+    ValueError
+        If the class or root object is not recognized by given schema.
+    """
     # Polymer-based hierarchy
     if isinstance(root, Polymer):
         if cls is Polymer:
@@ -179,18 +129,102 @@ def subobject_factory(cls, root):
 
     raise ValueError(f"Unexpected class or root: {cls}, {type(root)}")
 
+def deep_assert_equal(decoded, original, path="root"):
+    """Recursively compares two objects with support for type-aware handling and skip lists.
+    
+    Parameters
+    ----------
+    decoded : object
+        The decoded object to compare.
+    original : object
+        The original object to compare against.
+    path : str
+        The current path in the object hierarchy for error reporting.
+    
+    Raises
+    ------
+    AssertionError
+        If the objects are not equal or if there are type mismatches.
+    """
+    if type(decoded) != type(original):
+        raise AssertionError(f"[{path}] Type mismatch: {type(decoded)} != {type(original)}")
+
+    # Basic types
+    if isinstance(decoded, (int, float, bool, str)):
+        assert decoded == original, f"[{path}] Value mismatch: {decoded} != {original}"
+        return
+
+    # Dicts
+    if isinstance(decoded, dict):
+        assert decoded.keys() == original.keys(), f"[{path}] Dict keys mismatch"
+        for key in decoded:
+            deep_assert_equal(decoded[key], original[key], path=f"{path}.{key}")
+        return
+
+    # Lists or Tuples
+    if isinstance(decoded, (list, tuple)):
+        assert len(decoded) == len(original), f"[{path}] Length mismatch"
+        for i, (d_item, o_item) in enumerate(zip(decoded, original)):
+            deep_assert_equal(d_item, o_item, path=f"{path}[{i}]")
+        return
+
+    # Numpy arrays
+    if isinstance(decoded, np.ndarray):
+        assert np.allclose(decoded, original), f"[{path}] Numpy arrays not equal"
+        return
+
+    # RDKit Molecules
+    if isinstance(decoded, Chem.Mol):
+        decoded_smiles = Chem.MolToSmiles(decoded)
+        original_smiles = Chem.MolToSmiles(original)
+        assert decoded_smiles == original_smiles, f"[{path}] Mol SMILES mismatch"
+        return
+
+    # RDKit Reactions
+    if isinstance(decoded, rdChemReactions.ChemicalReaction):
+        assert rdChemReactions.ReactionToSmarts(decoded) == rdChemReactions.ReactionToSmarts(original), f"[{path}] Reaction SMARTS mismatch"
+        return
+
+    # Custom objects with attributes
+    if hasattr(decoded, "__dict__"):
+        cls = type(decoded)
+        skip_attrs = EQUALITY_SKIP_FIELDS.get(cls, set())
+
+        for attr in vars(original):
+            if attr in skip_attrs:
+                continue
+            if not hasattr(decoded, attr):
+                raise AssertionError(f"[{path}] Missing attribute: {attr}")
+            decoded_val = getattr(decoded, attr)
+            original_val = getattr(original, attr)
+            deep_assert_equal(decoded_val, original_val, path=f"{path}.{attr}")
+        return
+
+    # Fallback
+    assert decoded == original, f"[{path}] Fallback mismatch: {decoded} != {original}"
+    return
+# endregion
+
+
+# region Hierachical Tests
+
+# iterate over nested classes in the Polymer hierarchy
 @pytest.mark.parametrize("cls", [
     Polymer,
     Monomer,
     RDKitMoleculeSetup,
 ])
+# check for seralization/deserialization and deep equality
 def test_json_roundtrip(cls, populated_polymer):
+    """Tests starting from a populated polymer object"""
     for obj in subobject_factory(cls, populated_polymer):
         json_str = obj.to_json()
+        assert json_str is not None
         decoded = cls.from_json(json_str)
         assert isinstance(decoded, cls)
         deep_assert_equal(decoded, obj)
 
+# same test for a polymer with missing residues
 @pytest.mark.parametrize("cls", [
     Polymer,
     Monomer,
@@ -205,6 +239,7 @@ def test_json_roundtrip_missing(cls, populated_polymer_missing):
         assert isinstance(decoded, cls)
         deep_assert_equal(decoded, obj)
 
+# same test but starting from the default ResidueChemTemplates object
 @pytest.mark.parametrize("cls", [
     ResidueChemTemplates,
     ResidueTemplate,
@@ -217,6 +252,7 @@ def test_json_rct(cls, populated_residue_chem_templates):
         assert isinstance(decoded, cls)
         deep_assert_equal(decoded, obj)
 
+# same test but iterating over the RDKitMoleculeSetup hierarchy
 @pytest.mark.parametrize("cls", [
     RDKitMoleculeSetup,
     Atom,
@@ -224,14 +260,14 @@ def test_json_rct(cls, populated_residue_chem_templates):
     Ring,
     Restraint,
 ])
-def test_json_molsetup(cls, populated_polymer):
+# the RDKitMoleculeSetup instances used for this test are created from the populated polymer
+def test_json_molsetup(cls, populated_polymer_missing):
     for molsetup in subobject_factory(RDKitMoleculeSetup, populated_polymer):
         for obj in subobject_factory(cls, molsetup):
             json_str = obj.to_json()
             decoded = cls.from_json(json_str)
             assert isinstance(decoded, cls)
             deep_assert_equal(decoded, obj)
-
 # endregion
 
 # region Other Tests
