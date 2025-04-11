@@ -2339,6 +2339,8 @@ class ResiduePadder(BaseJSONParsable):
     ----------
     rxn : rdChemReactions.ChemicalReaction
         Reaction SMARTS of a single-reactant, single-product reaction for padding.
+    adjacent_smarts : str
+        SMARTS pattern for identifying atoms in the adjacent residue to copy positions from.
     adjacent_smartsmol : Chem.Mol
         SMARTS molecule with mapping numbers to copy atom positions from part of adjacent residue.
     adjacent_smartsmol_mapidx : list
@@ -2382,12 +2384,14 @@ class ResiduePadder(BaseJSONParsable):
 
         # Fill in adjacent_smartsmol_mapidx
         if adjacent_res_smarts is None:
+            self.adjacent_smarts = None
             self.adjacent_smartsmol = None
             self.adjacent_smartsmol_mapidx = None
             return
 
-        # Ensure adjacent_res_smarts is None or a valid SMARTS        
-        self.adjacent_smartsmol = self._initialize_adj_smartsmol(adjacent_res_smarts)
+        # Ensure adjacent_res_smarts is None or a valid SMARTS 
+        self.adjacent_smarts = adjacent_res_smarts 
+        self.adjacent_smartsmol = self._initialize_adj_smartsmol(self.adjacent_smarts)
 
         # Ensure the mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
         self._check_adj_smarts(self.rxn, self.adjacent_smartsmol)
@@ -2586,7 +2590,7 @@ class ResiduePadder(BaseJSONParsable):
     def json_encoder(cls, obj: "ResiduePadder") -> Optional[dict[str, Any]]:
         output_dict = {
             "rxn_smarts": rdChemReactions.ReactionToSmarts(obj.rxn),
-            "adjacent_res_smarts": serialize_optional(Chem.MolToSmarts, obj.adjacent_smartsmol),
+            "adjacent_res_smarts": obj.adjacent_smarts,
             "auto_blunt": obj.auto_blunt,
         }
         # we are not serializing the adjacent_smartsmol_mapidx as that will
