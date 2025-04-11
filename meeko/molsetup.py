@@ -1567,7 +1567,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             int(k): [string_to_tuple(t) for t in v]
             for k, v in obj["atom_to_ring_id"].items()
         }
-        rdkit_molsetup.rmsd_symmetry_indices = list(map(string_to_tuple, obj["rmsd_symmetry_indices"]))
+        rdkit_molsetup.rmsd_symmetry_indices = tuple(map(string_to_tuple, obj["rmsd_symmetry_indices"]))
         return rdkit_molsetup
     # endregion
 
