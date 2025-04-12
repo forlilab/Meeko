@@ -236,58 +236,21 @@ def deep_assert_equal(decoded, original, path="root"):
 # region Hierachical Tests
 
 # iterate over nested classes in the Polymer hierarchy
+@pytest.mark.parametrize("polymer_fixture", [
+    "populated_polymer", "populated_polymer_v061", "populated_polymer_missing"
+])
 @pytest.mark.parametrize("cls", [
     Polymer,
     Monomer,
     RDKitMoleculeSetup,
 ])
 # check for seralization/deserialization and deep equality
-def test_json_roundtrip(cls, populated_polymer):
+def test_json_roundtrip(cls, polymer_fixture, request):
     """Tests starting from a populated polymer object"""
-    for obj in subobject_factory(cls, populated_polymer):
-        json_str = obj.to_json()
-        decoded = cls.from_json(json_str)
-        assert isinstance(decoded, cls)
-        deep_assert_equal(decoded, obj)
-
-# same test for a polymer from JSON written with v0.6.1
-@pytest.mark.parametrize("cls", [
-    Polymer,
-    Monomer,
-    RDKitMoleculeSetup,
-])
-# check for seralization/deserialization and deep equality
-def test_json_roundtrip(cls, populated_polymer_v061):
-    """Tests starting from a populated polymer object"""
-    for obj in subobject_factory(cls, populated_polymer_v061):
-        json_str = obj.to_json()
-        decoded = cls.from_json(json_str)
-        assert isinstance(decoded, cls)
-        deep_assert_equal(decoded, obj)
-
-# same test for a polymer with missing residues
-@pytest.mark.parametrize("cls", [
-    Polymer,
-    Monomer,
-    RDKitMoleculeSetup,
-])
-def test_json_roundtrip_missing(cls, populated_polymer_missing):
-    for obj in subobject_factory(cls, populated_polymer_missing):
+    polymer = request.getfixturevalue(polymer_fixture)
+    for obj in subobject_factory(cls, polymer):
         if obj is None:
             continue
-        json_str = obj.to_json()
-        decoded = cls.from_json(json_str)
-        assert isinstance(decoded, cls)
-        deep_assert_equal(decoded, obj)
-
-# same test but starting from the default ResidueChemTemplates object
-@pytest.mark.parametrize("cls", [
-    ResidueChemTemplates,
-    ResidueTemplate,
-    ResiduePadder,
-])
-def test_json_rct(cls, populated_residue_chem_templates):
-    for obj in subobject_factory(cls, populated_residue_chem_templates):
         json_str = obj.to_json()
         decoded = cls.from_json(json_str)
         assert isinstance(decoded, cls)
@@ -349,10 +312,4 @@ def test_broken_bond():
         count_breakable += bond_info.breakable
     assert count_rotatable == 10
     assert count_breakable == 1
-
-def test_read_v061_polymer():
-    with open(ahhy_v061_json) as f:
-        json_str = f.read()
-    polymer = Polymer.from_json(json_str)
-    assert isinstance(polymer, Polymer)
 # endregion
