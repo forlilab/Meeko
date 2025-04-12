@@ -5,6 +5,7 @@ from rdkit import Chem
 from rdkit.Chem import rdChemReactions
 import meeko
 from meeko import MoleculePreparation
+import warnings
 
 # JSONParsable classes subject to serialization tests
 from meeko import (
@@ -55,12 +56,12 @@ def populated_polymer():
 
 @pytest.fixture
 def populated_polymer_v061():
-    """fixture for a populated polymer object, with one residue missing"""
-    with open(ahhy_v061_json) as file:
-        pdb_str = file.read()
-    polymer = Polymer.from_pdb_string(
-        pdb_str, chem_templates, mk_prep, 
-    )
+    """fixture for a populated polymer object, from a v0.6.1 JSON file"""
+    with open(ahhy_v061_json) as f:
+        json_str = f.read()
+    polymer = Polymer.from_json(json_str)
+    if len(polymer.monomers) == 0:
+        raise ValueError("Polymer creation failed")
     return polymer
 
 @pytest.fixture
@@ -250,6 +251,23 @@ def test_json_roundtrip(cls, polymer_fixture, request):
     polymer = request.getfixturevalue(polymer_fixture)
     for obj in subobject_factory(cls, polymer):
         if obj is None:
+            warnings.warn(f"Subobject of type {cls.__name__} is None — skipping.", stacklevel=1)
+            continue
+        json_str = obj.to_json()
+        decoded = cls.from_json(json_str)
+        assert isinstance(decoded, cls)
+        deep_assert_equal(decoded, obj)
+
+# same test but starting from the default ResidueChemTemplates object
+@pytest.mark.parametrize("cls", [
+    ResidueChemTemplates,
+    ResidueTemplate,
+    ResiduePadder,
+])
+def test_json_rct(cls, populated_residue_chem_templates):
+    for obj in subobject_factory(cls, populated_residue_chem_templates):
+        if obj is None:
+            warnings.warn(f"Subobject of type {cls.__name__} is None — skipping.", stacklevel=1)
             continue
         json_str = obj.to_json()
         decoded = cls.from_json(json_str)
@@ -268,6 +286,9 @@ def test_json_roundtrip(cls, polymer_fixture, request):
 def test_json_molsetup(cls, populated_polymer):
     for molsetup in subobject_factory(RDKitMoleculeSetup, populated_polymer):
         for obj in subobject_factory(cls, molsetup):
+            if obj is None:
+                warnings.warn(f"Subobject of type {cls.__name__} is None — skipping.", stacklevel=1)
+                continue
             json_str = obj.to_json()
             decoded = cls.from_json(json_str)
             assert isinstance(decoded, cls)
