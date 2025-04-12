@@ -46,7 +46,7 @@ just_one_ALA_missing = (
 chem_templates = ResidueChemTemplates.create_from_defaults()
 mk_prep = MoleculePreparation()
 
-def read_v061_polymer():
+def test_read_v061_polymer():
     with open(ahhy_v061_json) as f:
         json_str = f.read()
     polymer = Polymer.from_json(json_str)
