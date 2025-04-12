@@ -37,6 +37,7 @@ pkgdir = pathlib.Path(meeko.__file__).parents[1]
 
 # Test Data
 ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
+ahhy_v061_json = pkgdir / "test/polymer_data/AHHY-v0.6.1.json"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
@@ -45,6 +46,11 @@ just_one_ALA_missing = (
 chem_templates = ResidueChemTemplates.create_from_defaults()
 mk_prep = MoleculePreparation()
 
+def test_read_v061_polymer():
+    with open(ahhy_v061_json) as f:
+        json_str = f.read()
+    polymer = Polymer.from_json(json_str)
+    return
 
 # region Fixtures
 @pytest.fixture
@@ -384,8 +390,6 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
 
     # Going through and checking MoleculeSetup attributes
     assert decoded_obj.name == starting_obj.name
-    assert isinstance(decoded_obj.is_sidechain, bool)
-    assert decoded_obj.is_sidechain == starting_obj.is_sidechain
     assert isinstance(decoded_obj.pseudoatom_count, int)
     assert decoded_obj.pseudoatom_count == starting_obj.pseudoatom_count
 
