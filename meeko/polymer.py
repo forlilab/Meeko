@@ -36,7 +36,6 @@ from .chemtempgen import build_linked_CCs
 
 import numpy as np
 
-data_path = files("meeko") / "data"
 periodic_table = Chem.GetPeriodicTable()
 
 try:
@@ -643,13 +642,18 @@ class ResidueChemTemplates(BaseJSONParsable):
                 res_template = ResidueTemplate.from_dict(value)
                 self.residue_templates[key] = res_template
         for link_label, value in data.get("padders", {}).items():
-            if overwrite or key not in self.padders:
-                padder = ResiduePadder.from_dict(data)
+            if overwrite or link_label not in self.padders:
+                padder = ResiduePadder.from_dict(value)
                 self.padders[link_label] = padder
         return
+    
+    @staticmethod
+    def _default_data_path():
+        return files("meeko") / "data"
 
     @staticmethod
-    def lookup_filename(filename, data_path):
+    def lookup_filename(filename, data_path = None):
+        data_path = data_path or ResidueChemTemplates._default_data_path()
         p = pathlib.Path(filename)
         if not p.exists():
             if (data_path / p).exists():
@@ -661,7 +665,8 @@ class ResidueChemTemplates(BaseJSONParsable):
         return filename
 
     @classmethod
-    def from_json_file(cls, filename):
+    def from_json_file(cls, filename, data_path = None):
+        data_path = data_path or ResidueChemTemplates._default_data_path()
         filename = cls.lookup_filename(filename, data_path)
         with open(filename) as f:
             jsonstr = f.read()
@@ -681,7 +686,8 @@ class ResidueChemTemplates(BaseJSONParsable):
     def create_from_defaults(cls):
         return cls.from_json_file("residue_chem_templates")
 
-    def add_json_file(self, filename):
+    def add_json_file(self, filename, data_path = None):
+        data_path = data_path or ResidueChemTemplates._default_data_path()
         filename = self.lookup_filename(filename, data_path)
         with open(filename) as f:
             jsonstr = f.read()
