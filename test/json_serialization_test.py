@@ -20,7 +20,6 @@ from meeko.molsetup import Atom, Bond, Ring, Restraint
 
 # Registry of class : set of attributes to skip for testing
 EQUALITY_SKIP_FIELDS = { 
-    RDKitMoleculeSetup: {"atom_true_count" },
     Monomer: {"template", "link_labels"},
 }
 

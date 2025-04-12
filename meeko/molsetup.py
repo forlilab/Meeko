@@ -1641,7 +1641,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         # functions
         molsetup = cls()
         molsetup.mol = mol
-        molsetup.atom_true_count = molsetup.get_num_mol_atoms()
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
         molsetup.init_atom(compute_gasteiger_charges, read_charges_from_prop, coords)
