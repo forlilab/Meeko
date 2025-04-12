@@ -37,7 +37,6 @@ ahhy_v061_json = pkgdir / "test/polymer_data/AHHY-v0.6.1.json"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
-NAKB_json = pkgdir / "meeko/data/NAKB_templates.json"
 
 # Polymer creation data
 chem_templates = ResidueChemTemplates.create_from_defaults()
@@ -51,6 +50,16 @@ def populated_polymer():
         pdb_str = file.read()
     polymer = Polymer.from_pdb_string(
         pdb_str, chem_templates, mk_prep, blunt_ends=[("A:1", 0)]
+    )
+    return polymer
+
+@pytest.fixture
+def populated_polymer_v061():
+    """fixture for a populated polymer object, with one residue missing"""
+    with open(ahhy_v061_json) as file:
+        pdb_str = file.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_str, chem_templates, mk_prep, 
     )
     return polymer
 
@@ -236,6 +245,21 @@ def deep_assert_equal(decoded, original, path="root"):
 def test_json_roundtrip(cls, populated_polymer):
     """Tests starting from a populated polymer object"""
     for obj in subobject_factory(cls, populated_polymer):
+        json_str = obj.to_json()
+        decoded = cls.from_json(json_str)
+        assert isinstance(decoded, cls)
+        deep_assert_equal(decoded, obj)
+
+# same test for a polymer from JSON written with v0.6.1
+@pytest.mark.parametrize("cls", [
+    Polymer,
+    Monomer,
+    RDKitMoleculeSetup,
+])
+# check for seralization/deserialization and deep equality
+def test_json_roundtrip(cls, populated_polymer_v061):
+    """Tests starting from a populated polymer object"""
+    for obj in subobject_factory(cls, populated_polymer_v061):
         json_str = obj.to_json()
         decoded = cls.from_json(json_str)
         assert isinstance(decoded, cls)
