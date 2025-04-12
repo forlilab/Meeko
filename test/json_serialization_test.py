@@ -190,7 +190,24 @@ def deep_assert_equal(decoded, original, path="root"):
         cls = type(decoded)
         skip_attrs = EQUALITY_SKIP_FIELDS.get(cls, set())
 
-        for attr in vars(original):
+        # Check for extra attributes that are not in the original
+        decoded_attr = set(dir(decoded))
+        original_attr = set(dir(original))
+        if decoded_attr - original_attr: 
+            raise AssertionError(f"[{path}] Extra attributes in decoded object: {decoded_attr - original_attr}")
+
+        for attr in original_attr:
+            # skip private
+            if attr.startswith("_"):
+                continue
+            # skip methods/functions/descriptors
+            try:
+                orig_val = getattr(original, attr)
+            except Exception:
+                continue  
+            if callable(orig_val):
+                continue
+            # skip attributes if explicitly stated
             if attr in skip_attrs:
                 continue
             if not hasattr(decoded, attr):
