@@ -37,6 +37,7 @@ pkgdir = pathlib.Path(meeko.__file__).parents[1]
 
 # Test Data
 ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
+ahhy_v061_json = pkgdir / "test/polymer_data/AHHY-v0.6.1.json"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
@@ -45,6 +46,11 @@ just_one_ALA_missing = (
 chem_templates = ResidueChemTemplates.create_from_defaults()
 mk_prep = MoleculePreparation()
 
+def read_v061_polymer():
+    with open(ahhy_v061_json) as f:
+        json_str = f.read()
+    polymer = Polymer.from_json(json_str)
+    return
 
 # region Fixtures
 @pytest.fixture
