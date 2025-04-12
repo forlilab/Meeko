@@ -384,8 +384,6 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
 
     # Going through and checking MoleculeSetup attributes
     assert decoded_obj.name == starting_obj.name
-    assert isinstance(decoded_obj.is_sidechain, bool)
-    assert decoded_obj.is_sidechain == starting_obj.is_sidechain
     assert isinstance(decoded_obj.pseudoatom_count, int)
     assert decoded_obj.pseudoatom_count == starting_obj.pseudoatom_count
 

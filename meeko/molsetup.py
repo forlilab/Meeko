@@ -429,7 +429,6 @@ class MoleculeSetup(BaseJSONParsable):
     Attributes
     ----------
     name: str
-    is_sidechain: bool
     pseudoatom_count: int
 
     atoms: list[Atom]
@@ -447,11 +446,10 @@ class MoleculeSetup(BaseJSONParsable):
     PSEUDOATOM_ATOMIC_NUM = 0
     # endregion
 
-    def __init__(self, name: str = None, is_sidechain: bool = False):
+    def __init__(self, name: str = None):
 
         # Initializer attributes 
         self.name: str = name
-        self.is_sidechain: bool = is_sidechain
 
         # (JSON-bound) computed attributes
         self.pseudoatom_count: int = 0
@@ -474,7 +472,6 @@ class MoleculeSetup(BaseJSONParsable):
             
         output_dict = {
             "name": obj.name,
-            "is_sidechain": obj.is_sidechain,
             "pseudoatom_count": obj.pseudoatom_count,
             "atoms": [Atom.json_encoder(x) for x in obj.atoms],
             "bond_info": {
@@ -512,7 +509,6 @@ class MoleculeSetup(BaseJSONParsable):
     # Keys to check for deserialized JSON 
     expected_json_keys = {
             "name",
-            "is_sidechain",
             "pseudoatom_count",
             "atoms",
             "bond_info",
@@ -529,8 +525,7 @@ class MoleculeSetup(BaseJSONParsable):
 
         # Constructs a MoleculeSetup object and restores the expected attributes
         name = obj["name"]
-        is_sidechain = obj["is_sidechain"]
-        molsetup = cls(name, is_sidechain)
+        molsetup = cls(name)
 
         molsetup.pseudoatom_count = obj["pseudoatom_count"]
         molsetup.atoms = [Atom.from_dict(x) for x in obj["atoms"]]
@@ -1500,11 +1495,11 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         constructor for the RDKitMoleculeSetup object (consider adapting to init?)
     """
 
-    def __init__(self, name: str = None, is_sidechain: bool = False, 
+    def __init__(self, name: str = None,
                  source: "MoleculeSetup" = None):
         
         # Initializer attributes 
-        super().__init__(name, is_sidechain)
+        super().__init__(name)
 
         if source:
             if isinstance(source, MoleculeSetup):
