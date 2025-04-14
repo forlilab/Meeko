@@ -2158,7 +2158,7 @@ class Monomer(BaseJSONParsable):
 
         # (JSON-unbound) computed attributes
         # TODO convert link indices/labels in template to rdkit_mol indices herein
-        # self.link_labels = {}
+        self.link_labels = {}
         self.template = None
 
     @staticmethod

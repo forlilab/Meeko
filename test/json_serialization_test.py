@@ -221,7 +221,7 @@ def deep_assert_equal(decoded, original, path="root"):
             if attr in skip_attrs:
                 continue
             if not hasattr(decoded, attr):
-                raise AssertionError(f"[{path}] Missing attribute: {attr}")
+                raise AssertionError(f"[{path}] Missing attribute in decoded object: {attr}")
             decoded_val = getattr(decoded, attr)
             original_val = getattr(original, attr)
             deep_assert_equal(decoded_val, original_val, path=f"{path}.{attr}")
