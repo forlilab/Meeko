@@ -1713,7 +1713,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         # that should be added upon removal of the M-L bond
         rm_to_neigh = {}
         if not idx_to_rm:
-            return input_mol, idx_to_rm, rm_to_neigh
+            # return the copy of mol to avoid changes of input_mol in the subsequent steps (outside of this function)
+            return mol, idx_to_rm, rm_to_neigh
         for atom_idx in idx_to_rm:
             rm_to_neigh[atom_idx] = {}
             for neigh in atoms_in_mol[atom_idx].GetNeighbors():
