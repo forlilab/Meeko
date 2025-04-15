@@ -759,6 +759,7 @@ class Polymer(BaseJSONParsable):
         mk_prep=None,
         set_template: dict[str, str] = None,
         blunt_ends: list[tuple[str, int]] = None,
+        get_atomprop_from_raw: dict = None,
     ):
         """
         Parameters
@@ -932,7 +933,7 @@ class Polymer(BaseJSONParsable):
             monomer.molsetup_mapidx = mapidx_from_pad
 
         if mk_prep is not None:
-            self.parameterize(mk_prep)
+            self.parameterize(mk_prep, get_atomprop_from_raw = get_atomprop_from_raw)
 
         return
     
@@ -1147,7 +1148,105 @@ class Polymer(BaseJSONParsable):
 
         return polymer
 
+    # region adapted from from_pdb_string
+    @classmethod
+    def from_pqr_string(
+        cls,
+        pqr_string,
+        chem_templates,
+        mk_prep,
+        set_template=None,
+        residues_to_delete=None,
+        allow_bad_res=False,
+        bonds_to_delete=None,
+        blunt_ends=None,
+    ):
+        """
 
+        Parameters
+        ----------
+        pdb_string
+        chem_templates
+        mk_prep
+        set_template
+        residues_to_delete
+        allow_bad_res
+        bonds_to_delete
+        blunt_ends
+
+        Returns
+        -------
+
+        """
+
+        tmp_raw_input_mols = cls._pqr_to_residue_mols(
+            pqr_string,
+        )
+
+        # from here on it duplicates self.from_prody(), but extracting
+        # this out into a function felt like it sacrificed readibility
+        # so I decided to keep the duplication.
+        _delete_residues(residues_to_delete, tmp_raw_input_mols)
+        raw_input_mols = {}
+        res_needed_altloc = []
+        res_missed_altloc = []
+        unparsed_res = []
+        for res_id, stuff in tmp_raw_input_mols.items():
+            mol, resname, missed_altloc, needed_altloc = stuff
+            if mol is None and missed_altloc:
+                res_missed_altloc.append(res_id)
+            elif mol is None and needed_altloc:
+                res_needed_altloc.append(res_id)
+            elif mol is None:
+                unparsed_res.append(res_id)
+            else:
+                raw_input_mols[res_id] = (mol, resname)
+        bonds = find_inter_mols_bonds(raw_input_mols)
+        if bonds_to_delete is not None:
+            for res1, res2 in bonds_to_delete:
+                popped = ()
+                if (res1, res2) in bonds:
+                    popped = bonds.pop((res1, res2))
+                elif (res2, res1) in bonds:
+                    popped = bonds.pop((res2, res1))
+                if len(popped) >= 2:
+                    msg = (
+                        "can't delete bonds for residue pairs that have more"
+                        " than one bond between them"
+                    )
+                    raise NotImplementedError(msg)
+                
+        polymer = cls(
+            raw_input_mols,
+            bonds,
+            chem_templates,
+            mk_prep,
+            set_template,
+            blunt_ends,
+            get_atomprop_from_raw = {"PQRCharge": 0.},
+        )
+
+        if polymer.log["matched_with_H_anomaly"]:
+            msg = ""
+            for res_id, (template_name, h_info) in polymer.log["matched_with_H_anomaly"].items():
+                h_miss = h_info.get('H_miss', 0)
+                h_excess = h_info.get('H_excess', 0)
+                msg += f"Residue {res_id} matched with template '{template_name}' has H discrepancy: {h_miss} missing, {h_excess} excess. \n"
+            raise PolymerCreationError(msg + "These discrepancies may compromise the validity of the charge assignment from PQR, making the charges inapplicable to the processed receptor. \n")
+
+        unmatched_res = polymer.get_ignored_monomers()
+        handle_parsing_situations(
+            unmatched_res,
+            unparsed_res,
+            allow_bad_res,
+            res_missed_altloc,
+            res_needed_altloc,
+        )
+
+        return polymer
+    # endregion
+
+            
     @classmethod
     def from_prody(
         cls,
@@ -1240,7 +1339,7 @@ class Polymer(BaseJSONParsable):
 
         return polymer
 
-    def parameterize(self, mk_prep):
+    def parameterize(self, mk_prep, get_atomprop_from_raw = None):
         """
 
         Parameters
@@ -1253,7 +1352,7 @@ class Polymer(BaseJSONParsable):
         """
 
         for residue_id in self.get_valid_monomers():
-            self.monomers[residue_id].parameterize(mk_prep, residue_id)
+            self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
 
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
@@ -1356,6 +1455,7 @@ class Polymer(BaseJSONParsable):
         log = {
             "chosen_by_fewest_missing_H": {},
             "chosen_by_default": {},
+            "matched_with_H_anomaly": {},
             "no_match": [],
             "no_mol": [],
             "msg": "",
@@ -1550,6 +1650,15 @@ class Polymer(BaseJSONParsable):
                 mapping = mappings[index]
                 H_miss = all_stats["H_missing"][index]
                 log["chosen_by_fewest_missing_H"][residue_key] = template_key
+
+            H_miss = all_stats["H_missing"][index]
+            H_excess = all_stats["H_excess"][index]
+            if H_miss or H_excess: 
+                log["matched_with_H_anomaly"][residue_key] = (
+                    template_key, 
+                    {"H_miss": H_miss, "H_excess": len(H_excess)}
+                )
+
             if template is None:
                 rdkit_mol = None
                 atom_names = None
@@ -1732,6 +1841,14 @@ class Polymer(BaseJSONParsable):
                 if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
                     monomer.is_flexres_atom[atom_idx] = True
         return
+    
+    @staticmethod
+    def _add_if_new(to_dict, key, value, repeat_log):
+        if key in to_dict:
+            repeat_log.add(key)
+        else:
+            to_dict[key] = value
+        return
 
     @staticmethod
     def _pdb_to_residue_mols(
@@ -1758,16 +1875,9 @@ class Polymer(BaseJSONParsable):
         interrupted_residues = set()
         pdb_block = []
 
-        def _add_if_new(to_dict, key, value, repeat_log):
-            if key in to_dict:
-                repeat_log.add(key)
-            else:
-                to_dict[key] = value
-            return
-
         for line in pdb_string.splitlines(True):
             if line.startswith("TER") and reskey is not None:
-                _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+                Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
                 blocks_by_residue[reskey] = pdb_block
                 pdb_block = []
                 reskey = None
@@ -1795,7 +1905,7 @@ class Polymer(BaseJSONParsable):
                     pdb_block.append(atom)
                 else:
                     if buffered_reskey is not None:
-                        _add_if_new(
+                        Polymer._add_if_new(
                             blocks_by_residue,
                             buffered_reskey,
                             pdb_block,
@@ -1805,7 +1915,7 @@ class Polymer(BaseJSONParsable):
                     pdb_block = [atom]
 
         if pdb_block:  # there was not a TER line
-            _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+            Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
 
         if interrupted_residues:
             msg = f"interrupted residues in PDB: {interrupted_residues}"
@@ -1828,6 +1938,169 @@ class Polymer(BaseJSONParsable):
                 requested_altloc,
                 default_altloc,
             )
+            resname = list(reskey_to_resname[reskey])[0]  # verified length 1
+            raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
+
+        return raw_input_mols
+    
+
+    @staticmethod
+    def _pqr_to_residue_mols(
+        pqr_string
+    ):
+        blocks_by_residue = {}
+        blocks_qr = {}
+        reskey_to_resname = {}
+        reskey = None
+        buffered_reskey = None
+
+        # residues in non-consecutive lines due to TER or another res
+        interrupted_residues = set()
+        pdb_block = []
+
+        def get_pqr_atom_items(pqr_line): 
+            """
+            based on pdb2pqr.structures.Atom.from_pqr_line
+            """
+            items = [w.strip() for w in pqr_line.split()]
+            token = items.pop(0)
+            if token in [
+                "REMARK",
+                "TER",
+                "END",
+                "HEADER",
+                "TITLE",
+                "COMPND",
+                "SOURCE",
+                "KEYWDS",
+                "EXPDTA",
+                "AUTHOR",
+                "REVDAT",
+                "JRNL",
+            ]:
+                return None
+            elif token in ["ATOM", "HETATM"]:
+                return items
+            elif token[:4] == "ATOM":
+                return token[4:] + items
+            elif token[:6] == "HETATM": 
+                return token[6:] + items
+            else:
+                err = f"Unable to parse PQR line: {pqr_line}"
+                raise ValueError(err)
+
+        def atom_from_pqr_items(atom_pqr_items: list[str]) -> tuple[AtomField, float]: 
+
+            if not atom_pqr_items: 
+                return None
+            
+            atom_serial = int(atom_pqr_items.pop(0)) # Meeko doesn't need atom_serial (ID)
+            atomname = atom_pqr_items.pop(0)
+            element = next((char for char in atomname if char.isalpha()), None)
+            if element is None: 
+                err = f"Unable to parse element from PQR atomname: {atomname}"
+                raise ValueError(err)
+            element = element.upper()
+
+            altloc = "" # PQR doesn't have altloc
+            resname = atom_pqr_items.pop(0)
+
+            token = atom_pqr_items.pop(0)
+            chainid = "" # Optional in PQR 
+            try:
+                resnum = int(token) # Must be int in PQR
+            except ValueError:
+                chainid = token
+                resnum = int(atom_pqr_items.pop(0))
+
+            token = atom_pqr_items.pop(0)
+            icode = "" # Optional in PQR 
+            try:
+                x = float(token)
+            except ValueError:
+                icode = token 
+                x = float(atom_pqr_items.pop(0))
+
+            y = float(atom_pqr_items.pop(0))
+            z = float(atom_pqr_items.pop(0))
+
+            charge = float(atom_pqr_items.pop(0))
+            radius = float(atom_pqr_items.pop(0))
+
+            return (
+                AtomField(
+                        atomname, altloc, resname, chainid,
+                        resnum, icode, x, y, z, element,
+                ), 
+                charge, radius, 
+            )
+
+        # region adapted from _pdb_to_residue_mols
+        for line in pqr_string.splitlines(True):
+            pqr_items = get_pqr_atom_items(line)
+            if pqr_items is None and reskey is not None:
+                Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+                blocks_by_residue[reskey] = pdb_block
+                blocks_qr[reskey] = block_qr
+                pdb_block = []
+                block_qr = []
+                reskey = None
+                buffered_reskey = None
+            if pqr_items:
+                atom, pqr_charge, pqr_radius = atom_from_pqr_items(pqr_items)
+                reskey = f"{atom.chain}:{atom.resnum}{atom.icode}"
+                resname = atom.resname
+                reskey_to_resname.setdefault(reskey, set())
+                reskey_to_resname[reskey].add(resname)
+
+                if reskey == buffered_reskey:  # this line continues existing residue
+                    pdb_block.append(atom)
+                    block_qr.append((pqr_charge, pqr_radius))
+                else:
+                    if buffered_reskey is not None:
+                        Polymer._add_if_new(
+                            blocks_by_residue,
+                            buffered_reskey,
+                            pdb_block,
+                            interrupted_residues,
+                        )
+                        blocks_qr[buffered_reskey] = block_qr
+                    buffered_reskey = reskey
+                    pdb_block = [atom]
+                    block_qr = [(pqr_charge, pqr_radius)]
+
+        if pdb_block:  # there was not a TER line
+            Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+            blocks_qr[reskey] = block_qr
+
+        if interrupted_residues:
+            msg = f"interrupted residues in PDB: {interrupted_residues}"
+            raise ValueError(msg)
+
+        # verify that each identifier (e.g. "A:17" has a single resname
+        violations = {k: v for k, v in reskey_to_resname.items() if len(v) != 1}
+        if len(violations):
+            msg = "each residue key must have exactly 1 resname" + eol
+            msg += f"but got {violations=}"
+            raise ValueError(msg)
+        # endregion
+
+        raw_input_mols = {}
+
+        # PQR shouldn't have altlocs
+        requested_altloc = None
+        default_altloc = ""
+        for reskey, atom_field_list in blocks_by_residue.items():
+            requested_altloc = None
+            pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
+                atom_field_list,
+                requested_altloc,
+                default_altloc,
+            )
+            for atom, pqr_prop in zip(pdbmol.GetAtoms(), blocks_qr[reskey]):
+                atom.SetDoubleProp("PQRCharge", pqr_prop[0])
+                atom.SetDoubleProp("PQRRadius", pqr_prop[1])
+
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
 
@@ -2263,7 +2536,23 @@ class Monomer(BaseJSONParsable):
         self.atom_names = atom_names_list
         return
 
-    def parameterize(self, mk_prep, residue_id):
+    def parameterize(self, mk_prep, residue_id, get_atomprop_from_raw: dict = None):
+
+        if get_atomprop_from_raw: 
+            if any(not isinstance(prop_name, str) for prop_name in get_atomprop_from_raw.keys()): 
+                raise ValueError(f"Atom property name must be str. Got {prop_name} ({type(prop_name)}) instead! ")
+            raw_mol = self.raw_rdkit_mol
+            atoms_in_raw_mol = [atom for atom in raw_mol.GetAtoms()]
+            mapidx_to_raw = self.mapidx_to_raw
+            molsetup_mapidx = self.molsetup_mapidx
+            for atom in self.padded_mol.GetAtoms(): 
+                atom_idx_in_raw = mapidx_to_raw.get(molsetup_mapidx.get(atom.GetIdx(), None), None)
+                for prop_name, default_value in get_atomprop_from_raw.items(): 
+                    if atom_idx_in_raw is not None: 
+                        prop_value = atoms_in_raw_mol[atom_idx_in_raw].GetProp(prop_name)
+                    else:
+                        prop_value = str(default_value)
+                    atom.SetProp(prop_name, prop_value)
 
         molsetups = mk_prep(self.padded_mol)
         if len(molsetups) != 1:
