@@ -1058,6 +1058,12 @@ class Polymer(BaseJSONParsable):
             k: Monomer.from_dict(v) for k, v in obj["monomers"].items()
         }
         polymer.log = obj["log"]
+        for nested_key in polymer.log:
+            if isinstance(polymer.log[nested_key], dict):
+                polymer.log[nested_key] = {
+                    k: tuple(v) if isinstance(v, list) else v
+                    for k, v in polymer.log[nested_key].items()
+                }
 
         return polymer
     # endregion
