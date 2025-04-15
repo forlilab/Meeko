@@ -40,6 +40,7 @@ ahhy_v061_json = pkgdir / "test/polymer_data/AHHY-v0.6.1.json"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
+pqr_example = pkgdir / "test/polymer_data/1FAS_dry.pqr"
 
 # Polymer creation data
 chem_templates = ResidueChemTemplates.create_from_defaults()
@@ -77,6 +78,16 @@ def populated_polymer_missing():
         mk_prep,
         blunt_ends=[("A:1", 0), ("A:1", 2)],
         allow_bad_res=True,
+    )
+    return polymer
+
+@pytest.fixture
+def populated_polymer_from_pqr():
+    """fixture for a populated polymer object"""
+    with open(pqr_example) as file:
+        pqr_str = file.read()
+    polymer = Polymer.from_pqr_string(
+        pqr_str, chem_templates, mk_prep
     )
     return polymer
 
@@ -241,7 +252,7 @@ def deep_assert_equal(decoded, original, path="root"):
 
 # iterate over nested classes in the Polymer hierarchy
 @pytest.mark.parametrize("polymer_fixture", [
-    "populated_polymer", "populated_polymer_v061", "populated_polymer_missing"
+    "populated_polymer", "populated_polymer_v061", "populated_polymer_missing", "populated_polymer_from_pqr"
 ])
 @pytest.mark.parametrize("cls", [
     Polymer,
