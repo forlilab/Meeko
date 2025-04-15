@@ -488,12 +488,12 @@ def main():
     
     # update config by inputs from arguments
     if args.charge_model is not None: 
-        mk_config["charge_model"]=args.charge_model
-        if mk_config["charge_model"]=="read": 
-            if args.read_pqr is None:
-                print("Error: --charge_model read requires --read_pqr")
-                sys.exit(2)
-            mk_config["charge_atom_prop"]="PQRCharge"
+        mk_config["charge_model"] = args.charge_model
+    if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
+        if args.read_pqr is None:
+            print("Error: --charge_model read requires --read_pqr")
+            sys.exit(2)
+        mk_config["charge_atom_prop"] = "PQRCharge"
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
