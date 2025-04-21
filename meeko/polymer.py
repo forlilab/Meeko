@@ -1753,22 +1753,29 @@ class Polymer(BaseJSONParsable):
                     bond_use_count[(r1_id, r2_id)] += 1
             padded_mol = Chem.AddHs(padded_mol, addCoords=True)
 
-            # Update hydrogen positions on padded atoms
-            inv_map = {v: k for k, v in mapidx_pad.items()}
-            padded_H_idxs = []
-
+            # update position of hydrogens bonded to link atoms
+            inv = {j: i for (i, j) in mapidx_pad.items()}
+            padded_idxs_to_update = []
+            no_pad_idxs_to_update = []
             for atom_index in monomer.link_labels:
                 heavy_atom = monomer.rdkit_mol.GetAtomWithIdx(atom_index)
                 for neighbor in heavy_atom.GetNeighbors():
                     if neighbor.GetAtomicNum() != 1:
                         continue
                     if neighbor.GetIdx() in monomer.mapidx_to_raw:
-                        continue  # existing hydrogen, already has a position
-                    padded_idx = inv_map.get(neighbor.GetIdx())
-                    if padded_idx is not None:
-                        padded_H_idxs.append(padded_idx)
+                        # index of H exists in mapidx_to_raw, which means that
+                        # the raw_input_mol had the hydrogen. Thus, we do not
+                        # want to update its coordiantes.
+                        continue
+                    no_pad_idxs_to_update.append(neighbor.GetIdx())
+                    padded_idxs_to_update.append(inv[neighbor.GetIdx()])
+            update_H_positions(padded_mol, padded_idxs_to_update)
+            source = padded_mol.GetConformer()
+            destination = monomer.rdkit_mol.GetConformer()
+            for i, j in zip(no_pad_idxs_to_update, padded_idxs_to_update):
+                destination.SetAtomPosition(i, source.GetAtomPosition(j))
+                # can invert chirality in 3D positions
 
-            update_H_positions(padded_mol, padded_H_idxs)
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
 
         # verify that all bonds resulted in padding
