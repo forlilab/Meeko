@@ -1716,76 +1716,70 @@ class Polymer(BaseJSONParsable):
             mapidx_pad = {
                 atom.GetIdx(): atom.GetIdx() for atom in padded_mol.GetAtoms()
             }
-            for atom_index, link_label in monomer.link_labels.items():
-                adjacent_rid = None
-                adjacent_mol = None
-                adjacent_atom_index = None
-                for (r1_id, r2_id), bond_list in bonds.items():
-                    # TODO the second and subsequent bonds between a pair of
-                    # residues will not update the padding atoms with the
-                    # positions of the adjacent residues. This is OK, the same
-                    # happens for blunt residues, because the adjacent residue
-                    # is missing.
-                    i1, i2 = bond_list[0]
-                    if r1_id == residue_id and i1 == atom_index:
+            padded_links = set()
+
+            for (r1_id, r2_id), bond_list in bonds.items():
+                for idx1, idx2 in bond_list:
+                    if r1_id == residue_id:
+                        atom_index = idx1
                         adjacent_rid = r2_id
-                        adjacent_atom_index = i2
-                        break
-                    elif r2_id == residue_id and i2 == atom_index:
+                        adjacent_atom_index = idx2
+                    elif r2_id == residue_id:
+                        atom_index = idx2
                         adjacent_rid = r1_id
-                        adjacent_atom_index = i1
-                        break
+                        adjacent_atom_index = idx1
+                    else:
+                        continue 
                 
-                if adjacent_rid is not None:
-                    adjacent_mol = monomers[adjacent_rid].rdkit_mol
+                    link_label = monomer.link_labels.get(atom_index)
+                    if link_label is None or link_label in padded_links:
+                        continue
+
+                    adjacent_mol = monomers.get(adjacent_rid, None)
+                    adjacent_mol = adjacent_mol.rdkit_mol if adjacent_mol else None
+
+                    padded_mol, mapidx = padders[link_label](
+                        padded_mol, adjacent_mol, atom_index, adjacent_atom_index
+                    )
+
+                    # Update mapping of padded indices
+                    new_mapidx_pad = {}
+                    for new_idx, old_idx in enumerate(mapidx):
+                        if old_idx is not None and old_idx in mapidx_pad:
+                            new_mapidx_pad[new_idx] = mapidx_pad[old_idx]
+                    mapidx_pad = new_mapidx_pad
+
+                    padded_links.add(link_label)
                     bond_use_count[(r1_id, r2_id)] += 1
-                
-                padded_mol, mapidx = padders[link_label](
-                    padded_mol, adjacent_mol, atom_index, adjacent_atom_index
-                )
 
-                tmp = {}
-                for i, j in enumerate(mapidx):
-                    if j is None:
-                        continue  # new padding atom
-                    if j not in mapidx_pad:
-                        continue  # padding atom from previous iteration for another link_label
-                    tmp[i] = mapidx_pad[j]
-                mapidx_pad = tmp
+            # Update hydrogen positions on padded atoms
+            inv_map = {v: k for k, v in mapidx_pad.items()}
+            padded_H_idxs = []
 
-            # update position of hydrogens bonded to link atoms
-            inv = {j: i for (i, j) in mapidx_pad.items()}
-            padded_idxs_to_update = []
-            no_pad_idxs_to_update = []
             for atom_index in monomer.link_labels:
                 heavy_atom = monomer.rdkit_mol.GetAtomWithIdx(atom_index)
                 for neighbor in heavy_atom.GetNeighbors():
                     if neighbor.GetAtomicNum() != 1:
                         continue
                     if neighbor.GetIdx() in monomer.mapidx_to_raw:
-                        # index of H exists in mapidx_to_raw, which means that
-                        # the raw_input_mol had the hydrogen. Thus, we do not
-                        # want to update its coordiantes.
-                        continue
-                    no_pad_idxs_to_update.append(neighbor.GetIdx())
-                    padded_idxs_to_update.append(inv[neighbor.GetIdx()])
-            update_H_positions(padded_mol, padded_idxs_to_update)
-            source = padded_mol.GetConformer()
-            destination = monomer.rdkit_mol.GetConformer()
-            for i, j in zip(no_pad_idxs_to_update, padded_idxs_to_update):
-                destination.SetAtomPosition(i, source.GetAtomPosition(j))
-                # can invert chirality in 3D positions
+                        continue  # existing hydrogen, already has a position
+                    padded_idx = inv_map.get(neighbor.GetIdx())
+                    if padded_idx is not None:
+                        padded_H_idxs.append(padded_idx)
 
+            padded_mol = Chem.AddHs(padded_mol)
+            update_H_positions(padded_mol, padded_H_idxs)
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
-                
 
         # verify that all bonds resulted in padding
         err_msg = ""
-        for key, count in bond_use_count.items():
-            if count != 2:
+        for (r1, r2), bond_list in bonds.items():
+            expected = 2 * len(bond_list)
+            actual = bond_use_count[(r1, r2)]
+            if actual != expected:
                 err_msg += (
-                    f"expected two paddings for {key} {bonds[key]}, padded {count}"
-                    + eol
+                    f"Expected {expected} paddings for ({r1}, {r2}) with bonds {bond_list}, "
+                    f"but got {actual}\n"
                 )
         if len(err_msg):
             raise RuntimeError(err_msg)
