@@ -225,7 +225,6 @@ With that, the standard output and the list of generated files from ``mk_prepare
     chain resnum is_reactive reactive_atom
         A    359       False              
         A    286       False              
-    reactive_flexres=set()
 
     Files written:
                  rec_2hzn.json <-- parameterized receptor

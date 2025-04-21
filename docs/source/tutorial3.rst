@@ -129,7 +129,6 @@ For output control: We are expecting at least two types of files, the receptor P
    Flexible residues:
    chain resnum is_reactive reactive_atom
       A    309       False              
-   reactive_flexres=set()
 
    Files written:
         3kgd_receptorH_flex.pdbqt <-- flexible receptor input file

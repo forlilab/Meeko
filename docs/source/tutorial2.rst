@@ -223,7 +223,6 @@ For output control: We are expecting at least two types of files, the receptor P
     Flexible residues:
     chain resnum is_reactive reactive_atom
         A    309        True           NE2
-    reactive_flexres={'A:309'}
 
     For reactive docking, pass the configuration file to AutoDock-GPU:
         autodock_gpu -C 1 --import_dpf 3kgd_receptorH.reactive_config --flexres 3kgd_receptorH_flex.pdbqt -L <ligand_filename>
