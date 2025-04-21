@@ -1751,6 +1751,7 @@ class Polymer(BaseJSONParsable):
 
                     padded_links.add(link_label)
                     bond_use_count[(r1_id, r2_id)] += 1
+            padded_mol = Chem.AddHs(padded_mol, addCoords=True)
 
             # Update hydrogen positions on padded atoms
             inv_map = {v: k for k, v in mapidx_pad.items()}
@@ -1767,7 +1768,6 @@ class Polymer(BaseJSONParsable):
                     if padded_idx is not None:
                         padded_H_idxs.append(padded_idx)
 
-            padded_mol = Chem.AddHs(padded_mol)
             update_H_positions(padded_mol, padded_H_idxs)
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
 
