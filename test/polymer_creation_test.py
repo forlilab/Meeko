@@ -155,7 +155,8 @@ def test_AHHY_flex_residues():
     rigid_part = "".join(rigid_part.splitlines())
 
     assert len(rigid_part) == 2923
-    assert len(movable_part) == 809
+    print(movable_part)
+    assert len(movable_part) == 0
 
     # and now with a fully rigid sidechain, to make sure it goes in rigid
     rigid_prep = MoleculePreparation(

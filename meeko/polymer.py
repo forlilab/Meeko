@@ -1743,11 +1743,14 @@ class Polymer(BaseJSONParsable):
                     )
 
                     # Update mapping of padded indices
-                    new_mapidx_pad = {}
-                    for new_idx, old_idx in enumerate(mapidx):
-                        if old_idx is not None and old_idx in mapidx_pad:
-                            new_mapidx_pad[new_idx] = mapidx_pad[old_idx]
-                    mapidx_pad = new_mapidx_pad
+                    tmp = {}
+                    for i, j in enumerate(mapidx):
+                        if j is None:
+                            continue  # new padding atom
+                        if j not in mapidx_pad:
+                            continue  # padding atom from previous iteration for another link_label
+                        tmp[i] = mapidx_pad[j]
+                    mapidx_pad = tmp
 
                     padded_links.add(link_label)
                     bond_use_count[(r1_id, r2_id)] += 1
