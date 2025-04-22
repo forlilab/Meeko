@@ -67,8 +67,6 @@ class EspalomaTyper:
     def set_espaloma_dihedrals(self, molsetup: RDKitMoleculeSetup, molgraph):
         """Grab dihedrals from graph node and set them to the molsetup """
 
-        ENERGY_UNIT_FACTOR = 0.00038087988 #Avoid relying on OpenFF for unit conversion 
-        
         # TODO replace torch with np, not tensors but arrays instead so no importing Pytorch
 
         if (
@@ -113,7 +111,7 @@ class EspalomaTyper:
                             k = -k
                             _phase = pi - _phase
                             
-                        k = k/0.00038087988
+                        k = k * 627.509  # hartree to kcal/mol
 
                         partaking_atoms[(idx0, idx1, idx2, idx3)] = len(torsions)
                         this_torsion.append({"k": k, "phase": _phase, "periodicity": _periodicity, "idivf": 1.0}) #idivf is not used here, just for compatibility
