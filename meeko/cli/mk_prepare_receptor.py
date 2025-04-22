@@ -10,6 +10,8 @@ import sys
 import numpy as np
 
 from meeko.reactive import atom_name_to_molsetup_index, assign_reactive_types_by_index
+from meeko.polymer import residue_chem_templates_json_decoder
+from meeko import ResidueChemTemplatesEncoder
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
@@ -175,6 +177,17 @@ def get_args():
     config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
     config_group.add_argument("--add_templates", help="[.json]", metavar="JSON_FILENAME", nargs="+", default=[])
+    config_group.add_argument("--cache_templates", 
+                              help=(
+                                  "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
+                                  "(optionally) a provided JSON filename. " 
+                                  "Default cache filename is: $HOME/.meeko_residue_chem_templates_cached.json) "
+                                  "When the caching is ON, the templates for polymer construction will be read from "
+                                  "the specified cache file and updates may be made to the same file in a cumulative manner. " 
+                              ), 
+                              nargs = "?", 
+                              default = False, 
+    )
     config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
         "-a", "--allow_bad_res",
@@ -283,6 +296,13 @@ def get_args():
         msg = "Can't use more than one at a time from -i/--read_with_prody, --read_pdb and --read_pqr"
         print(eol + msg, file=sys.stderr)
         sys.exit(2)
+
+    if args.cache_templates is not False: 
+        if not args.cache_templates:
+            print(f"--cache_templates is turned on, but a name is not provided. The default filename ($HOME/.meeko_residue_chem_templates_cached.json) will be used. ", 
+                file=sys.stderr)
+            default_cache_fn = ".meeko_residue_chem_templates_cached.json"
+            args.cache_templates = str(pathlib.Path.home() / default_cache_fn)
 
     if args.write_gpf is not None and args.write_pdbqt is None:
         # there's a few of places that assume this condition has been checked
@@ -499,7 +519,26 @@ def main():
     mk_prep = MoleculePreparation.from_config(mk_config)
     
     # load templates for mapping
-    templates = ResidueChemTemplates.create_from_defaults()
+    if args.cache_templates is not None:
+        cache_file = args.cache_templates
+
+        try:
+            with open(cache_file, "r") as f:
+                json_str = f.read()
+            templates = json.loads(
+                json_str, object_hook=residue_chem_templates_json_decoder
+            )
+        except FileNotFoundError:
+            print(f"WARNING: specified cache file for residue chem templates not found. " + eol +
+                  f"The initial templates will be default, and a new cache will be created at {cache_file}. ", 
+                  file=sys.stderr, 
+                  )
+            templates = ResidueChemTemplates.create_from_defaults()
+        except Exception as e:
+            print(f"An error occurred with --cache_templates: {e}")
+            sys.exit(1)
+    else: 
+        templates = ResidueChemTemplates.create_from_defaults()
     for fn in args.add_templates:
         templates.add_json_file(fn)
     
@@ -575,6 +614,11 @@ def main():
             sys.exit(1)
     
     
+    # Update residue chem template cache
+    if args.cache_templates is not None: 
+        updated_templates_json_strs = json.dumps(templates, cls=ResidueChemTemplatesEncoder)
+        with open(cache_file, 'w') as f:
+            f.write(updated_templates_json_strs)
     
     # Use residue name in the input structure file to find reactive atom name
     # According to the mapping of residue name and reactive atom name
