@@ -9,38 +9,44 @@ Prerequisites and Environment Setup
 ===================================
 
 Create a new virtual environment (recommended)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   micromamba create -c conda-forge -n meeko_tutorial_py39 python=3.9 -y
-   micromamba activate meeko_tutorial_py39         
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~      
 
 In this tutorial, we will use ``micromamba`` as the example package manager. Visit `this official guide  <https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html>`_ for a quick install and setup of micromamba. There are many equivalent ways to manage Python packages, such as ``conda`` and ``mamba``. You can easily adapt the commands to your preferred tool, as the syntax is largely compatible across these package managers. 
 
-Install the required Python packages through ``conda-forge``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Download or copy the following environment specification into a file named ``environment.yaml``:
+
+.. code-block:: yaml
+
+   name: meeko_tutorial_py311
+   channels:
+     - conda-forge
+   dependencies:
+     - python=3.11
+     - meeko
+     - numpy
+     - scipy
+     - rdkit
+     - gemmi
+     - vina
+     - pip
+     - molscrub
+     - ringtail
+     - pip:
+        - git+https://github.com/prody/ProDy.git@main#egg=prody
+
+Then, create the environment using:
 
 .. code-block:: bash
 
-   micromamba install -c conda-forge meeko numpy scipy rdkit gemmi vina -y
-
-Install the additional packages and data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- (Python package) Molscrub
-Git Repository: `Forlilab Molscrub <https://github.com/forlilab/molscrub>`_
-
-.. code-block:: bash
-
-   pip install molscrub
+   micromamba create -f environment.yaml -y
+   micromamba activate meeko_tutorial_py311
 
 - (Example files for this tutorial) Meeko/example/tutorial1
 Originally from `Forlilab tutorials <https://github.com/forlilab/tutorials>`_
 
 .. code-block:: bash
 
-  git clone --branch docwork --depth=1 --filter=tree:0 https://github.com/forlilab/Meeko.git
+  git clone --branch docwork --depth=1 --filter=tree:0 https://github.com/rwxayheee/Meeko.git
   cd Meeko; git sparse-checkout set --no-cone example; git checkout; cd ..
 
 Ligand Preparation
@@ -53,7 +59,7 @@ Prepare a Single Ligand from a Smiles String
 
 `Imatinib <https://pubchem.ncbi.nlm.nih.gov/compound/Imatinib>`_ is a small-molecule drug. You can find the SMILES string for Imatinib from various reliable chemical databases and resources, including but not limited to `PubChem <https://pubchem.ncbi.nlm.nih.gov/>`_ and `DrugBank <https://go.drugbank.com/>`_. 
 
-``scrub.py`` is a command-line script in Molscrub that generates 3D conformers of protomers and tautomers for given small molecules at a specified (range of) pH. Given a pH range of 5 to 9, the output protomers will include those which make up no less than 1% of the total population at pH = 7. Based on the reference pKa values, the amine nitrogens and the pyridine nitrogen will be considered for acid/base enumeration. With the ``meeko_tutorial_py39`` micromamba environment active, run ``scrub.py`` to generate 3D conformers of Imatinib from the SMILES string. 
+``scrub.py`` is a command-line script in Scrubber that generates 3D conformers of protomers and tautomers for given small molecules at a specified (range of) pH. Given a pH range of 5 to 9, the output protomers will include those which make up no less than 1% of the total population at pH = 7. Based on the reference pKa values, the amine nitrogens and the pyridine nitrogen will be considered for acid/base enumeration. With the ``meeko_tutorial_py39`` micromamba environment active, run ``scrub.py`` to generate 3D conformers of Imatinib from the SMILES string. 
 
 .. code-block:: bash
 
@@ -179,7 +185,7 @@ To compute the grid maps, the GPF file (``rec_1iep.gpf``) will be the input comm
 For AutoDock-GPU
 ~~~~~~~~~~~~~~~~
 
-At present, AutoDock-GPU also needs the pre-computed grid maps from AutoGrid. Therefore, Receptor Preparation for docking calculations with AutoDock-GPU is similar to preparation in the previous section :ref:`receptor_preparation_for_vina_with_adf4sf`. But in this case, we can drop the ``-v`` option as the Vina-style box definition TXT file is no longer needed for AutoDock-GPU. 
+At present, AutoDock-GPU also needs the pre-computed grid maps from AutoGrid. Therefore, Receptor Preparation for docking calculations with AutoDock-GPU is similar to preparation in the previous section :ref:`receptor_preparation_for_vina_with_adf4sf`. But in this case, we can drop the ``-v`` option as the Vina-style box definition TXT file is no longer needed for AutoGrid-GPU. 
 
 Below is the sample command: 
 
@@ -225,6 +231,7 @@ With that, the standard output and the list of generated files from ``mk_prepare
     chain resnum is_reactive reactive_atom
         A    359       False              
         A    286       False              
+    reactive_flexres=set()
 
     Files written:
                  rec_2hzn.json <-- parameterized receptor
