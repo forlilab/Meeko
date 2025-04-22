@@ -1565,7 +1565,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             int(k): [string_to_tuple(t) for t in v]
             for k, v in obj["atom_to_ring_id"].items()
         }
-        rdkit_molsetup.rmsd_symmetry_indices = list(map(string_to_tuple, obj["rmsd_symmetry_indices"]))
+        rdkit_molsetup.rmsd_symmetry_indices = tuple(map(string_to_tuple, obj["rmsd_symmetry_indices"]))
         return rdkit_molsetup
     # endregion
 
@@ -1644,7 +1644,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         # functions
         molsetup = cls()
         molsetup.mol = mol
-        molsetup.atom_true_count = molsetup.get_num_mol_atoms()
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
         molsetup.init_atom(compute_gasteiger_charges, read_charges_from_prop, coords)

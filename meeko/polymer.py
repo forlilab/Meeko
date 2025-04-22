@@ -37,7 +37,6 @@ from .chemtempgen import build_linked_CCs
 
 import numpy as np
 
-data_path = files("meeko") / "data"
 periodic_table = Chem.GetPeriodicTable()
 
 try:
@@ -644,13 +643,18 @@ class ResidueChemTemplates(BaseJSONParsable):
                 res_template = ResidueTemplate.from_dict(value)
                 self.residue_templates[key] = res_template
         for link_label, value in data.get("padders", {}).items():
-            if overwrite or key not in self.padders:
-                padder = ResiduePadder.from_dict(data)
+            if overwrite or link_label not in self.padders:
+                padder = ResiduePadder.from_dict(value)
                 self.padders[link_label] = padder
         return
+    
+    @staticmethod
+    def _default_data_path():
+        return files("meeko") / "data"
 
     @staticmethod
-    def lookup_filename(filename, data_path):
+    def lookup_filename(filename, data_path = None):
+        data_path = data_path or ResidueChemTemplates._default_data_path()
         p = pathlib.Path(filename)
         if not p.exists():
             if (data_path / p).exists():
@@ -662,7 +666,8 @@ class ResidueChemTemplates(BaseJSONParsable):
         return filename
 
     @classmethod
-    def from_json_file(cls, filename):
+    def from_json_file(cls, filename, data_path = None):
+        data_path = data_path or ResidueChemTemplates._default_data_path()
         filename = cls.lookup_filename(filename, data_path)
         with open(filename) as f:
             jsonstr = f.read()
@@ -682,7 +687,8 @@ class ResidueChemTemplates(BaseJSONParsable):
     def create_from_defaults(cls):
         return cls.from_json_file("residue_chem_templates")
 
-    def add_json_file(self, filename):
+    def add_json_file(self, filename, data_path = None):
+        data_path = data_path or ResidueChemTemplates._default_data_path()
         filename = self.lookup_filename(filename, data_path)
         with open(filename) as f:
             jsonstr = f.read()
@@ -1053,6 +1059,12 @@ class Polymer(BaseJSONParsable):
             k: Monomer.from_dict(v) for k, v in obj["monomers"].items()
         }
         polymer.log = obj["log"]
+        for nested_key in polymer.log:
+            if isinstance(polymer.log[nested_key], dict):
+                polymer.log[nested_key] = {
+                    k: tuple(v) if isinstance(v, list) else v
+                    for k, v in polymer.log[nested_key].items()
+                }
 
         return polymer
     # endregion
@@ -2426,7 +2438,7 @@ class Monomer(BaseJSONParsable):
 
         # (JSON-unbound) computed attributes
         # TODO convert link indices/labels in template to rdkit_mol indices herein
-        # self.link_labels = {}
+        self.link_labels = {}
         self.template = None
 
     @staticmethod
@@ -2629,6 +2641,8 @@ class ResiduePadder(BaseJSONParsable):
     ----------
     rxn : rdChemReactions.ChemicalReaction
         Reaction SMARTS of a single-reactant, single-product reaction for padding.
+    adjacent_smarts : str
+        SMARTS pattern for identifying atoms in the adjacent residue to copy positions from.
     adjacent_smartsmol : Chem.Mol
         SMARTS molecule with mapping numbers to copy atom positions from part of adjacent residue.
     adjacent_smartsmol_mapidx : list
@@ -2672,12 +2686,14 @@ class ResiduePadder(BaseJSONParsable):
 
         # Fill in adjacent_smartsmol_mapidx
         if adjacent_res_smarts is None:
+            self.adjacent_smarts = None
             self.adjacent_smartsmol = None
             self.adjacent_smartsmol_mapidx = None
             return
 
-        # Ensure adjacent_res_smarts is None or a valid SMARTS        
-        self.adjacent_smartsmol = self._initialize_adj_smartsmol(adjacent_res_smarts)
+        # Ensure adjacent_res_smarts is None or a valid SMARTS 
+        self.adjacent_smarts = adjacent_res_smarts 
+        self.adjacent_smartsmol = self._initialize_adj_smartsmol(self.adjacent_smarts)
 
         # Ensure the mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
         self._check_adj_smarts(self.rxn, self.adjacent_smartsmol)
@@ -2876,7 +2892,7 @@ class ResiduePadder(BaseJSONParsable):
     def json_encoder(cls, obj: "ResiduePadder") -> Optional[dict[str, Any]]:
         output_dict = {
             "rxn_smarts": rdChemReactions.ReactionToSmarts(obj.rxn),
-            "adjacent_res_smarts": serialize_optional(Chem.MolToSmarts, obj.adjacent_smartsmol),
+            "adjacent_res_smarts": obj.adjacent_smarts,
             "auto_blunt": obj.auto_blunt,
         }
         # we are not serializing the adjacent_smartsmol_mapidx as that will
