@@ -174,6 +174,26 @@ def test_AHHY_flex_residues():
     assert len(movable_part) == 0
 
 
+def test_AHHY_flexibilize_then_parameterize():
+    f = open(ahhy_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+    )
+    polymer.flexibilize_sidechain("A:2", mk_prep)
+    m = polymer.monomers["A:2"]
+    nr_rot_bonds = sum([b.rotatable for _, b in m.molsetup.bond_info.items()])
+    assert nr_rot_bonds == 2
+    # now parameterize and check we still have 2 rotatable bonds
+    # backbone may have become flexible
+    m.parameterize(mk_prep, "A:2")
+    nr_rot_bonds = sum([b.rotatable for _, b in m.molsetup.bond_info.items()])
+    assert nr_rot_bonds == 2
+
+
+
 def test_protonated_Nterm_residue():
     f = open(nphe_ser_example, "r")
     pdb_string = f.read()
