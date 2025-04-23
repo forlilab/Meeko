@@ -112,6 +112,7 @@ The following Python script demonstrates the ligand preparation process with pos
                for result in pool.imap_unordered(process_ligand, ligand_list[:max_ligands]):
                   pass  # Output files are written inside the function
 
+
 Receptor Preparation
 ========================
 
@@ -258,15 +259,18 @@ In this section, we will briefly describe how to execute the docking calculation
    adgpu --ffile 4EY7_receptor.maps.fld --filelist actives_final
    adgpu --ffile 4EY7_receptor.maps.fld --filelist decoys_final
 
+
 Please note, to proceed to the next tutorial which involves interaction analysis, you need to have the interactions written to the dlg file. To do this in the docking run time, use the `--contact_analysis/-C 1` option: 
 
 .. code-block:: bash
    adgpu --ffile 4EY7_receptor.maps.fld --filelist actives_final -C 1
 
+
 If you have obtained the docking outputs but did not include this argument in the docking run, you could still add the interaction analysis using the `--contact_analysis` argument:
 
 .. code-block:: bash
    adgpu -C 1 -X *.xml
+
 
 This in practice, will rewrite the dlg files with the contact analysis from the xml files, as implied by the long name of argument `--xml2dlg/-X`. 
 
