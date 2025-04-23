@@ -1355,6 +1355,8 @@ class Polymer(BaseJSONParsable):
             self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
 
     def flexibilize_sidechain(self, residue_id, mk_prep):
+        if residue_id not in self.get_valid_monomers():
+            raise ValueError(f"{residue_id=} not in valid monomers")
         return self.monomers[residue_id].flexibilize(mk_prep)
 
     @staticmethod
