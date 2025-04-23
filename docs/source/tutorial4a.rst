@@ -1,4 +1,6 @@
-Tutorial 4A: Preparation and Execution of Virtual Screening
+.. _tutorial4a:
+
+Preparation and Execution of Virtual Screening
 =========================================================
 
 .. contents::
