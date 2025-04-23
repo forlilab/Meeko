@@ -552,7 +552,7 @@ class PDBQTWriterLegacy:
                             this_flex_pdbqt,
                             resname,
                             chain,
-                            int(resnum),
+                            str(resnum) + icode,
                             skip_rename_ca_cb=True,
                             atom_count=flex_atom_count,
                         )
