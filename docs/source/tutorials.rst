@@ -12,3 +12,4 @@ including vina, autodock-gpu, ringtail, and molscrub.
    tutorial2
    tutorial3
    tutorial4a
+   tutorial4b

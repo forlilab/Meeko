@@ -7,7 +7,7 @@ Preparation and Execution of Virtual Screening with AutoDock-GPU
 Introduction
 ============
 
-In this tutorial, we will walk you through the basic steps required for virtual screening using Python as the primary control language during the preparation of ligand and receptor files. To execute the docking calculation, we will use AutoDock-GPU as the docking engine. This small virtual screening example is a docking calculation of a single receptor and ~1000 ligands (500 actives and 500 decoys). The calculation should be doable within an hour on a regular laptop. 
+In this tutorial, we will walk you through the basic steps required for virtual screening using Python as the primary control language during the preparation of ligand and receptor files. To execute the docking calculation, we will use AutoDock-GPU as the docking engine. This small virtual screening example is a docking calculation of a single receptor and ~1000 ligands (500 actives and 500 decoys). The calculation should be doable within 1-2 hours on a regular laptop. 
 
 
 Ligand Preparation
@@ -15,7 +15,7 @@ Ligand Preparation
 
 Acetylcholinesterase (AChE) is a well-studied target for drug discovery, particularly in the context of neurodegenerative diseases. In this section, we will prepare two set of ligands for virtual screening against AChE using AutoDock-GPU. The process involves converting SMILES strings to molecular structures, applying protonation state assignment, generating conformers, and saving the prepared ligands in PDBQT format for docking. 
 
-Specifically, we will retrieve the curated ligand set from the DUD-E dataset, where human AChE is listed under the target tag "aces/P22303". Docking results with both the active and decoy ligand setsmay be used to evaluate the performance of the established docking-selection protocol. To achieve a relatively balanced combined dataset, only the first 500 ligands in the decoy ligand set will be processed. As a minimum requirement, you need to download "aces/actives_final.ism" and "aces/decoys_final.ism", which contain the SMILES strings and ligand names. 
+Specifically, we will retrieve the curated ligand set from the DUD-E dataset, where human AChE is listed under the target tag "aces/P22303". Docking results with both the active and decoy ligand sets may be used to evaluate the performance of the established docking-selection protocol. To achieve a relatively balanced combined dataset, only the first 500 ligands in the decoy ligand set will be processed. As a minimum requirement, you need to download "aces/actives_final.ism" and "aces/decoys_final.ism", which contain the SMILES strings and ligand names as the starting information of the ligands. 
 
 In regard to the precedure, we will use the `molscrub` package to assign protonation states and generate ligand conformers. Then, we will use the respective writer functions in `meeko` to save the prepared ligand molecules into PDBQT files, which are the required input format for AutoDock-GPU. The ligand preparation process will be parallelized using the `multiprocessing` module to speed up the processing time. 
 
@@ -263,14 +263,14 @@ In this section, we will briefly describe how to execute the docking calculation
 Please note, to proceed to the next tutorial which involves interaction analysis, you need to have the interactions written to the dlg file. To do this in the docking run time, use the `--contact_analysis/-C 1` option: 
 
 .. code-block:: bash
-   adgpu --ffile 4EY7_receptor.maps.fld --filelist actives_final -C 1
 
+   adgpu --ffile 4EY7_receptor.maps.fld --filelist actives_final -C 1
 
 If you have obtained the docking outputs but did not include this argument in the docking run, you could still add the interaction analysis using the `--contact_analysis` argument:
 
 .. code-block:: bash
-   adgpu -C 1 -X *.xml
 
+   adgpu -C 1 -X *.xml
 
 This in practice, will rewrite the dlg files with the contact analysis from the xml files, as implied by the long name of argument `--xml2dlg/-X`. 
 
