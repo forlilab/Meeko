@@ -10,8 +10,6 @@ import sys
 import numpy as np
 
 from meeko.reactive import atom_name_to_molsetup_index, assign_reactive_types_by_index
-from meeko.polymer import residue_chem_templates_json_decoder
-from meeko import ResidueChemTemplatesEncoder
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
@@ -186,7 +184,7 @@ def get_args():
                                   "the specified cache file and updates may be made to the same file in a cumulative manner. " 
                               ), 
                               nargs = "?", 
-                              default = False, 
+                              default=False,
     )
     config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
@@ -297,8 +295,8 @@ def get_args():
         print(eol + msg, file=sys.stderr)
         sys.exit(2)
 
-    if args.cache_templates is not False: 
-        if not args.cache_templates:
+    if args.cache_templates is not False:
+        if args.cache_templates is None:
             print(f"--cache_templates is turned on, but a name is not provided. The default filename ($HOME/.meeko_residue_chem_templates_cached.json) will be used. ", 
                 file=sys.stderr)
             default_cache_fn = ".meeko_residue_chem_templates_cached.json"
@@ -519,15 +517,13 @@ def main():
     mk_prep = MoleculePreparation.from_config(mk_config)
     
     # load templates for mapping
-    if args.cache_templates is not None:
+    if args.cache_templates:
         cache_file = args.cache_templates
 
         try:
             with open(cache_file, "r") as f:
                 json_str = f.read()
-            templates = json.loads(
-                json_str, object_hook=residue_chem_templates_json_decoder
-            )
+            templates = ResidueChemTemplates.from_json(json_str)
         except FileNotFoundError:
             print(f"WARNING: specified cache file for residue chem templates not found. " + eol +
                   f"The initial templates will be default, and a new cache will be created at {cache_file}. ", 
@@ -615,8 +611,8 @@ def main():
     
     
     # Update residue chem template cache
-    if args.cache_templates is not None: 
-        updated_templates_json_strs = json.dumps(templates, cls=ResidueChemTemplatesEncoder)
+    if args.cache_templates: 
+        updated_templates_json_strs = templates.to_json()
         with open(cache_file, 'w') as f:
             f.write(updated_templates_json_strs)
     
