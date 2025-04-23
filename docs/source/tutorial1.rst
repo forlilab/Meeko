@@ -30,8 +30,10 @@ Download or copy the following environment specification into a file named ``env
      - vina
      - pip
      - molscrub
-     - ringtail
+     - multiprocess
+     - chemicalite
      - pip:
+        - ringtail
         - git+https://github.com/prody/ProDy.git@main#egg=prody
 
 Then, create the environment using:
