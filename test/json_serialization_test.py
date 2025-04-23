@@ -359,7 +359,7 @@ def test_broken_bond():
     for bond_id, bond_info in decoded_molsetup.bond_info.items():
         count_rotatable += bond_info.rotatable
         count_breakable += bond_info.breakable
-    assert count_rotatable == 10
+    assert count_rotatable == 9
     assert count_breakable == 1
 
 # endregion

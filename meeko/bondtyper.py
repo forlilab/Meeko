@@ -36,6 +36,19 @@ class BondTyperLegacy:
                 num_amides_removed += 1
         assert num_amides_originally == num_amides_removed + len(amide_bonds)
 
+        triple_bonds = [(x[0], x[1]) for x in setup.find_pattern("[*]#[*]")]
+        single_triple_single = [
+            (x[0], x[1], x[2], x[3]) for x in setup.find_pattern("[*]-[*]#[*]-[*]")
+        ]
+        single_to_rigidify = []
+        for i, j, k, m in single_triple_single:
+            triple_bonds.remove((j, k))
+            single_to_rigidify.append((i, j))
+            single_to_rigidify.append((k, m))
+        # fully rigidify nitrile and alike
+        single_to_rigidify.extend(
+            [(x[0], x[1]) for x in setup.find_pattern("[*]-[*]#[*X1]")]
+        )
         to_rigidify = set()
         n_smarts = len(rigidify_bonds_smarts)
         assert n_smarts == len(rigidify_bonds_indices)
@@ -58,5 +71,7 @@ class BondTyperLegacy:
                 bond_id in amide_bonds
                 or (bond_id[1], bond_id[0]) in amide_bonds
             ) and not flexible_amides:
+                rotatable = False
+            if bond_id in triple_bonds or bond_id in single_to_rigidify:
                 rotatable = False
             bond.rotatable = rotatable
