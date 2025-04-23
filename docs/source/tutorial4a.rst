@@ -1,23 +1,17 @@
 .. _tutorial4a:
 
-Preparation and Execution of Virtual Screening
-=========================================================
+================================================================
+Preparation and Execution of Virtual Screening with AutoDock-GPU
+================================================================
 
-.. contents::
-   :depth: 2
-   :local:
+Introduction
+============
 
 In this tutorial, we will walk you through the basic steps required for virtual screening using Python as the primary control language during the preparation of ligand and receptor files. To execute the docking calculation, we will use AutoDock-GPU as the docking engine. This small virtual screening example is a docking calculation of a single receptor and ~1000 ligands (500 actives and 500 decoys). The calculation should be doable within an hour on a regular laptop. 
 
-**Outline**
---------------------
-1. Ligand Preparation
-2. Receptor Preparation
-3. Execution of Docking with AutoDock-GPU
 
-
-### Ligand Preparation
------------------------
+Ligand Preparation
+==================
 
 Acetylcholinesterase (AChE) is a well-studied target for drug discovery, particularly in the context of neurodegenerative diseases. In this section, we will prepare two set of ligands for virtual screening against AChE using AutoDock-GPU. The process involves converting SMILES strings to molecular structures, applying protonation state assignment, generating conformers, and saving the prepared ligands in PDBQT format for docking. 
 
@@ -25,7 +19,7 @@ Specifically, we will retrieve the curated ligand set from the DUD-E dataset, wh
 
 In regard to the precedure, we will use the `molscrub` package to assign protonation states and generate ligand conformers. Then, we will use the respective writer functions in `meeko` to save the prepared ligand molecules into PDBQT files, which are the required input format for AutoDock-GPU. The ligand preparation process will be parallelized using the `multiprocessing` module to speed up the processing time. 
 
-The following code block demonstrates the ligand preparation process:
+The following Python script demonstrates the ligand preparation process with possible multiprocessing. This is a complete Python script and you may use Python from terminal to execute this script. 
 
 ```python
 from rdkit import Chem
@@ -116,3 +110,162 @@ if __name__ == "__main__":
         with Pool(processes=n_processes) as pool:
             for result in pool.imap_unordered(process_ligand, ligand_list[:max_ligands]):
                 pass  # Output files are written inside the function
+
+Receptor Preparation
+========================
+
+When starting from a high-resolution crystal structure, the receptor preparation process is relatively straightforward. In this example, we will use a structure of human AChE from the Protein Data Bank (PDB ID: 4EY7), a homodimer in complex with Donepezil. Donepezil is FDA-approved for the treatment of Alzheimer's disease and is a well-studied ligand for AChE. The receptor preparation process involves removing water molecules, adding hydrogens, and saving the prepared receptor in PDBQT format. Additionally, we will define the grid box for docking calculations using the center of the Donepezil ligand in the PDB structure and compute the grid maps using AutoGrid, as the second part of the receptor preparation. 
+
+Specifically, we will be choosing only chain A of the dimeric structure, choosing the first alternate allocation encountered, removing non-protein components, and saving the processed structure in PDBQT format. 
+
+The following code snippet demonstrates how to retrieve the structure and perform basic structure processing with ProDy. The receptor preparation process is not parallelized, as it is relatively fast and does not require significant computational resources. This is only a part of a Python script and you may execute it in an interactive notebook or use it as a component in your own script. 
+
+```python
+from prody import fetchPDB, parsePDB, writePDB, writePDBStream
+from meeko import MoleculePreparation, ResidueChemTemplates
+from meeko import Polymer
+from meeko import PDBQTWriterLegacy
+import numpy as np
+from meeko.gridbox import get_gpf_string
+from io import StringIO
+
+def get_clean_chainA(pdb_id: str, to_obj: bool = True, to_file: str = None) -> str:
+    # Fetch PDB and parse structure
+    pdb_path = fetchPDB(pdb_id, folder='.', compressed=False)
+    structure = parsePDB(pdb_path, altloc='first')
+
+    # Select protein atoms only in chain A, excluding hetatoms (e.g., ligands, water)
+    # keeps only the first listed conformer for each atom
+    chainA = structure.select('protein and chain A')
+
+    if chainA is None:
+        raise ValueError(f"No protein atoms found in chain A for PDB {pdb_id}")
+
+    if to_obj:
+        # Return the cleaned chain A object
+        return chainA
+    
+    if to_file:
+        writePDB(to_file, chainA)
+
+    # Get PDB string as well
+    pdb_io = StringIO()
+    writePDBStream(pdb_io, chainA)
+    return pdb_io.getvalue()
+
+def get_center_of_residue(pdb_id: str, chain_id: str, resname: str):
+    # Fetch and parse structure with only the first altloc
+    pdb_path = fetchPDB(pdb_id, folder='.', compressed=False)
+    structure = parsePDB(pdb_path, altloc='first')
+
+    # Find the residue
+    sel_str = f"chain {chain_id} and resname {resname}"
+    residue = structure.select(sel_str)
+    
+    if residue is None:
+        raise ValueError(f"Residue {resname} in chain {chain_id} not found in PDB {pdb_id}")
+    
+    # Compute center of mass of the residue
+    center = residue.getCoords().mean(axis=0)
+
+    return center
+
+
+# Getting the PDB string for 4EY7 and preprocessing it with ProDy
+pdb_str = {}
+for pdb_id in ['4EY7']:
+    pdb_str[pdb_id] = get_clean_chainA(pdb_id, to_file=f"{pdb_id}_chainA.pdb")
+
+# Constructing the polymer object
+mk_prep = MoleculePreparation()
+chem_templates = ResidueChemTemplates.create_from_defaults()
+mypol = Polymer.from_prody(pdb_str['4EY7'], chem_templates, mk_prep)
+
+# Writing the polymer object to a PDBQT file
+rigid_pdbqt_string, flex_pdbqt_string = PDBQTWriterLegacy.write_string_from_polymer(mypol)
+with open("4EY7_receptor.pdbqt", "w") as f:
+    f.write(rigid_pdbqt_string) # here, we only write the rigid part of the receptor
+
+# Specifying the needed atom types for the grid map calculation
+# the following are consistent with the default options in the command line script: mk_prepare_receptor.py
+# including all possible atom types for the ligand and receptor
+any_lig_base_types = [
+    "HD",
+    "C",
+    "A",
+    "N",
+    "NA",
+    "OA",
+    "F",
+    "P",
+    "SA",
+    "S",
+    "Cl",
+    "Br",
+    "I",
+    "Si",
+    "B",
+]
+rec_types = [
+    "HD",
+    "C",
+    "A",
+    "N",
+    "NA",
+    "OA",
+    "F",
+    "P",
+    "SA",
+    "S",
+    "Cl",
+    "Br",
+    "I",
+    "Mg",
+    "Ca",
+    "Mn",
+    "Fe",
+    "Zn",
+]
+
+# Calculating the center of the ligand in the PDB structure
+center = get_center_of_residue("4EY7", "A", "E20")
+
+# Writing out the grid parameter file (GPF) for AutoDock-GPU
+with open("4EY7_gpf.gpf", "w") as f:
+    gpf_string, (npts_x, npts_y, npts_z) = get_gpf_string(center, [20.] * 3, "4EY7_receptor.pdbqt", rec_types, any_lig_base_types)
+    f.write(gpf_string)
+
+
+Now, with the prepared receptor PDBQT file ("4EY4_receptor.pdbqt") and the grid parameter file ("4EY7_gpf.gpf"), we are ready to run the grid calculation with AutoGrid: 
+
+```bash
+autogrid4 -p 4EY7_gpf.gpf -l 4EY7_glg.glg
+```
+
+This will generate the grid maps for the receptor, which are the required inputs for AutoDock-GPU to perform the docking calculations. 
+
+
+Execution of Docking Calculations
+=================================
+
+In this section, we will briefly describe how to execute the docking calculations with AutoDock-GPU. The docking calculation is performed using the prepared receptor PDBQT file and the ligand PDBQT files (located in the "actives_final" and "decoys_final" directories, respectively) generated in the previous section: 
+
+```bash
+adgpu --ffile 4EY7_receptor.maps.fld --filelist actives_final
+adgpu --ffile 4EY7_receptor.maps.fld --filelist decoys_final
+```
+
+Please note, to proceed to the next tutorial which involves interaction analysis, you need to have the interactions written to the dlg file. To do this in the docking run time, use the `--contact_analysis/-C 1` option: 
+
+```bash
+adgpu --ffile 4EY7_receptor.maps.fld --filelist actives_final -C 1
+```
+
+If you have obtained the docking outputs but did not include this argument in the docking run, you could still add the interaction analysis using the `--contact_analysis` argument:
+
+```bash
+adgpu -C 1 -X *.xml
+```
+
+This in practice, will rewrite the dlg files with the contact analysis from the xml files, as implied by the long name of argument `--xml2dlg/-X`. 
+
