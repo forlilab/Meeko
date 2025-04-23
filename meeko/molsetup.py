@@ -205,7 +205,6 @@ class Atom(BaseJSONParsable):
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
     graph: list[int] = field(default_factory=list)
-    interaction_vectors: list[np.array] = field(default_factory=list)
 
     is_dummy: bool = False
     is_pseudo_atom: bool = False
@@ -223,7 +222,6 @@ class Atom(BaseJSONParsable):
             "atom_type": obj.atom_type,
             "is_ignore": obj.is_ignore,
             "graph": obj.graph,
-            "interaction_vectors": [v.tolist() for v in obj.interaction_vectors],
             "is_dummy": obj.is_dummy,
             "is_pseudo_atom": obj.is_pseudo_atom,
         }
@@ -239,7 +237,6 @@ class Atom(BaseJSONParsable):
             "atom_type",
             "is_ignore",
             "graph",
-            "interaction_vectors",
             "is_dummy",
             "is_pseudo_atom",
         }
@@ -256,7 +253,6 @@ class Atom(BaseJSONParsable):
         atom_type = obj["atom_type"]
         is_ignore = obj["is_ignore"]
         graph = obj["graph"]
-        interaction_vectors = [np.asarray(i) for i in obj["interaction_vectors"]]
         is_dummy = obj["is_dummy"]
         is_pseudo_atom = obj["is_pseudo_atom"]
         output_atom = cls(
@@ -268,7 +264,6 @@ class Atom(BaseJSONParsable):
             atom_type,
             is_ignore,
             graph,
-            interaction_vectors,
             is_dummy,
             is_pseudo_atom,
         )
@@ -664,7 +659,6 @@ class MoleculeSetup(BaseJSONParsable):
         is_ignore: bool = DEFAULT_IS_IGNORE,
         anchor_list: list[int] = None,
         rotatable: bool = False,
-        directional_vectors: list[int] = None,
     ):
         """
         Adds a pseudoatom with all the specified attributes to the MoleculeSetup. Default values will be used for any
@@ -687,8 +681,6 @@ class MoleculeSetup(BaseJSONParsable):
             a list of ints indicating the multiple bonds that can be specified as input
         rotatable: bool
             flag indicating if the anchor atom should be marked as rotatable to allow the pseudoatom movement.
-        directional_vectors
-            TODO: needs info
 
         Returns
         -------
@@ -721,9 +713,6 @@ class MoleculeSetup(BaseJSONParsable):
         if anchor_list is not None:
             for anchor in anchor_list:
                 self.add_bond(pseudoatom_index, anchor, rotatable=rotatable)
-        # Adds directional vectors [Check what this is used for/if this is used]
-        if directional_vectors is not None:
-            self._add_interaction_vectors(pseudoatom_index, directional_vectors)
         # If there are no specified anchor atoms,
         if not self.flexibility_model or not anchor_list:
             return pseudoatom_index
@@ -893,33 +882,6 @@ class MoleculeSetup(BaseJSONParsable):
                     del self.rotamers[bond_id]
         return
 
-    def _add_interaction_vectors(self, atom_index: int, vector_list: list[np.array]):
-        """
-        Adds input vector list to the list of directional interaction vectors for the specified atom.
-
-        Parameters
-        ----------
-        atom_index: int
-            index of the atom to add the vectors to
-        vector_list: list[np.array]
-            a list of directional interaction vectors
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        IndexError
-            if the specified atom index does not exist or is a dummy atom.
-        """
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom."
-            )
-        for vector in vector_list:
-            self.atoms[atom_index].interaction_vectors.append(vector)
-        return
 
     @property
     def true_atom_count(self):
@@ -1214,13 +1176,6 @@ class MoleculeSetup(BaseJSONParsable):
                 "GET_GRAPH: provided atom index is out of range or is a dummy atom"
             )
         return self.atoms[atom_index].graph
-
-    def get_interaction_vectors(self, atom_index: int):
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "GET_INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom"
-            )
-        return self.atoms[atom_index].interaction_vectors
 
     # endregion
 
