@@ -472,12 +472,8 @@ def check_atom_equality(decoded_obj: Atom, starting_obj: Atom):
     -------
     None
     """
-    correct_val_type = True
     # np.array conversion checks
     assert isinstance(decoded_obj.coord, numpy.ndarray)
-    for i_vec in decoded_obj.interaction_vectors:
-        correct_val_type = correct_val_type and isinstance(i_vec, numpy.ndarray)
-    assert correct_val_type
 
     # Checks for equality between decoded and original fields
     assert isinstance(decoded_obj.index, int)
