@@ -1457,6 +1457,7 @@ class Polymer(BaseJSONParsable):
             "chosen_by_fewest_missing_H": {},
             "chosen_by_default": {},
             "matched_with_H_anomaly": {},
+            "matched_with_excess_bond": [],
             "no_match": [],
             "no_mol": [],
             "msg": "",
@@ -1657,6 +1658,10 @@ class Polymer(BaseJSONParsable):
                     template_key, 
                     {"H_miss": H_miss, "H_excess": len(H_excess)}
                 )
+            bond_excess = all_stats["bonded_atoms_excess"][index]
+            if bond_excess:
+                log["matched_with_excess_bond"].append(residue_key)
+                logger.warning(f"matched with excess inter-residue bond(s): {residue_key}")
 
             if template is None:
                 rdkit_mol = None
