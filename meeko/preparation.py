@@ -83,7 +83,7 @@ class MoleculePreparation:
         rigidify_bonds_indices=[],
         input_atom_params=None,
         load_atom_params="ad4_types",
-        add_atom_types=(),
+        add_atom_types=None,
         input_offatom_params=None,
         load_offatom_params=None,
         charge_model="gasteiger",
@@ -422,7 +422,7 @@ class MoleculePreparation:
 
             atom_params.update(d)
 
-        if len(add_atom_types) > 0:
+        if add_atom_types is not None and len(add_atom_types) > 0:
             group_keys = list(atom_params.keys())
             if len(group_keys) != 1:
                 msg = "add_atom_types is usable only when there is one group of parameters"
