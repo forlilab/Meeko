@@ -9,10 +9,12 @@ Introduction
 
 Using the outcomes from the preivous tutorial, this tutorial is intended to show the basic procedure of ligand reconstruction, computing of assessment metrics (ROC-AUC, EF) in a retrospective docking analysis, and the building of regression model involving interaction vectors from AutoDock-GPU. 
 
-The main purpose of this tutorial is to show how to build the necessary interface between packages in retrospective docking analysis and model building via a practical example. But please note that the outcomes and conclusions should not be judged professionally. In practice, thorough profiling of the dataset and feature space, careful selection of the regression model and fine-tuning the coditions, are all necessary steps to achieve the optimal model. 
+The main purpose of this tutorial is to show how to build the necessary interface between packages in retrospective docking analysis and model building via a practical example. But please note that the outcomes and conclusions should not be judged professionally. In practice, thorough profiling of the dataset and feature space, careful selection of the regression model, and fine-tuning of the meta-parameters are all necessary steps to achieve an optimal model. 
 
 Additional Dependencies
 =======================
+
+    - scikit-learn (sklearn)
 
 Single-Pose Molecule Reconstruction
 ===================================
@@ -130,8 +132,86 @@ Next, we will reconnect to the Ringtail database and use a custom SQL query to s
     
 While the docking results are stored in the database as JSON-encoded fields, this section shows how they can be efficiently reconstituted into usable RDKit molecules. This "re-hydration" step complements the earlier ETL process by enabling further cheminformatics analysis and modeling. The reconstructed molecules serve as tangible, analyzable outputs ready for visualization, feature extraction, or machine learning workflows. 
 
-Basic Metrics (ROC-AUC, EF) based on Single Metric
-==================================================
+Basic Metrics (ROC AUC, EF) based on Single Numerical Metric
+============================================================
+
+ROC AUC (Area Under the Receiver Operating Characteristic Curve) and EF (Enrichment Factor) are two commonly used metrics in retrospective docking analysis to evaluate the performance of a docking protocol. In this section, we will use the docking score as the single numerical metric and compute the ROC AUC and EF values. 
+
+To begin with, we will need to label the actives and decoys in the docking results. There are various ways to do this, and in this example we will just use the ligand names to locate the input files and assign the labels accordingly. If working with larger datasets, having these labels entered into the Ligands table in the SQLite database would be more efficient to avoid repeated lookup. 
+
+.. code-block:: python
+
+    import glob
+
+    # Keep record of active and decoy ligands
+    active_list = [x.replace("actives_final/", "").replace(".pdbqt", "") for x in glob.glob("actives_final/*.pdbqt")]
+    decoy_list = [x.replace("decoys_final/", "").replace(".pdbqt", "") for x in glob.glob("decoys_final/*.pdbqt")]
+
+Now, we will continue our work on the previously generated DataFrame "best_df" and add a new column "label" to indicate whether the ligand is an active or decoy. Active ligands will be labeled as 1, while decoys will be labeled as 0. 
+
+.. code-block:: python
+
+    # Add a label column to the best_df DataFrame
+    best_df["label"] = 0
+    best_df.loc[best_df["LigName"].isin(active_list), "label"] = 1
+
+Here we will provide you with some reusable code snippets to compute these basic metrics:  
+
+.. code-block:: python
+
+    from sklearn.metrics import roc_auc_score
+
+    def enrichment_factor(scores, labels, top_fraction=0.01):
+        """
+        Calculate the enrichment factor (EF) for a given set of scores and labels.
+        The EF is a measure of how well the top fraction of scores enriches the active compounds.
+
+        Parameters
+        ----------
+        scores : list
+            List of docking scores (lower is better).
+        labels : list
+            List of binary labels (1 for active, 0 for decoy).
+        top_fraction : float
+            Fraction of top scores to consider for enrichment (default is 0.01).
+        
+        Returns
+        -------
+        float
+            Enrichment factor (EF) value.
+        """
+
+        N = len(scores)
+        top_n = max(1, int(N * top_fraction))
+        
+        df = pd.DataFrame({"score": scores, "label": labels})
+        df = df.sort_values(by="score")  # assuming more negative = better docking score
+        top_hits = df.head(top_n)
+        
+        num_actives_in_top = top_hits["label"].sum()
+        total_actives = df["label"].sum()
+        
+        if total_actives == 0:
+            return 0
+        ef = (num_actives_in_top / top_n) / (total_actives / N)
+        
+        return ef
+
+
+At this point, you may already find out that we are about to make the very naive, yet extremely common assumption that the docking score on its own is a good predictor to discriminate active ligands and inactives. We will compute the ROC AUC and EF values and see if that's true in our case (or your own benchmarking calculation)... 
+
+.. code-block:: python
+
+    # Compute and get the ROC AUC and enrichment factor at 1% of the dataset
+    scores, labels = best_df["docking_score"], best_df["label"]
+        
+    auc = roc_auc_score(labels, -scores)  # use -score since lower is better
+    ef1 = enrichment_factor(scores, labels, top_fraction=0.01)
+
+    print(f"   ROC AUC: {auc:.3f}")
+    print(f"   EF1%   : {ef1:.2f}\n")
+
+In this example, we have used the docking score as the single numerical metric to compute the ROC AUC and EF values. Unfortunately, the ROC AUC value is not very high (0.441), and the EF value is also not very impressive (1.87). This indicates that the docking score alone may not be a reliable predictor of ligand activity in our case. In the next section, we will explore the use of interaction vectors to improve the predictive power. 
 
 
 Vectorization of Interactions, XGBoost Modeling and SHAP explanation
