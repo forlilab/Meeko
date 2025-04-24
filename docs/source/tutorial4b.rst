@@ -20,6 +20,12 @@ Additional Dependencies
 
 - `SHAP <https://shap.readthedocs.io/en/latest/>`_
 
+To add these dependencies to your current micromamba environment (supposedly "meeko_tutorial_py311"), simply run the following command:
+
+.. code-block:: bash
+
+    micromamba install -n meeko_tutorial_py311 -c conda-forge scikit-learn xgboost shap
+
 Single-Pose Molecule Reconstruction
 ===================================
 
