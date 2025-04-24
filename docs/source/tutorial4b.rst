@@ -212,8 +212,8 @@ At this point, you may already find out that we are about to make the very naive
 
 In this example, we have used the docking score as the single numerical metric to compute the ROC AUC and EF values. Unfortunately, the ROC AUC value is not very high (0.441), and the EF value is also not very impressive (1.87). This indicates that the docking score alone may not be a reliable predictor of ligand activity in our case. In the next section, we will explore the use of interaction vectors to improve the predictive power. 
 
-Vectorization of Interactions, XGBoost Modeling and Explnation with SHAP
-========================================================================
+Vectorization of Interactions
+=============================
 
 To perform advanced, interaction-based statistical analysis or machine learning on the docking results, we need to extract the interaction vectors from the Ringtail database. So first, we will populate a "record" dictionary by retriving the information for all poses in the database. Specifically, this dictionary will contain the following information:
 - `pose_id`: The unique identifier for the pose.
@@ -290,33 +290,159 @@ Below is a complete, from-start-to-end, Python script that populates such "recor
     # Close the connection
     conn.close()
 
-With that, the "record" is filled with raw data from the database: 
+With that, the "record" is filled with raw data from the database like the following: 
 
 .. code-block:: bash
 
     Pose ID: 1
-    Ligand Name: CHEMBL609440_0
-    Docking Score: -10.73
-    Ligand Efficiency: -0.3353125
+    Ligand Name: CHEMBL299313_0
+    Docking Score: -10.4
+    Ligand Efficiency: -0.4
     Interactions: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29']
     Label: active
     Pose ID: 2
-    Ligand Name: CHEMBL609440_0
-    Docking Score: -10.39
-    Ligand Efficiency: -0.3246875
-    Interactions: ['1', '2', '4', '6', '11', '12', '15', '16', '17', '19', '20', '22', '26', '27', '28', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49']
+    Ligand Name: CHEMBL299313_0
+    Docking Score: -9.97
+    Ligand Efficiency: -0.38346153846153846
+    Interactions: ['0', '1', '4', '5', '6', '8', '9', '11', '12', '14', '15', '17', '18', '19', '21', '22', '25', '27', '28', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39']
     Label: active
     Pose ID: 3
-    Ligand Name: CHEMBL609440_0
-    Docking Score: -10.01
-    Ligand Efficiency: -0.3128125
-    Interactions: ['0', '1', '2', '10', '11', '12', '14', '15', '16', '19', '23', '27', '28', '29', '36', '40', '43', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62']
+    Ligand Name: CHEMBL299313_0
+    Docking Score: -9.75
+    Ligand Efficiency: -0.375
+    Interactions: ['0', '1', '3', '5', '6', '7', '8', '9', '10', '12', '13', '14', '15', '18', '19', '24', '25', '27', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52']
     Label: active
     Pose ID: 4
-    Ligand Name: CHEMBL76658_0
-    Docking Score: -14.71
-    Ligand Efficiency: -0.3587804878048781
-    Interactions: ['2', '4', '6', '8', '11', '15', '17', '19', '20', '22', '23', '26', '27', '28', '31', '32', '35', '37', '40', '41', '42', '43', '45', '49', '51', '53', '56', '59', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70', '71', '72', '73', '74', '75', '76']
+    Ligand Name: CHEMBL610243_0
+    Docking Score: -10.26
+    Ligand Efficiency: -0.30176470588235293
+    Interactions: ['0', '3', '4', '7', '15', '17', '18', '21', '22', '24', '26', '27', '28', '31', '32', '33', '34', '35', '37', '38', '39', '42', '44', '46', '48', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69']
     Label: active
     Pose ID: 5
     ...
+
+At this point, we are not yet ready to build a regression model, as we need to convert the interaction vectors into a suitable format. Moreover, we might want to normalize the feature values to ensure that they are on the same scale. Herein, we are providing the following reusable code snippet as a standard procedure to convert, especially the interaction vectors, into a usable format. 
+
+.. code-block:: python
+
+    from sklearn.model_selection import train_test_split
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import classification_report
+    from sklearn.feature_extraction import DictVectorizer
+    from sklearn.preprocessing import StandardScaler
+    import joblib
+
+    def prepare_features_and_labels(ligand_data: list[dict]):
+        """Prepare features and labels for regression model training."""
+        X = []  # List to store feature vectors
+        y = []  # List to store labels (active=1, decoy=0)
+
+        # Process each ligand data entry
+        for record in ligand_data:
+            # Feature vector: Docking score, ligand efficiency (leff), and interaction vector
+            features = {
+                'docking_score': record['docking_score'],
+                'leff': record['leff'],
+            }
+            
+            # Interaction vector: we assume that the `interactions` field contains a list of interaction IDs
+            interaction_vector = dict.fromkeys(record['interactions'], 1)  # Binary vector (1 if interaction is present)
+            
+            # Merge docking score, leff, and interaction vector
+            features.update(interaction_vector)
+            
+            # Append the features to X and label to y
+            X.append(features)
+            y.append(1 if record['label'] == 'active' else 0)  # Assign label 1 for active, 0 for decoy
+
+        return X, y
+
+    def vectorize_features(X: list[dict]):
+        """Vectorize all features using DictVectorizer."""
+        vectorizer = DictVectorizer(sparse=False)  # Use sparse=False for a dense matrix
+        X_vectorized = vectorizer.fit_transform(X)  # Convert to vectorized format
+        return X_vectorized, vectorizer
+
+    # Prepare the data for training the regression model
+    X, y = prepare_features_and_labels(ligand_data)
+
+    # Vectorize the features (including interactions)
+    X_vectorized, vectorizer = vectorize_features(X)
+
+    # Optionally, scale the features (important for models like logistic regression)
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X_vectorized)
+
+    # Split the data into training and testing sets (80% train, 20% test)
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+
+In this example, we first convert the interaction vectors into a binary feature dictionary, so that they can be vectorized together with the docking score and ligand efficiency by `DictVectorizer` from scikit-learn. Technically, the interaction vectors are transformed into a multi-label binary format (one-hot encoding) where each interaction ID becomes a separate feature with a value of 1 if present and 0 otherwise. 
+
+If you are running the code block in a Jupyter notebook, you may want to keep the "X_train, X_test, y_train, y_test" intact for later use with different regression models. 
+
+Logistic Regression and Explanation by Coefficients
+===================================================
+
+Now, our task will be: to find out the most important features that help to discriminate actives and decoys, and to build a regression model that can predict the activity of a ligand based on its docking score, ligand efficiency, and interaction vectors. We will begin with the relatively simple and interpretable Logistic Regression model with L2 regularization. 
+
+.. code-block:: python
+
+    # Train a Logistic Regression Model
+    model = LogisticRegression(max_iter=5000, solver='liblinear', penalty='l2', C=0.01)  # use a smaller C, a.k.a. higher regularization strength if there are imbalanced features
+    model.fit(X_train, y_train)
+
+    # Evaluate the model on the test data
+    y_pred = model.predict(X_test)
+
+    # Print classification report (accuracy, precision, recall, F1-score)
+    print(classification_report(y_test, y_pred))
+
+    # Step 7: Print Feature Weights (Coefficients)
+    # Get feature names from the vectorizer
+    feature_names = vectorizer.get_feature_names_out()
+
+    # Get the coefficients from the model
+    coefficients = model.coef_[0]
+
+    # Print each feature with its corresponding weight (coefficient)
+    for feature, coefficient in zip(feature_names, coefficients):
+        print(f"Feature: {feature}, Weight: {coefficient}")
+
+In our case, the Logistic Regression model achieved a recall of 0.78 on actives (class = 1) meaning the model is retrieving a good fraction of true binders. And a precision of 0.75 on actives means that 3 out of 4 predicted actives are actually active. 
+
+Logistic Regression is a linear model, and therefore, the feature importance and the direction of correlation can be determined from the absolute values and the signes of the coefficients. Here's a simple code snippet to visualize the top 10 features with the highest absolute coefficients: 
+
+.. code-block:: python
+
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    # Visualize feature importance
+    coefficients = model.coef_[0]
+    features = vectorizer.get_feature_names_out()
+
+    # Create a DataFrame to easily sort the features by importance
+    feature_importance = pd.DataFrame({
+        'Feature': features,
+        'Coefficient': coefficients
+    })
+
+    # Sort by absolute coefficient value
+    feature_importance['Absolute Coefficient'] = feature_importance['Coefficient'].abs()
+    feature_importance = feature_importance.sort_values(by='Absolute Coefficient', ascending=False)
+
+    # Plot the top 10 most important features
+    top_features = feature_importance.head(10)
+    plt.barh(top_features['Feature'], top_features['Coefficient'])
+    plt.xlabel('Coefficient Value')
+    plt.title('Top 10 Most Important Features')
+    plt.show()
+
+.. image:: images/lg-importance.png
+   :alt: Logistic Regression Feature Importance
+   :width: 100%
+   :align: center
+
+XGBoost Modeling and Explanation with SHAP
+=========================================
