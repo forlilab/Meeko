@@ -14,9 +14,11 @@ The main purpose of this tutorial is to show how to build the necessary interfac
 Additional Dependencies
 =======================
 
-    - scikit-learn (sklearn)
-    - xgboost
-    - shap
+- `scikit-learn <https://scikit-learn.org/stable/>`_
+
+- `XGBoost <https://xgboost.readthedocs.io/en/stable/>`_
+
+- `SHAP <https://shap.readthedocs.io/en/latest/>`_
 
 Single-Pose Molecule Reconstruction
 ===================================
