@@ -197,7 +197,6 @@ Here we will provide you with some reusable code snippets to compute these basic
         
         return ef
 
-
 At this point, you may already find out that we are about to make the very naive, yet extremely common assumption that the docking score on its own is a good predictor to discriminate active ligands and inactives. We will compute the ROC AUC and EF values and see if that's true in our case (or your own benchmarking calculation)... 
 
 .. code-block:: python
@@ -213,6 +212,111 @@ At this point, you may already find out that we are about to make the very naive
 
 In this example, we have used the docking score as the single numerical metric to compute the ROC AUC and EF values. Unfortunately, the ROC AUC value is not very high (0.441), and the EF value is also not very impressive (1.87). This indicates that the docking score alone may not be a reliable predictor of ligand activity in our case. In the next section, we will explore the use of interaction vectors to improve the predictive power. 
 
+Vectorization of Interactions, XGBoost Modeling and Explnation with SHAP
+========================================================================
 
-Vectorization of Interactions, XGBoost Modeling and SHAP explanation
-=====================================================================
+To perform advanced, interaction-based statistical analysis or machine learning on the docking results, we need to extract the interaction vectors from the Ringtail database. So first, we will populate a "record" dictionary by retriving the information for all poses in the database. Specifically, this dictionary will contain the following information:
+- `pose_id`: The unique identifier for the pose.
+- `ligand_name`: The name of the ligand.
+- `docking_score`: The docking score of the pose.
+- `leff`: The ligand efficiency of the pose.
+- `interactions`: A list of interaction IDs associated with the pose.
+
+And again, we will be labeling, if not already, the actives and decoys in the docking results: 
+- `label`: The label indicating whether the ligand is an active or decoy.
+
+Below is a complete, from-start-to-end, Python script that populates such "record" and print for preview: 
+
+.. code-block:: python
+
+    import glob
+    import sqlite3
+
+    # Get label information, if it's not already in the database
+    active_list = [x.replace("actives_final/", "").replace(".pdbqt", "") for x in glob.glob("actives_final/*.pdbqt")]
+    decoy_list = [x.replace("decoys_final/", "").replace(".pdbqt", "") for x in glob.glob("decoys_final/*.pdbqt")]
+
+    # Connect to the database
+    conn = sqlite3.connect("4EY7_combined.db")
+    cursor = conn.cursor()
+
+    # Query to join Results and Interactions tables on Pose_ID
+    cursor.execute("""
+        SELECT r.Pose_ID, r.LigName, r.docking_score, r.leff, GROUP_CONCAT(i.interaction_id) AS interactions
+        FROM Results r
+        LEFT JOIN Interactions i ON r.Pose_ID = i.Pose_ID
+        GROUP BY r.Pose_ID
+    """)
+
+    # Fetch and process the results
+    rows = cursor.fetchall()
+
+    # List to store individual records (each row as a separate record)
+    ligand_data = []
+
+    if rows:
+        for row in rows:
+            pose_id, ligand_name, docking_score, leff, interactions = row
+
+            # Store each pose as a separate record with its corresponding data
+            record = {
+                'pose_id': pose_id,
+                'ligand_name': ligand_name,
+                'docking_score': docking_score,
+                'leff': leff,
+                'interactions': interactions.split(',') if interactions else [],
+            }
+
+            # Assign a label based on whether the ligand is in the active or decoy list
+            if ligand_name in active_list:
+                record['label'] = 'active'
+            elif ligand_name in decoy_list:
+                record['label'] = 'decoy'
+
+            # Append the record
+            ligand_data.append(record)
+
+        # Print the records for inspection
+        for record in ligand_data:
+            print(f"Pose ID: {record['pose_id']}")
+            print(f"Ligand Name: {record['ligand_name']}")
+            print(f"Docking Score: {record['docking_score']}")
+            print(f"Ligand Efficiency: {record['leff']}")
+            print(f"Interactions: {record['interactions']}")
+            print(f"Label: {record['label']}")
+    else:
+        print("No data found.")
+
+    # Close the connection
+    conn.close()
+
+With that, the "record" is filled with raw data from the database: 
+
+.. code-block:: bash
+
+    Pose ID: 1
+    Ligand Name: CHEMBL609440_0
+    Docking Score: -10.73
+    Ligand Efficiency: -0.3353125
+    Interactions: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29']
+    Label: active
+    Pose ID: 2
+    Ligand Name: CHEMBL609440_0
+    Docking Score: -10.39
+    Ligand Efficiency: -0.3246875
+    Interactions: ['1', '2', '4', '6', '11', '12', '15', '16', '17', '19', '20', '22', '26', '27', '28', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49']
+    Label: active
+    Pose ID: 3
+    Ligand Name: CHEMBL609440_0
+    Docking Score: -10.01
+    Ligand Efficiency: -0.3128125
+    Interactions: ['0', '1', '2', '10', '11', '12', '14', '15', '16', '19', '23', '27', '28', '29', '36', '40', '43', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62']
+    Label: active
+    Pose ID: 4
+    Ligand Name: CHEMBL76658_0
+    Docking Score: -14.71
+    Ligand Efficiency: -0.3587804878048781
+    Interactions: ['2', '4', '6', '8', '11', '15', '17', '19', '20', '22', '23', '26', '27', '28', '31', '32', '35', '37', '40', '41', '42', '43', '45', '49', '51', '53', '56', '59', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70', '71', '72', '73', '74', '75', '76']
+    Label: active
+    Pose ID: 5
+    ...
