@@ -506,3 +506,5 @@ And finally, we will explain the XGBoost model using SHAP (SHapley Additive exPl
    :width: 60%
    :align: center
 
+Here and again, we are seeing interaction ID 51 & 186 and they both exhibit a negative correlation (having more red dots on the left, and more blue on the right) with the prediction of active ligands. Good news is that, among all interactions, we might have found a potentially useful one with interaction ID 21, which corresponds to hydrogen bonding with the backbone N atom of Phe 295. In both the previous logistic regression model and this XGBoost model, this interaction stands out with a positive correlation and is nearly as important as the docking score. In fatc, this interaction is one of the characteristic hydrogen-bonding interactions of Donepezil, according to the original complex structure (PDB ID 4EY7). 
+
