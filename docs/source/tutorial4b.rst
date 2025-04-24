@@ -99,10 +99,6 @@ Next, we will reconnect to the Ringtail database and use a custom SQL query to s
     # Conviniently, created a table to store the best poses
     best_df = pd.read_sql(best_pose_query, conn)
 
-    # Execute the query and fetch results
-    cursor.execute(sql_query)
-    results = cursor.fetchall()
-
     # Reconstruct molecules
     reconstructed_mols = []
     for _, row in best_df.iterrows():
@@ -134,8 +130,8 @@ Next, we will reconnect to the Ringtail database and use a custom SQL query to s
     
 While the docking results are stored in the database as JSON-encoded fields, this section shows how they can be efficiently reconstituted into usable RDKit molecules. This "re-hydration" step complements the earlier ETL process by enabling further cheminformatics analysis and modeling. The reconstructed molecules serve as tangible, analyzable outputs ready for visualization, feature extraction, or machine learning workflows. 
 
-Basic Metrics (ROC-AUC, EF) based on Single Variable
-====================================================
+Basic Metrics (ROC-AUC, EF) based on Single Metric
+==================================================
 
 
 Vectorization of Interactions, XGBoost Modeling and SHAP explanation
