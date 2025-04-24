@@ -7,7 +7,7 @@ Retrospective Docking Analysis and Model Building
 Introduction
 ============
 
-Using the outcomes from the preivous tutorial, this tutorial is intended to show the basic procedure of ligand reconstruction, computing of assessment metrics (ROC-AUC, EF) in a retrospective docking analysis, and the building of regression model involving interaction vectors from AutoDock-GPU. 
+Using the outcomes from the previous tutorial, this tutorial is intended to show the basic procedure of ligand reconstruction, computing of assessment metrics (ROC-AUC, EF) in a retrospective docking analysis, and the building of regression model involving interaction vectors from AutoDock-GPU. 
 
 The main purpose of this tutorial is to show how to build the necessary interface between packages in retrospective docking analysis and model building via a practical example. But please note that the outcomes and conclusions should not be judged professionally. In practice, thorough profiling of the dataset and feature space, careful selection of the regression model, and fine-tuning of the meta-parameters are all necessary steps to achieve an optimal model. 
 
@@ -31,7 +31,7 @@ Single-Pose Molecule Reconstruction
 
 In this section, we demonstrate how to use Meeko's API functions to reconstruct RDKit molecules from docking results stored in a Ringtail database, which is essentially a SQLite databse. This reconstruction approach aligns with the internal method Ringtail uses when exporting filtered poses to SDF files. Instead of applying Ringtail’s built-in filtering tools, we will select poses using a custom SQL query. The selected poses will then be reconstructed using their SMILES strings, atom index mappings, hydrogen-parent relationships, and 3D coordinates. 
 
-To begin with, we will use Ringtail to extract, transform and store the docking results from *.dlg files of both the actives and decoys ligand sets. Assuming that the *.dlg files are located in the folders named "4EY7_actives" and "4EY7_decoys" in the current directly, we will use the following Python code snippet to write all docking results to a Ringtail database. 
+To begin with, we will use Ringtail to extract, transform and store the docking results from *.dlg files of both the actives and decoys ligand sets. Assuming that the *.dlg files are located in the folders named "4EY7_actives" and "4EY7_decoys" in the current directory, we will use the following Python code snippet to write all docking results to a Ringtail database. 
 
 .. code-block:: python
 
@@ -112,7 +112,7 @@ Next, we will reconnect to the Ringtail database and use a custom SQL query to s
     )
     """
 
-    # Conviniently, created a table to store the best poses
+    # Conveniently, created a table to store the best poses
     best_df = pd.read_sql(best_pose_query, conn)
 
     # Reconstruct molecules
@@ -229,7 +229,7 @@ In this example, we have used the docking score as the single numerical metric t
 Vectorization of Interactions
 =============================
 
-To perform advanced, interaction-based statistical analysis or machine learning on the docking results, we need to extract the interaction vectors from the Ringtail database. So first, we will populate a "record" dictionary by retriving the information for all poses in the database. Specifically, this dictionary will contain the following information:
+To perform advanced, interaction-based statistical analysis or machine learning on the docking results, we need to extract the interaction vectors from the Ringtail database. So first, we will populate a "record" dictionary by retrieving the information for all poses in the database. Specifically, this dictionary will contain the following information:
 
 - `pose_id`: The unique identifier for the pose.
 
@@ -430,7 +430,7 @@ Now, our task will be: to find out the most important features that help to disc
 
 In our case, the Logistic Regression model achieved a recall of 0.78 on actives (class = 1) meaning the model is retrieving a good fraction of true binders. And a precision of 0.75 on actives means that 3 out of 4 predicted actives are actually active. 
 
-Logistic Regression is a linear model, and therefore, the feature importance and the direction of correlation can be determined from the absolute values and the signes of the coefficients. Here's a simple code snippet to visualize the top 10 features with the highest absolute coefficients: 
+Logistic Regression is a linear model, and therefore, the feature importance and the direction of correlation can be determined from the absolute values and the signs of the coefficients. Here's a simple code snippet to visualize the top 10 features with the highest absolute coefficients: 
 
 .. code-block:: python
 
@@ -465,10 +465,10 @@ In our case, interestingly, we found that there are potentially more important i
    :width: 60%
    :align: center
 
-We may retrieve the details about the interaction using the interaction IDs. In this example, interaction ID 51 corresponds to Van der Waals interaction with carbon atom CD2 of His 447, an important binding residue at the active side. However, given the property of the imidazole ring and the H-bonding environment, occupying this position, especially approaching this carbon without solvent buffering, may not be favorable for binding. Interaction ID 186 corresponds to interaction with the backbone O atom of Thr 83, which is potentially disrupting the alpha-helix structure of in the region. In fact, the distribution over interaction ID 186 is quite skewed, with only a very small part of the poses exhibiting this interaction. 
+We may retrieve the details about the interaction using the interaction IDs. In this example, interaction ID 51 corresponds to Van der Waals interaction with carbon atom CD2 of His 447, an important binding residue at the active side. However, given the property of the imidazole ring and the H-bonding environment, occupying this position, especially approaching this carbon without solvent buffering, may not be favorable for binding. Interaction ID 186 corresponds to interaction with the backbone O atom of Thr 83, which is potentially disrupting the alpha-helix structure in this region. In fact, the distribution over interaction ID 186 is quite skewed, with only a very small part of the poses exhibiting this interaction. 
 
 XGBoost Modeling and Explanation with SHAP
-=========================================
+==========================================
 
 In this section, we will use a fundamentally different regression model, XGBoost, to see if we can improve the performance and/or confirm the findings from the Logistic Regression model. We will reuse the same dataset, same feature vectorization, and the same exact train/test split: 
 
@@ -514,5 +514,5 @@ And finally, we will explain the XGBoost model using SHAP (SHapley Additive exPl
    :width: 60%
    :align: center
 
-Here and again, we are seeing interaction ID 51 & 186 and they both exhibit a negative correlation (having more red dots on the left, and more blue on the right) with the prediction of active ligands. Good news is that, among all interactions, we might have found a potentially useful one with interaction ID 21, which corresponds to hydrogen bonding with the backbone N atom of Phe 295. In both the previous logistic regression model and this XGBoost model, this interaction stands out with a positive correlation and is nearly as important as the docking score. In fatc, this interaction is one of the characteristic hydrogen-bonding interactions of Donepezil, according to the original complex structure (PDB ID 4EY7). 
+Here and again, we are seeing interaction ID 51 & 186 and they both exhibit a negative correlation (having more red dots on the left, and more blue on the right) with the prediction of active ligands. Good news is that, among all interactions, we might have found a potentially useful one with interaction ID 21, which corresponds to hydrogen bonding with the backbone N atom of Phe 295. In both the previous logistic regression model and this XGBoost model, this interaction stands out with a positive correlation and is nearly as important as the docking score. In fact, this interaction is one of the characteristic hydrogen-bonding interactions of Donepezil, according to the original complex structure (PDB ID 4EY7). 
 
