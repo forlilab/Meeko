@@ -15,6 +15,8 @@ Additional Dependencies
 =======================
 
     - scikit-learn (sklearn)
+    - xgboost
+    - shap
 
 Single-Pose Molecule Reconstruction
 ===================================
@@ -66,12 +68,16 @@ In the following Python code block, we have first defined a helper function `reb
 
         # Create base molecule
         mol = Chem.MolFromSmiles(smiles)
+        
         # Parse coordinates: [['x', 'y', 'z'], ...] → [(float, float, float), ...]
         coordinates = [tuple(map(float, coord)) for coord in json.loads(coordinates_json)]
+        
         # Parse atom index map: [mol_idx1, pose_idx1, mol_idx2, pose_idx2, ...]
         index_map = [int(x) for x in json.loads(atom_index_map_json)]
+        
         # Apply pose to molecule using Meeko logic
         mol = RDKitMolCreate.add_pose_to_mol(mol, coordinates, index_map)
+        
         # Update hydrogen positions
         if h_parent_json:
             h_parent = [int(x) for x in json.loads(h_parent_json)]
@@ -216,13 +222,19 @@ Vectorization of Interactions
 =============================
 
 To perform advanced, interaction-based statistical analysis or machine learning on the docking results, we need to extract the interaction vectors from the Ringtail database. So first, we will populate a "record" dictionary by retriving the information for all poses in the database. Specifically, this dictionary will contain the following information:
+
 - `pose_id`: The unique identifier for the pose.
+
 - `ligand_name`: The name of the ligand.
+
 - `docking_score`: The docking score of the pose.
+
 - `leff`: The ligand efficiency of the pose.
+
 - `interactions`: A list of interaction IDs associated with the pose.
 
 And again, we will be labeling, if not already, the actives and decoys in the docking results: 
+
 - `label`: The label indicating whether the ligand is an active or decoy.
 
 Below is a complete, from-start-to-end, Python script that populates such "record" and print for preview: 
@@ -389,7 +401,7 @@ Now, our task will be: to find out the most important features that help to disc
 .. code-block:: python
 
     # Train a Logistic Regression Model
-    model = LogisticRegression(max_iter=5000, solver='liblinear', penalty='l2', C=0.01)  # use a smaller C, a.k.a. higher regularization strength if there are imbalanced features
+    model = LogisticRegression(max_iter=5000, solver='liblinear', penalty='l2', C=0.01)
     model.fit(X_train, y_train)
 
     # Evaluate the model on the test data
@@ -398,8 +410,7 @@ Now, our task will be: to find out the most important features that help to disc
     # Print classification report (accuracy, precision, recall, F1-score)
     print(classification_report(y_test, y_pred))
 
-    # Step 7: Print Feature Weights (Coefficients)
-    # Get feature names from the vectorizer
+    # Print Feature Weights (Coefficients)
     feature_names = vectorizer.get_feature_names_out()
 
     # Get the coefficients from the model
@@ -439,10 +450,59 @@ Logistic Regression is a linear model, and therefore, the feature importance and
     plt.title('Top 10 Most Important Features')
     plt.show()
 
+In our case, interestingly, we found that there are potentially more important interaction features than docking score, and they are contributing negatively to the prediction of active ligands. Perhaps, these interactions are non-specific and prevalent in decoys, and the model is learning to penalize them, while they don't have predominant contribution to the binding of actives. 
+
 .. image:: images/lg-importance.png
    :alt: Logistic Regression Feature Importance
-   :width: 100%
+   :width: 60%
    :align: center
+
+We may retrieve the details about the interaction using the interaction IDs. In this example, interaction ID 51 corresponds to Van der Waals interaction with carbon atom CD2 of His 447, an important binding residue at the active side. However, given the property of the imidazole ring and the H-bonding environment, occupying this position, especially approaching this carbon without solvent buffering, may not be favorable for binding. Interaction ID 186 corresponds to interaction with the backbone O atom of Thr 83, which is potentially disrupting the alpha-helix structure of in the region. In fact, the distribution over interaction ID 186 is quite skewed, with only a very small part of the poses exhibiting this interaction. 
 
 XGBoost Modeling and Explanation with SHAP
 =========================================
+
+In this section, we will use a fundamentally different regression model, XGBoost, to see if we can improve the performance and/or confirm the findings from the Logistic Regression model. We will reuse the same dataset, same feature vectorization, and the same exact train/test split: 
+
+.. code-block:: python
+
+    # Train an XGBoost Classifier
+    model = xgb.XGBClassifier(
+        max_depth=6,  # Control the depth of the trees
+        learning_rate=0.1,  # Step size shrinkage
+        n_estimators=100,  # Number of boosting rounds
+        scale_pos_weight=1,  # Handle imbalanced data
+        objective='binary:logistic',  # Binary classification problem
+        eval_metric='logloss',  # Log loss as the evaluation metric
+        use_label_encoder=False  # Disable the label encoder warning
+    )
+    model.fit(X_train, y_train)
+
+    # Evaluate the model on the test data
+    y_pred = model.predict(X_test)
+
+    # Print classification report (accuracy, precision, recall, F1-score)
+    print(classification_report(y_test, y_pred))
+
+With XGBoost, we will gain a minor improvement in the recall of actives (0.83) and in the precision (0.82). Now, 4 out of 5 predicted actives are actually active. 
+
+And finally, we will explain the XGBoost model using SHAP (SHapley Additive exPlanations) values. SHAP values provide a unified and relatively invariant measure of feature importance and can help us understand the contribution of each feature to the model's predictions. It is very straightforward to generate a beeswarm plot with SHAP: 
+
+.. code-block:: python
+
+    import shap
+
+    # Initialize SHAP explainer
+    explainer = shap.TreeExplainer(model)
+
+    # Calculate SHAP values
+    shap_values = explainer.shap_values(X_test)
+
+    # Plot SHAP summary
+    shap.summary_plot(shap_values, X_test, feature_names=vectorizer.get_feature_names_out())
+
+.. image:: images/xgb-shap.png
+   :alt: XGBoost Explained by SHAP
+   :width: 60%
+   :align: center
+
