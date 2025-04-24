@@ -13,7 +13,7 @@ In this tutorial, we will walk you through the basic steps required for virtual 
 Ligand Preparation
 ==================
 
-Acetylcholinesterase (AChE) is a well-studied target for drug discovery, particularly in the context of neurodegenerative diseases. In this section, we will prepare two set of ligands for virtual screening against AChE using AutoDock-GPU. The process involves converting SMILES strings to molecular structures, applying protonation state assignment, generating conformers, and saving the prepared ligands in PDBQT format for docking. 
+Acetylcholinesterase (AChE) is a well-studied target for drug discovery, particularly in the context of neurodegenerative diseases. In this section, we will prepare two sets of ligands for virtual screening against AChE using AutoDock-GPU. The process involves converting SMILES strings to molecular structures, applying protonation state assignment, generating conformers, and saving the prepared ligands in PDBQT format for docking. 
 
 <<<<<<< HEAD
 Specifically, we will retrieve the curated ligand set from the DUD-E dataset, where human AChE is listed under the target tage "aces/P22303". The ligand set includes both actives and decoys, which may be used to evaluate the performance of the established docking-selection protocol. As a minimum requirement, you need to download "aces/actives_final.ism" and "aces/decoys_final.ism", which contain the SMILES strings and ligand names. 
@@ -21,7 +21,11 @@ Specifically, we will retrieve the curated ligand set from the DUD-E dataset, wh
 Specifically, we will retrieve the curated ligand set from the DUD-E dataset, where human AChE is listed under the target tag "aces/P22303". Docking results with both the active and decoy ligand sets may be used to evaluate the performance of the established docking-selection protocol. To achieve a relatively balanced combined dataset, only the first 500 ligands in the decoy ligand set will be processed. As a minimum requirement, you need to download "aces/actives_final.ism" and "aces/decoys_final.ism", which contain the SMILES strings and ligand names as the starting information of the ligands. 
 >>>>>>> 44e2b91 ((doc) outline of 4b)
 
+<<<<<<< HEAD
 In regard to the precedure, we will use the `molscrub` package to assign protonation states and generate ligand conformers. Then, we will use the corresponding writer functions in `meeko` to save the prepared ligands into PDBQT files, which are the required input format for AutoDock-GPU. The ligand preparation process will be parallelized using the `multiprocessing` module to speed up the processing time. 
+=======
+Regarding the procedure, we will use the `molscrub` package to assign protonation states and generate ligand conformers. Then, we will use the respective writer functions in `meeko` to save the prepared ligand molecules into PDBQT files, which are the required input format for AutoDock-GPU. The ligand preparation process will be parallelized using the `multiprocessing` module to speed up the processing time. 
+>>>>>>> 4d23608 (format and spelling fixes)
 
 The following Python script demonstrates the ligand preparation process with possible multiprocessing. This is a complete Python script and you may use Python from terminal to execute this script. 
 
@@ -118,11 +122,11 @@ The following Python script demonstrates the ligand preparation process with pos
 
 
 Receptor Preparation
-========================
+====================
 
 When starting from a high-resolution crystal structure, the receptor preparation process is relatively straightforward. In this example, we will use a structure of human AChE from the Protein Data Bank (PDB ID: 4EY7), a homodimer in complex with Donepezil. Donepezil is FDA-approved for the treatment of Alzheimer's disease and is a well-studied ligand for AChE. The receptor preparation process involves removing water molecules, adding hydrogens, and saving the prepared receptor in PDBQT format. Additionally, we will define the grid box for docking calculations using the center of the Donepezil ligand in the PDB structure and compute the grid maps using AutoGrid, as the second part of the receptor preparation. 
 
-Specifically, we will be choosing only chain A of the dimeric structure, choosing the first alternate allocation encountered, removing non-protein components, and saving the processed structure in PDBQT format. 
+Specifically, we will be choosing only chain A of the dimeric structure, choosing the first alternate location encountered, removing non-protein components, and saving the processed structure in PDBQT format. 
 
 The following code snippet demonstrates how to retrieve the structure and perform basic structure processing with ProDy. The receptor preparation process is not parallelized, as it is relatively fast and does not require significant computational resources. This is only a part of a Python script and you may execute it in an interactive notebook or use it as a component in your own script. 
 
@@ -235,6 +239,7 @@ The following code snippet demonstrates how to retrieve the structure and perfor
    ]
 
    # Calculating the center of the ligand in the PDB structure
+   # E20 is the residue name for Donepezil in the PDB structure
    center = get_center_of_residue("4EY7", "A", "E20")
 
    # Writing out the grid parameter file (GPF) for AutoDock-GPU
