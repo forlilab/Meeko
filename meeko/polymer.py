@@ -204,13 +204,21 @@ def mapping_by_mcs(mol, ref):
 
     """
     mcs_result = rdFMCS.FindMCS([mol, ref], bondCompare=rdFMCS.BondCompare.CompareAny)
+
+    if not mcs_result.smartsString:
+        return []
+
     mcs_mol = Chem.MolFromSmarts(mcs_result.smartsString)
+    mol_matches = mol.GetSubstructMatches(mcs_mol, uniquify=False)
+    ref_matches = ref.GetSubstructMatches(mcs_mol, uniquify=False)
 
-    mol_idxs = mol.GetSubstructMatch(mcs_mol)
-    ref_idxs = ref.GetSubstructMatch(mcs_mol)
+    atom_maps = []
+    for mol_idxs in mol_matches:
+        for ref_idxs in ref_matches:
+            if len(mol_idxs) == len(ref_idxs):
+                atom_maps.append({i: j for i, j in zip(mol_idxs, ref_idxs)})
 
-    atom_map = {i: j for (i, j) in zip(mol_idxs, ref_idxs)}
-    return atom_map
+    return atom_maps
 
 
 def _snap_to_int(value, tolerance=0.12):
@@ -1522,38 +1530,51 @@ class Polymer(BaseJSONParsable):
                 "bonded_atoms_excess": [],
             }
             mappings = []
+            template_index_to_passing_id = {}
+            counter = 0
             for index, template in enumerate(candidate_templates):
 
                 # match intra-residue graph
-                match_stats, mapping = template.match(raw_mol)
-                mappings.append(mapping)
+                results, matched_mappings = template.match(raw_mol)
+                if candidate_template_keys[index]=="SER": 
+                    print(Chem.MolToSmiles(raw_mol), Chem.MolToSmiles(template.mol))
+                if len(matched_mappings) > 1: 
+                    print(f"Warning: multiple matches found for"
+                          f" {candidate_template_keys[index]}")
+                for match_stats, mapping in zip(results, matched_mappings):
+                    mappings.append(mapping)
+                    template_index_to_passing_id[counter] = index
+                    counter += 1
 
-                # match inter-residue bonds
-                atoms_with_bonds = set()
-                from_raw = {value: key for (key, value) in mapping.items()}
-                for raw_index in raw_atoms_with_bonds:
-                    if raw_index in from_raw:  # bonds can occur on atoms the template does not have
-                        atom_index = from_raw[raw_index]
-                        atoms_with_bonds.add(atom_index)
-                # we treat blunt ends like bonds
-                for res_id, atom_idx in blunt_ends:
-                    if res_id == residue_key:
-                        atoms_with_bonds.add(from_raw[atom_idx])
-                expected = set(template.link_labels)
-                bonded_atoms_found = atoms_with_bonds.intersection(expected)
-                bonded_atoms_missing = expected.difference(atoms_with_bonds)
-                bonded_atoms_excess = atoms_with_bonds.difference(expected)
+                    # match inter-residue bonds
+                    atoms_with_bonds = set()
+                    from_raw = {value: key for (key, value) in mapping.items()}
+                    for raw_index in raw_atoms_with_bonds:
+                        if raw_index in from_raw:  # bonds can occur on atoms the template does not have
+                            atom_index = from_raw[raw_index]
+                            atoms_with_bonds.add(atom_index)
+                    # we treat blunt ends like bonds
+                    for res_id, atom_idx in blunt_ends:
+                        if res_id == residue_key:
+                            atoms_with_bonds.add(from_raw[atom_idx])
+                    expected = set(template.link_labels)
+                    bonded_atoms_found = atoms_with_bonds.intersection(expected)
+                    bonded_atoms_missing = expected.difference(atoms_with_bonds)
+                    bonded_atoms_excess = atoms_with_bonds.difference(expected)
 
-                all_stats["heavy_missing"].append(match_stats["heavy"]["missing"])
-                all_stats["heavy_excess"].append(match_stats["heavy"]["excess"])
-                all_stats["H_excess"].append(match_stats["H"]["excess"])
-                all_stats["H_missing"].append(match_stats["H"]["missing"])
-                all_stats["bonded_atoms_missing"].append(bonded_atoms_missing)
-                all_stats["bonded_atoms_excess"].append(bonded_atoms_excess)
+                    all_stats["heavy_missing"].append(match_stats["heavy"]["missing"])
+                    all_stats["heavy_excess"].append(match_stats["heavy"]["excess"])
+                    all_stats["H_excess"].append(match_stats["H"]["excess"])
+                    all_stats["H_missing"].append(match_stats["H"]["missing"])
+                    all_stats["bonded_atoms_missing"].append(bonded_atoms_missing)
+                    all_stats["bonded_atoms_excess"].append(bonded_atoms_excess)
 
             passed = []
 
-            embedded_indices = [index for index, template in enumerate(candidate_templates) if len(template.link_labels) >= 2]
+            embedded_indices = [
+                imapping for imapping, template_idx in template_index_to_passing_id.items()
+                if len(candidate_templates[template_idx].link_labels) >= 2
+            ]   
             # 1st round
             for i in embedded_indices:
                 if (
@@ -1570,26 +1591,28 @@ class Polymer(BaseJSONParsable):
             if len(passed) == 0: 
                 for i in embedded_indices:
                     auto_blunt = set()
-                    for j, padder_label in candidate_templates[i].link_labels.items():
+                    for j, padder_label in candidate_templates[template_index_to_passing_id[i]].link_labels.items():
                         if residue_chem_templates.padders[padder_label].auto_blunt:
                             auto_blunt.add(j)
                     if (
                         all_stats["heavy_missing"][i]
                         or all_stats["heavy_excess"][i]
-                        or (not set(all_stats["H_excess"][i]) <= set(candidate_templates[i].link_labels) and not excess_H_ok)
+                        or (not set(all_stats["H_excess"][i]) <= set(candidate_templates[template_index_to_passing_id[i]].link_labels) and not excess_H_ok)
                         or not all_stats["bonded_atoms_missing"][i] <= auto_blunt
+                        or len(all_stats["bonded_atoms_excess"][i])
                     ):
                         continue
                     passed.append(i)
 
             # 3rd round
             if len(passed) == 0 or any(all_stats["H_excess"][i] for i in passed): 
-                for i in range(len(candidate_templates)):
+                for i in range(len(mappings)):
                     if (
                         all_stats["heavy_missing"][i]
                         or all_stats["heavy_excess"][i]
                         or (all_stats["H_excess"][i] and not excess_H_ok)
                         or len(all_stats["bonded_atoms_missing"][i])
+                        or len(all_stats["bonded_atoms_excess"][i])
                     ):
                         continue
                     if i not in passed:
@@ -1609,7 +1632,7 @@ class Polymer(BaseJSONParsable):
                     H_excess = all_stats["H_excess"][i]
                     bond_miss = all_stats["bonded_atoms_missing"][i]
                     bond_excess = all_stats["bonded_atoms_excess"][i]
-                    tkey = candidate_template_keys[i]
+                    tkey = candidate_template_keys[template_index_to_passing_id[i]]
                     m += (
                         f"{tkey:10} {heavy_miss=} {heavy_excess=} {H_excess=} {bond_miss=} {bond_excess=}"
                         + eol
@@ -1617,8 +1640,8 @@ class Polymer(BaseJSONParsable):
                 logger.warning(m)
             elif len(passed) == 1 or not raw_mol_has_H:
                 index = passed[0]
-                template_key = candidate_template_keys[index]
-                template = candidate_templates[index]
+                template_key = candidate_template_keys[template_index_to_passing_id[index]]
+                template = candidate_templates[template_index_to_passing_id[index]]
                 mapping = mappings[index]
                 H_miss = all_stats["H_missing"][index]
             else:
@@ -1637,20 +1660,23 @@ class Polymer(BaseJSONParsable):
                     best_idxs = [index for index in passed if len(all_stats["H_excess"][index]) == min_excess_H]
                     
                     if len(best_idxs) > 1: 
-                        tied = " ".join(candidate_template_keys[i] for i in best_idxs)
+                        tied = " ".join(candidate_template_keys[template_index_to_passing_id[i]] for i in best_idxs)
                         m = f"for {residue_key=}, {len(passed)} have passed: "
-                        tkeys = [candidate_template_keys[i] for i in passed]
+                        tkeys = [candidate_template_keys[template_index_to_passing_id[i]] for i in passed]
                         m += f"{tkeys} and tied for fewest missing and excess H: {tied} "
 
                         raise RuntimeError(m)
                 
                 index = best_idxs[0]
-                template_key = candidate_template_keys[index]
+                template_key = candidate_template_keys[template_index_to_passing_id[index]]
+    
                 template = residue_templates[template_key]
                 mapping = mappings[index]
                 H_miss = all_stats["H_missing"][index]
                 log["chosen_by_fewest_missing_H"][residue_key] = template_key
 
+            print(f"residue {residue_key} matched with template {template_key}")
+            print(Chem.MolToSmiles(raw_mol), Chem.MolToSmiles(template.mol))
             H_miss = all_stats["H_missing"][index]
             H_excess = all_stats["H_excess"][index]
             if H_miss or H_excess: 
@@ -3052,42 +3078,48 @@ class ResidueTemplate(BaseJSONParsable):
         return
 
     def match(self, input_mol):
-        mapping = mapping_by_mcs(self.mol, input_mol)
-        mapping_inv = {value: key for (key, value) in mapping.items()}
-        if len(mapping_inv) != len(mapping):
-            raise RuntimeError(
-                f"bug in atom indices, repeated value different keys? {mapping=}"
-            )
-        # atoms "missing" exist in self.mol but not in input_mol
-        # "excess" atoms exist in input_mol but not in self.mol
-        result = {
-            "H": {"found": 0, "missing": 0, "excess": []},
-            "heavy": {"found": 0, "missing": 0, "excess": 0},
-        }
-        for atom in self.mol.GetAtoms():
-            element = "H" if atom.GetAtomicNum() == 1 else "heavy"
-            key = "found" if atom.GetIdx() in mapping else "missing"
-            result[element][key] += 1
-        for atom in input_mol.GetAtoms():
-            element = "H" if atom.GetAtomicNum() == 1 else "heavy"
-            if atom.GetIdx() not in mapping_inv:
-                if element == "H":
-                    if atom.GetNeighbors(): 
-                        nei_idx = atom.GetNeighbors()[0].GetIdx()
-                        if nei_idx in mapping_inv: 
-                            result[element]["excess"].append(mapping_inv[nei_idx])
+        mappings = mapping_by_mcs(self.mol, input_mol)
+        results = []
+        for mapping in mappings: 
+            mapping_inv = {value: key for (key, value) in mapping.items()}
+            if len(mapping_inv) != len(mapping):
+                raise RuntimeError(
+                    f"bug in atom indices, repeated value different keys? {mapping=}"
+                )
+            # atoms "missing" exist in self.mol but not in input_mol
+            # "excess" atoms exist in input_mol but not in self.mol
+            result = {
+                "H": {"found": 0, "missing": 0, "excess": []},
+                "heavy": {"found": 0, "missing": 0, "excess": 0},
+            }
+            for atom in self.mol.GetAtoms():
+                element = "H" if atom.GetAtomicNum() == 1 else "heavy"
+                key = "found" if atom.GetIdx() in mapping else "missing"
+                result[element][key] += 1
+            for atom in input_mol.GetAtoms():
+                element = "H" if atom.GetAtomicNum() == 1 else "heavy"
+                if atom.GetIdx() not in mapping_inv:
+                    if element == "H":
+                        if atom.GetNeighbors(): 
+                            nei_idx = atom.GetNeighbors()[0].GetIdx()
+                            if nei_idx in mapping_inv: 
+                                result[element]["excess"].append(mapping_inv[nei_idx])
+                            else:
+                                result[element]["excess"].append(-1)
+                        else: # lone hydrogen found in monomer
+                            monomer_info = getPdbInfoNoNull(atom)
+                            if monomer_info:
+                                logger.warning(f"WARNING: Lone hydrogen is ignored: \n" 
+                                                f"  {monomer_info} \n")
+                            else:
+                                logger.warning(f"WARNING: A lone hydrogen is ignored during monomer-template matching. \n")
+                    else: 
+                        if element == "heavy":
+                            result[element]["excess"] += 1
                         else:
                             result[element]["excess"].append(-1)
-                    else: # lone hydrogen found in monomer
-                        monomer_info = getPdbInfoNoNull(atom)
-                        if monomer_info:
-                            logger.warning(f"WARNING: Lone hydrogen is ignored: \n" 
-                                            f"  {monomer_info} \n")
-                        else:
-                            logger.warning(f"WARNING: A lone hydrogen is ignored during monomer-template matching. \n")
-                else: 
-                    result[element]["excess"] += 1
-        return result, mapping
+            results.append(result)
+        return results, mappings
 
 # region JSON Encoders
 
