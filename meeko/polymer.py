@@ -16,6 +16,7 @@ from rdkit.Chem import rdFMCS
 from rdkit.Chem import rdChemReactions
 from rdkit.Chem import rdMolInterchange
 from rdkit.Geometry import Point3D
+from collections import Counter
 
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetup
@@ -211,9 +212,6 @@ def mapping_by_mcs(mol, ref):
     mcs_mol = Chem.MolFromSmarts(mcs_result.smartsString)
     mol_matches = mol.GetSubstructMatches(mcs_mol)
     ref_matches = ref.GetSubstructMatches(mcs_mol, uniquify=False)
-    if len(ref_matches) > 2: 
-        ref_matches = ref_matches[:2]
-
 
     atom_maps = []
     for mol_idxs in mol_matches:
@@ -221,7 +219,18 @@ def mapping_by_mcs(mol, ref):
             if len(mol_idxs) == len(ref_idxs):
                 atom_maps.append({i: j for i, j in zip(mol_idxs, ref_idxs)})
 
-    return atom_maps
+    def symmetry_score(mol):
+        """Returns a rough score of symmetry: higher = more symmetric."""
+        ranks = Chem.CanonicalRankAtoms(mol, breakTies=False)
+        rank_counts = Counter(ranks)
+        score = sum(count for count in rank_counts.values() if count > 1)
+        return score
+    
+
+    if symmetry_score(ref)>symmetry_score(mol): # ref is more symmetric
+        return atom_maps
+    else:
+        return [atom_maps[0]]  # return only the first one
 
 
 def _snap_to_int(value, tolerance=0.12):
@@ -1474,10 +1483,6 @@ class Polymer(BaseJSONParsable):
             "msg": "",
         }
         for residue_key, (raw_mol, input_resname) in raw_input_mols.items():
-            if input_resname in ["SER"]: 
-                match_multiple = True
-            else:
-                match_multiple = False
             if raw_mol is None:
                 monomers[residue_key] = Monomer(
                     None, None, None, input_resname, None
@@ -1542,7 +1547,7 @@ class Polymer(BaseJSONParsable):
             for index, template in enumerate(candidate_templates):
 
                 # match intra-residue graph
-                results, matched_mappings = template.match(raw_mol, multiple=match_multiple)
+                results, matched_mappings = template.match(raw_mol)
                 if len(matched_mappings) > 1: 
                     print(f"Warning: multiple matches found for"
                           f" {candidate_template_keys[index]}")
@@ -3080,7 +3085,7 @@ class ResidueTemplate(BaseJSONParsable):
             raise ValueError(f"{len(atom_names)=} differs from {mol.GetNumAtoms()=}")
         return
 
-    def match(self, input_mol, multiple=False):
+    def match(self, input_mol):
         mappings = mapping_by_mcs(self.mol, input_mol)
         results = []
         for mapping in mappings: 
@@ -3122,10 +3127,7 @@ class ResidueTemplate(BaseJSONParsable):
                         else:
                             result[element]["excess"].append(-1)
             results.append(result)
-        if multiple:
-            return results, mappings
-        else:
-            return [results[0]], [mappings[0]]
+        return results, mappings
 
 # region JSON Encoders
 
