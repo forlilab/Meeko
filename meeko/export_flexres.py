@@ -133,6 +133,7 @@ def export_pdb_updated_flexres(polymer, pdbqt_mol):
                     key = polymer.monomers[res_id].residue_template_key
                     template = polymer.residue_chem_templates.residue_templates[key]
                     _, template_to_pdbqt = template.match(mol)
+                    template_to_pdbqt = template_to_pdbqt[0]
 
                 sidechain_positions = {}
                 molsetup_matched = set()

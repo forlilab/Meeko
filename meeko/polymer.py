@@ -209,8 +209,11 @@ def mapping_by_mcs(mol, ref):
         return []
 
     mcs_mol = Chem.MolFromSmarts(mcs_result.smartsString)
-    mol_matches = mol.GetSubstructMatches(mcs_mol, uniquify=False)
+    mol_matches = mol.GetSubstructMatches(mcs_mol)
     ref_matches = ref.GetSubstructMatches(mcs_mol, uniquify=False)
+    if len(ref_matches) > 2: 
+        ref_matches = ref_matches[:2]
+
 
     atom_maps = []
     for mol_idxs in mol_matches:
@@ -1471,6 +1474,10 @@ class Polymer(BaseJSONParsable):
             "msg": "",
         }
         for residue_key, (raw_mol, input_resname) in raw_input_mols.items():
+            if input_resname in ["SER"]: 
+                match_multiple = True
+            else:
+                match_multiple = False
             if raw_mol is None:
                 monomers[residue_key] = Monomer(
                     None, None, None, input_resname, None
@@ -1535,9 +1542,7 @@ class Polymer(BaseJSONParsable):
             for index, template in enumerate(candidate_templates):
 
                 # match intra-residue graph
-                results, matched_mappings = template.match(raw_mol)
-                if candidate_template_keys[index]=="SER": 
-                    print(Chem.MolToSmiles(raw_mol), Chem.MolToSmiles(template.mol))
+                results, matched_mappings = template.match(raw_mol, multiple=match_multiple)
                 if len(matched_mappings) > 1: 
                     print(f"Warning: multiple matches found for"
                           f" {candidate_template_keys[index]}")
@@ -1599,7 +1604,7 @@ class Polymer(BaseJSONParsable):
                         or all_stats["heavy_excess"][i]
                         or (not set(all_stats["H_excess"][i]) <= set(candidate_templates[template_index_to_passing_id[i]].link_labels) and not excess_H_ok)
                         or not all_stats["bonded_atoms_missing"][i] <= auto_blunt
-                        or len(all_stats["bonded_atoms_excess"][i])
+                        #or len(all_stats["bonded_atoms_excess"][i])
                     ):
                         continue
                     passed.append(i)
@@ -1612,7 +1617,7 @@ class Polymer(BaseJSONParsable):
                         or all_stats["heavy_excess"][i]
                         or (all_stats["H_excess"][i] and not excess_H_ok)
                         or len(all_stats["bonded_atoms_missing"][i])
-                        or len(all_stats["bonded_atoms_excess"][i])
+                        #or len(all_stats["bonded_atoms_excess"][i])
                     ):
                         continue
                     if i not in passed:
@@ -1664,8 +1669,8 @@ class Polymer(BaseJSONParsable):
                         m = f"for {residue_key=}, {len(passed)} have passed: "
                         tkeys = [candidate_template_keys[template_index_to_passing_id[i]] for i in passed]
                         m += f"{tkeys} and tied for fewest missing and excess H: {tied} "
-
-                        raise RuntimeError(m)
+                        
+                        logging.warn(m)
                 
                 index = best_idxs[0]
                 template_key = candidate_template_keys[template_index_to_passing_id[index]]
@@ -1675,15 +1680,13 @@ class Polymer(BaseJSONParsable):
                 H_miss = all_stats["H_missing"][index]
                 log["chosen_by_fewest_missing_H"][residue_key] = template_key
 
-            print(f"residue {residue_key} matched with template {template_key}")
-            print(Chem.MolToSmiles(raw_mol), Chem.MolToSmiles(template.mol))
             H_miss = all_stats["H_missing"][index]
             H_excess = all_stats["H_excess"][index]
             if H_miss or H_excess: 
-                log["matched_with_H_anomaly"][residue_key] = (
+                log["matched_with_H_anomaly"][residue_key] = [
                     template_key, 
                     {"H_miss": H_miss, "H_excess": len(H_excess)}
-                )
+                ]
             bond_excess = all_stats["bonded_atoms_excess"][index]
             if bond_excess:
                 log["matched_with_excess_bond"].append(residue_key)
@@ -3077,7 +3080,7 @@ class ResidueTemplate(BaseJSONParsable):
             raise ValueError(f"{len(atom_names)=} differs from {mol.GetNumAtoms()=}")
         return
 
-    def match(self, input_mol):
+    def match(self, input_mol, multiple=False):
         mappings = mapping_by_mcs(self.mol, input_mol)
         results = []
         for mapping in mappings: 
@@ -3119,7 +3122,10 @@ class ResidueTemplate(BaseJSONParsable):
                         else:
                             result[element]["excess"].append(-1)
             results.append(result)
-        return results, mappings
+        if multiple:
+            return results, mappings
+        else:
+            return [results[0]], [mappings[0]]
 
 # region JSON Encoders
 
