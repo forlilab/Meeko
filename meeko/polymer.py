@@ -1720,42 +1720,47 @@ class Polymer(BaseJSONParsable):
                     continue
 
                 # Find all bonds involving this link atom
-                matching_bonds = []
+                found_bond = False
                 for (r1_id, r2_id), bond_list in bonds.items():
                     for idx1, idx2 in bond_list:
                         if r1_id == residue_id and idx1 == atom_index:
-                            matching_bonds.append(((r1_id, r2_id), idx1, idx2))
+                            adjacent_rid = r2_id
+                            adjacent_atom_index = idx2
+                            adjacent_mol = monomers[adjacent_rid].rdkit_mol
+                            bond_use_count[(r1_id, r2_id)] += 1
+                            found_bond = True
+                            break
                         elif r2_id == residue_id and idx2 == atom_index:
-                            matching_bonds.append(((r1_id, r2_id), idx2, idx1))
+                            adjacent_rid = r1_id
+                            adjacent_atom_index = idx1
+                            adjacent_mol = monomers[adjacent_rid].rdkit_mol
+                            bond_use_count[(r1_id, r2_id)] += 1
+                            found_bond = True
+                            break
+                    if found_bond:
+                        break
 
-                if not matching_bonds:
-                    continue
+                if not found_bond:
+                    adjacent_mol = None
+                    adjacent_atom_index = None
 
-                for (r1_id, r2_id), atom_index, adjacent_atom_index in matching_bonds:
-                    adjacent_rid = r2_id if r1_id == residue_id else r1_id
-                    adjacent_mol = monomers.get(adjacent_rid)
-                    adjacent_mol = adjacent_mol.rdkit_mol if adjacent_mol else None
+                # Always call the padder
+                padded_mol, mapidx = padders[link_label](
+                    padded_mol, adjacent_mol, atom_index, adjacent_atom_index
+                )
 
-                    padded_mol, mapidx = padders[link_label](
-                        padded_mol, adjacent_mol, atom_index, adjacent_atom_index
-                    )
-
-                    # Update mapidx_pad
-                    tmp = {}
-                    for i, j in enumerate(mapidx):
-                        if j is None:
-                            continue  # new atom
-                        if j not in mapidx_pad:
-                            continue  # previously added atom, not traceable
-                        tmp[i] = mapidx_pad[j]
-                    mapidx_pad = tmp
-
-                    bond_use_count[(r1_id, r2_id)] += 1
-
+                # Update mapidx_pad
+                tmp = {}
+                for i, j in enumerate(mapidx):
+                    if j is None:
+                        continue  # new atom
+                    if j not in mapidx_pad:
+                        continue  # previously added atom, not traceable
+                    tmp[i] = mapidx_pad[j]
+                mapidx_pad = tmp
                 padded_links.add(link_label)
 
-            # Add hydrogens and update positions for newly added ones
-            padded_mol = Chem.AddHs(padded_mol, addCoords=True)
+            # Update hydrogen positions and add hydrogens
             inv_map = {v: k for k, v in mapidx_pad.items()}
             padded_H_idxs = []
 
@@ -1771,6 +1776,7 @@ class Polymer(BaseJSONParsable):
                         padded_H_idxs.append(padded_idx)
 
             update_H_positions(padded_mol, padded_H_idxs)
+            padded_mol = Chem.AddHs(padded_mol, addCoords=True)
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
 
         # Validate all bonds were used twice (A padded with B, and B with A)
