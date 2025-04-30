@@ -1716,7 +1716,7 @@ class Polymer(BaseJSONParsable):
             padded_links = set()
 
             for atom_index, link_label in monomer.link_labels.items():
-                if link_label in padded_links:
+                if (atom_index, link_label) in padded_links:
                     continue
 
                 # Find all bonds involving this link atom
@@ -1758,7 +1758,7 @@ class Polymer(BaseJSONParsable):
                         continue  # previously added atom, not traceable
                     tmp[i] = mapidx_pad[j]
                 mapidx_pad = tmp
-                padded_links.add(link_label)
+                padded_links.add((atom_index, link_label))
 
             # Update hydrogen positions and add hydrogens
             inv_map = {v: k for k, v in mapidx_pad.items()}
