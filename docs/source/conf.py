@@ -30,7 +30,7 @@ napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 
 autodoc_mock_imports = [
-    "rdkit", "rdkit.Chem", "rdkit.Geometry", "numpy", "scipy", "gemmi",
+    "rdkit", "rdkit.Chem", "rdkit.Geometry", "numpy", "scipy", "gemmi", "prody"
 ]
 
 html_logo = "images/raccoon.png"
