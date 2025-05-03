@@ -5,7 +5,7 @@ dependencies:
   - python=3.10
   - rdkit
   - gemmi
-  - "numpy <2"
+  - numpy<2
   - prody
   - pip
   - pip:
