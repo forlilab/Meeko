@@ -23,7 +23,13 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'sphinx_design',
+    'sphinx.ext.viewcode',
+    'sphinx_autodoc_typehints',
 ]
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+
+sys.path.insert(0, os.path.abspath('../../meeke'))
 
 html_logo = "images/raccoon.png"
 

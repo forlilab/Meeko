@@ -98,3 +98,10 @@ to run molecular docking and virtual screening.
 
    Usage <export_usage>
    mk_export.py options <export_cli_options>
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
+
+   meeko.chemtempgen
+   ...
