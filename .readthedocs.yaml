@@ -8,5 +8,10 @@ build:
 conda:
   environment: docs/environment.yml
 
+python:
+  install:
+    - path: .
+    - requirements: docs/requirements.txt
+
 sphinx:
   configuration: docs/source/conf.py
