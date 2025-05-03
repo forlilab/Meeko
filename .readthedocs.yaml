@@ -33,3 +33,9 @@ sphinx:
 python:
   install:
     - requirements: docs/requirements.txt
+
+conda:
+  environment: docs/environment.yml
+
+sphinx:
+  configuration: docs/source/conf.py

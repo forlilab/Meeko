@@ -1,0 +1,12 @@
+name: meeko-docs
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - rdkit
+  - gemmi
+  - "numpy <2"
+  - prody
+  - pip
+  - pip:
+      - -r docs/requirements.txt
