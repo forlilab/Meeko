@@ -104,4 +104,5 @@ to run molecular docking and virtual screening.
    :caption: API Reference
 
    meeko.chemtempgen
+   meeko.covalentbuilder
    ...
