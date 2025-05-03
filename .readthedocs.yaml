@@ -5,9 +5,6 @@ build:
   tools:
     python: "3.10"
 
-conda:
-  environment: docs/environment.yml
-
 python:
   install:
     - path: .
