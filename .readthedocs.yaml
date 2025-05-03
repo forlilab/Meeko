@@ -13,6 +13,8 @@ build:
     # nodejs: "20"
     # rust: "1.70"
     # golang: "1.20"
+  environment:
+   docs/ environment.yml
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
@@ -37,5 +39,3 @@ python:
 conda:
   environment: docs/environment.yml
 
-sphinx:
-  configuration: docs/source/conf.py
