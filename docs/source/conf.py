@@ -30,7 +30,7 @@ extensions = [
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 
-sys.path.insert(0, os.path.abspath('../../'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 html_logo = "images/raccoon.png"
 
