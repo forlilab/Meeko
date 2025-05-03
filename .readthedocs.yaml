@@ -1,6 +1,3 @@
-# Read the Docs configuration file for Sphinx projects
-# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
-
 version: 2
 
 build:
@@ -8,13 +5,8 @@ build:
   tools:
     python: "3.10"
 
-# Use the conda environment
 conda:
   environment: docs/environment.yml
-
-python:
-  install:
-    - requirements: docs/requirements.txt
 
 sphinx:
   configuration: docs/source/conf.py
