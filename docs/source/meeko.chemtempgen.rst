@@ -3,4 +3,5 @@ meeko.chemtempgen module
 
 .. automodule:: meeko.chemtempgen
    :members:
-   :autosummary:
+   :show-inheritance:
+   :undoc-members:
