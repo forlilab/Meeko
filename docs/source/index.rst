@@ -106,4 +106,5 @@ to run molecular docking and virtual screening.
    meeko.polymer
    meeko.preparation
    meeko.chemtempgen
+   meeko.molecule_pdbqt
    ...
