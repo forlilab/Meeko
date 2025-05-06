@@ -103,6 +103,7 @@ to run molecular docking and virtual screening.
    :maxdepth: 2
    :caption: API Reference
 
-   meeko.chemtempgen
    meeko.polymer
+   meeko.preparation
+   meeko.chemtempgen
    ...
