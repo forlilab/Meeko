@@ -102,19 +102,25 @@ residues_rotamers = {
 
 def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=()):
     """
-    Recursively finds all paths between start and end nodes.
+    (DFS Path Search) Recursively find all paths from a start node to any of the specified end nodes in a directed graph.
 
     Parameters
     ----------
-    graph
-    start_node
-    end_nodes
-    current_path
-    paths_found
+    graph : dict[int, list[int]]
+        A dictionary representing a graph. Keys are node IDs (integers), and values are lists of neighboring node IDs.
+    start_node : int
+        The node from which to begin path traversal.
+    end_nodes : iterable of int
+        A set or list of node IDs that are valid end points for a path.
+    current_path : tuple[int], optional
+        The current traversal path (used during recursion). Default is empty tuple.
+    paths_found : list[list[int]], optional
+        The list of complete paths found so far. Default is empty tuple, which will be converted internally.
 
     Returns
     -------
-
+    list[list[int]]
+        A list of paths. Each path is represented as a list of node IDs from start_node to an end_node.
     """
     current_path = current_path + (start_node,)
     paths_found = list(paths_found)
@@ -130,16 +136,20 @@ def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=
 
 def find_inter_mols_bonds(mols_dict):
     """
+    Finds inter-residue bonds between the RDKit Mols in mols_dict based on distances compared to built-in covalent radii (.utils.rdkitutils.covalent_radius). 
 
     Parameters
     ----------
-    mols_dict:
-
+    mols_dict : dict[str, (Chem.Mol, str)]
+        A dictionary to store raw input mols and input residue names by residue IDs. 
+        The keys are residue IDs in the format <chain>:<resnum> such as "A:42", and the values are tuples of an RDKit Mols and input resname.
+        
     Returns
     -------
-
+    dict[(str, str), list[tuple[int, int]]]
+        A dictionary representing inter-residue bonds. 
+        The keys are tuples of residue IDs in the format <chain>:<resnum>, and the values are lists of tuples of atom indices in the two residues that are bonded.
     """
-
     allowance = 1.2  # vina uses 1.1 but covalent radii are shorter here
     max_possible_covalent_radius = (
         2 * allowance * max([r for k, r in covalent_radius.items()])
@@ -193,15 +203,20 @@ def find_inter_mols_bonds(mols_dict):
 
 def mapping_by_mcs(mol, ref):
     """
+    Find an atom-atom mapping between two molecules based on the maximum common substructure (MCS).
 
     Parameters
     ----------
-    mol
-    ref
+    mol : Chem.Mol
+        The first molecule to compare.
+    ref : Chem.Mol
+        The second molecule to compare.
 
     Returns
     -------
-
+    dict[int, int]
+        A dictionary mapping atom indices from the first molecule to the second molecule.
+        The keys are atom indices from the first molecule, and the values are atom indices from the second molecule.
     """
     mcs_result = rdFMCS.FindMCS([mol, ref], bondCompare=rdFMCS.BondCompare.CompareAny)
     mcs_mol = Chem.MolFromSmarts(mcs_result.smartsString)
@@ -215,15 +230,19 @@ def mapping_by_mcs(mol, ref):
 
 def _snap_to_int(value, tolerance=0.12):
     """
+    Rounds a floating-point number to the nearest integer within a specified tolerance.
 
     Parameters
     ----------
-    value
-    tolerance
+    value : float
+        The floating-point number to be rounded.
+    tolerance : float, optional
+        The tolerance within which the number is considered close to an integer. Default is 0.12.
 
     Returns
     -------
-
+    int or None
+        The rounded integer if the value is within the tolerance of an integer, otherwise None.
     """
     for inc in [-1, 0, 1]:
         if abs(value - int(value) - inc) <= tolerance:
@@ -233,16 +252,21 @@ def _snap_to_int(value, tolerance=0.12):
 
 def divide_int_gracefully(integer, weights, allow_equal_weights_to_differ=False):
     """
+    Divides an integer into parts based on the provided weights, ensuring that the sum of the parts equals the integer.
 
     Parameters
     ----------
-    integer
-    weights
-    allow_equal_weights_to_differ
+    integer : int
+        The integer to be divided.
+    weights : list[float]
+        A list of weights that determine the proportions of the integer.
+    allow_equal_weights_to_differ : bool, optional
+        If True, allows equal weights to be treated as different groups. Default is False (equal inputs get equal outputs).
 
     Returns
     -------
-
+    list[float]
+        A list of floats representing the divided integer based on the weights.
     """
     for weight in weights:
         if type(weight) not in [int, float] or weight < 0:
@@ -297,20 +321,22 @@ def divide_int_gracefully(integer, weights, allow_equal_weights_to_differ=False)
 
 def rectify_charges(q_list, net_charge=None, decimals=3) -> list[float]:
     """
-    Makes charges 3 decimals in length and ensures they sum to an integer
+    Makes charges N (default is 3) decimals in length and ensures they sum to an integer. 
 
     Parameters
     ----------
-    q_list
-    net_charge
-    decimals
+    q_list : list[float]
+        List of charges to be rectified.
+    net_charge : int or None
+        The desired net charge. If None, it will be calculated from the sum of the charges in q_list.
+    decimals : int
+        The number of decimal places to round the charges to. Default is 3.
 
     Returns
     -------
     charges_dec: list[float]
-
+        List of rectified charges, rounded to the specified number of decimal places.
     """
-
     fstr = "%%.%df" % decimals
     charges_dec = [float(fstr % q) for q in q_list]
 
@@ -346,14 +372,16 @@ def get_updated_positions(monomer, new_positions: dict):
 
     Parameters
     ----------
-    monomer: Monomer
-        rdkit_mol in monomer is associated with new positions
-    new_positions: dict (int -> (float, float, float))
-                         |      |
-                atom_index      |
-                                new_position
-    """
+    monomer : Monomer
+        Must have rdkit_mol to associate with new positions. 
+    new_positions : dict[int, (float, float, float)]
+        Dictionary mapping the atom indices to their new positions. 
 
+    Returns
+    -------
+    positions : np.ndarray
+        The updated positions of the atoms in the RDKit molecule.
+    """
     h_to_update = set()
     mol = Chem.Mol(monomer.rdkit_mol)  # avoids side effects
     conformer = mol.GetConformer()
@@ -385,9 +413,9 @@ def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
 
     Parameters
     ----------
-    mol: Chem.Mol
+    mol : Chem.Mol
         RDKit Mol object with hydrogens
-    indices_to_update: list[int]
+    indices_to_update : list[int]
         Hydrogen indices to update
 
     Returns
@@ -460,19 +488,23 @@ def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
 
 def _delete_residues(res_to_delete, raw_input_mols):
     """
+    Deletes residues from raw_input_mols that are not needed for the Polymer object. 
 
     Parameters
     ----------
-    res_to_delete: list (str) or None
+    res_to_delete : list[str] or None
         residue IDs to delete in format <chain>:<resnum><icode>
-    raw_input_mols: dict (str -> RDKit mol)
+    raw_input_mols : dict[str, Chem.Mol]
         keys are residue IDs
 
     Returns
     -------
     None
-    (modifies raw_input_mols in-place)
 
+    Raises
+    ------
+    ValueError:
+        If any of the residues to delete are not found in raw_input_mols.
     """
     if res_to_delete is None:
         return
@@ -488,8 +520,30 @@ def _delete_residues(res_to_delete, raw_input_mols):
 
 
 class PolymerCreationError(RuntimeError):
+    """
+    Exception raised when the creation of a Polymer object fails.
+
+    Attributes
+    ----------
+    error : str
+        The main error message.
+    recommendations : str
+        Recommendations for resolving the error.
+    traceback : str
+        The traceback of the error.
+    """
 
     def __init__(self, error: str, recommendations: str = None): 
+        """
+        Initialize the PolymerCreationError.
+        
+        Parameters
+        ----------
+        error : str
+            The main error message.
+        recommendations : str
+            Recommendations for resolving the error.
+        """
         super().__init__(error) # main error message to pass to RuntimeError
         self.error = error
         self.recommendations = recommendations
@@ -500,6 +554,14 @@ class PolymerCreationError(RuntimeError):
             self.traceback = None
 
     def __str__(self):
+        """
+        Return a string representation of the error message.
+
+        Returns
+        -------
+        str
+            The error message.
+        """
         msg = "" + eol
         msg += "Error: Creation of data structure for receptor failed." + eol
         msg += "" + eol
@@ -524,7 +586,27 @@ def handle_parsing_situations(
     res_missed_altloc,
     res_needed_altloc,
     ):
+    """
+    Handle situations where residues are not parsed correctly or do not match templates.
 
+    Parameters
+    ----------
+    unmatched_res : set
+        Residues that did not match any template.
+    unparsed_res : set
+        Residues that could not be parsed.
+    allow_bad_res : bool
+        If True, allows residues that do not match templates to be ignored.
+    res_missed_altloc : set
+        Residues that were requested with an alternate location but were not found.
+    res_needed_altloc : set
+        Residues that were found with an alternate location but were not requested.
+    
+    Raises
+    ------
+    PolymerCreationError
+        If there are residues that could not be parsed or matched to templates, and allow_bad_res is False.
+    """
     err = ""
     if unparsed_res:
         msg = f"- Parsing failed for: {unparsed_res}."
@@ -567,23 +649,39 @@ def handle_parsing_situations(
 
 
 class ResidueChemTemplates(BaseJSONParsable):
-    """Holds template data required to initialize Polymer
+    """
+    Holds template data required to initialize Polymer
 
     Attributes
     ----------
-    residue_templates: dict (string -> ResidueTemplate)
+    residue_templates: dict[str, ResidueTemplate]
         keys are the ID of an instance of ResidueTemplate
-    padders: dict
+    padders : dict
         instances of ResiduePadder keyed by a link_label (a string)
         link_labels establish the relationship between ResidueTemplates
         and ResiduePadders, determining which padder is to be used to
         pad each atom of an instance of Monomer that needs padding.
-    ambiguous: dict
+    ambiguous : dict[str, list[str]]
         mapping between input residue names (e.g. the three-letter residue
         name from PDB files) and IDs (strings) of ResidueTemplates
     """
 
     def __init__(self, residue_templates, padders, ambiguous):
+        """
+        Initialize ResidueChemTemplates.
+
+        Parameters
+        ----------
+        residue_templates : dict[str, ResidueTemplate]
+            A dictionary of residue templates.
+            Keys are the IDs of the templates, and values are instances of ResidueTemplate.
+        padders : dict[str, ResiduePadder]
+            A dictionary of residue padders.
+            Keys are the IDs of the padders, and values are instances of ResiduePadder.
+        ambiguous : dict[str, list[str]]
+            Mapping between input residue names (e.g. the three-letter residue
+            name from PDB files) and IDs (strings) of ResidueTemplates
+        """
         self._check_missing_padders(residue_templates, padders)
         self._check_ambiguous_reskeys(residue_templates, ambiguous)
         self.residue_templates = residue_templates
@@ -629,6 +727,19 @@ class ResidueChemTemplates(BaseJSONParsable):
     # endregion
 
     def add_dict(self, data, overwrite=False):
+        """
+        Add or update data from a dictionary to the current instance. 
+        
+        Parameters
+        ----------
+        data : dict
+            A dictionary containing new data to be added.
+            The dictionary may contain keys within "residue_templates", "padders", and "ambiguous".
+        overwrite : bool, optional
+            If True, existing data will be overwritten with new data.
+            If False, new data will be added without overwriting existing data.
+            Default is False.
+        """
         bad_keys = set(data) - {"ambiguous", "residue_templates", "padders"}
         if bad_keys:
             logging.warning(f"Ignore unexpected keys: {bad_keys}")
@@ -651,6 +762,29 @@ class ResidueChemTemplates(BaseJSONParsable):
 
     @staticmethod
     def lookup_filename(filename, data_path):
+        """
+        Look for a file in the current directory or in the data_path directory.
+        If the file is not found in either location, raise a ValueError.
+        If the file is found in the data_path directory, return the full path.
+        If the file is found in the current directory, return the filename.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the file to look for.
+        data_path : pathlib.Path
+            The path to the directory where the file may be located.
+
+        Returns
+        -------
+        str
+            The full path to the file if found, otherwise raises ValueError.
+
+        Raises
+        ------
+        ValueError
+            If the file is not found in either the current directory or the data_path directory.
+        """
         p = pathlib.Path(filename)
         if not p.exists():
             if (data_path / p).exists():
@@ -663,6 +797,20 @@ class ResidueChemTemplates(BaseJSONParsable):
 
     @classmethod
     def from_json_file(cls, filename):
+        """
+        Create an instance of ResidueChemTemplates from a JSON file.
+        
+        Parameters
+        ----------
+        filename : str
+            The name of the JSON file to read.
+            The file may contain residue templates, padders, and ambiguous residue names.
+
+        Returns
+        -------
+        ResidueChemTemplates
+            An instance of ResidueChemTemplates created from the JSON file.
+        """
         filename = cls.lookup_filename(filename, data_path)
         with open(filename) as f:
             jsonstr = f.read()
@@ -680,9 +828,30 @@ class ResidueChemTemplates(BaseJSONParsable):
  
     @classmethod
     def create_from_defaults(cls):
+        """
+        Create an instance of ResidueChemTemplates using default data (residue_chem_templates.json).
+
+        Returns
+        -------
+        ResidueChemTemplates
+            An instance of ResidueChemTemplates created from the default JSON file.
+        """
         return cls.from_json_file("residue_chem_templates")
 
     def add_json_file(self, filename):
+        """
+        Add data from a JSON file to the current instance.
+        
+        Parameters
+        ----------
+        filename : str
+            The name of the JSON file to read.
+            The file may contain residue templates, padders, and ambiguous residue names.
+
+        Returns
+        -------
+        None
+        """
         filename = self.lookup_filename(filename, data_path)
         with open(filename) as f:
             jsonstr = f.read()
@@ -732,7 +901,8 @@ class ResidueChemTemplates(BaseJSONParsable):
 
 
 class Polymer(BaseJSONParsable):
-    """Represents polymer with its subunits as individual RDKit molecules.
+    """
+    Represents polymer with its subunits as individual RDKit molecules.
 
     Used for proteins and nucleic acids. The key class is Monomer,
     which contains, a padded RDKit molecule containing part of the adjacent
@@ -743,13 +913,14 @@ class Polymer(BaseJSONParsable):
 
     Attributes
     ----------
-    monomers: dict (string -> Monomer) #TODO: figure out exact SciPy standard for dictionary key/value notation
-    termini: dict (string (representing residue id) -> string (representing what we want the capping to look like))
-    mutate_res_dict: dict (string (representing starting residue id) -> string (representing the desired mutated id))
-    res_templates: dict (string -> dict (rdkit_mol and atom_data))
-    ambiguous:
-    disulfide_bridges:
-    suggested_mutations:
+    monomers : dict[str, Monomer] 
+        Dictionary to store monomers where keys are residue IDs in the format <chain>:<resnum> such as "A:42" and values are instances of Monomer. 
+    log : dict[str, list[str]]
+        Dictionary to store log messages during monomer processing (_get_monomer). 
+    residue_chem_templates : ResidueChemTemplates
+        An instance of the ResidueChemTemplates class used to initialize this Polymer. 
+    raw_input_mols : dict[str, tuple[Chem.Mol, str]]
+        A dictionary of raw input mols used to initialize this Polymer, where keys are residue IDs in the format <chain>:<resnum> such as "A:42" and values are tuples of an RDKit Mols and input resname.
     """
 
     def __init__(
@@ -763,22 +934,28 @@ class Polymer(BaseJSONParsable):
         get_atomprop_from_raw: dict = None,
     ):
         """
+        Initialize Polymer.
+
         Parameters
         ----------
-        raw_input_mols: dict (string -> (Chem.Mol, string))
+        raw_input_mols : dict[str, tuple[Chem.Mol, str]]
             A dictionary of raw input mols where keys are residue IDs in the format <chain>:<resnum> such as "A:42" and
             values are tuples of an RDKit Mols and input resname.
             RDKit Mols will be matched to instances of ResidueTemplate, and may contain none, all, or some of the
             Hydrogens.
-        bonds: dict ((string, string) -> (int, int))
-        residue_chem_templates: ResidueChemTemplates
+        bonds : dict[tuple[str, str], tuple[int, int]]
+            A dictionary of inter-residue bonds where keys are tuples of residue IDs in the format <chain>:<resnum> such as "A:42" and
+            values are tuples of atom indices.
+        residue_chem_templates : ResidueChemTemplates
             An instance of the ResidueChemTemplates class.
-        mk_prep: MoleculePreparation
+        mk_prep : MoleculePreparation
             An instance of the MoleculePreparation class to parameterize the padded molecules.
-        set_template: dict (string -> string)
+        set_template : dict[str, str]
             A dict mapping residue IDs in the format <chain>:<resnum> such as "A:42" to ResidueTemplate instances.
-        blunt_ends: list (tuple (string, int))
+        blunt_ends : list[tuple[str, int]]
             A list of tuples where each tuple is residue IDs and 0-based atom index, e.g.; ("A:42", 0)
+        get_atomprop_from_raw : dict[str, any]
+            A dictionary mapping atom properties to pass from raw_input_mols. The keys are the property names and the values are the default values. 
 
         Returns
         -------
@@ -786,9 +963,11 @@ class Polymer(BaseJSONParsable):
 
         Raises
         ------
-        ValueError:
+        ValueError
+            If raw_input_mols is not a dictionary or if any of the residues in set_template are not found in raw_input_mols.
+        PolymerCreationError
+            If there are residues that could not be parsed or matched to templates, and allow_bad_res is False.
         """
-
         # TODO simplify SMARTS for adjacent res in padders
 
         if type(raw_input_mols) != dict:
@@ -941,7 +1120,7 @@ class Polymer(BaseJSONParsable):
     # region JSON-interchange functions
     @classmethod
     def json_encoder(cls, obj: "Polymer") -> Optional[dict[str, Any]]:
-        
+
         output_dict = {
             "residue_chem_templates": ResidueChemTemplates.json_encoder(
                 obj.residue_chem_templates
@@ -961,23 +1140,45 @@ class Polymer(BaseJSONParsable):
         "log",
     }
 
+    @classmethod
+    def _decode_object(cls, obj: dict[str, Any]): 
+        # Deserializes ResidueChemTemplates from the dict to use as an input, then constructs a Polymer object
+        # and sets its values using deserialized JSON values.
+        residue_chem_templates = ResidueChemTemplates.from_dict(
+            obj["residue_chem_templates"]
+        )
+
+        polymer = cls({}, {}, residue_chem_templates)
+
+        polymer.monomers = {
+            k: Monomer.from_dict(v) for k, v in obj["monomers"].items()
+        }
+        polymer.log = obj["log"]
+
+        return polymer
+    # endregion
+
     def stitch(self, residues_to_add: Optional[set[str]] = None, 
                bonds_to_use: Optional[dict[tuple[str], list[tuple[int]]]] = None):
-        """returns a single rdkit molecule that results from adding bonds
-            between every chorizo residue. It may contain multiple fragments
-            if there are multiple chains or gaps. 
-
-            Optionally, specify a set of residue IDs for stitching.
-            Defaults to stitching all monomers. 
-
-            Optionally, specify a dict for bonds to use, 
-            Defaults to stitching using all available bonds in polymer. 
-            key format: (res_id_1, res_id_2)
-            value format: [(atom_idx_1, atom_idx_2), ]
-            same format as output from function find_inter_mols_bonds, 
-            but the indices need to based on rdkit_mol. 
         """
+        Function to stitch together monomers into a single molecule. 
+
+        Parameters
+        ----------
+        residues_to_add : set[str], optional
+            A set of residue IDs to add to the stitched molecule.
+            If None, all valid monomers will be added. Default is None (all valid monomers).
+        bonds_to_use : dict[tuple[str], list[tuple[int]]], optional
+            A dictionary of bonds to use for stitching.
+            The keys are tuples of residue IDs, and the values are lists of tuples of atom indices (in rdkit_mol).
+            If None, all available bonds in the polymer will be used. Default is None (all available bonds).
         
+        Returns
+        -------
+        Chem.Mol
+            An RDKit molecule that results from adding bonds between the specified residues.
+            It may contain multiple fragments if there are multiple chains or gaps.
+        """    
         # stitching all valid monomers by default
         valid_monomers = set(self.get_valid_monomers().keys())
         residues_to_add = residues_to_add or valid_monomers
@@ -1037,25 +1238,6 @@ class Polymer(BaseJSONParsable):
             raise RuntimeError("nr of residues added differs from residues to add")
         
         return mol
-
-    @classmethod
-    def _decode_object(cls, obj: dict[str, Any]): 
-
-        # Deserializes ResidueChemTemplates from the dict to use as an input, then constructs a Polymer object
-        # and sets its values using deserialized JSON values.
-        residue_chem_templates = ResidueChemTemplates.from_dict(
-            obj["residue_chem_templates"]
-        )
-
-        polymer = cls({}, {}, residue_chem_templates)
-
-        polymer.monomers = {
-            k: Monomer.from_dict(v) for k, v in obj["monomers"].items()
-        }
-        polymer.log = obj["log"]
-
-        return polymer
-    # endregion
     
     @classmethod
     def from_pdb_string(
@@ -1072,25 +1254,48 @@ class Polymer(BaseJSONParsable):
         default_altloc=None
     ):
         """
+        Construct a Polymer object from a PDB string.
 
         Parameters
         ----------
-        pdb_string
-        chem_templates
-        mk_prep
-        set_template
-        residues_to_delete
-        allow_bad_res
-        bonds_to_delete
-        blunt_ends
-        wanted_altloc
-        default_altloc
+        pdb_string : str
+            The PDB string containing the polymer structure.
+        chem_templates : ResidueChemTemplates
+            An instance of the ResidueChemTemplates class to construct the polymer. 
+        mk_prep : MoleculePreparation
+            An instance of the MoleculePreparation class to construct the polymer. 
+        set_template : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the user-specified ResidueTemplate names.
+            If None, no specific templates will be set. Default is None (the built-in ResidueTemplate ambiguious name mapping will be used).
+        residues_to_delete : set[str], optional
+            A set of residue IDs to delete from the polymer.
+            If None, no residues will be deleted. Default is None (no residues will be deleted).
+        allow_bad_res : bool, optional
+            If True, allows residues that do not match templates to be ignored (rdkit_mol will be None).
+            If False, raises an error if any residues do not match templates. Default is False.
+        bonds_to_delete : list[tuple[str, str]], optional
+            A list of tuples of residue IDs to delete bonds between.
+            If None, no bonds will be deleted. Default is None (no bonds will be deleted).
+        blunt_ends : list[tuple[str, int]], optional
+            A list of tuples where each tuple is a residue ID and a 0-based atom index (in raw_mol).
+            If None, no blunt ends will be added. Default is None (no blunt ends will be added).
+        wanted_altloc : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the desired alternate location (altloc) for that residue.
+        default_altloc : str, optional
+            A string representing the default alternate location (altloc) to be used for residues that do not have a specific altloc specified.
 
         Returns
         -------
+        Polymer
+            An instance of the Polymer class constructed from the PDB string.
 
+        Raises
+        ------
+        NotImplementedError
+            If bonds_to_delete includes residue pairs with more than bond2 between them. 
+        PolymerCreationError
+            If there are residues that could not be parsed or matched to templates, and allow_bad_res is False.
         """
-
         tmp_raw_input_mols = cls._pdb_to_residue_mols(
             pdb_string,
             wanted_altloc,
@@ -1163,23 +1368,44 @@ class Polymer(BaseJSONParsable):
         blunt_ends=None,
     ):
         """
+        Construct a Polymer object from a PQR string. Adapted from PDB2PQR. 
 
         Parameters
         ----------
-        pdb_string
-        chem_templates
-        mk_prep
-        set_template
-        residues_to_delete
-        allow_bad_res
-        bonds_to_delete
-        blunt_ends
-
+        pqr_string : str
+            The PQR string containing the polymer structure.
+        chem_templates : ResidueChemTemplates
+            An instance of the ResidueChemTemplates class to construct the polymer. 
+        mk_prep : MoleculePreparation
+            An instance of the MoleculePreparation class to construct the polymer. 
+        set_template : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the user-specified ResidueTemplate names.
+            If None, no specific templates will be set. Default is None (the built-in ResidueTemplate ambiguious name mapping will be used).
+        residues_to_delete : set[str], optional
+            A set of residue IDs to delete from the polymer.
+            If None, no residues will be deleted. Default is None (no residues will be deleted).
+        allow_bad_res : bool, optional
+            If True, allows residues that do not match templates to be ignored (rdkit_mol will be None).
+            If False, raises an error if any residues do not match templates. Default is False.
+        bonds_to_delete : list[tuple[str, str]], optional
+            A list of tuples of residue IDs to delete bonds between.
+            If None, no bonds will be deleted. Default is None (no bonds will be deleted).
+        blunt_ends : list[tuple[str, int]], optional
+            A list of tuples where each tuple is a residue ID and a 0-based atom index (in raw_mol).
+            If None, no blunt ends will be added. Default is None (no blunt ends will be added).
+        
         Returns
         -------
+        Polymer
+            An instance of the Polymer class constructed from the PDB string.
 
+        Raises
+        ------
+        NotImplementedError
+            If bonds_to_delete includes residue pairs with more than bond2 between them. 
+        PolymerCreationError
+            If there are residues that could not be parsed or matched to templates, and allow_bad_res is False.
         """
-
         tmp_raw_input_mols = cls._pqr_to_residue_mols(
             pqr_string,
         )
@@ -1263,25 +1489,48 @@ class Polymer(BaseJSONParsable):
         default_altloc: Optional[str]=None,
     ):
         """
+        Construct a Polymer object from a ProDy Selection or AtomGroup object.
 
         Parameters
         ----------
-        prody_obj
-        chem_templates
-        mk_prep
-        set_template
-        residues_to_delete
-        allow_bad_res
-        bonds_to_delete
-        blunt_ends
-        wanted_altloc
-        default_altloc
+        prody_obj : ProDy.Selection or ProDy.AtomGroup
+            The ProDy object to construct the polymer from. 
+        chem_templates : ResidueChemTemplates
+            An instance of the ResidueChemTemplates class to construct the polymer. 
+        mk_prep : MoleculePreparation
+            An instance of the MoleculePreparation class to construct the polymer. 
+        set_template : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the user-specified ResidueTemplate names.
+            If None, no specific templates will be set. Default is None (the built-in ResidueTemplate ambiguious name mapping will be used).
+        residues_to_delete : set[str], optional
+            A set of residue IDs to delete from the polymer.
+            If None, no residues will be deleted. Default is None (no residues will be deleted).
+        allow_bad_res : bool, optional
+            If True, allows residues that do not match templates to be ignored (rdkit_mol will be None).
+            If False, raises an error if any residues do not match templates. Default is False.
+        bonds_to_delete : list[tuple[str, str]], optional
+            A list of tuples of residue IDs to delete bonds between.
+            If None, no bonds will be deleted. Default is None (no bonds will be deleted).
+        blunt_ends : list[tuple[str, int]], optional
+            A list of tuples where each tuple is a residue ID and a 0-based atom index (in raw_mol).
+            If None, no blunt ends will be added. Default is None (no blunt ends will be added).
+        wanted_altloc : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the desired alternate location (altloc) for that residue.
+        default_altloc : str, optional
+            A string representing the default alternate location (altloc) to be used for residues that do not have a specific altloc specified.
 
         Returns
         -------
+        Polymer
+            An instance of the Polymer class constructed from the PDB string.
 
+        Raises
+        ------
+        NotImplementedError
+            If bonds_to_delete includes residue pairs with more than bond2 between them. 
+        PolymerCreationError
+            If there are residues that could not be parsed or matched to templates, and allow_bad_res is False.
         """
-
         tmp_raw_input_mols = cls._prody_to_residue_mols(
             prody_obj,
             wanted_altloc,
@@ -1342,33 +1591,42 @@ class Polymer(BaseJSONParsable):
 
     def parameterize(self, mk_prep, get_atomprop_from_raw = None):
         """
+        Parameterize the monomers in the polymer using the provided MoleculePreparation instance.
 
         Parameters
         ----------
-        mk_prep
+        mk_prep : MoleculePreparation
+            An instance of the MoleculePreparation class to parameterize the monomers.
+        get_atomprop_from_raw : dict, optional
+            A dictionary mapping atom properties to pass from raw_input_mols. The keys are the property names and the values are the default values.
 
         Returns
         -------
-
+        None
         """
-
         for residue_id in self.get_valid_monomers():
             self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
 
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
         """
+        Build an RDKit molecule from a raw molecule according to a ResidueTemplate. 
 
         Parameters
         ----------
-        raw_mol
-        template
-        mapping
-        nr_missing_H
+        raw_mol : Chem.Mol
+            The raw molecule matched to the template. 
+        template : ResidueTemplate
+            The template to match the raw molecule to.
+        mapping : dict[int, int]
+            A dictionary mapping atom indices from the raw molecule to the template.
+        nr_missing_H : int
+            The number of missing hydrogen atoms in the raw molecule compared to the template. 
 
         Returns
         -------
-
+        Chem.Mol
+            The RDKit molecule built from the raw molecule and template.
         """
         rdkit_mol = Chem.Mol(template.mol)  # making a copy
         conf = Chem.Conformer(rdkit_mol.GetNumAtoms())
@@ -1392,14 +1650,19 @@ class Polymer(BaseJSONParsable):
     @staticmethod
     def _get_best_missing_Hs(results):
         """
+        Get the best results based on the number of missing H atoms.
 
         Parameters
         ----------
-        results
-
+        results : list[dict]
+            A list of dictionaries containing the results of matching raw molecules to templates.
+        
         Returns
         -------
-
+        best_idxs : list[int]
+            A list of indices of the best results based on the number of missing H atoms.
+        fail_log : list[list[str]]
+            A list of lists containing failure messages for each result.
         """
         min_missing_H = 999999
         best_idxs = []
@@ -1436,21 +1699,32 @@ class Polymer(BaseJSONParsable):
         blunt_ends,
     ):
         """
+        Process, parameterize and populate monomers of a Polymer from raw_input_mols and residue_chem_templates.
 
         Parameters
         ----------
-        raw_input_mols
-        ambiguous
-        residue_chem_templates
-        set_template
-        bonds
-        blunt_ends
+        raw_input_mols : dict[str, tuple[Chem.Mol, str]]
+            A dictionary mapping residue IDs to tuples of raw molecules and their corresponding residue names.
+        ambiguous : dict[str, list[str]]
+            Mapping between input residue names (e.g. the three-letter residue
+            name from PDB files) and IDs (strings) of ResidueTemplates. 
+        residue_chem_templates : ResidueChemTemplates
+            An instance of the ResidueChemTemplates class to construct the polymer.
+        set_template : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the user-specified ResidueTemplate names.
+        bonds : dict[tuple[str], list[tuple[int]]]
+            A dictionary of bonds between residues.
+        blunt_ends : list[tuple[str, int]], optional
+            A list of tuples where each tuple is a residue ID and a 0-based atom index (in raw_mol).
+            If None, no blunt ends will be added. Default is None (no blunt ends will be added).
 
         Returns
         -------
-
+        monomers : dict[str, Monomer]
+            A dictionary mapping residue IDs to Monomer objects.
+        log : dict
+            A dictionary containing logs of the matching process, including information about chosen templates, missing atoms, and unmatched residues.
         """
-
         residue_templates = residue_chem_templates.residue_templates
         monomers = {}
         log = {
@@ -1697,16 +1971,21 @@ class Polymer(BaseJSONParsable):
     @staticmethod
     def _build_padded_mols(monomers, bonds, padders):
         """
+        Build padded molecules from monomers and bonds.
 
         Parameters
         ----------
-        monomers
-        bonds
-        padders
+        monomers : dict[str, Monomer]
+            A dictionary mapping residue IDs to Monomer objects.
+        bonds : dict[tuple[str], list[tuple[int]]]
+            A dictionary of bonds between residues.
+        padders : dict[str, function]
+            A dictionary mapping link labels to functions that pad the molecules.
 
         Returns
         -------
-
+        padded_mols : dict[str, tuple[Chem.Mol, dict[int, int]]]
+            A dictionary mapping residue IDs to tuples of padded molecules and their corresponding mapping dictionaries.
         """
         padded_mols = {}
         bond_use_count = {key: 0 for key in bonds}
@@ -1797,15 +2076,18 @@ class Polymer(BaseJSONParsable):
 
     def flexibilize_sidechain(self, residue_id, mk_prep):
         """
+        Set the sidechain of a residue as flexible. The Monomer must have been processed and have valid attributes before calling this method. 
 
         Parameters
         ----------
-        residue_id
-        mk_prep
+        residue_id : str
+            The ID of the residue to be made flexible.
+        mk_prep : MoleculePreparation
+            An instance of the MoleculePreparation class to construct the polymer.
 
         Returns
         -------
-
+        None
         """
         monomer = self.monomers[residue_id]
         inv = {j: i for i, j in monomer.molsetup_mapidx.items()}
@@ -1861,14 +2143,27 @@ class Polymer(BaseJSONParsable):
         default_altloc: Optional[str]=None,
     ):
         """
+        Convert a PDB string to residue molecules.
 
         Parameters
         ----------
-        pdb_string
+        pdb_string : str
+            The PDB string to convert.
+        wanted_altloc : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the desired alternate location (altloc) for that residue.
+        default_altloc : str, optional
+            A string representing the default alternate location (altloc) to be used for residues that do not have a specific altloc specified.
 
         Returns
         -------
-
+        raw_input_mols : dict[str, tuple[Chem.Mol, str]]
+            A dictionary mapping residue IDs to tuples of raw molecules and their corresponding residue names.
+            Each tuple contains the raw molecule, the residue name, a list of missing altlocs, and a list of needed altlocs.
+        
+        Raises
+        ------
+        ValueError
+            If there are interrupted residues or if each residue key does not have exactly one resname.
         """
         blocks_by_residue = {}
         reskey_to_resname = {}
@@ -1952,6 +2247,25 @@ class Polymer(BaseJSONParsable):
     def _pqr_to_residue_mols(
         pqr_string
     ):
+        """
+        Convert a PQR string to residue molecules.
+
+        Parameters
+        ----------
+        pqr_string : str
+            The PQR string to convert.
+
+        Returns
+        -------
+        raw_input_mols : dict[str, tuple[Chem.Mol, str]]
+            A dictionary mapping residue IDs to tuples of raw molecules and their corresponding residue names.
+            Each tuple contains the raw molecule, the residue name, a list of missing altlocs, and a list of needed altlocs.
+        
+        Raises
+        ------
+        ValueError
+            If there are interrupted residues or if each residue key does not have exactly one resname.
+        """
         blocks_by_residue = {}
         blocks_qr = {}
         reskey_to_resname = {}
@@ -1963,9 +2277,7 @@ class Polymer(BaseJSONParsable):
         pdb_block = []
 
         def get_pqr_atom_items(pqr_line): 
-            """
-            based on pdb2pqr.structures.Atom.from_pqr_line
-            """
+            """based on pdb2pqr.structures.Atom.from_pqr_line"""
             items = [w.strip() for w in pqr_line.split()]
             token = items.pop(0)
             if token in [
@@ -1994,7 +2306,7 @@ class Polymer(BaseJSONParsable):
                 raise ValueError(err)
 
         def atom_from_pqr_items(atom_pqr_items: list[str]) -> tuple[AtomField, float]: 
-
+            """get AtomField from items read from a PQR line"""
             if not atom_pqr_items: 
                 return None
             
@@ -2118,16 +2430,23 @@ class Polymer(BaseJSONParsable):
             default_altloc: Optional[str] = None,
         ) -> dict:
         """
+        Convert a ProDy object to residue molecules.
 
         Parameters
         ----------
-        prody_obj
+        prody_obj : ALLOWED_PRODY_TYPES
+            The ProDy object to convert (can be one of the allowed types in .utils.prodyutils.ALLOWED_PRODY_TYPES). 
+        wanted_altloc_dict : dict[str, str], optional
+            A dictionary mapping residue IDs in the format <chain>:<resnum> such as "A:42" to the desired alternate location (altloc) for that residue.
+        default_altloc : str, optional
+            A string representing the default alternate location (altloc) to be used for residues that do not have a specific altloc specified.
 
         Returns
         -------
-
+        raw_input_mols : dict[str, tuple[Chem.Mol, str]]
+            A dictionary mapping residue IDs to tuples of raw molecules and their corresponding residue names.
+            Each tuple contains the raw molecule, the residue name, a list of missing altlocs, and a list of needed altlocs.
         """
-
         if wanted_altloc_dict is None:
             wanted_altloc_dict = {}
         raw_input_mols = {}
@@ -2164,18 +2483,23 @@ class Polymer(BaseJSONParsable):
 
     def to_pdb(self, new_positions: Optional[dict]=None):
         """
+        Convert the polymer to a PDB string while (optionally) updating the coordinates of specified monomers. 
+
         Parameters
         ----------
-        new_positions: dict (str -> dict (int -> (float, float, float)))
-                             |            |      |
-                    residue_id            |      |
-                                 atom_index      |
-                                                 new_position
-        Returns
-        _______
-        pdb_string: str
-        """    
+        new_positions: dict[str, dict[int, tuple[float, float, float]]], optional
+            A dictionary mapping residue IDs to dictionaries of atom indices and their new coordinates.
 
+        Returns
+        -------
+        pdb_string: str 
+            The PDB string representation of the polymer. 
+        
+        Raises
+        ------
+        ValueError
+            If any residue IDs in new_positions are not valid monomers.
+        """    
         if new_positions is None:
             new_positions = {}
         valid_monomers = self.get_valid_monomers()
@@ -2234,11 +2558,14 @@ class Polymer(BaseJSONParsable):
 
     def export_static_atom_params(self):
         """
+        Export static atom parameters from the polymer.
 
         Returns
         -------
         atom_params: dict
+            A dictionary containing atom parameters.
         coords: list
+            A list of coordinates for the atoms.
         """
         atom_params = {}
         counter_atoms = 0
@@ -2284,9 +2611,25 @@ class Polymer(BaseJSONParsable):
 
     # region Filtering Residues
     def get_ignored_monomers(self):
+        """
+        Get monomers that are ignored.
+        
+        Returns
+        -------
+        dict[str, Monomer]
+            A dictionary of ignored monomers. The keys are the residue IDs and the values are the corresponding Monomer objects.
+        """
         return {k: v for k, v in self.monomers.items() if v.rdkit_mol is None}
 
     def get_valid_monomers(self):
+        """
+        Get monomers that are valid (not ignored).
+
+        Returns
+        -------
+        dict[str, Monomer]
+            A dictionary of valid monomers. The keys are the residue IDs and the values are the corresponding Monomer objects.
+        """
         return {k: v for k, v in self.monomers.items() if v.rdkit_mol is not None}
 
     # endregion
@@ -2294,15 +2637,19 @@ class Polymer(BaseJSONParsable):
 
 def add_rotamers_to_polymer_molsetups(rotamer_states_list, polymer):
     """
+    Add rotamer states to the monomers' molecule setups in a polymer and get the state indices.
 
     Parameters
     ----------
-    rotamer_states_list
-    polymer
+    rotamer_states_list : list[dict[str, list[float]]]
+        A list of dictionaries, where each dictionary contains residue IDs as keys and lists of angles as values.
+    polymer : Polymer
+        The polymer object to which the rotamer states will be added.
 
     Returns
     -------
-
+    state_indices_list : list[dict[str, int]]
+        A list of dictionaries, where each dictionary contains residue IDs as keys and the corresponding rotamer state indices as values.
     """
     rotamer_res_disambiguate = {}
     for (
@@ -2367,35 +2714,41 @@ def add_rotamers_to_polymer_molsetups(rotamer_states_list, polymer):
 
 
 class Monomer(BaseJSONParsable):
-    """Individual subunit in a Polymer. Often called residue.
+    """
+    Individual subunit in a Polymer. Often called residue.
 
     Attributes
     ----------
-    raw_rdkit_mol: RDKit Mol
-        defines element and connectivity within a residue. Bond orders and
+    raw_rdkit_mol : Chem.Mol
+        An RDKit Mol that defines element and connectivity within a residue. Bond orders and
         formal charges may be incorrect, and hydrogens may be missing.
         This molecule may originate from a PDB string and it defines also
         the positions of the atoms.
-    rdkit_mol: RDKit Mol
+    rdkit_mol : Chem.Mol
         Copy of the molecule from a ResidueTemplate, with positions from
         raw_rdkit_mol. All hydrogens are real atoms except for those
         at connections with adjacent residues.
-    mapidx_to_raw: dict (int -> int)
-        indices of atom in rdkit_mol to raw_rdkit_mol
-    input_resname: str
-        usually a three-letter code from a PDB
-    template_key: str
-        identifies instance of ResidueTemplate in ResidueChemTemplates
-    atom_names: list (str)
-        names of the atoms in the same order as rdkit_mol
-    padded_mol: RDKit Mol
-        molecule padded with ResiduePadder
-    molsetup: RDKitMoleculeSetup
-        An RDKitMoleculeSetup associated with this residue
-    molsetup_mapidx: dict (int -> int)
-        key: index of atom in padded_mol
-        value: index of atom in rdkit_mol
-    template: ResidueTemplate
+    mapidx_to_raw : dict[int, int]
+        Mapping of atom indices in rdkit_mol to raw_rdkit_mol. 
+    residue_template_key : str
+        The matched residue template key of this Monomer. 
+    input_resname : str
+        The input residue name of this Monomer. 
+    atom_names : list[str]
+        List of atom names in the same order as rdkit_mol. 
+    padded_mol : Chem.Mol
+        Padded molecule with additional atoms around link atoms from adjacent residues. 
+    molsetup : RDKitMoleculeSetup
+        An RDKitMoleculeSetup associated with this residue. 
+    molsetup_mapidx : dict[int, int]
+        Mapping of atom indices in padded_mol to rdkit_mol. 
+    is_flexres_atom : list[bool]
+        List indicating whether each atom is a flexible residue atom.
+    is_movable : bool
+        Indicates whether the residue is movable.
+    mapidx_from_raw : dict[int, int]
+        Mapping of atom indices in raw_rdkit_mol to rdkit_mol.
+    template : ResidueTemplate
         provides access to link_labels in the template
     """
 
@@ -2408,12 +2761,32 @@ class Monomer(BaseJSONParsable):
         template_key=None,
         atom_names=None,
     ):
-        
+        """
+        Initialize a Monomer instance.
+
+        Parameters
+        ----------
+        raw_input_mol : Chem.Mol
+            An RDKit Mol that defines element and connectivity within a residue. Bond orders and
+            formal charges may be incorrect, and hydrogens may be missing.
+        rdkit_mol : Chem.Mol
+            Copy of the molecule from a ResidueTemplate, with positions from
+            raw_rdkit_mol. All hydrogens are real atoms except for those
+            at connections with adjacent residues.
+        mapidx_to_raw : dict[int, int]
+            Mapping of atom indices in rdkit_mol to raw_rdkit_mol. 
+        input_resname : str, optional
+            The input residue name of this Monomer.
+        template_key : str, optional
+            The matched residue template key of this Monomer.
+        atom_names : list[str], optional
+            List of atom names in the same order as rdkit_mol.
+        """
         # Initializer attributes 
         self.raw_rdkit_mol = raw_input_mol
         self.rdkit_mol = rdkit_mol
         self.mapidx_to_raw = mapidx_to_raw
-        self.residue_template_key = template_key  # same as pdb_resname except NALA, etc
+        self.residue_template_key = template_key
         self.input_resname = input_resname  # exists even in openmm topology
         self.atom_names = (
             atom_names  # same order as atoms in rdkit_mol, used in rotamers
@@ -2522,11 +2895,17 @@ class Monomer(BaseJSONParsable):
 
     def set_atom_names(self, atom_names_list):
         """
+        Set the atom names for the monomer.
+
         Parameters
         ----------
-        atom_names_list
+        atom_names_list : list[str]
+            A list of atom names to set for the monomer.
+            The length of this list must match the number of atoms in the RDKit molecule.
+
         Returns
         -------
+        None
         """
         if self.rdkit_mol is None:
             raise RuntimeError("can't set atom_names if rdkit_mol is not set yet")
@@ -2541,7 +2920,27 @@ class Monomer(BaseJSONParsable):
         return
 
     def parameterize(self, mk_prep, residue_id, get_atomprop_from_raw: dict = None):
+        """
+        Parameterize the monomer using the provided mk_prep object.
+    
+        Parameters
+        ----------
+        mk_prep : MoleculePreparation
+            A MoleculePreparation object that provides the parameterization method.
+        residue_id : str
+            The residue ID to be used for parameterization.
+        get_atomprop_from_raw : dict[str, any], optional
+            A dictionary mapping atom property names to default values. 
+            If provided, these properties will be set on the atoms in the raw RDKit molecule.
+            The default is None (not passing any properties). 
 
+        Raises
+        ------
+        ValueError
+            If the atom property names in get_atomprop_from_raw are not strings.
+        NotImplementedError
+            If the number of molsetups is not equal to 1.
+        """
         if get_atomprop_from_raw: 
             if any(not isinstance(prop_name, str) for prop_name in get_atomprop_from_raw.keys()): 
                 raise ValueError(f"Atom property name must be str. Got {prop_name} ({type(prop_name)}) instead! ")
@@ -2617,7 +3016,24 @@ class Monomer(BaseJSONParsable):
 
 
 class NoAtomMapWarning(logging.Filter):
+    """
+    A logging filter to exclude warnings about missing atom mapping numbers in RDKit.
+    """
+
     def filter(self, record):
+        """
+        Filter out warnings about missing atom mapping numbers in RDKit.
+        
+        Parameters
+        ----------
+        record : logging.LogRecord
+            The log record to be filtered.
+        
+        Returns
+        -------
+        bool
+            True if the record should be logged, False otherwise.
+        """
         fields = record.getMessage().split()
         a = " ".join(fields[1:4]) == "product atom-mapping number"
         b = " ".join(fields[5:]) == "not found in reactants."
@@ -2712,10 +3128,7 @@ class ResiduePadder(BaseJSONParsable):
     
     @staticmethod
     def _check_adj_smarts(rxn: rdChemReactions.ChemicalReaction, adjacent_smartsmol: Chem.Mol):
-        """
-        Ensure the atom mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product
-        """
-
+        """Ensure the atom mapping numbers are the same in adjacent_smartsmol and rxn_smarts's product"""
         # Assumes single reactant, single product
         reactant_ids = get_molAtomMapNumbers(rxn.GetReactantTemplate(0))
         product_ids = get_molAtomMapNumbers(rxn.GetProductTemplate(0))
@@ -2931,7 +3344,6 @@ def apply_atom_mappings(mcs_mol: Chem.Mol, original_mol: Chem.Mol) -> list[Chem.
     Apply atom mappings from the original molecule to the MCS molecule by substructure match.
     Be prepared for multiple matches, return a list for further evaluation
     """
-
     # Assumes original_mol contains mcs_mol
     matches = original_mol.GetSubstructMatches(mcs_mol)
     mapped_mcs_molecules = []
@@ -2971,18 +3383,31 @@ class ResidueTemplate(BaseJSONParsable):
 
     Attributes
     ----------
-    mol: RDKit Mol
+    mol : Chem.Mol
         molecule with the exact atoms that constitute the system.
         All Hs are explicit, but atoms bonded to adjacent residues miss an H.
-    link_labels: dict (int -> string)
+    link_labels: dict[int, str]
         Keys are indices of atoms that need padding
         Values are strings to identify instances of ResiduePadder
-    atom_names: list (string)
+    atom_names: list[str]
         list of atom names, matching order of atoms in rdkit mol
     """
 
     def __init__(self, smiles, link_labels=None, atom_names=None):
+        """
+        Initialize a ResidueTemplate object.
 
+        Parameters
+        ----------
+        smiles : str
+            SMILES representation of the molecule.
+        link_labels : dict[int,str], optional
+            Keys are indices of atoms that need padding
+            Values are strings to identify instances of ResiduePadder
+            If None, no link atoms. The default is None. 
+        atom_names : list[str], optional
+            List of atom names in the same order as the atoms in the given smiles.
+        """
         # Initializer attributes 
         self.link_labels = link_labels
         self.atom_names = atom_names
@@ -3033,6 +3458,26 @@ class ResidueTemplate(BaseJSONParsable):
     # endregion
 
     def check(self, mol, link_labels, atom_names):
+        """
+        Check the validity of a ResidueTemplate using the rdkit mol. 
+
+        Parameters
+        ----------
+        mol : Chem.Mol
+            The molecule to check.
+        link_labels : dict[int, str], optional
+            Keys are indices of atoms that need padding
+            Values are strings to identify instances of ResiduePadder
+        atom_names : list[str], optional
+            List of atom names in the same order as the atoms in the given smiles.
+
+        Raises
+        ------
+        ValueError
+            If the number of atoms in the molecule does not match the length of atom_names.
+        RuntimeError
+            If the molecule is not a valid SMILES representation.
+        """
         have_implicit_hs = set()
         for atom in mol.GetAtoms():
             if atom.GetTotalNumHs() > 0:
@@ -3088,10 +3533,3 @@ class ResidueTemplate(BaseJSONParsable):
                 else: 
                     result[element]["excess"] += 1
         return result, mapping
-
-# region JSON Encoders
-
-
-
-# endregion
-
