@@ -3142,6 +3142,41 @@ class ResiduePadder(BaseJSONParsable):
 
     def __call__(self, target_mol: Chem.Mol, adjacent_mol = None, 
                  target_required_atom_index = None, adjacent_required_atom_index = None):
+        """
+        Pad the target_mol with atoms from the adjacent_mol using the defined reaction.
+        The target_mol must contain the reactant of the reaction, and the adjacent_mol
+        must contain the expected adjacent_smartsmol. The function returns the padded
+        molecule and the mapping index of the adjacent_smartsmol. 
+
+        Parameters
+        ----------
+        target_mol : Chem.Mol
+            The target molecule to be padded. It must contain the reactant of the reaction.
+        adjacent_mol : Chem.Mol, optional
+            The adjacent molecule from which atoms will be copied. It must contain the expected adjacent_smartsmol.
+        target_required_atom_index : int, optional  
+            The atom index in the target_mol that must be present in the product.
+        adjacent_required_atom_index : int, optional
+            The atom index in the adjacent_mol that must be present in the product.
+        
+        Returns
+        -------
+        padded_mol : Chem.Mol
+            The padded molecule with additional atoms from the adjacent_mol.
+        adjacent_smartsmol_mapidx : dict[int, int]
+            Mapping of atom indices in the adjacent_smartsmol to the target_mol. 
+
+        Raises
+        RuntimeError
+            If the target_mol does not contain the reactant of the reaction or if the adjacent_mol
+            does not contain the expected adjacent_smartsmol.
+        ValueError
+            If the target_mol does not contain the expected atom index or if the adjacent_mol
+            does not contain the expected atom index.
+        NotImplementedError
+            If the reaction does not produce a single product or if the adjacent_mol does not
+            contain the expected adjacent_smartsmol.
+        """
         # add Hs only to padding atoms
         # copy coordinates if adjacent res has Hs bound to heavy atoms
         # labels have been checked upstream
