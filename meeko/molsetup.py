@@ -96,7 +96,7 @@ class UniqAtomParams:
         Returns
         -------
         uap : UniqAtomParams
-            A populated UniqAtomParams object
+            A populated UniqAtomParams object. 
         """
         uap = UniqAtomParams()
         uap.params = [row.copy() for row in dictionary["params"]]
@@ -384,7 +384,7 @@ class Bond(BaseJSONParsable):
         Returns
         -------
         canon_id : tuple
-            a tuple of the two indices in their canonical order.
+            a tuple of the two indices in their canonical order
         """
         idx_min = min(idx1, idx2)
         idx_max = max(idx1, idx2)
@@ -779,19 +779,19 @@ class MoleculeSetup(BaseJSONParsable):
         graph : list[int]
             A list of indices representing the neighboring atoms in the molecule.
         anchor_list : list[int]
-            a list of ints indicating the multiple bonds that can be specified as input
+            a list of ints indicating the multiple bonds that can be specified as input. 
         rotatable : bool
             flag indicating if the anchor atom should be marked as rotatable to allow the pseudoatom movement.
 
         Returns
         -------
         pseudoatom_index : int
-            The atom_index of the added pseudoatom
+            The atom_index of the added pseudoatom. 
 
         Raises
         ------
         RuntimeError
-            When the incorrect number of anchors of pseudoatoms are found in rigid_groups in the flexibility model
+            When the incorrect number of anchors of pseudoatoms are found in rigid_groups in the flexibility model. 
 
         """
         # Places the atom at the end of the atom list.
@@ -867,11 +867,11 @@ class MoleculeSetup(BaseJSONParsable):
         Parameters
         ----------
         atom_index_1 : int
-            Atom index of one of the atoms in the bond
+            Atom index of one of the atoms in the bond. 
         atom_index_2 : int
-            Atom index of the other atom in the bond
+            Atom index of the other atom in the bond. 
         rotatable : bool
-            Indicates whether the bond is rotatable
+            Indicates whether the bond is rotatable. 
 
         Returns
         -------
@@ -880,7 +880,7 @@ class MoleculeSetup(BaseJSONParsable):
         Raises
         ------
         IndexError
-            When one or more the given bond atom indices do not exist in the MoleculeSetup
+            When one or more the given bond atom indices do not exist in the MoleculeSetup. 
         """
         # Checks that both of the atom indices provided are valid indices, otherwise throws an error
         if len(self.atoms) <= atom_index_1 or len(self.atoms) <= atom_index_2:
@@ -904,9 +904,9 @@ class MoleculeSetup(BaseJSONParsable):
         Parameters
         ----------
         atom_index_1 : int
-            The atom index of one of the atoms in the bond to delete
+            The atom index of one of the atoms in the bond to delete. 
         atom_index_2 : int
-            The atom index of the other atom in the bond to delete
+            The atom index of the other atom in the bond to delete. 
 
         Returns
         -------
@@ -1061,7 +1061,7 @@ class MoleculeSetup(BaseJSONParsable):
         Returns
         -------
         pdbinfo : str
-            A string containing the pdb information for the atom
+            A string containing the pdb information for the atom. 
 
         Raises
         ------
@@ -1087,7 +1087,7 @@ class MoleculeSetup(BaseJSONParsable):
         Returns
         -------
         charge : float
-            The charge associated with the atom
+            The charge associated with the atom. 
 
         Raises
         ------
@@ -1165,7 +1165,7 @@ class MoleculeSetup(BaseJSONParsable):
         Returns
         -------
         charge : str
-            The atom index associated with the atom
+            The atom index associated with the atom. 
 
         Raises
         ------
@@ -1215,9 +1215,9 @@ class MoleculeSetup(BaseJSONParsable):
         Parameters
         ----------
         uniq_atom_params : UniqAtomParams
-            A uniq atom params object to extract atom_type from
+            A uniq atom params object to extract atom_type from. 
         prefix : str
-            A prefix to be appended to all the atom_type attributes
+            A prefix to be appended to all the atom_type attributes. 
 
         Returns
         -------
@@ -1249,7 +1249,7 @@ class MoleculeSetup(BaseJSONParsable):
         Returns
         -------
         is_ignore : bool
-            Indicates whether a particular atom should be ignored
+            Indicates whether a particular atom should be ignored. 
 
         Raises
         ------
@@ -1299,7 +1299,7 @@ class MoleculeSetup(BaseJSONParsable):
         Parameters
         ----------
         indices : list
-            A list of indices to merge
+            A list of indices to merge. 
 
         Returns
         -------
@@ -1355,7 +1355,7 @@ class MoleculeSetup(BaseJSONParsable):
         collected : list[int]
             a list of connected subgroups
         exclude : list[int]
-            a list of atom indices to exclude from the final walk.
+            a list of atom indices to exclude from the final walk
 
         Returns
         -------
@@ -1455,7 +1455,7 @@ class MoleculeSetupExternalToolkit(ABC):
     Required Attributes
     -------------------
     dihedral_interactions : list
-        A list of fourier series [add detail]
+        A list of fourier series. 
     """
 
     @staticmethod
@@ -1548,7 +1548,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
     Attributes
     ----------
     mol : Chem.Mol
-        An RDKit Mol object to base the Molecule Setup on.
+        An RDKit Mol object to base the MoleculeSetup on.
     modified_atom_positions : list
         List of dictionaries where keys are atom indices, Used to store sets of coordinates, e.g. docked poses, as
         dictionaries indexed by the atom index, because not all atoms need to have new coordinates specified.
@@ -1562,7 +1562,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
     atom_to_ring_id : dict
         mapping of atom index to ring id of each atom belonging to the ring
     rmsd_symmetry_indices : tuple
-        Tuples of the indices of the molecule's atoms that match a substructure query. needs info.
+        Tuples of the indices of the molecule's atoms that match a substructure query. 
     """
 
     def __init__(self, name: str = None,
@@ -1926,7 +1926,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         Parameters
         ----------
         smarts : str
-            A SMARTS string to find in the RDKit Mol object
+            A SMARTS string to find in the RDKit Mol object. 
 
         Returns
         -------
@@ -2084,14 +2084,14 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
     # region Ring Construction
     def perceive_rings(self, keep_chorded_rings: bool, keep_equivalent_rings: bool):
         """
-        Uses Hanser-Jauffret-Kaufmann exhaustive ring detection to find the rings in the molecule
+        Uses Hanser-Jauffret-Kaufmann exhaustive ring detection to find the rings in the molecule. 
 
         Parameters
         ----------
         keep_chorded_rings : bool
-            Indicates whether we want to keep chorded rings
+            Indicates whether we want to keep chorded rings. 
         keep_equivalent_rings : bool
-            Indicates whether we want to keep equivalent rings
+            Indicates whether we want to keep equivalent rings. 
 
         Returns
         -------
