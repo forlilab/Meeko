@@ -37,6 +37,7 @@ autodoc_default_options = {
     'undoc-members': False,  # Exclude undocumented members
     'show-inheritance': True,
 }
+autodoc_member_order = 'bysource'
 
 html_logo = "images/raccoon.png"
 
