@@ -103,9 +103,10 @@ to run molecular docking and virtual screening.
    :maxdepth: 2
    :caption: API Reference
 
-   meeko.polymer
-   meeko.preparation
-   meeko.chemtempgen
    meeko.molecule_pdbqt
+   meeko.rdkit_mol_create
    meeko.molsetup
+   meeko.preparation
+   meeko.polymer
+   meeko.chemtempgen
    ...
