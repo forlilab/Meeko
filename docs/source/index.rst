@@ -101,6 +101,8 @@ to run molecular docking and virtual screening.
    :caption: CLI Reference
 
    meeko.mk_prepare_receptor
+   meeko.mk_prepare_ligand
+   meeko.mk_export
    ...
 
 .. toctree::
