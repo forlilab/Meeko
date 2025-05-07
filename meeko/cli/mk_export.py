@@ -21,7 +21,7 @@ from meeko import export_pdb_updated_flexres
 from meeko.utils.utils import parse_begin_res
 
 
-def cmd_lineparser():
+def get_parser():
     parser = argparse.ArgumentParser(
         description='Export docked ligand to SDF, and receptor to PDB',
     )
@@ -46,10 +46,10 @@ def cmd_lineparser():
                         help="add flexres, if any, to SDF ouput")
     parser.add_argument('-', '--',  dest='redirect_stdout', action='store_true',
                         help="do not write SDF file, just print it to STDOUT")
-    return parser.parse_args()
+    return parser
 
 def main():
-    args = cmd_lineparser()
+    args = get_parser().parse_args()
     
     docking_results_filenames = args.docking_results_filename
     write_sdf = args.write_sdf
