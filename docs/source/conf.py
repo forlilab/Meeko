@@ -23,7 +23,6 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx_design',
     'sphinx.ext.viewcode',
-    # 'sphinx.ext.autosummary',
     'sphinx_autodoc_typehints',
 ]
 napoleon_google_docstring = False
