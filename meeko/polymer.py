@@ -414,9 +414,9 @@ def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
     Parameters
     ----------
     mol : Chem.Mol
-        RDKit Mol object with hydrogens
+        RDKit Mol object with hydrogens. 
     indices_to_update : list[int]
-        Hydrogen indices to update
+        Hydrogen indices to update. 
 
     Returns
     -------
@@ -680,7 +680,7 @@ class ResidueChemTemplates(BaseJSONParsable):
             Keys are the IDs of the padders, and values are instances of ResiduePadder.
         ambiguous : dict[str, list[str]]
             Mapping between input residue names (e.g. the three-letter residue
-            name from PDB files) and IDs (strings) of ResidueTemplates
+            name from PDB files) and IDs (strings) of ResidueTemplates. 
         """
         self._check_missing_padders(residue_templates, padders)
         self._check_ambiguous_reskeys(residue_templates, ambiguous)
@@ -3300,7 +3300,7 @@ class ResiduePadder(BaseJSONParsable):
     def _check_adjacent_mol(expected_adjacent_smartsmol: Chem.Mol, adjacent_mol: Chem.Mol, adjacent_required_atom_index: str):
         """
         Ensure adjacent_mol contains expected_adjacent_smartsmol, and 
-        there's exactly one match that includes atom with adjacent_required_atom_index
+        there's exactly one match that includes atom with adjacent_required_atom_index. 
         """
         if expected_adjacent_smartsmol is None:
             raise RuntimeError("adjacent_res_smarts must be initialized to support adjacent_mol.")
@@ -3315,7 +3315,7 @@ class ResiduePadder(BaseJSONParsable):
         return True
 
     def _check_target_mol(self, target_mol: Chem.Mol):
-        """Ensure target_mol contains self.rxn's reactant"""
+        """Ensure target_mol contains self.rxn's reactant."""
         # Assumes single reactant
         if target_mol.GetSubstructMatches(self.rxn.GetReactantTemplate(0)):
             return True
@@ -3377,7 +3377,7 @@ def remove_unmapped_atoms_from_mol(mol: Chem.Mol) -> Chem.Mol:
 def apply_atom_mappings(mcs_mol: Chem.Mol, original_mol: Chem.Mol) -> list[Chem.Mol]:
     """
     Apply atom mappings from the original molecule to the MCS molecule by substructure match.
-    Be prepared for multiple matches, return a list for further evaluation
+    Be prepared for multiple matches, return a list for further evaluation. 
     """
     # Assumes original_mol contains mcs_mol
     matches = original_mol.GetSubstructMatches(mcs_mol)
@@ -3532,6 +3532,26 @@ class ResidueTemplate(BaseJSONParsable):
         return
 
     def match(self, input_mol):
+        """
+        Match the input molecule with the template molecule and return the mapping.
+        
+        Parameters
+        ----------
+        input_mol : Chem.Mol
+            The input molecule to be matched with the template.
+
+        Returns
+        -------
+        tuple[dict, dict]
+            A tuple containing two dictionaries:
+            - The first dictionary contains the results of the matching, including the number of found and missing atoms.
+            - The second dictionary contains the mapping between the template and input molecule atom indices.
+
+        Raises
+        ------
+        RuntimeError
+            If there are repeated values with different keys in the mapping.
+        """
         mapping = mapping_by_mcs(self.mol, input_mol)
         mapping_inv = {value: key for (key, value) in mapping.items()}
         if len(mapping_inv) != len(mapping):
