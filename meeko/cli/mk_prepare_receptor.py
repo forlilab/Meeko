@@ -107,7 +107,7 @@ def required_length(nmin, nmax):
             setattr(namespace, self.dest, values)
     return RequiredLength
 
-def get_args():
+def get_parser():
     parser = TalkativeParser()
 
     io_group = parser.add_argument_group("Input/Output")
@@ -362,11 +362,11 @@ def get_args():
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
 
-    return args
+    return parser
 
 
 def main():
-    args = get_args()
+    args = get_parser().parse_args
     
     if args.wanted_altloc is None:
         wanted_altloc = None
