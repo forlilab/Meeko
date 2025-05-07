@@ -28,33 +28,34 @@ atom_property_definitions = {'H': 'vdw', 'C': 'vdw', 'A': 'vdw', 'N': 'vdw', 'P'
 
 
 def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_dlg=False, skip_typing=False):
-    """Read PDBQT file and return the atoms, positions and annotations
+    """
+    Read PDBQT file and return the atoms, positions and annotations. 
 
     Parameters
     ----------
     pdbqt_string : str
-        PDBQT string
+        PDBQT string. 
     poses_to_read : int
         Number of poses to read. 
-        Default is -1 (read all poses)
+        Default is -1 (read all poses). 
     energy_range : float
         Read docked poses until the maximum energy difference from best pose is reach, for example 2.5 kcal/mol. 
-        Default is -1 (read all poses) 
+        Default is -1 (read all poses). 
     is_dlg : bool
-        Input file is in dlg (AutoDock docking log) format
+        Input file is in dlg (AutoDock docking log) format. 
     skip_typing : bool
-        Flag indicating that atomtyping should be skipped
+        Flag indicating that atomtyping should be skipped. 
     
     Returns
     -------
     atoms : ndarray
-        Array of atoms
+        Array of atoms. 
     positions : ndarray
-        Array of positions
+        Array of positions. 
     atom_annotations : dict
-        Dictionary of atom annotations
+        Dictionary of atom annotations. 
     pose_data : dict
-        Dictionary of pose data
+        Dictionary of pose data. 
     """
     i = 0
     n_poses = 0
@@ -335,21 +336,22 @@ def _read_ligand_pdbqt_file(pdbqt_string, poses_to_read=-1, energy_range=-1, is_
 
 
 def _identify_bonds(atom_idx, positions, atom_types):
-    """Identify bonds between atoms based on their positions and types
+    """
+    Identify bonds between atoms based on their positions and types. 
     
     Parameters
     ----------
     atom_idx : list
-        List of atom indices
+        List of atom indices. 
     positions : ndarray
-        Array of atom positions
+        Array of atom positions. 
     atom_types : list
-        List of atom types
+        List of atom types. 
     
     Returns
     -------
     bonds : dict
-        Dictionary of bonds
+        Dictionary of bonds. 
     """
     bonds = defaultdict(list)
     KDTree = spatial.cKDTree(positions)
@@ -375,48 +377,48 @@ def _identify_bonds(atom_idx, positions, atom_types):
 
 class PDBQTMolecule:
     """
-    PDBQTMolecule class for reading PDBQT (or dlg) files from AutoDock4, AutoDock-GPU or AutoDock-Vina
+    PDBQTMolecule class for reading PDBQT (or dlg) files from AutoDock4, AutoDock-GPU or AutoDock-Vina. 
 
     Attributes
     ----------
     _current_pose : int
-        Index of the current pose
+        Index of the current pose. 
     _pdbqt_filename : str
-        Filename of the PDBQT file
-    _atoms : ndarray
-        Array of atoms
+        Filename of the PDBQT file. 
+    _atoms : ndarray. 
+        Array of atoms. 
     _positions : ndarray
-        Array of positions
+        Array of positions. 
     _bonds : dict
-        Dictionary of bonds
+        Dictionary of bonds. 
     _atom_annotations : dict
-        Dictionary of atom annotations
+        Dictionary of atom annotations. 
     _pose_data : dict
-        Dictionary of pose data
+        Dictionary of pose data. 
     _name : str
-        Name of the molecule
+        Name of the molecule. 
     _KDTrees : list
-        List of KDTree objects for each pose
+        List of KDTree objects for each pose. 
     """
 
     def __init__(self, pdbqt_string, name=None, poses_to_read=None, energy_range=None, is_dlg=False, skip_typing=False):
         """
-        Initialize PDBQTMolecule object
+        Initialize PDBQTMolecule object. 
 
         Parameters
         ----------
         pdbqt_string : str
-            PDBQT string
+            PDBQT string. 
         name : str, optional
-            Name of the molecule (default: None, use filename without pdbqt suffix)
+            Name of the molecule (default: None, use filename without pdbqt suffix). 
         poses_to_read : int, optional
-            Total number of poses to read (default: None, read all)
+            Total number of poses to read (default: None, read all). 
         energy_range : float, optional
-            Read docked poses until the maximum energy difference from best pose is reach, for example 2.5 kcal/mol (default: None, read all)
+            Read docked poses until the maximum energy difference from best pose is reach, for example 2.5 kcal/mol (default: None, read all). 
         is_dlg : bool, optional
-            Input file is in dlg (AutoDock docking log) format (default: False)
+            Input file is in dlg (AutoDock docking log) format (default: False). 
         skip_typing : bool, optional
-            Flag indicating that atomtyping should be skipped (default: False)
+            Flag indicating that atomtyping should be skipped (default: False). 
         """
         self._current_pose = 0
         self._pdbqt_filename = None
@@ -455,22 +457,28 @@ class PDBQTMolecule:
     @classmethod
     def from_file(cls, pdbqt_filename, name=None, poses_to_read=None, energy_range=None, is_dlg=False, skip_typing=False): 
         """
-        Read PDBQT file and return PDBQTMolecule object
+        Read PDBQT file and return PDBQTMolecule object. 
         
         Parameters
         ----------
         pdbqt_filename : str
-            Filename of the PDBQT file
+            Filename of the PDBQT file. 
         name : str, optional
-            Name of the molecule (default: None, use filename without pdbqt suffix)
+            Name of the molecule. 
+            De is None (use filename without pdbqt suffix). 
         poses_to_read : int, optional
-            Total number of poses to read (default: None, read all)
+            Total number of poses to read. 
+            Default is None (read all).
         energy_range : float, optional
-            Read docked poses until the maximum energy difference from best pose is reach, for example 2.5 kcal/mol (default: None, read all)
+            Read docked poses until the maximum energy difference from best pose is reach, for example 2.5 kcal/mol. 
+            Default is None (read all). 
         is_dlg : bool, optional
-            Input file is in dlg (AutoDock docking log) format (default: False)
+            Input file is in dlg (AutoDock docking log) format. 
+            Default is False (input file is not in dlg format). 
         skip_typing : bool, optional
-            Flag indicating that atomtyping should be skipped (default: False)"""
+            Flag indicating that atomtyping should be skipped. 
+            Default is False (do not skip typing).
+        """
         if name is None:
             name = os.path.splitext(os.path.basename(pdbqt_filename))[0]
         with open(pdbqt_filename) as f:
@@ -481,24 +489,24 @@ class PDBQTMolecule:
 
     def __getitem__(self, value):
         """
-        Get a pose by index
+        Get a pose by index. 
 
         Parameters
         ----------
         value : int
-            Index of the pose to get
+            Index of the pose to get. 
         
         Returns
         -------
         self : PDBQTMolecule
-            PDBQTMolecule object with the specified pose
+            PDBQTMolecule object with the specified pose. 
         
         Raises
         -------
         IndexError
-            If the index is out of range
+            If the index is out of range. 
         TypeError
-            If the argument type is invalid
+            If the argument type is invalid. 
         """
         if isinstance(value, int):
             if value < 0 or value >= self._positions.shape[0]:
@@ -512,12 +520,12 @@ class PDBQTMolecule:
         return self
 
     def __iter__(self):
-        """Return the iterator object"""
+        """Return the iterator object."""
         self._current_pose = -1
         return self
 
     def __next__(self):
-        """Return the next pose in the iteration"""
+        """Return the next pose in the iteration."""
         if self._current_pose + 1 >= self._positions.shape[0]:
             raise StopIteration
 
@@ -526,7 +534,7 @@ class PDBQTMolecule:
         return self
 
     def __repr__(self):
-        """Return a string representation of the PDBQTMolecule object"""
+        """Return a string representation of the PDBQTMolecule object."""
         repr_str = '<Molecule named %s containing %d poses of %d atoms>'
         return (repr_str % (self._name, self._pose_data['n_poses'], self._atoms.shape[0]))
 
@@ -548,17 +556,20 @@ class PDBQTMolecule:
     def available_atom_properties(self, ignore_properties=None):
         """
         Return all the available atom properties for that molecule.
-        The following properties are awlays ignored: ligand and flexible_residue
+        The following properties are awlays ignored: 
+            - ligand
+            - flexible_residue
+            - water
 
         Parameters
         ----------
         ignore_properties : list, optional
-            List of properties to ignore (default: None, no properties are ignored)
+            List of properties to ignore (default: None, no properties are ignored). 
         
         Returns
         -------
         list : list
-            List of available atom properties
+            List of available atom properties. 
         """
         if ignore_properties is None:
             ignore_properties = []
@@ -578,7 +589,7 @@ class PDBQTMolecule:
         Returns
         -------
         bool
-            True if contains flexible residues, otherwise False
+            True if contains flexible residues, otherwise False. 
         """
         if self._atom_annotations['flexible_residue']:
             return True
@@ -592,7 +603,7 @@ class PDBQTMolecule:
         Returns
         -------
         bool
-            True if contains water molecules in the current pose, otherwise False
+            True if contains water molecules in the current pose, otherwise False. 
         """
         active_atoms_idx = self._pose_data['active_atoms'][self._current_pose]
         if set(self._atom_annotations['water']).intersection(active_atoms_idx):
@@ -602,19 +613,21 @@ class PDBQTMolecule:
 
     def atoms(self, atom_idx=None, only_active=True):
         """
-        Return the atom i
+        Return the ith atom. 
 
         Parameters
         ----------
         atom_idx : int, list, optional
-            Index of one or multiple atoms (0-based) (default: None, return all atoms)
+            Index of one or multiple atoms (0-based). 
+            Default is None (return all atoms).
         only_active : bool, optional
-            Return only active atoms (default: True, return only active atoms)  
+            Return only active atoms
+            Default is True (return only active atoms).
 
         Returns
         -------
         atoms : ndarray
-            ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
+            ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t). 
         """
         if atom_idx is not None:
             if not isinstance(atom_idx, (list, tuple, np.ndarray)):
@@ -634,42 +647,43 @@ class PDBQTMolecule:
 
     def positions(self, atom_idx=None, only_active=True):
         """
-        Return coordinates (xyz) of all atoms or a certain atom
+        Return coordinates (xyz) of all atoms or a certain atom. 
 
         Parameters
         ----------
         atom_idx : int, list, optional
-            Index of one or multiple atoms (0-based) (default: None, return all atoms)
+            Index of one or multiple atoms (0-based) (default: None, return all atoms). 
         only_active : bool, optional
-            Return only active atoms (default: True, return only active atoms)
+            Return only active atoms (default: True, return only active atoms). 
 
         Returns
         -------
         ndarray
-            ndarray of coordinates (xyz)
+            ndarray of coordinates (xyz). 
         """
         return np.atleast_2d(self.atoms(atom_idx, only_active)['xyz'])
 
     def atoms_by_properties(self, atom_properties, only_active=True):
         """
-        Return atom based on their properties
+        Return atom based on their properties. 
         
         Parameters
         ----------
         atom_properties : str or list
-            Property of the atoms to retrieve (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
+            Property of the atoms to retrieve (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue). 
         only_active : bool, optional
-            Return only active atoms (default: True, return only active atoms)
+            Return only active atoms. 
+            Default is True (return only active atoms). 
 
         Returns
         -------
         ndarray
-            ndarray of atoms (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
+            ndarray of atoms (atom_id, atom_name, resname, resid, chainid, xyz, q, t). 
 
         Raises
         -------
         KeyError
-            If the atom property is not valid
+            If the atom property is not valid. 
         """
         if not isinstance(atom_properties, (list, tuple)):
             atom_properties = [atom_properties]
@@ -705,24 +719,24 @@ class PDBQTMolecule:
         Parameters
         ----------
         xyz : np.ndarray
-            array of 3D coordinates
+            array of 3D coordinates. 
         radius : float
-            radius
+            radius. 
         atom_properties : str or list, optional
-            Property of the atoms to retrieve (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
+            Property of the atoms to retrieve (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue). 
         ignore : int or list, optional
-            Ignore atom for the search using atom id (0-based)
-            Default is None (no atoms are ignored)
+            Ignore atom for the search using atom id (0-based). 
+            Default is None (no atoms are ignored). 
         
         Returns
         -------
         ndarray
-            ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
+            ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t). 
 
         Raises
         -------
         KeyError
-            If the atom property is not valid
+            If the atom property is not valid. 
         """
         atom_idx = self._KDTrees[self._current_pose].query_ball_point(xyz, radius, p=2, return_sorted=True)
 
@@ -771,16 +785,16 @@ class PDBQTMolecule:
         Parameters
         ----------
         atom_idx : int, list
-            index of one or multiple atoms (0-based)
+            index of one or multiple atoms (0-based). 
         radius : float
-            radius
+            radius. 
         atom_properties : str or list, optional
-            Property of the atoms to retrieve (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue)
+            Property of the atoms to retrieve (properties: ligand, flexible_residue, vdw, hb_don, hb_acc, metal, water, reactive, glue). 
 
         Returns
         -------
         ndarray
-            ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t)
+            ndarray (atom_id, atom_name, resname, resid, chainid, xyz, q, t). 
         """
         if not isinstance(atom_idx, (list, tuple)):
             atom_idx = [atom_idx]
@@ -797,17 +811,17 @@ class PDBQTMolecule:
 
     def neighbor_atoms(self, atom_idx):
         """
-        Return neighbor (bonded) atoms of certain atom(s) by their index 
+        Return neighbor (bonded) atoms of certain atom(s) by their index. 
 
         Parameters
         ----------
         atom_idx : int, list
-            index of one or multiple atoms (0-based)
+            index of one or multiple atoms (0-based). 
 
         Returns
         -------
         list
-            list of lists containing the neighbor (bonded) atoms (0-based)
+            list of lists containing the neighbor (bonded) atoms (0-based). 
         """
         if not isinstance(atom_idx, (list, tuple, np.ndarray)):
             atom_idx = [atom_idx]
@@ -820,18 +834,18 @@ class PDBQTMolecule:
 
     def write_pdbqt_string(self, as_model=True):
         """
-        Write PDBQT output string of the current pose
+        Write PDBQT output string of the current pose. 
 
         Parameters
         ----------
         as_model : bool, optional
             Add MODEL/ENDMDL keywords to the output PDBQT string
-            Default is True (add MODEL/ENDMDL keywords)
+            Default is True (add MODEL/ENDMDL keywords). 
         
         Returns
         -------
         str
-            PDBQT string of the current pose
+            PDBQT string of the current pose. 
         """
         if as_model:
             pdbqt_string = 'MODEL    %5d\n' % (self._current_pose + 1)
@@ -848,16 +862,18 @@ class PDBQTMolecule:
         Parameters
         ----------
         output_pdbqtfilename : str
-            Filename of the output PDBQT file
+            Filename of the output PDBQT file. 
         overwrite : bool, optional
-            Overwrite on existing PDBQT file (default: False)
+            Overwrite on existing PDBQT file. 
+            Default is False (do not overwrite). 
         as_model : bool, optional
-            Add MODEL/ENDMDL keywords to the output PDBQT string (default: False)
+            Add MODEL/ENDMDL keywords to the output PDBQT string. 
+            Default is False (do not add MODEL/ENDMDL keywords).
 
         Raises
         ------
         RuntimeError
-            If the output PDBQT file already exists and overwrite is False
+            If the output PDBQT file already exists and overwrite is False.
 
         Returns
         -------
