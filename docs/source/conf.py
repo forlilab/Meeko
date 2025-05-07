@@ -32,6 +32,11 @@ napoleon_numpy_docstring = True
 autodoc_mock_imports = [
     "rdkit", "rdkit.Chem", "rdkit.Geometry", "numpy", "scipy", "gemmi", "prody"
 ]
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': False,  # Exclude undocumented members
+    'show-inheritance': True,
+}
 
 html_logo = "images/raccoon.png"
 
