@@ -37,16 +37,6 @@ def clean_extend(existing_dict, new_row):
 class RDKitMolCreate:
     """
     Utilities for constructing RDKit molecules from PDBQT docking results.
-
-    See Also
-    --------
-    from_pdbqt_mol : Convert a PDBQT molecule into a list of RDKit molecules.
-    guess_flexres_smiles : Infer SMILES and mapping from residue name and atom names.
-    add_pose_to_mol : Add docking pose coordinates to an RDKit molecule.
-    add_hydrogens : Add and place hydrogen atoms on an RDKit molecule.
-    combine_rdkit_mols : Merge multiple RDKit molecules into one.
-    add_sandbox_coordinates : Parse coordinates from a DLG file and append to RDKit mol.
-    write_sd_string : Generate multi-conformer SDF string from docking results.
     """
 
     ambiguous_flexres_choices = {
