@@ -48,7 +48,7 @@ def setup_config_parser():
 
     return confargs, remaining_argv
 
-def get_parser(confargs):
+def get_parser():
     parser = (
         argparse.ArgumentParser()
     )  # parents=[conf_parser]) # parents shows --config_file in help msg
@@ -296,12 +296,12 @@ def update_parser(parser, confargs):
     # variable `config` with the values parsed with argparse
     parser.set_defaults(**config)
 
-    return parser
+    return parser, config
 
-def cmd_lineparser(parser):
+def cmd_lineparser():
     confargs, remaining_argv = setup_config_parser()
-    parser = get_parser(confargs)
-    parser = update_parser(parser, confargs)
+    parser = get_parser()
+    parser, config = update_parser(parser, confargs)
     args = parser.parse_args(remaining_argv)
 
     # check reactive arguments
