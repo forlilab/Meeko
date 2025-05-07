@@ -286,12 +286,12 @@ class RDKitMolCreate:
         -------
         tuple[str, list, list]
             A tuple containing: 
-                smiles: SMILES string starting at C-alpha (excludes most of the backbone)
-                index_map: list of pairs of integers, first in pair is index in the smiles,
-                        second is index of corresponding atom in atom_names         
-                h_parent: list of pairs of integers, first in pair is index of a heavy atom
-                        in the smiles, second is index of a hydrogen in atom_names.
-                        The hydrogen is bonded to the heavy atom. 
+                - smiles: SMILES string starting at C-alpha (excludes most of the backbone)
+                - index_map: list of pairs of integers, first in pair is index in the smiles,
+                    second is index of corresponding atom in atom_names         
+                - h_parent: list of pairs of integers, first in pair is index of a heavy atom
+                    in the smiles, second is index of a hydrogen in atom_names.
+                    The hydrogen is bonded to the heavy atom. 
         """
         if len(set(atom_names)) != len(atom_names):
             return None, None, None
@@ -326,9 +326,7 @@ class RDKitMolCreate:
     @classmethod
     def add_pose_to_mol(cls, mol, ligand_coordinates, index_map):
         """
-        Add given coordinates to given molecule as new conformer.
-        Index_map maps order of coordinates to order in smile string
-        used to generate rdkit mol
+        Add given coordinates to given molecule as new conformer. 
 
         Parameters
         ----------
@@ -339,7 +337,7 @@ class RDKitMolCreate:
         index_map : list[int]
             list of nr_atom pairs of integers, 1-indexed.
             In each pair, the first int is the index in mol, and
-            the second int is the index in ligand_coordinates
+            the second int is the index in ligand_coordinates (PDBQT). 
 
         Returns 
         -------
@@ -387,7 +385,7 @@ class RDKitMolCreate:
     def add_hydrogens(mol, coordinates_list, h_parent):
         """
         Add hydrogen atoms to ligand RDKit mol, adjust the positions of
-        polar hydrogens to match pdbqt
+        polar hydrogens to match pdbqt.
 
         Parameters
         ----------
@@ -432,7 +430,7 @@ class RDKitMolCreate:
     @staticmethod
     def combine_rdkit_mols(mol_list):
         """
-        Combines list of rdkit molecules into a single one
+        Combines list of rdkit molecules into a single one using Chem.CombineMols. 
 
         Parameters
         ----------
