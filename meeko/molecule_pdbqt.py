@@ -410,15 +410,20 @@ class PDBQTMolecule:
         pdbqt_string : str
             PDBQT string. 
         name : str, optional
-            Name of the molecule (default: None, use filename without pdbqt suffix). 
+            Name of the molecule. 
+            Default is None (use filename without pdbqt suffix). 
         poses_to_read : int, optional
-            Total number of poses to read (default: None, read all). 
+            Total number of poses to read. 
+            Default is None (read all). 
         energy_range : float, optional
-            Read docked poses until the maximum energy difference from best pose is reach, for example 2.5 kcal/mol (default: None, read all). 
+            Read docked poses until the maximum energy difference from best pose is reach, for example 2.5 kcal/mol. 
+            Default is None (read all).
         is_dlg : bool, optional
-            Input file is in dlg (AutoDock docking log) format (default: False). 
+            Input file is in dlg (AutoDock docking log) format. 
+            Default is False (input file is not in dlg format).
         skip_typing : bool, optional
-            Flag indicating that atomtyping should be skipped (default: False). 
+            Flag indicating that atomtyping should be skipped. 
+            Default is False (do not skip typing).
         """
         self._current_pose = 0
         self._pdbqt_filename = None
@@ -564,7 +569,8 @@ class PDBQTMolecule:
         Parameters
         ----------
         ignore_properties : list, optional
-            List of properties to ignore (default: None, no properties are ignored). 
+            List of properties to ignore. 
+            Default is None (no properties are ignored).
         
         Returns
         -------
@@ -621,7 +627,7 @@ class PDBQTMolecule:
             Index of one or multiple atoms (0-based). 
             Default is None (return all atoms).
         only_active : bool, optional
-            Return only active atoms
+            Return only active atoms. 
             Default is True (return only active atoms).
 
         Returns
@@ -652,9 +658,11 @@ class PDBQTMolecule:
         Parameters
         ----------
         atom_idx : int, list, optional
-            Index of one or multiple atoms (0-based) (default: None, return all atoms). 
+            Index of one or multiple atoms (0-based). 
+            Default is None (return all atoms). 
         only_active : bool, optional
-            Return only active atoms (default: True, return only active atoms). 
+            Return only active atoms. 
+            Default is True (return only active atoms). 
 
         Returns
         -------
