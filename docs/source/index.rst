@@ -101,6 +101,13 @@ to run molecular docking and virtual screening.
 
 .. toctree::
    :maxdepth: 2
+   :caption: CLI Reference
+
+   meeko.mk_prepare_receptor
+   ...
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference
 
    meeko.molecule_pdbqt
