@@ -24,7 +24,8 @@ extensions = [
     'sphinx_design',
     'sphinx.ext.viewcode',
     'sphinx_autodoc_typehints',
-    'sphinx_argparse_cli'
+    'sphinx_argparse_cli',
+    'sphinxarg.ext'
 ]
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True

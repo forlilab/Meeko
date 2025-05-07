@@ -366,7 +366,7 @@ def get_parser():
 
 
 def main():
-    args = get_parser().parse_args
+    args = get_parser().parse_args()
     
     if args.wanted_altloc is None:
         wanted_altloc = None

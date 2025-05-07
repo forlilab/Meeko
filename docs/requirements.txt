@@ -1,4 +1,5 @@
 sphinx-book-theme
 sphinx-design
 sphinx-autodoc-typehints
+sphinx-argparse
 sphinx-argparse-cli
