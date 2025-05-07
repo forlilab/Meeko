@@ -1,6 +1,7 @@
 meeko.preparation module
 ========================
 
-.. automodule:: meeko.preparation
-   :members:
+.. autoclass:: meeko.preparation.MoleculePreparation
+   :members: 
    :show-inheritance:
+   :exclude-members: packaged_params, name, path
