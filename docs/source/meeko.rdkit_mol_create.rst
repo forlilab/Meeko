@@ -2,5 +2,5 @@ meeko.rdkit_mol_create module
 ========================
 
 .. automodule:: meeko.rdkit_mol_create
-   :members:
+   :members: RDKitMolCreate
    :show-inheritance:
