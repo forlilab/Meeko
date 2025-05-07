@@ -280,7 +280,10 @@ def get_parser():
         type=float,
         help="r_eq scaling for 1-4 interaction across reactive atoms",
     )
-    args = parser.parse_args()
+
+    return parser 
+
+def check_args(parser, args):
     
     num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)])
 
@@ -362,11 +365,11 @@ def get_parser():
             print("Command line error: " + msg, file=sys.stderr)
             sys.exit(2)
 
-    return parser
-
 
 def main():
-    args = get_parser().parse_args()
+    parser = get_parser()
+    args = parser.parse_args()
+    check_args(parser, args)
     
     if args.wanted_altloc is None:
         wanted_altloc = None
