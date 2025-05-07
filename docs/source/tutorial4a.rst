@@ -32,7 +32,10 @@ The following Python script demonstrates the ligand preparation process with pos
 .. code-block:: python
 
    from rdkit import Chem
-   from scrubber import Scrub
+   try:
+    from scrubber import Scrub  # Old name util v0.1.1
+   except ImportError:
+      from molscrub import Scrub  # New name
    from meeko import MoleculePreparation, PDBQTWriterLegacy
    from multiprocessing import Pool
    from time import sleep
