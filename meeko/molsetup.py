@@ -247,31 +247,6 @@ class UniqAtomParams:
 class Atom(BaseJSONParsable):
     """
     A class representing an atom in a molecule.
-
-    Attributes
-    ----------
-    index : int
-        The index of the atom in the molecule.
-    pdbinfo : str
-        The PDB information for the atom.
-    charge : float
-        The charge of the atom.
-    coord : np.ndarray
-        The coordinates of the atom in 3D space.
-    atomic_num : int
-        The atomic number of the atom.
-    atom_type : str
-        The type of the atom.
-    is_ignore : bool
-        A flag indicating whether the atom should be ignored.
-    graph : list[int]
-        A list of indices representing the neighboring atoms in the molecule.
-    is_dummy : bool, optional
-        A flag indicating whether the atom is a dummy atom.
-        Default is False.
-    is_pseudo_atom : bool, optional
-        A flag indicating whether the atom is a pseudo atom.
-        Default is False.
     """
 
     index: int
@@ -352,19 +327,6 @@ class Atom(BaseJSONParsable):
 class Bond(BaseJSONParsable):
     """
     A class representing a bond between two atoms in a molecule.
-
-    Attributes
-    ----------
-    index1 : int
-        The index of the first atom in the bond.
-    index2 : int
-        The index of the second atom in the bond.
-    rotatable : bool
-        A flag indicating whether the bond is rotatable.
-    breakable : bool
-        A flag indicating whether the bond is breakable.
-    canon_id : tuple[int, int]
-        A tuple representing the canonical ID of the bond, generated from the indices of the two atoms.
     """
 
     canon_id: tuple[int, int] = field(init=False)  # Excluded from __init__
@@ -432,11 +394,6 @@ class Bond(BaseJSONParsable):
 class Ring(BaseJSONParsable):
     """
     A class representing a ring in a molecule.
-
-    Attributes
-    ----------
-    ring_id : tuple[int, int]
-        A tuple representing the ID of the ring, generated from the indices of the atoms in the ring.
     """
 
     ring_id: tuple
@@ -467,13 +424,6 @@ class Ring(BaseJSONParsable):
 class RingClosureInfo:
     """
     A class representing the information about ring closures in a molecule.
-    
-    Attributes
-    ----------
-    bonds_removed : list
-        A list of bonds that have been removed to form the ring closure.
-    pseudos_by_atom : dict
-        A dictionary mapping atom indices to pseudoatoms used in the ring closure.
     """
 
     bonds_removed: list = field(default_factory=list)
@@ -484,17 +434,6 @@ class RingClosureInfo:
 class Restraint(BaseJSONParsable):
     """
     A class representing a restraint on an atom in a molecule.
-
-    Attributes
-    ----------
-    atom_index : int
-        The index of the atom being restrained.
-    target_coords : tuple[float, float, float]
-        The target coordinates for the restraint.
-    kcal_per_angstrom_square : float
-        The force constant for the restraint in kcal/(angstrom^2).
-    delay_angstroms : float
-        The distance at which the restraint is applied in angstroms.
     """
 
     atom_index: int
