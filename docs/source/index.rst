@@ -79,7 +79,6 @@ to run molecular docking and virtual screening.
    Overview <lig_overview>
    Basic usage <lig_prep_basic>
    Advanced usage <lig_prep_advanced>
-   mk_prepare_ligand.py options <lig_cli_options>
 
 .. toctree::
    :maxdepth: 2
@@ -89,7 +88,6 @@ to run molecular docking and virtual screening.
    Overview <rec_overview>
    Info on templates  <py_build_temp>
    Command line usage <cli_rec_prep>
-   mk_prepare_receptor.py options <rec_cli_options>
 
 .. toctree::
    :maxdepth: 2
@@ -97,7 +95,6 @@ to run molecular docking and virtual screening.
    :caption: Exporting results
 
    Usage <export_usage>
-   mk_export.py options <export_cli_options>
 
 .. toctree::
    :maxdepth: 2
