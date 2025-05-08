@@ -87,6 +87,7 @@ to run molecular docking and virtual screening.
    :caption: Receptor preparation
 
    Overview <rec_overview>
+   Basic usage <rec_prep_basic>
    Info on templates  <py_build_temp>
    Command line usage <cli_rec_prep>
    mk_prepare_receptor.py options <rec_cli_options>
