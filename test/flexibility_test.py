@@ -106,3 +106,11 @@ def test_non_sequential_atom_ordering_05():
         expected_rot_bonds={(14, 16), (16, 17), (17, 22), (10, 11), (11, 19)},
         expected_sizes_of_rigid_bodies=[17, 1, 5, 2, 2],
     )
+
+def test_double_bond_is_rigid():
+    run(
+        fn="has_alkene.mol",
+        folder="flexibility_data",
+        expected_rot_bonds={(0, 1), (5, 8), (10, 11)},
+        expected_sizes_of_rigid_bodies=[3, 6, 5, 2],
+    )

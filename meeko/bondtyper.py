@@ -4,6 +4,8 @@
 # Meeko bond typer
 #
 
+from rdkit.Chem.rdchem import BondType
+
 
 class BondTyperLegacy:
 
@@ -63,7 +65,13 @@ class BondTyperLegacy:
                 to_rigidify.add((atom_b, atom_a))
 
         for bond_id, bond in setup.bond_info.items():
-            rotatable = True
+            if (
+                bond_id[0] >= setup.mol.GetNumAtoms()
+                or bond_id[1] >= setup.mol.GetNumAtoms()
+            ):
+                continue  # at least one of the atoms is pseudo or dummy
+            rdkit_bond = setup.mol.GetBondBetweenAtoms(bond_id[0], bond_id[1])
+            rotatable = rdkit_bond.GetBondType() == BondType.SINGLE
             if bond_id in to_rigidify:
                 rotatable = False
             # check if bond is amide
