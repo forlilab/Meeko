@@ -10,7 +10,7 @@ To display the help message, run:
 
 .. code-block:: bash
 
-    mk_receptor_ligand.py -h
+    mk_receptor_receptor.py -h
 
 Writing a single PDBQT file:
 
