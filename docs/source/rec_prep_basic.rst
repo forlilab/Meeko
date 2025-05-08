@@ -58,3 +58,84 @@ To specify a destination or re-uses an existing cache (must be a .JSON file):
 .. code-block:: bash
 
     mk_prepare_receptor.py -i receptor.pdb -o some_output --cache_templates path_to_existing_cache.json
+
+
+See Also
+--------
+
+- Example usage for basic docking preparation with AutoDock-Vina and AutoDock-GPU: :ref:`Basic docking preparation <tutorial1>`
+- Example usage for flexible docking: :ref:`Flexible docking <tutorial2>`
+- Example usage for covalent docking: :ref:`Covalent docking <tutorial3>`
+
+
+Python API
+----------
+
+The receptor preparation functionality is also accessible via Meeko’s Python API! This allows fine-grained control of preprocessing steps and integration into larger pipelines. The essential and general steps for receptor preparation are:
+
+1. Load and Clean Input Structure
+
+Choose a source of structural data (e.g., PDB ID) and preprocess it with a tool like ProDy or RDKit. 
+
+2. Instantiate the Preparation Method
+
+To instantiate the default preparation method, use the following code: 
+
+.. code-block:: python
+
+    from meeko import MoleculePreparation
+    mk_prep = MoleculePreparation()
+
+To use an established preparation method, you may instantiate ``MoleculePreparation`` with a configuration. This may be a dictionary or a JSON file: 
+
+.. code-block:: python
+
+    from meeko import MoleculePreparation
+    # from a dictionary
+    mk_prep_from_dict = MoleculePreparation.from_config(config_dict)
+    # from a JSON file
+    mk_prep_from_file = MoleculePreparation.from_config_file(config_file)
+
+3. Load Template Library
+
+To load the default library of ``ResidueChemTemplates``, use the following code: 
+
+.. code-block:: python
+
+    from meeko import ResidueChemTemplates
+    chem_templates = ResidueChemTemplates.create_from_defaults()
+
+See the :ref:`this post about templates <py_build_temp>` section for more information on how to create a custom template. See also the API reference on options to load the additional templates.  
+
+4. Build the Polymer Object
+
+To be constructed into a Polymer object, the receptor structure needs to be loaded into a ProDy object or a PDB/PQR string. 
+
+.. code-block:: python
+
+    from meeko import Polymer
+    # from a ProDy object
+    polymer_from_prody = Polymer.from_prody(pdb_str, chem_templates, mk_prep)
+    # from a PDB string
+    polymer_from_pdb = Polymer.from_pdb_string(pdb_str, chem_templates, mk_prep)
+
+5. Write Output Files
+
+The basic output files are PDBQT and JSON. To write a PDBQT file for basic, rigid docking, use the following code: 
+
+.. code-block:: python
+
+    from meeko import PDBQTWriterLegacy
+    rigid_pdbqt_str, flex_pdbqt_str = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+    with open("receptor_rigid.pdbqt", "w") as f:
+        f.write(rigid_pdbqt_str)
+
+To write a JSON file, use the following code:
+
+.. code-block:: python
+
+    json_str = polymer.to_json()
+    with open("receptor.json", "w") as f:
+        f.write(json_str)
+
+All ``BaseJSONParsable`` objects, including but not limited to ``Polymer``, can be read from/written to a JSON string using the ``from_json()/to_json()`` method. 
