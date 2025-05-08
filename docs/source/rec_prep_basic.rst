@@ -73,11 +73,11 @@ Python API
 
 The receptor preparation functionality is also accessible via Meeko’s Python API! This allows fine-grained control of preprocessing steps and integration into larger pipelines. The essential and general steps for receptor preparation are:
 
-1. Load and Clean Input Structure
+**1. Load and Clean Input Structure**
 
 Choose a source of structural data (e.g., PDB ID) and preprocess it with a tool like ProDy or RDKit. 
 
-2. Instantiate the Preparation Method
+**2. Instantiate the Preparation Method**
 
 To instantiate the default preparation method, use the following code: 
 
@@ -96,7 +96,7 @@ To use an established preparation method, you may instantiate ``MoleculePreparat
     # from a JSON file
     mk_prep_from_file = MoleculePreparation.from_config_file(config_file)
 
-3. Load Template Library
+**3. Load Template Library**
 
 To load the default library of ``ResidueChemTemplates``, use the following code: 
 
@@ -107,7 +107,7 @@ To load the default library of ``ResidueChemTemplates``, use the following code:
 
 See the :ref:`this post about templates <py_build_temp>` section for more information on how to create a custom template. See also the API reference on options to load the additional templates.  
 
-4. Build the Polymer Object
+**4. Build the Polymer Object**
 
 To be constructed into a Polymer object, the receptor structure needs to be loaded into a ProDy object or a PDB/PQR string. 
 
@@ -119,7 +119,7 @@ To be constructed into a Polymer object, the receptor structure needs to be load
     # from a PDB string
     polymer_from_pdb = Polymer.from_pdb_string(pdb_str, chem_templates, mk_prep)
 
-5. Write Output Files
+**5. Write Output Files**
 
 The basic output files are PDBQT and JSON. To write a PDBQT file for basic, rigid docking, use the following code: 
 
