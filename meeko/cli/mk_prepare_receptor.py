@@ -838,7 +838,6 @@ def main():
                 ligmol = Chem.MolFromPDBBlock(pdbstr, removeHs=False, sanitize=False)
             elif ft != ".sdf" and ft != ".pdbqt":
                 ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)
-                Chem.MolToMolFile(ligmol, "ligmol.mol")
             elif ft == ".sdf":
                 ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)[
                     0
