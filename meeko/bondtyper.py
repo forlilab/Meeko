@@ -40,11 +40,12 @@ class BondTyperLegacy:
         single_triple_single = [
             (x[0], x[1], x[2], x[3]) for x in setup.find_pattern("[*]-[*]#[*]-[*]")
         ]
+        canonicalize_bond = lambda i, j: (i, j) if i < j else (j, i)
         single_to_rigidify = []
         for i, j, k, m in single_triple_single:
-            triple_bonds.remove((j, k))
-            single_to_rigidify.append((i, j))
-            single_to_rigidify.append((k, m))
+            triple_bonds.remove(canonicalize_bond(j, k))
+            single_to_rigidify.append(canonicalize_bond(i, j))
+            single_to_rigidify.append(canonicalize_bond(k, m))
         # fully rigidify nitrile and alike
         single_to_rigidify.extend(
             [(x[0], x[1]) for x in setup.find_pattern("[*]-[*]#[*X1]")]
