@@ -21,6 +21,7 @@ from meeko import PolymerCreationError
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
+from meeko import pdbutils
 from meeko import __file__ as pkg_init_path
 from rdkit import Chem
 
@@ -821,7 +822,7 @@ def main():
         elif args.box_enveloping is not None:
             ft = pathlib.Path(args.box_enveloping).suffix
             suppliers = {
-                ".pdb": Chem.MolFromPDBFile,
+                ".pdb": None,  # overriden below, needed here as valid type
                 ".mol": Chem.MolFromMolFile,
                 ".mol2": Chem.MolFromMol2File,
                 ".sdf": Chem.SDMolSupplier,
@@ -832,6 +833,9 @@ def main():
                     success=False,
                     error_msg=f"Given --box_enveloping file type {ft} not readable!"
                 )
+            elif ft == ".pdb":
+                pdbstr = pdbutils.strip_altloc_from_pdb_file(args.box_enveloping)
+                ligmol = Chem.MolFromPDBBlock(pdbstr, removeHs=False, sanitize=False)
             elif ft != ".sdf" and ft != ".pdbqt":
                 ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)
             elif ft == ".sdf":
