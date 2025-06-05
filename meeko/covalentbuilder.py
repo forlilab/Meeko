@@ -42,21 +42,32 @@ CovLigandPrepared = namedtuple("CovalentLigandPrepared", ["mol", "res_id", "at_n
 
 
 class CovalentBuilder(object):
-    """ Class to perform structural alignments of ligands containing the target side chain attached
-        to run tethered covalent dockings
-
-        The class is instantiated for a given target, with a list of one or more residues, then
-        ligands can be processed sequentially ( CovalentBuilder.process() )
-
-            receptor_mol    :       ProDy molecule
-            residue_string  :       string specifying residues to process. Examples:
-                                    ":LYS:"              (all LYS, default atom names: CA,CB)
-                                    "A:LYS:204:CA,CB"
-                                    "A:HIS::ND1,CE1"     (all HIS on chain A)
-
-        (ProDy regular expressions could be also injected here).
     """
+    Class to perform structural alignments of ligands containing the target side chain attached to run tethered covalent dockings. The class is instantiated for a given target, with a list of one or more residues, then ligands can be processed sequentially ( CovalentBuilder.process() )
+
+    Attributes
+    ----------
+    rec : ProDy molecule
+        ProDy molecule object for the target residue
+    residues : dict
+        Dictionary with the structure { res_id : (at1_coord, at2_coord), ...}
+    """
+
     def __init__(self, receptor_mol, residue_string):
+        """
+        Initializes the CovalentBuilder object with a ProDy molecule and a residue string.
+        
+        Parameters
+        ----------
+        receptor_mol : ProDy molecule
+            ProDy molecule object for the target residue.
+        residue_string : str
+            String specifying residues to process. Examples:
+                ":LYS:"              (all LYS, default atom names: CA,CB)
+                "A:LYS:204:CA,CB"
+                "A:HIS::ND1,CE1"     (all HIS on chain A)
+                (ProDy regular expressions could be also injected here).
+        """
         self.rec = receptor_mol
         selection_tuple = self.parse_residue_string(residue_string, force_CA_CB=True)
         # selection tuple: (chain, res, num, atname1, atname2)
@@ -66,7 +77,24 @@ class CovalentBuilder(object):
         self._compact_selection(out)
 
     def _generate_prody_selection(self, residue):
-        """ generate the string to perform a Prody.Selection """
+        """
+        Generate the string to perform a Prody.Selection. 
+        
+        Parameters
+        ----------
+        residue : tuple
+            Tuple containing the residue information (chain, res, num, atname1, atname2).
+
+        Returns
+        -------
+        tuple
+            Tuple containing the ProDy selection and the atom names (atname1, atname2).
+
+        Raises
+        -------
+        ValueError
+            If no residue is found with the specified selection.
+        """
         # sel_string = 'chid %s AND resname %s AND resnum %s AND (name %s or name %s)'
         sel_string = []
         # out = []
@@ -88,7 +116,23 @@ class CovalentBuilder(object):
         # returnsout
 
     def _compact_selection(self, sel_info, allow_missing=False):
-        """ process a ProDy selection and return a dictionary with the structure { res_id : (at1_coord, at2_coord), ...} """
+        """
+        Process a ProDy selection and return a dictionary with the structure { res_id : (at1_coord, at2_coord), ...}.
+
+        Parameters
+        ----------
+        sel_info : tuple
+            Tuple containing the ProDy selection and the atom names (atname1, atname2).
+        allow_missing : bool, optional
+            If True, allow missing atoms in the selection. Default is False.
+
+        Raises
+        -------
+        ValueError
+            If allow_missing is False and one or more atoms are missing in the selection.
+        RuntimeWarning
+            If one or more atoms are missing in the selection and allow_missing is True.    
+        """
         self.residues = {}
         # for (sel, at1, at2) in sel_info:
         sel, at1, at2 = sel_info
@@ -119,7 +163,34 @@ class CovalentBuilder(object):
         # pp(self.residues)
 
     def process(self, ligand, smarts=None, smarts_indices=None, indices=None, first_only=False):
-        """ process the ligand for the residue(s) specified for the current receptor"""
+        """
+        Process the ligand for the residue(s) specified for the current receptor. 
+
+        Parameters
+        ----------
+        ligand : RDKit molecule
+            RDKit molecule object for the ligand to be processed.
+        smarts : str, optional
+            SMARTS pattern to search for in the ligand. Default is None.
+        smarts_indices : tuple, optional
+            Tuple containing the indices of the atoms in the SMARTS pattern. Default is None.
+        indices : list, optional
+            List of tuples containing the indices of the atoms in the ligand. Default is None.
+        first_only : bool, optional
+            If True, only the first match of the SMARTS pattern will be used. Default is False.
+        
+        Yields
+        -------
+        CovLigandPrepared
+            A named tuple containing the prepared ligand molecule, residue information, atom names, SMARTS pattern, indices, and label.
+        
+        Raises
+        -------
+        ValueError
+            If neither smarts nor indices are specified.
+        RuntimeWarning
+            If the SMARTS pattern doesn't match any atoms in the ligand.
+        """
         if (smarts is None) and (indices is None):
             raise ValueError("Specify at least one criterion, either SMARTS pattern or atom indices (2)")
         # if SMARTS are specified, use that to define (or override) indices
@@ -143,7 +214,32 @@ class CovalentBuilder(object):
                 yield CovLigandPrepared(mol, res_info, at_names, smarts, smarts_indices, idx_pair,label)
 
     def find_smarts(self, mol, smarts, smarts_indices, first_only):
-        """ find occurrences of the SMARTS indices atoms in the requested SMARTS"""
+        """
+        Find occurrences of the SMARTS indices atoms in the requested SMARTS. 
+        
+        Parameters
+        ----------
+        mol : RDKit molecule
+            RDKit molecule object for the ligand to be processed.
+        smarts : str
+            SMARTS pattern to search for in the ligand.
+        smarts_indices : tuple
+            Tuple containing the indices of the atoms in the SMARTS pattern.
+        first_only : bool
+            If True, only the first match of the SMARTS pattern will be used. Default is False.
+
+        Returns
+        -------
+        list
+            List of tuples containing the indices of the atoms in the ligand.
+
+        Raises
+        -------
+        ValueError
+            If the SMARTS index exceeds the number of atoms in the SMARTS pattern.  
+        RuntimeWarning
+            If the specified ligand pattern returned more than one match.
+        """
         indices = []
         patt = Chem.MolFromSmarts(smarts)
         smarts_size = patt.GetNumAtoms()
@@ -162,10 +258,22 @@ class CovalentBuilder(object):
         return indices
 
     def transform(self, ligand, index_pair, coord):
-        """ generate translatead and aligned molecules for each of the indices requested
-            and for all the residues defined in the class constructor
+        """
+        Generate translatead and aligned molecules for each of the indices requested and for all the residues defined in the class constructor. SOURCE: https://sourceforge.net/p/rdkit/mailman/message/36750909/
 
-            SOURCE: https://sourceforge.net/p/rdkit/mailman/message/36750909/
+        Parameters
+        ----------
+        ligand : RDKit molecule
+            RDKit molecule object for the ligand to be processed.
+        index_pair : tuple
+            Tuple containing the indices of the atoms in the ligand.
+        coord : list
+            List of tuples containing the coordinates of the atoms in the target residue.
+        
+        Returns
+        -------
+        RDKit molecule
+            RDKit molecule object for the transformed ligand.
         """
         # make a copy of the ligand
         # TODO: maybe define new conformers?
@@ -188,6 +296,29 @@ class CovalentBuilder(object):
 
     @classmethod
     def parse_residue_string(cls, string, force_CA_CB=True):
+        """
+        Parse the residue string and return a tuple with the residue information.
+        The string can be in the format "CHAIN:RES:NUM" or "CHAIN:RES:NUM:ATOM1,ATOM2".
+        
+        Parameters
+        ----------
+        string : str
+            String specifying residues to process. 
+        force_CA_CB : bool, optional
+            If True, force the atom names to be CA and CB. Default is True.
+        
+        Returns
+        -------
+        tuple
+            Tuple containing the residue information (chain, res, num, atname1, atname2).
+        
+        Raises
+        -------
+        ValueError
+            If the residue string is not in the expected format.
+        RuntimeError
+            If the atom names are not CA and CB and force_CA_CB is True.
+        """
         chain, res, num, *atom_names = string.split(":")
         #print("PARSED c:%s r:%s n:%s AAA:%s" % (chain, res, num, atom_names))
         if not num == "":

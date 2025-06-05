@@ -14,6 +14,7 @@ import json
 
 
 def clean_extend(existing_dict, new_row):
+    """extend existing_dict with new_row, which is a dict"""
     nr_rows = []
     for key in existing_dict:
         nr_rows.append(len(existing_dict[key]))
@@ -34,6 +35,9 @@ def clean_extend(existing_dict, new_row):
                 
 
 class RDKitMolCreate:
+    """
+    Utilities for constructing RDKit molecules from PDBQT docking results.
+    """
 
     ambiguous_flexres_choices = {
         "HIS": ["HIE", "HID", "HIP"],
@@ -186,6 +190,30 @@ class RDKitMolCreate:
         only_cluster_leads=False,
         keep_flexres=False,
     ):
+        """
+        Convert a PDBQT molecule into a list of RDKit molecules.
+
+        Parameters
+        ----------
+        pdbqt_mol : PDBQT
+            The PDBQT molecule to convert.
+        only_cluster_leads : bool, optional
+            If True, only cluster leads are converted. Default is False.
+        keep_flexres : bool, optional
+            If True, flexible residues are kept. Default is False.
+
+        Returns
+        -------
+        list
+            A list of RDKit molecules. Each molecule corresponds to a pose in the PDBQT molecule.
+    
+        Raises
+        ------
+        RuntimeError
+            If no cluster leads are found in the PDBQT molecule and only_cluster_leads is True.
+        ValueError
+            If some atoms of a ligand are parsed as sidechain but not all.
+        """
         # todo: add pseudo-water (W atoms, variable nr each pose)
         if only_cluster_leads and len(pdbqt_mol._pose_data["cluster_leads_sorted"]) == 0:
             raise RuntimeError("no cluster_leads in pdbqt_mol but only_cluster_leads=True")
@@ -242,24 +270,29 @@ class RDKitMolCreate:
 
     @classmethod
     def guess_flexres_smiles(cls, resname, atom_names):
-        """ Determine a SMILES string for flexres based on atom names,
-            as well as the equivalent of smile_index_map and smiles_h_parent
-            which are written to PDBQT remarks for regular small molecules.
-
-        Args:
-            resname (str):
-        
-        Returns:
-            smiles: SMILES string starting at C-alpha (excludes most of the backbone)
-            index_map: list of pairs of integers, first in pair is index in the smiles,
-                       second is index of corresponding atom in atom_names         
-            h_parent: list of pairs of integers, first in pair is index of a heavy atom
-                      in the smiles, second is index of a hydrogen in atom_names.
-                      The hydrogen is bonded to the heavy atom. 
         """
+        Determine a SMILES string for flexres based on atom names,
+        as well as the equivalent of smile_index_map and smiles_h_parent
+        which are written to PDBQT remarks for regular small molecules.
 
+        Parameters
+        ----------
+        resname : str
+            The residue name of the flexible residue.
+        atom_names : list of str
+            The names of the atoms in the flexible residue.
 
-
+        Returns
+        -------
+        tuple[str, list, list]
+            A tuple containing: 
+                - smiles: SMILES string starting at C-alpha (excludes most of the backbone)
+                - index_map: list of pairs of integers, first in pair is index in the smiles,
+                    second is index of corresponding atom in atom_names         
+                - h_parent: list of pairs of integers, first in pair is index of a heavy atom
+                    in the smiles, second is index of a hydrogen in atom_names.
+                    The hydrogen is bonded to the heavy atom. 
+        """
         if len(set(atom_names)) != len(atom_names):
             return None, None, None
         candidate_resnames = cls.ambiguous_flexres_choices.get(resname, [resname])
@@ -292,21 +325,31 @@ class RDKitMolCreate:
 
     @classmethod
     def add_pose_to_mol(cls, mol, ligand_coordinates, index_map):
-        """add given coordinates to given molecule as new conformer.
-        Index_map maps order of coordinates to order in smile string
-        used to generate rdkit mol
-
-        Args:
-            ligand_coordinates: 2D array of shape (nr_atom, 3).
-            index_map: list of nr_atom pairs of integers, 1-indexed.
-                       In each pair, the first int is the index in mol, and
-                       the second int is the index in ligand_coordinates
-
-        Raises:
-            RuntimeError: Will raise error if number of coordinates provided does not
-                match the number of atoms there should be coordinates for.
         """
+        Add given coordinates to given molecule as new conformer. 
 
+        Parameters
+        ----------
+        mol : Chem.Mol
+            The RDKit molecule to which the coordinates will be added.
+        ligand_coordinates : list[list[float]]
+            2D array of shape (nr_atom, 3).
+        index_map : list[int]
+            list of nr_atom pairs of integers, 1-indexed.
+            In each pair, the first int is the index in mol, and
+            the second int is the index in ligand_coordinates (PDBQT). 
+
+        Returns 
+        -------
+        mol : Chem.Mol
+            The RDKit molecule with the new conformer added.
+
+        Raises
+        ------
+        RuntimeError
+            Will raise error if number of coordinates provided does not 
+            match the number of atoms there should be coordinates for.
+        """
         n_atoms = mol.GetNumAtoms()
         n_mappings = int(len(index_map) / 2)
         conf = Chem.Conformer(n_atoms)
@@ -340,8 +383,25 @@ class RDKitMolCreate:
     
     @staticmethod
     def add_hydrogens(mol, coordinates_list, h_parent):
-        """Add hydrogen atoms to ligand RDKit mol, adjust the positions of
-            polar hydrogens to match pdbqt
+        """
+        Add hydrogen atoms to ligand RDKit mol, adjust the positions of
+        polar hydrogens to match pdbqt.
+
+        Parameters
+        ----------
+        mol : Chem.Mol
+            The RDKit molecule to which the hydrogens will be added.
+        coordinates_list : list[list[float]]
+            2D array of shape (nr_atom, 3).
+        h_parent : list[int]
+            list of pairs of integers, 1-indexed.
+            In each pair, the first int is the index in mol, and
+            the second int is the index in coordinates_list
+
+        Returns
+        -------
+        mol : Chem.Mol
+            The RDKit molecule with the new hydrogens added.
         """
         mol = Chem.AddHs(mol, addCoords=True)
         conformers = list(mol.GetConformers())
@@ -369,9 +429,19 @@ class RDKitMolCreate:
 
     @staticmethod
     def combine_rdkit_mols(mol_list):
-        """Combines list of rdkit molecules into a single one
-            None's are ignored
-            returns None if input is empty list or all molecules are None
+        """
+        Combines list of rdkit molecules into a single one using Chem.CombineMols. 
+
+        Parameters
+        ----------
+        mol_list : list[Chem.Mol]
+            List of RDKit molecules to combine.
+
+        Returns
+        -------
+        Chem.Mol
+            Combined RDKit molecule with all conformers from the input list.
+            If all input molecules are None, returns None.
         """
         combined_mol = None
         props = {}
@@ -391,6 +461,15 @@ class RDKitMolCreate:
 
     @classmethod
     def _verify_flexres(cls):
+        """
+        Verify that the flexres dictionary is consistent and does not contain
+        duplicate atom names.
+
+        Raises
+        ------
+        RuntimeError
+            If there are duplicate atom names in the flexres dictionary.
+        """
         for resname in cls.flexres:
             atom_names_in_smiles_order = cls.flexres[resname]["atom_names_in_smiles_order"]
             h_to_parent_index = cls.flexres[resname]["h_to_parent_index"]
@@ -400,6 +479,39 @@ class RDKitMolCreate:
 
     @classmethod
     def add_sandbox_coordinates(cls, dlgstring, rdmol, index_map, h_parent, groupname=None):
+        """
+        Parse coordinates from a DLG file and append to RDKit mol.
+        The coordinates are sorted by energy, and the best pose is added first.
+        The function also adds the pose index to the RDKit molecule.
+        The coordinates are added as conformers to the RDKit molecule.
+        The function also adds the pose index to the RDKit molecule.
+        
+        Parameters
+        ----------
+        dlgstring : str
+            The DLG file content as a string.
+        rdmol : Chem.Mol
+            The RDKit molecule to which the coordinates will be added.
+        index_map : list[int]
+            List of pairs of integers, 1-indexed.
+            In each pair, the first int is the index in mol, and
+            the second int is the index in coordinates_list.
+        h_parent : list[int]
+            List of pairs of integers, 1-indexed.
+            In each pair, the first int is the index in mol, and
+            the second int is the index in coordinates_list.
+        groupname : str, optional
+            The name of the group to filter the coordinates. If None, all coordinates are used. 
+            Default is None.
+        
+        Returns
+        -------
+        tuple[Chem.Mol, dict]
+            A tuple containing:
+                - rdmol: The RDKit molecule with the new conformers added.
+                - energy: A dictionary containing the intermolecular and intramolecular energies
+                  for each pose, as well as the pose index.
+        """
         # this function does not deal with implicit H, at least not yet
         index_map = [i + 1 for i in index_map] # 1-indexing like in PDBQT
         h_parent = [i + 1 for i in h_parent] # 1-indexing like in PDBQT
@@ -456,6 +568,25 @@ class RDKitMolCreate:
 
     @staticmethod
     def write_sd_string(pdbqt_mol, only_cluster_leads=False, keep_flexres=False):
+        """
+        Write a multi-conformer SDF string from a PDBQT molecule.
+
+        Parameters
+        ----------
+        pdbqt_mol : PDBQT
+            The PDBQT molecule to convert.
+        only_cluster_leads : bool, optional
+            If True, only cluster leads are converted. Default is False.
+        keep_flexres : bool, optional
+            If True, flexible residues are kept. Default is False.
+        
+        Returns
+        -------
+        tuple[str, list]
+            A tuple containing:
+                - output_string: The multi-conformer SDF string.
+                - failures: A list of indices of failed conversions.
+        """
         sio = StringIO()
         f = Chem.SDWriter(sio)
         mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads, keep_flexres)

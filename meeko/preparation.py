@@ -38,27 +38,67 @@ warnings.filterwarnings("default", category=DeprecationWarning)
 
 class MoleculePreparation:
     """
+    A class representing the protocol for preparing a molecule for docking.
+
     Attributes
     ----------
-    deprecated_setup_access:
-    merge_these_atom_types: tuple
-    hydrate: bool
-    flexible_amides: bool
-    rigid_macrocycles: bool
-    min_ring_size: int
-    max_ring_size: int
-    keep_chorded_rings: bool
-    keep_equivalent_rings: bool
-    double_bond_penalty: float
-    macrocycle_allow_A: bool
-    rigidify_bonds_smarts: list
-    rigidify_bonds_indices: list
-
-    input_atom_params:
-    load_atom_params:
-    add_atom_types:
-
-    atom_params:
+    deprecated_setup_access : list
+        Deprecated access to the setup object (deprecated since v0.5).
+    merge_these_atom_types : tuple
+        A tuple of atom types to merge. 
+        For example, ("H",) will merge all hydrogens.
+    hydrate : bool
+        If True, the molecule will be hydrated with water molecules. 
+    flexible_amides : bool
+        If True, amide bonds will be treated as flexible.
+    rigid_macrocycles : bool
+        If True, macrocycles will be treated as rigid.
+    untyped_macrocycles : bool
+        If True, macrocycles will not be typed.
+    min_ring_size : int
+        The minimum size of a ring to be considered a macrocycle.
+    max_ring_size : int
+        The maximum size of a ring to be considered a macrocycle.
+    keep_chorded_rings : bool
+        If True, chorded rings will be kept in the molecule.
+    keep_equivalent_rings : bool
+        If True, equivalent rings will be kept in the molecule.
+    double_bond_penalty : float
+        The penalty for double bonds in macrocycles.
+    macrocycle_allow_A : bool
+        If True, macrocycles will be allowed to have atom type A (aromatic carbon).
+    rigidify_bonds_smarts : list
+        A list of SMARTS patterns for bonds to be rigidified.
+    rigidify_bonds_indices : list[tuple[int, int]]
+        A list of tuples of indices representing bonds to be rigidified.
+    input_atom_params : dict
+        A dictionary of input atom parameters.
+    load_atom_params : str
+        A string representing the name of the atom parameters to load. 
+    add_atom_types : list
+        A list of additional atom types to add.
+    charge_model : str
+        The charge model to use. Options are "espaloma", "gasteiger", "zero", or "read".
+    charge_atom_prop : str
+        The name of the atom property to use for charges.
+    dihedral_model : str 
+        The dihedral model to use. Options are None, "openff", or "espaloma".
+    reactive_smarts : str
+        A string representing the SMARTS pattern for reactive groups.
+    reactive_smarts_idx : int
+        An index representing the position of the reactive atom in the SMARTS pattern.
+    add_index_map : bool
+        If True, an index map will be added to the molecule.
+    remove_smiles : bool
+        If True, the SMILES representation of the molecule will be removed.
+    atom_params : dict
+        A dictionary of atom parameters.
+    offatom_params : dict
+        A dictionary of off-atom parameters.
+    dihedral_params : list
+        A list of dihedral parameters.
+    espaloma_model : EspalomaTyper
+        An instance of the EspalomaTyper class. 
     """
 
     packaged_params = {}
@@ -95,34 +135,76 @@ class MoleculePreparation:
         remove_smiles=False,
     ):
         """
+        Initialize the MoleculePreparation class.
 
         Parameters
         ----------
-        merge_these_atom_types
-        hydrate
-        flexible_amides
-        rigid_macrocycles
-        min_ring_size
-        max_ring_size
-        keep_chorded_rings
-        keep_equivalent_rings
-        double_bond_penalty
-        macrocycle_allow_A
-        rigidify_bonds_smarts
-        rigidify_bonds_indices
-        input_atom_params
-        load_atom_params
-        add_atom_types
-        input_offatom_params
-        load_offatom_params
-        charge_model
-        dihedral_model
-        reactive_smarts
-        reactive_smarts_idx
-        add_index_map
-        remove_smiles
-        """
+        merge_these_atom_types : tuple
+            A tuple of atom types to merge. 
+            Default is ("H",) which will merge all hydrogens.
+        hydrate : bool
+            If True, the molecule will be hydrated with water molecules. 
+            Default is False (no hydration).
+        flexible_amides : bool
+            If True, amide bonds will be treated as flexible.
+            Default is False (amide bonds are rigid).
+        rigid_macrocycles : bool
+            If True, macrocycles will be treated as rigid.
+            Default is False (macrocycles are flexible).
+        untyped_macrocycles : bool
+            If True, macrocycles will not be typed.
+            Default is False (macrocycles are typed).
+        min_ring_size : int
+            The minimum size of a ring to be considered a macrocycle.
+            Default is meeko.macrocycle.DEFAULT_MIN_RING_SIZE.
+        max_ring_size : int
+            The maximum size of a ring to be considered a macrocycle.
+            Default is meeko.macrocycle.DEFAULT_MAX_RING_SIZE.
+        keep_chorded_rings : bool
+            If True, chorded rings will be kept in the molecule.
+            Default is False (chorded rings are removed).
+        keep_equivalent_rings : bool
+            If True, equivalent rings will be kept in the molecule.
+            Default is False (equivalent rings are removed).
+        double_bond_penalty : float
+            The penalty for double bonds in macrocycles.
+        macrocycle_allow_A : bool
+            If True, macrocycles will be allowed to have atom type A (aromatic carbon).
+        rigidify_bonds_smarts : list, optional
+            A list of SMARTS patterns for bonds to be rigidified.
+        rigidify_bonds_indices : list[tuple[int, int]], optional
+            A list of tuples of indices representing bonds to be rigidified.
+        input_atom_params : dict, optional
+            A dictionary of input atom parameters.
+        load_atom_params : str
+            A string representing the name of the atom parameters to load. 
+            Default is "ad4_types".
+        add_atom_types : list, optional
+            A list of additional atom types to add.
+        charge_model : str
+            The charge model to use. Options are "espaloma", "gasteiger", "zero", or "read".
+            Default is "gasteiger".
+        charge_atom_prop : str, optional
+            The name of the atom property to use for charges. Only used if charge_model is "read".
+        dihedral_model : str
+            The dihedral model to use. Options are None, "openff", or "espaloma".
+            Default is None.
+        reactive_smarts : str, optional
+            A string representing the SMARTS pattern for reactive groups.
+        reactive_smarts_idx : int, optional
+            An index representing the position of the reactive atom in the SMARTS pattern.
+        add_index_map : bool, optional
+            If True, an index map will be added to the molecule.
+        remove_smiles : bool, optional
+            If True, the SMILES representation of the molecule will be removed.
 
+        Raises
+        ------
+        ValueError
+            If unrecognized or conflicting initializer parameters are passed. 
+        NotImplementedError
+            If load_offatom_params is not None.
+        """
         self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
         self.hydrate = hydrate
@@ -228,14 +310,19 @@ class MoleculePreparation:
     @classmethod
     def from_config(cls, config):
         """
+        Create a MoleculePreparation instance from a configuration dictionary.
 
         Parameters
         ----------
-        config
+        config : dict
+            A dictionary containing the configuration parameters for the
+            MoleculePreparation instance.
 
         Returns
         -------
-
+        MoleculePreparation
+            A new instance of the MoleculePreparation class with the specified
+            configuration.
         """
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
@@ -247,6 +334,20 @@ class MoleculePreparation:
     
     @classmethod
     def from_json_file(cls, filename): 
+        """
+        Create a MoleculePreparation instance from a JSON file containing the configuration. 
+
+        Parameters
+        ----------
+        filename : str
+            The path to the JSON file containing the configuration parameters.
+        
+        Returns
+        -------
+        MoleculePreparation
+            A new instance of the MoleculePreparation class with the specified
+            configuration.
+        """
         with open(filename) as f:
             jsonstr = f.read()
         alldata = json.loads(jsonstr)
@@ -262,18 +363,25 @@ class MoleculePreparation:
         glue_pseudo_atoms=None,
     ):
         """
+        Calculate the flexibility model for the molecule setup.
 
         Parameters
         ----------
-        setup
-        root_atom_index
-        not_terminal_atoms
-        delete_ring_bonds
-        glue_pseudo_atoms
+        setup : RDKitMoleculeSetup
+            The molecule setup for which to calculate the flexibility model.
+        root_atom_index : int, optional
+            The index of the root atom in the molecule setup. If None, the root atom
+            will be determined automatically.
+        not_terminal_atoms : list, optional
+            A list of atom indices that should be treated as non-terminal atoms.
+        delete_ring_bonds : list[tuple[int, int]], optional
+            Bonds deleted for macrocycle flexibility. Each bond is a tuple of two ints (atom 0-indices).
+        glue_pseudo_atoms : dict, optional
+            A dictionary for pseudo atoms mapping atom indices to their corresponding coordinates.
 
         Returns
         -------
-
+        None
         """
         if not_terminal_atoms is None:
             not_terminal_atoms = []
@@ -345,17 +453,32 @@ class MoleculePreparation:
         input_atom_params, load_atom_params, add_atom_types, packaged_params
     ):
         """
+        Load and combine atom parameters from various sources.
 
         Parameters
         ----------
-        input_atom_params
-        load_atom_params
-        add_atom_types
-        packaged_params
+        input_atom_params : dict
+            A dictionary of input atom parameters.
+        load_atom_params : str
+            A string representing the name of the atom parameters to load.
+        add_atom_types : list
+            A list of additional atom types to add.
+        packaged_params : dict
+            A dictionary of packaged parameters. Keys are parameter group names
+            and values are file paths to the corresponding JSON files.
 
+        Raises
+        ------
+        ValueError
+            If there are overlapping parameter groups or if the name of the
+            parameter group is not recognized.
+        RuntimeError
+            If there are multiple groups of parameters when using add_atom_types.
+        
         Returns
         -------
-
+        atom_params : dict
+            A dictionary of combined atom parameters.
         """
         atom_params = {}
         if type(load_atom_params) == str:
@@ -439,10 +562,17 @@ class MoleculePreparation:
     @property
     def setup(self):
         """
+        Deprecated access to the setup object.
 
         Returns
         -------
+        RDKitMoleculeSetup
+            The setup object in the deprecated_setup_access list.
 
+        Raises
+        ------
+        RuntimeError
+            If there are multiple setups in the deprecated_setup_access list.
         """
         msg = "MoleculePreparation.setup is deprecated in Meeko v0.5."
         msg += (
@@ -459,10 +589,12 @@ class MoleculePreparation:
     @classmethod
     def get_defaults_dict(cls):
         """
+        Get the default values for all parameters in the class.
 
         Returns
         -------
-
+        dict
+            A dictionary containing the default values for all parameters in the class.
         """
         defaults = {}
         sig = signature(cls)
@@ -471,6 +603,7 @@ class MoleculePreparation:
         return defaults
 
     def __call__(self, *args, **kwargs):
+        """Shortcut to call `prepare()` directly on the MoleculePreparation instance."""
         return self.prepare(*args, **kwargs)
 
     def prepare(
@@ -488,24 +621,29 @@ class MoleculePreparation:
 
         Parameters
         ----------
-        mol: rdkit.Chem.rdchem.Mol
+        mol : Chem.Mol
             An RDKit Mol with explicit hydrogens and 3D coordinates.
-        root_atom_index: int
+        root_atom_index : int, optional
             Used to set ROOT of torsion tree instead of searching.
-        not_terminal_atoms: list
-            Makes bonds with terminal atoms rotatable (e.g. C-Alpha carbon in flexres).
-        delete_ring_bonds: list[tuple[int, int]]
+            Default is None, which means the root atom will be determined automatically.
+        not_terminal_atoms : list, optional
+            A list of atom indices that should be treated as non-terminal atoms.).
+        delete_ring_bonds : list[tuple[int, int]], optional
             Bonds deleted for macrocycle flexibility. Each bond is a tuple of two ints (atom 0-indices).
-        glue_pseudo_atoms: dict
+        glue_pseudo_atoms : dict, optional
             Mapping from parent atom indices to coordinates.
-        conformer_id: int
+        conformer_id : int
+            Conformer ID to use for the molecule. 
+            Default is -1, which means the current conformer will be used. 
+        rename_atoms : bool
+            If True, atoms will be renamed to include their index.
+            Default is False, which means atoms will not be renamed.
 
         Returns
         -------
         setups: list[RDKitMoleculeSetup]
             Returns a list of generated RDKitMoleculeSetups
         """
-
         if not_terminal_atoms is None:
             not_terminal_atoms = []
         if delete_ring_bonds is None:
@@ -624,12 +762,17 @@ class MoleculePreparation:
     @staticmethod
     def check_external_ring_break(molsetup, break_ring_bonds, glue_pseudo_atoms):
         """
+        Check that the external ring break bonds are in the molecule setup and that
+        the glue pseudo atoms are present and have the correct number of coordinates.
 
         Parameters
         ----------
-        molsetup: RDKitMoleculeSetup
-        break_ring_bonds:
+        molsetup : RDKitMoleculeSetup
+            The molecule setup to check.
+        break_ring_bonds : list[tuple[int, int]]
+            A list of tuples representing the bonds to break.
         glue_pseudo_atoms: dict
+            A dictionary mapping atom indices to their corresponding coordinates.
 
         Returns
         -------
@@ -662,7 +805,13 @@ class MoleculePreparation:
 
         Returns
         -------
+        str
+            The PDBQT string representation of the molecule setup.
 
+        Raises
+        ------
+        RuntimeError
+            If there is an error generating the PDBQT string.
         """
         msg = "MoleculePreparation.write_pdbqt_string() is deprecated in Meeko v0.5."
         msg += " Pass the MoleculeSetup instance to PDBQTWriterLegacy.write_string()."

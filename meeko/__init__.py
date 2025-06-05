@@ -47,10 +47,11 @@ from .hydrate import Hydrate
 import logging
 from rdkit import rdBase
 rdkit_logger = logging.getLogger("rdkit")
-rdkit_logger.handlers[0].setLevel("WARNING")
-rdkit_logger.handlers[0].setFormatter(
-    logging.Formatter('[RDKit] %(levelname)s:%(message)s'),
-)
+if rdkit_logger.handlers:
+    rdkit_logger.handlers[0].setLevel("WARNING")
+    rdkit_logger.handlers[0].setFormatter(
+        logging.Formatter('[RDKit] %(levelname)s:%(message)s'),
+    )
 rdBase.LogToPythonLogger()
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup', 

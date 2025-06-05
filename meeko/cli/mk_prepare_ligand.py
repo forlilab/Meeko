@@ -32,7 +32,7 @@ else:
     _has_prody = True
 
 
-def cmd_lineparser():
+def setup_config_parser():
 
     conf_parser = argparse.ArgumentParser(
         description=__doc__,
@@ -46,6 +46,9 @@ def cmd_lineparser():
     )
     confargs, remaining_argv = conf_parser.parse_known_args()
 
+    return confargs, remaining_argv
+
+def get_parser():
     parser = (
         argparse.ArgumentParser()
     )  # parents=[conf_parser]) # parents shows --config_file in help msg
@@ -275,6 +278,10 @@ def cmd_lineparser():
         help="indices (1-based) of the SMARTS atoms that will be attached (default: 1 2)",
     )
 
+    return parser
+
+def update_parser(parser, confargs):
+
     config = MoleculePreparation.get_defaults_dict()
 
     if confargs.config_file is not None:
@@ -288,6 +295,13 @@ def cmd_lineparser():
     # defaults to the values from the config file. Then, we can just update
     # variable `config` with the values parsed with argparse
     parser.set_defaults(**config)
+
+    return parser, config
+
+def cmd_lineparser():
+    confargs, remaining_argv = setup_config_parser()
+    parser = get_parser()
+    parser, config = update_parser(parser, confargs)
     args = parser.parse_args(remaining_argv)
 
     # check reactive arguments

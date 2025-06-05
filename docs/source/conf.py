@@ -5,7 +5,6 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../meeko/'))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -23,7 +22,23 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'sphinx_design',
+    'sphinx.ext.viewcode',
+    'sphinx_autodoc_typehints',
+    'sphinx_argparse_cli',
+    'sphinxarg.ext'
 ]
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+
+autodoc_mock_imports = [
+    "rdkit", "rdkit.Chem", "rdkit.Geometry", "numpy", "scipy", "gemmi", "prody"
+]
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': False,  # Exclude undocumented members
+    'show-inheritance': True,
+}
+autodoc_member_order = 'bysource'
 
 html_logo = "images/raccoon.png"
 

@@ -1,7 +1,7 @@
 .. _tutorial1:
 
 Basic Docking 
--------------------------------------
+-------------
 
 This tutorial provides practice examples and a step-by-step guide for the two basic procedures, **Ligand Preparation** and **Receptor Preparation**, with Meeko for molecular docking and virtual screening with `AutoDock Vina <https://github.com/ccsb-scripps/AutoDock-Vina>`_ and `AutoDock-GPU <https://github.com/ccsb-scripps/AutoDock-GPU>`_. It is based on, but not a full version of the tutorial materials in `Forlilab tutorials <https://github.com/forlilab/tutorials>`_. 
 
@@ -201,7 +201,7 @@ And the expected standard output will be:
               rec_1iep.box.pdb <-- PDB file to visualize the grid box
 
 Save a Receptor JSON File for Docking with Flexible and/or Reactive Residues
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Docking with flexible and/or reactive residues may require more files than basic docking, and ``mk_prepare_receptor.py`` is able to prepare those simultaneously when creating the receptor PDBQT file. The detailed procedure for Reactive Docking can be found in :ref:`tutorial2`. Here, we will use a different PDB file at ``Meeko/example/tutorial1/input_files/2hzn_protein.pdb`` to showcase a simple docking preparation with flexible sidechains: 
 
