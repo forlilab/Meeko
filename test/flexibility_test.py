@@ -114,3 +114,11 @@ def test_double_bond_is_rigid():
         expected_rot_bonds={(0, 1), (5, 8), (10, 11)},
         expected_sizes_of_rigid_bodies=[3, 6, 5, 2],
     )
+
+def test_single_triple_single_bond_is_rotatable():
+    run(
+        fn="single-triple-single-bond.mol",
+        folder="flexibility_data",
+        expected_rot_bonds={(6, 7)},
+        expected_sizes_of_rigid_bodies=[7, 7],
+    )
