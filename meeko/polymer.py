@@ -1620,10 +1620,9 @@ class Polymer(BaseJSONParsable):
                 template_key = candidate_template_keys[index]
                 template = candidate_templates[index]
                 mapping = mappings[index]
-                H_miss = all_stats["H_missing"][index]
             else:
                 min_missing_H = 999999
-                for i, index in enumerate(passed):
+                for index in passed:
                     H_missed = all_stats["H_missing"][index]
                     if H_missed < min_missing_H:
                         best_idxs = []
@@ -1632,9 +1631,9 @@ class Polymer(BaseJSONParsable):
                         best_idxs.append(index)
 
                 if len(best_idxs) > 1:
-                    number_excess_H = [len(all_stats["H_excess"][index]) for index in passed]
+                    number_excess_H = [len(all_stats["H_excess"][index]) for index in best_idxs]
                     min_excess_H = min(number_excess_H)
-                    best_idxs = [index for index in passed if len(all_stats["H_excess"][index]) == min_excess_H]
+                    best_idxs = [index for index in best_idxs if len(all_stats["H_excess"][index]) == min_excess_H]
                     
                     if len(best_idxs) > 1: 
                         tied = " ".join(candidate_template_keys[i] for i in best_idxs)

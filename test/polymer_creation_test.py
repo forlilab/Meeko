@@ -31,6 +31,7 @@ has_lys = pkgdir / "test/polymer_data/has-lys.pdb"
 has_lyn = pkgdir / "test/polymer_data/has-lyn.pdb"
 has_lys_resname_lyn = pkgdir / "test/polymer_data/has-lys-resname-lyn.pdb"
 disulfide_adjacent = pkgdir / "test/polymer_data/disulfide_bridge_in_adjacent_residues.pdb"
+nglu = pkgdir / "test/polymer_data/nglu.pdb"
 
 
 # TODO: add checks for untested polymer fields (e.g. input options not indicated here)
@@ -590,3 +591,13 @@ def test_stitch_polymer():
     stitched_mol = polymer.stitch()
     assert stitched_mol.HasSubstructMatch(adjacent_disulfide)
     assert stitched_mol.HasSubstructMatch(disulfide_then_proline)
+
+def test_nglu():
+    with open(nglu, "r") as f:
+        pdb_text = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+    )
+    assert ":1" in polymer.get_valid_monomers()

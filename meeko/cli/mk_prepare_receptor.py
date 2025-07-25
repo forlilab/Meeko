@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import logging
 import json
 import math
 eol="\n"
@@ -169,7 +170,10 @@ def get_args():
         help="config file for Vina with box dimensions (filename defaults to --output_basename when not specified_",
         nargs="*",
         action=required_length(0, 1))
-
+    io_group.add_argument(
+        "--debug_fn",
+        help="log debug level to filename",
+    )
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
@@ -282,6 +286,15 @@ def get_args():
         help="r_eq scaling for 1-4 interaction across reactive atoms",
     )
     args = parser.parse_args()
+
+    if args.debug_fn:
+        logger = logging.getLogger()
+        logger.setLevel("DEBUG")
+        formatter = logging.Formatter("%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s [%(name)s@%(filename)s:%(lineno)d]", datefmt='%Y-%m-%d %H:%M:%S')
+        handler = logging.FileHandler(args.debug_fn)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.debug("Starting to log")
     
     num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)])
 
