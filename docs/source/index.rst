@@ -98,3 +98,11 @@ to run molecular docking and virtual screening.
 
    Usage <export_usage>
    mk_export.py options <export_cli_options>
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   :caption: Appendix
+
+   pdbqt specification <pdbqt_spec>
+   Flexible receptors pdbqt <flex_rec_pdbqt>
