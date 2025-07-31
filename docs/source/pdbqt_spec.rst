@@ -18,20 +18,20 @@ The PDBQT format adds four things to standard formatted PDB files:
 
 1. partial charges are included in each ATOM or HETATM record, substituting for the fields in columns 67-76.
 
-2. AutoDock atom types (which may be one or two letters) are included in each ATOM or HETATM record in columns 78-79.
+2. AutoDock atom types (which may be one or two letters) are included in each ATOM or HETATM record from column 78 to the next whitespace.
 
-3. To allow flexibility in the ligand, it is necessary to assign the rotatable bonds. AutoDock can handle up to MAX_TORS rotatable bonds: this parameter is defined in “autodock.h”, and is ordinarily set to 32. If this value is changed, AutoDock must be recompiled. Please note that AutoDock4.2 is currently effective for systems with roughly 10 torsional degrees of freedom, and systems with more torsional flexibility may not give consistent results. Torsions are defined in the PDBQT file using the following keywords:
+3. To allow flexibility in the ligand, it is necessary to assign the rotatable bonds. AutoDock can handle up to MAX_TORS rotatable bonds: this parameter is defined in “autodock.h”, and is ordinarily set to 32. If this value is changed, AutoDock must be recompiled. Torsions are defined in the PDBQT file using the following keywords:
 
 .. code-block:: 
 
     ROOT / ENDROOT
     BRANCH / ENDBRANCH
 
-4. These keywords use the metaphor of a tree. See the diagram below for an example. The “root” is defined as the central portion of the ligand, from which rotatable ‘branches’ sprout. Branches within branches are possible. Nested rotatable bonds are rotated in order from the “leaves” to the “root”. The PDBQT keywords must be carefully placed, and the order of the ATOM or HETATM records often need to be changed in order to fit into the correct branches. AutoDockTools is designed to assist the user in placing these keywords correctly, and in reordering the ATOM or HETATM records in the ligand PDBQT file.
+4. These keywords use the metaphor of a tree. See the diagram below for an example. The “root” is defined as the central portion of the ligand, from which rotatable ‘branches’ sprout. Branches within branches are possible. Nested rotatable bonds are rotated in order from the “leaves” to the “root”. The PDBQT keywords must be carefully placed, and the order of the ATOM or HETATM records often need to be changed in order to fit into the correct branches. 
 
-5. The number of torsional degrees of freedom, which will be used to evaluate the conformational entropy, is specified using the TORSDOF keyword followed by the integer number of rotatable bonds. In the current AutoDock 4.2 force field, this is the total number of rotatable bonds in the ligand, including rotatable bonds in hydroxyls and other groups where only hydrogen atoms are moved, but excluding bonds that are within cycles. The value in the PDBQT file can be overridden in the AutoDock DPF using the “torsdof” statement. 
+5. The number of torsional degrees of freedom, which will be used to evaluate the conformational entropy, is specified using the TORSDOF keyword followed by the integer number of rotatable bonds. In the current AutoDock 4.2 force field, this is the total number of rotatable bonds in the ligand, including rotatable bonds in hydroxyls and other groups where only hydrogen atoms are moved, but excluding bonds that are within cycles.  
 
-**Note**: AutoDockTools, AutoGrid and AutoDock do not recognize or write out PDB “CONECT”
+**Note**: AutoDockTools, AutoGrid,  AutoDock, and Meeko do not recognize or write out PDB “CONECT”
 records.
 
 
