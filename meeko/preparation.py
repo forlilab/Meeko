@@ -540,15 +540,20 @@ class MoleculePreparation:
 
         # Convert molecule to graph and apply trained Espaloma model
         if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
-            molgraph = self.espaloma_model.get_espaloma_graph(setup)
+            if mol.GetNumAtoms() > 1:
+                molgraph = self.espaloma_model.get_espaloma_graph(setup)
 
         # Grab dihedrals from graph node and set them to the molsetup
-        if self.dihedral_model == "espaloma":
+        if self.dihedral_model == "espaloma" and mol.GetNumAtoms() > 3:
             self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
 
         # Grab charges from graph node and set them to the molsetup
         if self.charge_model == "espaloma":
-            self.espaloma_model.set_espaloma_charges(setup, molgraph)
+            if mol.GetNumAtoms() > 1:
+                self.espaloma_model.set_espaloma_charges(setup, molgraph)
+            else:
+                setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
+
 
         # merge hydrogens (or any terminal atoms)
         indices = set()
