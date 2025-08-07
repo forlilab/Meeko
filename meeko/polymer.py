@@ -26,7 +26,6 @@ from .utils.jsonutils import convert_to_int_keyed_dict
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.rdkitutils import AtomField
-from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
 from .utils.rdkitutils import _aux_altloc_mol_build
 from .utils.rdkitutils import covalent_radius
 from .utils.pdbutils import PDBAtomInfo
