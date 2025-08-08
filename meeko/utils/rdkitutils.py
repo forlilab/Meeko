@@ -499,11 +499,11 @@ def compute_gasteiger_charges(rdkit_mol):
         for i in sorted(idx_rm_to_formal_charge, reverse=True):
             ok_charges.insert(i, 0.0)
         nr_rm = len(idx_rm_to_formal_charge)
-        nr_added_h = copy_mol.GetNumAtoms() - self.mol.GetNumAtoms() + nr_rm
+        nr_added_h = copy_mol.GetNumAtoms() - rdkit_mol.GetNumAtoms() + nr_rm
         ok_charges = ok_charges[:len(ok_charges)-nr_added_h]
         chrg_by_heavy_atom = {}
         for i in range(nr_added_h):
-            added_H_idx = self.mol.GetNumAtoms() + i - nr_rm
+            added_H_idx = rdkit_mol.GetNumAtoms() + i - nr_rm
             # print(f"{added_H_idx=}")
             neighs = copy_mol.GetAtomWithIdx(added_H_idx).GetNeighbors()
             if len(neighs) != 1:
