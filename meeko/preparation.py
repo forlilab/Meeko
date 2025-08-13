@@ -27,6 +27,18 @@ from .writer import PDBQTWriterLegacy
 from .reactive import assign_reactive_types
 from .openff_xml_parser import load_openff
 
+from sys import version
+if int(version.split()[0].split('.')[1]) >= 11:
+    import tomllib as toml
+    _got_toml = True
+else:
+    try:
+        import tomli as toml
+        _got_toml = True
+    except ImportError as import_err:
+        _toml_import_error = import_err
+        _got_toml = False
+
 pkg_dir = pathlib.Path(__file__).parents[0]
 params_dir = pkg_dir / "data" / "params"
 # the above is controversial, see
@@ -367,8 +379,12 @@ class MoleculePreparation:
             if (
                 name == "openff-2.0.0" or name == "openff"
             ):  # TODO allow multiple versions
+                if not _got_toml:
+                    raise ImportError("need package tomli to read metal vdw param to complement openff") from _toml_import_error
                 vdw_list, _, _ = load_openff()
-                d = {"openff-2.0.0": vdw_list}
+                with open(params_dir / "metal_vdw.toml", "rb") as f:
+                    metals_vdw = toml.load(f)
+                d = {"openff-2.0.0": vdw_list + metals_vdw["vdw_params"]}
             elif name in packaged_params:
                 filename = packaged_params[name]
             elif name.endswith(".json"):
