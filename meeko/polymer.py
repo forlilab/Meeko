@@ -1354,6 +1354,11 @@ class Polymer(BaseJSONParsable):
         for residue_id in self.get_valid_monomers():
             self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
 
+    def flexibilize_sidechain(self, residue_id, mk_prep):
+        if residue_id not in self.get_valid_monomers():
+            raise ValueError(f"{residue_id=} not in valid monomers")
+        return self.monomers[residue_id].flexibilize(mk_prep)
+
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
         """
@@ -1793,56 +1798,6 @@ class Polymer(BaseJSONParsable):
             raise RuntimeError(err_msg)
         return padded_mols
 
-    def flexibilize_sidechain(self, residue_id, mk_prep):
-        """
-
-        Parameters
-        ----------
-        residue_id
-        mk_prep
-
-        Returns
-        -------
-
-        """
-        monomer = self.monomers[residue_id]
-        inv = {j: i for i, j in monomer.molsetup_mapidx.items()}
-        link_atoms = [inv[i] for i in monomer.template.link_labels]
-        if len(link_atoms) == 0:
-            raise RuntimeError(
-                "can't define a sidechain without bonds to other residues"
-            )
-        # TODO: rewrite this to work better with new MoleculeSetups
-        graph = {atom.index: atom.graph for atom in monomer.molsetup.atoms}
-        for i in range(len(link_atoms) - 1):
-            start_node = link_atoms[i]
-            end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
-            backbone_paths = find_graph_paths(graph, start_node, end_nodes)
-            for path in backbone_paths:
-                for x in range(len(path) - 1):
-                    idx1 = min(path[x], path[x + 1])
-                    idx2 = max(path[x], path[x + 1])
-                    monomer.molsetup.bond_info[(idx1, idx2)].rotatable = False
-        monomer.is_movable = True
-
-        mk_prep.calc_flex(
-            monomer.molsetup,
-            root_atom_index=link_atoms[0],
-        )
-
-        molsetup = monomer.molsetup
-        is_rigid_atom = [False for _ in molsetup.atoms]
-        graph = molsetup.flexibility_model["rigid_body_graph"]
-        root_body_idx = molsetup.flexibility_model["root"]
-        conn = molsetup.flexibility_model["rigid_body_connectivity"]
-        rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
-        # from the root, use only the atom that is bonded to the only rotatable bond
-        for other_body_idx in graph[root_body_idx]:
-            root_link_atom_idx = conn[(root_body_idx, other_body_idx)][0]
-            for atom_idx, body_idx in rigid_index_by_atom.items():
-                if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
-                    monomer.is_flexres_atom[atom_idx] = True
-        return
     
     @staticmethod
     def _add_if_new(to_dict, key, value, repeat_log):
@@ -2568,9 +2523,6 @@ class Monomer(BaseJSONParsable):
             if atom.index not in self.molsetup_mapidx:
                 atom.is_ignore = True
 
-        # recalculate flexibility tree after setting ignored atoms
-        mk_prep.calc_flex(molsetup)
-
         # rectify charges to sum to integer (because of padding)
         if mk_prep.charge_model == "zero":
             net_charge = 0
@@ -2589,6 +2541,58 @@ class Monomer(BaseJSONParsable):
         for i, j in enumerate(not_ignored_idxs):
             molsetup.atoms[j].charge = charges[i]
         self._set_pdbinfo(residue_id)
+
+        if self.is_movable:
+            self.flexibilize(mk_prep)
+        return
+
+    def flexibilize(self, mk_prep):
+        """
+
+        Parameters
+        ----------
+        mk_prep
+
+        Returns
+        -------
+
+        """
+        inv = {j: i for i, j in self.molsetup_mapidx.items()}
+        link_atoms = [inv[i] for i in self.template.link_labels]
+        if len(link_atoms) == 0:
+            raise RuntimeError(
+                "can't define a sidechain without bonds to other residues"
+            )
+        # maybe rewrite this to work better with new MoleculeSetups
+        graph = {atom.index: atom.graph for atom in self.molsetup.atoms}
+        for i in range(len(link_atoms) - 1):
+            start_node = link_atoms[i]
+            end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
+            backbone_paths = find_graph_paths(graph, start_node, end_nodes)
+            for path in backbone_paths:
+                for x in range(len(path) - 1):
+                    idx1 = min(path[x], path[x + 1])
+                    idx2 = max(path[x], path[x + 1])
+                    self.molsetup.bond_info[(idx1, idx2)].rotatable = False
+        self.is_movable = True
+
+        mk_prep.calc_flex(
+            self.molsetup,
+            root_atom_index=link_atoms[0],
+        )
+
+        molsetup = self.molsetup
+        ### is_rigid_atom = [False for _ in molsetup.atoms]
+        graph = molsetup.flexibility_model["rigid_body_graph"]
+        root_body_idx = molsetup.flexibility_model["root"]
+        conn = molsetup.flexibility_model["rigid_body_connectivity"]
+        rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
+        # from the root, use only the atom that is bonded to the only rotatable bond
+        for other_body_idx in graph[root_body_idx]:
+            root_link_atom_idx = conn[(root_body_idx, other_body_idx)][0]
+            for atom_idx, body_idx in rigid_index_by_atom.items():
+                if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
+                    self.is_flexres_atom[atom_idx] = True
         return
 
     def _set_pdbinfo(self, residue_id):
