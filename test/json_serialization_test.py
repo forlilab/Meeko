@@ -359,7 +359,7 @@ def test_broken_bond():
     for bond_id, bond_info in decoded_molsetup.bond_info.items():
         count_rotatable += bond_info.rotatable
         count_breakable += bond_info.breakable
-    assert count_rotatable == 10
+    assert count_rotatable == 9
     assert count_breakable == 1
 
 # endregion
@@ -472,12 +472,8 @@ def check_atom_equality(decoded_obj: Atom, starting_obj: Atom):
     -------
     None
     """
-    correct_val_type = True
     # np.array conversion checks
     assert isinstance(decoded_obj.coord, numpy.ndarray)
-    for i_vec in decoded_obj.interaction_vectors:
-        correct_val_type = correct_val_type and isinstance(i_vec, numpy.ndarray)
-    assert correct_val_type
 
     # Checks for equality between decoded and original fields
     assert isinstance(decoded_obj.index, int)

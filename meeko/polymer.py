@@ -3,6 +3,7 @@ import json
 import logging
 import traceback
 from importlib.resources import files
+import warnings
 eol="\n"
 from sys import exc_info
 from typing import Union
@@ -25,7 +26,6 @@ from .utils.jsonutils import convert_to_int_keyed_dict
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.rdkitutils import AtomField
-from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
 from .utils.rdkitutils import _aux_altloc_mol_build
 from .utils.rdkitutils import covalent_radius
 from .utils.pdbutils import PDBAtomInfo
@@ -851,8 +851,8 @@ class Polymer(BaseJSONParsable):
                 rec += "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. "
                 raise PolymerCreationError(err, rec)
 
-            print(err)
-            print("Trying to resolve unknown residues by building chemical templates... ")
+            warnings.warn(err, RuntimeWarning)
+            warnings.warn("Trying to resolve unknown residues by building chemical templates... ", RuntimeWarning)
 
             all_unknown_res = unknown_res_from_input.copy()
             all_unknown_res.update(unknown_res_from_assign)
@@ -875,7 +875,7 @@ class Polymer(BaseJSONParsable):
                                                     link_labels = fetch_template_dict['link_labels'])})
                         ambiguous[resname] = [cc.resname]
                     except Exception as e: 
-                        print(f"Failed building template from CCD for {resname=}")
+                        logger.warning(f"Failed building template from CCD for {resname=}")
                         raise PolymerCreationError(str(e))
 
             if bonded_unknown_res: 
@@ -1461,6 +1461,7 @@ class Polymer(BaseJSONParsable):
             "chosen_by_fewest_missing_H": {},
             "chosen_by_default": {},
             "matched_with_H_anomaly": {},
+            "matched_with_excess_bond": [],
             "no_match": [],
             "no_mol": [],
             "msg": "",
@@ -1581,7 +1582,6 @@ class Polymer(BaseJSONParsable):
                         or all_stats["heavy_excess"][i]
                         or (not set(all_stats["H_excess"][i]) <= set(candidate_templates[i].link_labels) and not excess_H_ok)
                         or not all_stats["bonded_atoms_missing"][i] <= auto_blunt
-                        or len(all_stats["bonded_atoms_excess"][i])
                     ):
                         continue
                     passed.append(i)
@@ -1594,7 +1594,6 @@ class Polymer(BaseJSONParsable):
                         or all_stats["heavy_excess"][i]
                         or (all_stats["H_excess"][i] and not excess_H_ok)
                         or len(all_stats["bonded_atoms_missing"][i])
-                        or len(all_stats["bonded_atoms_excess"][i])
                     ):
                         continue
                     if i not in passed:
@@ -1625,10 +1624,9 @@ class Polymer(BaseJSONParsable):
                 template_key = candidate_template_keys[index]
                 template = candidate_templates[index]
                 mapping = mappings[index]
-                H_miss = all_stats["H_missing"][index]
             else:
                 min_missing_H = 999999
-                for i, index in enumerate(passed):
+                for index in passed:
                     H_missed = all_stats["H_missing"][index]
                     if H_missed < min_missing_H:
                         best_idxs = []
@@ -1637,9 +1635,9 @@ class Polymer(BaseJSONParsable):
                         best_idxs.append(index)
 
                 if len(best_idxs) > 1:
-                    number_excess_H = [len(all_stats["H_excess"][index]) for index in passed]
+                    number_excess_H = [len(all_stats["H_excess"][index]) for index in best_idxs]
                     min_excess_H = min(number_excess_H)
-                    best_idxs = [index for index in passed if len(all_stats["H_excess"][index]) == min_excess_H]
+                    best_idxs = [index for index in best_idxs if len(all_stats["H_excess"][index]) == min_excess_H]
                     
                     if len(best_idxs) > 1: 
                         tied = " ".join(candidate_template_keys[i] for i in best_idxs)
@@ -1663,6 +1661,10 @@ class Polymer(BaseJSONParsable):
                     template_key, 
                     {"H_miss": H_miss, "H_excess": len(H_excess)}
                 )
+            bond_excess = all_stats["bonded_atoms_excess"][index]
+            if bond_excess:
+                log["matched_with_excess_bond"].append(residue_key)
+                logger.warning(f"matched with excess inter-residue bond(s): {residue_key}")
 
             if template is None:
                 rdkit_mol = None
@@ -2278,7 +2280,7 @@ def add_rotamers_to_polymer_molsetups(rotamer_states_list, polymer):
 
     state_indices_list = []
     for state_index, state_dict in enumerate(rotamer_states_list):
-        print(f"adding rotamer state {state_index + 1}")
+        logger.info(f"adding rotamer state {state_index + 1}")
         state_indices = {}
         for res_no_resname, angles in state_dict.items():
             res_with_resname = no_resname_to_resname[res_no_resname]
@@ -2736,7 +2738,7 @@ class ResiduePadder(BaseJSONParsable):
         # Ensure target_mol contains self.rxn's reactant
         rxn = self.rxn
         if not self._check_target_mol(target_mol):
-            print(f"target_mol ({Chem.MolToSmiles(target_mol)}) is not fully compliant with the template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)})...")
+            logger.info(f"target_mol ({Chem.MolToSmiles(target_mol)}) is not fully compliant with the template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)})...")
             # Assumes single reactant and single product
             reactant_smartsmol = rxn.GetReactantTemplate(0)
             reactant_ids = get_molAtomMapNumbers(reactant_smartsmol)
@@ -2765,7 +2767,7 @@ class ResiduePadder(BaseJSONParsable):
             fallback_product = remove_atoms_with_mapping(rxn.GetProductTemplate(0), skipping_ids)
             fallback_rxnsmarts = f"{Chem.MolToSmarts(fallback_reactant)}>>{Chem.MolToSmarts(fallback_product)}"
             rxn = rdChemReactions.ReactionFromSmarts(fallback_rxnsmarts)
-            print(f"Switched from Template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)}) to Fallback rxn ({fallback_rxnsmarts})")
+            logger.info(f"Switched from Template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)}) to Fallback rxn ({fallback_rxnsmarts})")
         
         # Get adjacent_mol's reacting part that contains adjacent_required_atom_index
         if adjacent_mol is not None:
@@ -2778,12 +2780,12 @@ class ResiduePadder(BaseJSONParsable):
             # Remove unmapped atoms from Template adjacent mol SMARTS as the fallback option;
             # The unmapped atoms aren't needed for positions anyways
             else:
-                print(f"adjacent_mol ({Chem.MolToSmiles(adjacent_mol)}) is not fully compliant with the template adjacent_smarts ({Chem.MolToSmarts(self.adjacent_smartsmol)})...")
+                logger.info(f"adjacent_mol ({Chem.MolToSmiles(adjacent_mol)}) is not fully compliant with the template adjacent_smarts ({Chem.MolToSmarts(self.adjacent_smartsmol)})...")
                 adjacent_smartsmol = remove_unmapped_atoms_from_mol(self.adjacent_smartsmol)
 
                 # Evaluate adjacent mol against the fallback adjacent mol SMARTS
                 if self._check_adjacent_mol(adjacent_smartsmol, adjacent_mol, adjacent_required_atom_index):
-                     print(f"Switched from Template adjacent mol ({Chem.MolToSmarts(self.adjacent_smartsmol)}) to Fallback adjacent mol ({Chem.MolToSmarts(adjacent_smartsmol)})")
+                    logger.info(f"Switched from Template adjacent mol ({Chem.MolToSmarts(self.adjacent_smartsmol)}) to Fallback adjacent mol ({Chem.MolToSmarts(adjacent_smartsmol)})")
                 else:
                     raise RuntimeError(f"adjacent_mol doesn't contain the mapped atoms in adjacent_smartsmol.") 
             

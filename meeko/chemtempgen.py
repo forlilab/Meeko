@@ -842,11 +842,11 @@ def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: 
     if json_fname:
         with open(pathlib.Path(json_fname), 'w') as f:
             f.write(json_str)
-        print(f"{json_fname} <-- Json File for New Chemical Templates")
+        logger.info(f"{json_fname} <-- Json File for New Chemical Templates")
     else:
-        print(" New Template Built ".center(60, "*"))
-        print(json_str)
-        print("*"*60)
+        logger.info(" New Template Built ".center(60, "*"))
+        logger.info(json_str)
+        logger.info("*"*60)
         return json_str
 
 

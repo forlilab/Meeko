@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import logging
 import json
 import math
 eol="\n"
@@ -21,6 +22,7 @@ from meeko import PolymerCreationError
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
+from meeko import pdbutils
 from meeko import __file__ as pkg_init_path
 from rdkit import Chem
 
@@ -168,13 +170,27 @@ def get_args():
         help="config file for Vina with box dimensions (filename defaults to --output_basename when not specified_",
         nargs="*",
         action=required_length(0, 1))
-
+    io_group.add_argument(
+        "--debug_fn",
+        help="log debug level to filename",
+    )
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
     config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
     config_group.add_argument("--add_templates", help="[.json]", metavar="JSON_FILENAME", nargs="+", default=[])
+    config_group.add_argument("--cache_templates", 
+                              help=(
+                                  "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
+                                  "(optionally) a provided JSON filename. " 
+                                  "Default cache filename is: $HOME/.meeko_residue_chem_templates_cached.json) "
+                                  "When the caching is ON, the templates for polymer construction will be read from "
+                                  "the specified cache file and updates may be made to the same file in a cumulative manner. " 
+                              ), 
+                              nargs = "?", 
+                              default=False,
+    )
     config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
         "-a", "--allow_bad_res",
@@ -270,6 +286,15 @@ def get_args():
         help="r_eq scaling for 1-4 interaction across reactive atoms",
     )
     args = parser.parse_args()
+
+    if args.debug_fn:
+        logger = logging.getLogger()
+        logger.setLevel("DEBUG")
+        formatter = logging.Formatter("%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s [%(name)s@%(filename)s:%(lineno)d]", datefmt='%Y-%m-%d %H:%M:%S')
+        handler = logging.FileHandler(args.debug_fn)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.debug("Starting to log")
     
     num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)])
 
@@ -283,6 +308,13 @@ def get_args():
         msg = "Can't use more than one at a time from -i/--read_with_prody, --read_pdb and --read_pqr"
         print(eol + msg, file=sys.stderr)
         sys.exit(2)
+
+    if args.cache_templates is not False:
+        if args.cache_templates is None:
+            print(f"--cache_templates is turned on, but a name is not provided. The default filename ($HOME/.meeko_residue_chem_templates_cached.json) will be used. ", 
+                file=sys.stderr)
+            default_cache_fn = ".meeko_residue_chem_templates_cached.json"
+            args.cache_templates = str(pathlib.Path.home() / default_cache_fn)
 
     if args.write_gpf is not None and args.write_pdbqt is None:
         # there's a few of places that assume this condition has been checked
@@ -499,7 +531,24 @@ def main():
     mk_prep = MoleculePreparation.from_config(mk_config)
     
     # load templates for mapping
-    templates = ResidueChemTemplates.create_from_defaults()
+    if args.cache_templates:
+        cache_file = args.cache_templates
+
+        try:
+            with open(cache_file, "r") as f:
+                json_str = f.read()
+            templates = ResidueChemTemplates.from_json(json_str)
+        except FileNotFoundError:
+            print(f"WARNING: specified cache file for residue chem templates not found. " + eol +
+                  f"The initial templates will be default, and a new cache will be created at {cache_file}. ", 
+                  file=sys.stderr, 
+                  )
+            templates = ResidueChemTemplates.create_from_defaults()
+        except Exception as e:
+            print(f"An error occurred with --cache_templates: {e}")
+            sys.exit(1)
+    else: 
+        templates = ResidueChemTemplates.create_from_defaults()
     for fn in args.add_templates:
         templates.add_json_file(fn)
     
@@ -575,6 +624,11 @@ def main():
             sys.exit(1)
     
     
+    # Update residue chem template cache
+    if args.cache_templates: 
+        updated_templates_json_strs = templates.to_json()
+        with open(cache_file, 'w') as f:
+            f.write(updated_templates_json_strs)
     
     # Use residue name in the input structure file to find reactive atom name
     # According to the mapping of residue name and reactive atom name
@@ -781,7 +835,7 @@ def main():
         elif args.box_enveloping is not None:
             ft = pathlib.Path(args.box_enveloping).suffix
             suppliers = {
-                ".pdb": Chem.MolFromPDBFile,
+                ".pdb": None,  # overriden below, needed here as valid type
                 ".mol": Chem.MolFromMolFile,
                 ".mol2": Chem.MolFromMol2File,
                 ".sdf": Chem.SDMolSupplier,
@@ -792,6 +846,9 @@ def main():
                     success=False,
                     error_msg=f"Given --box_enveloping file type {ft} not readable!"
                 )
+            elif ft == ".pdb":
+                pdbstr = pdbutils.strip_altloc_from_pdb_file(args.box_enveloping)
+                ligmol = Chem.MolFromPDBBlock(pdbstr, removeHs=False, sanitize=False)
             elif ft != ".sdf" and ft != ".pdbqt":
                 ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)
             elif ft == ".sdf":

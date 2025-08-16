@@ -1,0 +1,51 @@
+# source: 10.1021/acs.jctc.0c00194 table 4
+# 12-6 CM (compromise) for OPC3
+# for divalent metals
+
+[[vdw_params]]
+smarts = "[Fe]"
+IDX = [0]
+rmin_half = 1.356
+epsilon = 0.00974813
+
+[[vdw_params]]
+smarts = "[Cu]"
+IDX = [0]
+rmin_half = 1.228
+epsilon = 0.00174080
+
+[[vdw_params]]
+smarts = "[Ni]"
+IDX = [0]
+rmin_half = 1.251
+epsilon = 0.00247282
+
+[[vdw_params]]
+smarts = "[Zn]"
+IDX = [0]
+rmin_half = 1.280
+epsilon = 0.00374505
+
+[[vdw_params]]
+smarts = "[Co]"
+IDX = [0]
+rmin_half = 1.306
+epsilon = 0.00530214
+
+[[vdw_params]]
+smarts = "[Mg]"
+IDX = [0]
+rmin_half = 1.363
+epsilon = 0.01055378
+
+[[vdw_params]]
+smarts = "[Mn,Hg]"
+IDX = [0]
+rmin_half = 1.410
+epsilon = 0.01738340
+
+[[vdw_params]]
+smarts = "[Ca]"
+IDX = [0]
+rmin_half = 1.628
+epsilon = 0.09399072

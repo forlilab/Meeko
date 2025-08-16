@@ -323,6 +323,8 @@ def cmd_lineparser():
                 additional_ats.append(at)
             elif type(at) == list:
                 additional_ats.extend(at)
+        if config["add_atom_types"] is None:
+            config["add_atom_types"] = []
         config["add_atom_types"] += additional_ats
 
     if args.multimol_output_dir is not None or args.multimol_prefix is not None:

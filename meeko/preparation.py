@@ -27,6 +27,18 @@ from .writer import PDBQTWriterLegacy
 from .reactive import assign_reactive_types
 from .openff_xml_parser import load_openff
 
+from sys import version
+if int(version.split()[0].split('.')[1]) >= 11:
+    import tomllib as toml
+    _got_toml = True
+else:
+    try:
+        import tomli as toml
+        _got_toml = True
+    except ImportError as import_err:
+        _toml_import_error = import_err
+        _got_toml = False
+
 pkg_dir = pathlib.Path(__file__).parents[0]
 params_dir = pkg_dir / "data" / "params"
 # the above is controversial, see
@@ -83,7 +95,7 @@ class MoleculePreparation:
         rigidify_bonds_indices=[],
         input_atom_params=None,
         load_atom_params="ad4_types",
-        add_atom_types=(),
+        add_atom_types=None,
         input_offatom_params=None,
         load_offatom_params=None,
         charge_model="gasteiger",
@@ -367,8 +379,12 @@ class MoleculePreparation:
             if (
                 name == "openff-2.0.0" or name == "openff"
             ):  # TODO allow multiple versions
+                if not _got_toml:
+                    raise ImportError("need package tomli to read metal vdw param to complement openff") from _toml_import_error
                 vdw_list, _, _ = load_openff()
-                d = {"openff-2.0.0": vdw_list}
+                with open(params_dir / "metal_vdw.toml", "rb") as f:
+                    metals_vdw = toml.load(f)
+                d = {"openff-2.0.0": vdw_list + metals_vdw["vdw_params"]}
             elif name in packaged_params:
                 filename = packaged_params[name]
             elif name.endswith(".json"):
@@ -422,7 +438,7 @@ class MoleculePreparation:
 
             atom_params.update(d)
 
-        if len(add_atom_types) > 0:
+        if add_atom_types is not None and len(add_atom_types) > 0:
             group_keys = list(atom_params.keys())
             if len(group_keys) != 1:
                 msg = "add_atom_types is usable only when there is one group of parameters"
@@ -540,15 +556,20 @@ class MoleculePreparation:
 
         # Convert molecule to graph and apply trained Espaloma model
         if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
-            molgraph = self.espaloma_model.get_espaloma_graph(setup)
+            if mol.GetNumAtoms() > 1:
+                molgraph = self.espaloma_model.get_espaloma_graph(setup)
 
         # Grab dihedrals from graph node and set them to the molsetup
-        if self.dihedral_model == "espaloma":
+        if self.dihedral_model == "espaloma" and mol.GetNumAtoms() > 3:
             self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
 
         # Grab charges from graph node and set them to the molsetup
         if self.charge_model == "espaloma":
-            self.espaloma_model.set_espaloma_charges(setup, molgraph)
+            if mol.GetNumAtoms() > 1:
+                self.espaloma_model.set_espaloma_charges(setup, molgraph)
+            else:
+                setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
+
 
         # merge hydrogens (or any terminal atoms)
         indices = set()
