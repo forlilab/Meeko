@@ -760,6 +760,7 @@ class Polymer(BaseJSONParsable):
         set_template: dict[str, str] = None,
         blunt_ends: list[tuple[str, int]] = None,
         get_atomprop_from_raw: dict = None,
+        forgive_extra_bonds: bool = False,
     ):
         """
         Parameters
@@ -778,6 +779,9 @@ class Polymer(BaseJSONParsable):
             A dict mapping residue IDs in the format <chain>:<resnum> such as "A:42" to ResidueTemplate instances.
         blunt_ends: list (tuple (string, int))
             A list of tuples where each tuple is residue IDs and 0-based atom index, e.g.; ("A:42", 0)
+        forgive_extra_bonds: bool
+            allows processing clashed structures because templates match even with excess bonds to other residues
+            at the expense of causing unpredictable problems and potentially matching incorrect templates
 
         Returns
         -------
@@ -912,6 +916,7 @@ class Polymer(BaseJSONParsable):
             set_template,
             bonds,
             blunt_ends,
+            forgive_extra_bonds,
         )
 
         _bonds = {}
@@ -1068,7 +1073,8 @@ class Polymer(BaseJSONParsable):
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc=None,
-        default_altloc=None
+        default_altloc=None,
+        forgive_extra_bonds=False,
     ):
         """
 
@@ -1084,6 +1090,7 @@ class Polymer(BaseJSONParsable):
         blunt_ends
         wanted_altloc
         default_altloc
+        forgive_extra_bonds
 
         Returns
         -------
@@ -1135,6 +1142,7 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            forgive_extra_bonds=forgive_extra_bonds,
         )
 
         unmatched_res = polymer.get_ignored_monomers()
@@ -1160,6 +1168,7 @@ class Polymer(BaseJSONParsable):
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
+        forgive_extra_bonds=False,
     ):
         """
 
@@ -1173,6 +1182,7 @@ class Polymer(BaseJSONParsable):
         allow_bad_res
         bonds_to_delete
         blunt_ends
+        forgive_extra_bonds
 
         Returns
         -------
@@ -1224,6 +1234,7 @@ class Polymer(BaseJSONParsable):
             set_template,
             blunt_ends,
             get_atomprop_from_raw = {"PQRCharge": 0.},
+            forgive_extra_bonds=forgive_extra_bonds,
         )
 
         if polymer.log["matched_with_H_anomaly"]:
@@ -1260,6 +1271,7 @@ class Polymer(BaseJSONParsable):
         blunt_ends=None,
         wanted_altloc: Optional[dict]=None,
         default_altloc: Optional[str]=None,
+        forgive_extra_bonds: bool=False,
     ):
         """
 
@@ -1275,6 +1287,7 @@ class Polymer(BaseJSONParsable):
         blunt_ends
         wanted_altloc
         default_altloc
+        forgive_extra_bonds
 
         Returns
         -------
@@ -1327,6 +1340,7 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            forgive_extra_bonds=forgive_extra_bonds,
         )
         unmatched_res = polymer.get_ignored_monomers()
         handle_parsing_situations(
@@ -1438,6 +1452,7 @@ class Polymer(BaseJSONParsable):
         set_template,
         bonds,
         blunt_ends,
+        forgive_extra_bonds=False,
     ):
         """
 
@@ -1582,6 +1597,7 @@ class Polymer(BaseJSONParsable):
                         or all_stats["heavy_excess"][i]
                         or (not set(all_stats["H_excess"][i]) <= set(candidate_templates[i].link_labels) and not excess_H_ok)
                         or not all_stats["bonded_atoms_missing"][i] <= auto_blunt
+                        or (len(all_stats["bonded_atoms_excess"][i]) and not forgive_extra_bonds)
                     ):
                         continue
                     passed.append(i)
@@ -1594,6 +1610,7 @@ class Polymer(BaseJSONParsable):
                         or all_stats["heavy_excess"][i]
                         or (all_stats["H_excess"][i] and not excess_H_ok)
                         or len(all_stats["bonded_atoms_missing"][i])
+                        or (len(all_stats["bonded_atoms_excess"][i]) and not forgive_extra_bonds)
                     ):
                         continue
                     if i not in passed:
