@@ -10,6 +10,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 import json
 eol="\n"
+import logging
 import sys
 import warnings
 from typing import Union
@@ -18,7 +19,6 @@ from typing import Optional, Any
 import numpy as np
 import rdkit.Chem
 from rdkit import Chem
-from rdkit.Chem import rdPartialCharges
 from rdkit.Chem import rdMolInterchange
 
 from .utils.jsonutils import rdkit_mol_from_json, tuple_to_string, string_to_tuple
@@ -29,7 +29,6 @@ from .utils import rdkitutils
 from .utils import utils
 from .utils.geomutils import calcDihedral
 from .utils.pdbutils import PDBAtomInfo
-from .receptor_pdbqt import PDBQTReceptor
 
 try:
     from misctools import StereoIsomorphism
@@ -40,6 +39,8 @@ else:
 
 
 from .utils import rdkitutils
+
+logger = logging.getLogger(__name__)
 
 # region DEFAULT VALUES
 DEFAULT_PDBINFO = None
@@ -202,7 +203,6 @@ class Atom(BaseJSONParsable):
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
     graph: list[int] = field(default_factory=list)
-    interaction_vectors: list[np.array] = field(default_factory=list)
 
     is_dummy: bool = False
     is_pseudo_atom: bool = False
@@ -220,7 +220,6 @@ class Atom(BaseJSONParsable):
             "atom_type": obj.atom_type,
             "is_ignore": obj.is_ignore,
             "graph": obj.graph,
-            "interaction_vectors": [v.tolist() for v in obj.interaction_vectors],
             "is_dummy": obj.is_dummy,
             "is_pseudo_atom": obj.is_pseudo_atom,
         }
@@ -236,7 +235,6 @@ class Atom(BaseJSONParsable):
             "atom_type",
             "is_ignore",
             "graph",
-            "interaction_vectors",
             "is_dummy",
             "is_pseudo_atom",
         }
@@ -253,7 +251,6 @@ class Atom(BaseJSONParsable):
         atom_type = obj["atom_type"]
         is_ignore = obj["is_ignore"]
         graph = obj["graph"]
-        interaction_vectors = [np.asarray(i) for i in obj["interaction_vectors"]]
         is_dummy = obj["is_dummy"]
         is_pseudo_atom = obj["is_pseudo_atom"]
         output_atom = cls(
@@ -265,7 +262,6 @@ class Atom(BaseJSONParsable):
             atom_type,
             is_ignore,
             graph,
-            interaction_vectors,
             is_dummy,
             is_pseudo_atom,
         )
@@ -429,7 +425,6 @@ class MoleculeSetup(BaseJSONParsable):
     Attributes
     ----------
     name: str
-    is_sidechain: bool
     pseudoatom_count: int
 
     atoms: list[Atom]
@@ -447,11 +442,10 @@ class MoleculeSetup(BaseJSONParsable):
     PSEUDOATOM_ATOMIC_NUM = 0
     # endregion
 
-    def __init__(self, name: str = None, is_sidechain: bool = False):
+    def __init__(self, name: str = None):
 
         # Initializer attributes 
         self.name: str = name
-        self.is_sidechain: bool = is_sidechain
 
         # (JSON-bound) computed attributes
         self.pseudoatom_count: int = 0
@@ -474,7 +468,6 @@ class MoleculeSetup(BaseJSONParsable):
             
         output_dict = {
             "name": obj.name,
-            "is_sidechain": obj.is_sidechain,
             "pseudoatom_count": obj.pseudoatom_count,
             "atoms": [Atom.json_encoder(x) for x in obj.atoms],
             "bond_info": {
@@ -512,7 +505,6 @@ class MoleculeSetup(BaseJSONParsable):
     # Keys to check for deserialized JSON 
     expected_json_keys = {
             "name",
-            "is_sidechain",
             "pseudoatom_count",
             "atoms",
             "bond_info",
@@ -529,8 +521,7 @@ class MoleculeSetup(BaseJSONParsable):
 
         # Constructs a MoleculeSetup object and restores the expected attributes
         name = obj["name"]
-        is_sidechain = obj["is_sidechain"]
-        molsetup = cls(name, is_sidechain)
+        molsetup = cls(name)
 
         molsetup.pseudoatom_count = obj["pseudoatom_count"]
         molsetup.atoms = [Atom.from_dict(x) for x in obj["atoms"]]
@@ -666,7 +657,6 @@ class MoleculeSetup(BaseJSONParsable):
         is_ignore: bool = DEFAULT_IS_IGNORE,
         anchor_list: list[int] = None,
         rotatable: bool = False,
-        directional_vectors: list[int] = None,
     ):
         """
         Adds a pseudoatom with all the specified attributes to the MoleculeSetup. Default values will be used for any
@@ -689,8 +679,6 @@ class MoleculeSetup(BaseJSONParsable):
             a list of ints indicating the multiple bonds that can be specified as input
         rotatable: bool
             flag indicating if the anchor atom should be marked as rotatable to allow the pseudoatom movement.
-        directional_vectors
-            TODO: needs info
 
         Returns
         -------
@@ -723,9 +711,6 @@ class MoleculeSetup(BaseJSONParsable):
         if anchor_list is not None:
             for anchor in anchor_list:
                 self.add_bond(pseudoatom_index, anchor, rotatable=rotatable)
-        # Adds directional vectors [Check what this is used for/if this is used]
-        if directional_vectors is not None:
-            self._add_interaction_vectors(pseudoatom_index, directional_vectors)
         # If there are no specified anchor atoms,
         if not self.flexibility_model or not anchor_list:
             return pseudoatom_index
@@ -895,33 +880,6 @@ class MoleculeSetup(BaseJSONParsable):
                     del self.rotamers[bond_id]
         return
 
-    def _add_interaction_vectors(self, atom_index: int, vector_list: list[np.array]):
-        """
-        Adds input vector list to the list of directional interaction vectors for the specified atom.
-
-        Parameters
-        ----------
-        atom_index: int
-            index of the atom to add the vectors to
-        vector_list: list[np.array]
-            a list of directional interaction vectors
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        IndexError
-            if the specified atom index does not exist or is a dummy atom.
-        """
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom."
-            )
-        for vector in vector_list:
-            self.atoms[atom_index].interaction_vectors.append(vector)
-        return
 
     @property
     def true_atom_count(self):
@@ -1217,13 +1175,6 @@ class MoleculeSetup(BaseJSONParsable):
             )
         return self.atoms[atom_index].graph
 
-    def get_interaction_vectors(self, atom_index: int):
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "GET_INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom"
-            )
-        return self.atoms[atom_index].interaction_vectors
-
     # endregion
 
     def merge_terminal_atoms(self, indices) -> None:
@@ -1500,11 +1451,11 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         constructor for the RDKitMoleculeSetup object (consider adapting to init?)
     """
 
-    def __init__(self, name: str = None, is_sidechain: bool = False, 
+    def __init__(self, name: str = None,
                  source: "MoleculeSetup" = None):
         
         # Initializer attributes 
-        super().__init__(name, is_sidechain)
+        super().__init__(name)
 
         if source:
             if isinstance(source, MoleculeSetup):
@@ -1631,12 +1582,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         rdkit_conformer = mol.GetConformer(conformer_id)
         if not rdkit_conformer.Is3D():
             warnings.warn(
-                "RDKit molecule not labeled as 3D. This warning won't show again."
+                "RDKit molecule not labeled as 3D. This warning won't show again.", RuntimeWarning
             )
             RDKitMoleculeSetup.warned_not3D = True
         if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one."
-            print(msg, file=sys.stderr)
+            warnings.warn(msg, RuntimeWarning)
         if len(Chem.GetMolFrags(mol)) != 1:
             raise ValueError(f"RDKit molecule has {len(Chem.GetMolFrags(mol))} fragments. Must have 1.")
         if mol.HasQuery():
@@ -1664,34 +1615,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         return molsetup
 
-    @staticmethod
-    def remove_elements(mol, to_rm=(12, 20, 25, 26, 30)):
-        idx_to_rm = {}
-        neigh_idx_to_nr_h = {}
-        rm_to_neigh = {}
-        for atom in mol.GetAtoms():
-            if atom.GetAtomicNum() in to_rm:
-                idx_to_rm[atom.GetIdx()] = atom.GetFormalCharge()
-                rm_to_neigh[atom.GetIdx()] = set()
-                for neigh in atom.GetNeighbors():
-                    n = neigh.GetNumExplicitHs()
-                    neigh_idx_to_nr_h[neigh.GetIdx()] = n
-                    rm_to_neigh[atom.GetIdx()].add(neigh.GetIdx())
-        if not idx_to_rm:
-            return Chem.Mol(mol), idx_to_rm, rm_to_neigh
-        rwmol = Chem.EditableMol(mol)
-        for idx in sorted(idx_to_rm, reverse=True):
-            rwmol.RemoveAtom(idx)
-        mol = rwmol.GetMol()
-        for idx in neigh_idx_to_nr_h:
-            n = neigh_idx_to_nr_h[idx]
-            newidx = idx - sum([i < idx for i in idx_to_rm]) 
-            mol.GetAtomWithIdx(newidx).SetNumExplicitHs(n + 1)
-        mol.UpdatePropertyCache()
-        Chem.SanitizeMol(mol)
-        mol = Chem.AddHs(mol)
-        return mol, idx_to_rm, rm_to_neigh
-
     def init_atom(self, compute_gasteiger_charges: bool, read_charges_from_prop: str, coords: list[np.ndarray]):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
@@ -1713,46 +1636,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 raise ValueError(
                     "Conflicting options: compute_gasteiger_charges and read_charges_from_prop cannot both be set. "
                 )
-            things = self.remove_elements(self.mol)
-            copy_mol, idx_rm_to_formal_charge, rm_to_neigh = things
-            for atom in copy_mol.GetAtoms():
-                if atom.GetAtomicNum() == 34:
-                    atom.SetAtomicNum(16)
-            rdPartialCharges.ComputeGasteigerCharges(copy_mol)
-            charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
-            if idx_rm_to_formal_charge:
-                ok_charges = charges.copy()
-                for i in sorted(idx_rm_to_formal_charge, reverse=True):
-                    ok_charges.insert(i, 0.0)
-                nr_rm = len(idx_rm_to_formal_charge)
-                nr_added_h = copy_mol.GetNumAtoms() - self.mol.GetNumAtoms() + nr_rm
-                ok_charges = ok_charges[:len(ok_charges)-nr_added_h]
-                # print(f"{nr_added_h=}")
-                # print(f"{nr_rm=}")
-                # print(f"{idx_rm_to_formal_charge=}")
-                # print(f"{len(charges)=}")
-                # print(f"{len(ok_charges)=}")
-                # print(f"{copy_mol.GetNumAtoms()=}")
-                # print(f"{self.mol.GetNumAtoms()=}")
-                chrg_by_heavy_atom = {}
-                for i in range(nr_added_h):
-                    added_H_idx = self.mol.GetNumAtoms() + i - nr_rm
-                    # print(f"{added_H_idx=}")
-                    neighs = copy_mol.GetAtomWithIdx(added_H_idx).GetNeighbors()
-                    if len(neighs) != 1:
-                        raise RuntimeError("H should have 1 neighbor")
-                    if neighs[0].GetIdx() in chrg_by_heavy_atom:
-                        raise RuntimeError("expected only 1 added H per heavy atom, maybe deleted element had double bond to this heavy atom")
-                    chrg_by_heavy_atom[neighs[0].GetIdx()] = charges[added_H_idx]
-                # print(f"{chrg_by_heavy_atom=}")
-                for i, neighs in rm_to_neigh.items():
-                    # print(f"{i=}, {neighs=}")
-                    ok_charges[i] += idx_rm_to_formal_charge[i]
-                    for idx in neighs:
-                        newidx = idx - sum([i <= idx for i in idx_rm_to_formal_charge]) 
-                        # print(f"{idx=} {newidx=}")
-                        ok_charges[i] += chrg_by_heavy_atom[newidx]
-                charges = ok_charges
+            charges = rdkitutils.compute_gasteiger_charges(self.mol)
         elif read_charges_from_prop is not None: 
             if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
                 raise ValueError(
@@ -1766,7 +1650,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             if None in charges: 
                 for idx, charge in enumerate(charges):
                     if charge is None:
-                        print(f"Charge at index {idx} is None.")
+                        logger.error(f"Charge at index {idx} is None.")
                 raise ValueError(
                     f"The list of charges based on atom property name {read_charges_from_prop} contains None. "
                 )  
@@ -2063,13 +1947,13 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 molname = mol.GetProp("_Name")
             else:
                 molname = ""
-            print(
-                "warning: found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd"
-                % max_matches
+            warnings.warn(
+                "Found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd"
+                % max_matches, RuntimeWarning
             )
-            print(
-                'Maybe this molecule is "too" symmetric? %s' % molname,
-                Chem.MolToSmiles(mol_noHs),
+            warnings.warn(
+                'Maybe this molecule is "too" symmetric? %s %s' % (molname, Chem.MolToSmiles(mol_noHs)),
+                RuntimeWarning
             )
         return matches
 

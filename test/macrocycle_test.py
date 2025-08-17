@@ -113,7 +113,7 @@ def test_untyped_macrocycle():
     for bond_id, bond_info in molsetup_typed.bond_info.items():
         count_rotatable += bond_info.rotatable
         count_breakable += bond_info.breakable
-    assert count_rotatable == 2
+    assert count_rotatable == 1
     assert count_breakable == 0
 
     mk_prep_untyped = MoleculePreparation(untyped_macrocycles=True)
@@ -123,5 +123,5 @@ def test_untyped_macrocycle():
     for bond_id, bond_info in molsetup_untyped.bond_info.items():
         count_rotatable += bond_info.rotatable
         count_breakable += bond_info.breakable
-    assert count_rotatable == 10
+    assert count_rotatable == 9
     assert count_breakable == 1

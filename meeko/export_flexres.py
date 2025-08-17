@@ -1,3 +1,4 @@
+import logging
 from rdkit import Chem
 from rdkit.Chem import rdDetermineBonds
 from rdkit.Geometry import Point3D
@@ -5,6 +6,8 @@ from .utils.utils import parse_begin_res
 from .utils.utils import mini_periodic_table
 from .rdkit_mol_create import RDKitMolCreate
 from .polymer import Polymer
+
+logger = logging.getLogger(__name__)
 
 
 mini_periodic_table = {v: k for k, v in mini_periodic_table.items()}
@@ -56,8 +59,8 @@ def export_pdb_updated_flexres(polymer, pdbqt_mol):
                 orig_resmol = Chem.Mol(polymer.monomers[res_id].rdkit_mol)
                 orig_atomnames = polymer.monomers[res_id].atom_names
                 
-                backbone_SMARTS = "[NX3]([H])[CX4][CX3](=O)"
-                expected_names = ('N', 'H', 'CA', 'C', 'O')
+                backbone_SMARTS = "[NX3]([H])[CX4]([H])[CX3](=O)"
+                expected_names = ('N', 'H', 'CA', 'HA', 'C', 'O')
 
                 backbone_qmol = Chem.MolFromSmarts(backbone_SMARTS)
                 backbone_matches = orig_resmol.GetSubstructMatches(backbone_qmol)
@@ -105,7 +108,10 @@ def export_pdb_updated_flexres(polymer, pdbqt_mol):
                 for neighbor_idx, bond_type in bonds_to_recover: 
                     new_CA_idx = covres_mol.GetNumAtoms() + expected_names.index('CA')
                     combined_res.AddBond(new_CA_idx, neighbor_idx, bond_type)
-                combined_res.RemoveAtom(CA_index)
+
+                CA_h_idx = [nei.GetIdx() for nei in combined_res.GetAtomWithIdx(CA_index).GetNeighbors() if nei.GetAtomicNum()==1]
+                for atom_idx in sorted(CA_h_idx + [CA_index], reverse=True): 
+                    combined_res.RemoveAtom(atom_idx)
                 combined_res = combined_res.GetMol()
 
                 polymer.monomers[res_id].rdkit_mol = combined_res
@@ -181,7 +187,7 @@ def pdb_updated_flexres_from_rdkit(polymer:Polymer, flexres_rdkit_mols:dict):
 
     new_positions = {}
     for res_id, mol in flexres_rdkit_mols.items():
-        print(Chem.MolToSmiles(mol))
+        logger.debug(Chem.MolToSmiles(mol))
         #mol = Chem.RemoveHs(mol)
         # get templates for matching indices of rdkit mol to monomer in polymer
         key = polymer.monomers[res_id].residue_template_key
@@ -221,7 +227,7 @@ def pdb_updated_flexres_from_rdkit(polymer:Polymer, flexres_rdkit_mols:dict):
             first_after_root.add(conn[(root_body_idx, other_body_idx)][1])
         to_pop = set()
         for index in sidechain_positions:
-            print(index)
+            logger.debug(index)
             index_molsetup = template_to_molsetup[index]
             if (
                 rigid_index_by_atom[index_molsetup] == root_body_idx or 

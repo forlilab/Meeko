@@ -210,6 +210,8 @@ class AtomTyper:
     @staticmethod
     def _type_dihedrals(molsetup, dihedral_params):
 
+        canon = lambda x: x if x[2] > x[1] else (x[3], x[2], x[1], x[0])
+
         dihedrals = {}
 
         for line in dihedral_params:
@@ -241,6 +243,7 @@ class AtomTyper:
 
             for hit in hits:
                 atom_idxs = tuple([hit[j] for j in idxs])
+                atom_idxs = canon(atom_idxs)
                 molsetup.dihedral_partaking_atoms[atom_idxs] = dihedral_index
                 molsetup.dihedral_labels[atom_idxs] = tid
 
