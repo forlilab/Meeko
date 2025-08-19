@@ -496,29 +496,34 @@ def compute_gasteiger_charges(rdkit_mol):
     charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
     if idx_rm_to_formal_charge:
         ok_charges = charges.copy()
-        for i in sorted(idx_rm_to_formal_charge, reverse=True):
+        for i in sorted(idx_rm_to_formal_charge, reverse=False):
             ok_charges.insert(i, 0.0)
         nr_rm = len(idx_rm_to_formal_charge)
         nr_added_h = copy_mol.GetNumAtoms() - rdkit_mol.GetNumAtoms() + nr_rm
         ok_charges = ok_charges[:len(ok_charges)-nr_added_h]
-        chrg_by_heavy_atom = {}
+        h_chrg_by_heavy_atom = {}
         for i in range(nr_added_h):
             added_H_idx = rdkit_mol.GetNumAtoms() + i - nr_rm
-            # print(f"{added_H_idx=}")
             neighs = copy_mol.GetAtomWithIdx(added_H_idx).GetNeighbors()
             if len(neighs) != 1:
                 raise RuntimeError("H should have 1 neighbor")
-            if neighs[0].GetIdx() in chrg_by_heavy_atom:
-                raise RuntimeError("expected only 1 added H per heavy atom, maybe deleted element had double bond to this heavy atom")
-            chrg_by_heavy_atom[neighs[0].GetIdx()] = charges[added_H_idx]
-        # print(f"{chrg_by_heavy_atom=}")
+            # in iron-sulfur clusters, sulfur will be added more than one hydrogen
+            idx = neighs[0].GetIdx()
+            h_chrg_by_heavy_atom.setdefault(idx, 0.0)
+            h_chrg_by_heavy_atom[idx] += charges[added_H_idx]
+        # in iron-sulfur clusters, each sulfur will donate its added H charges
+        # to multiple irons, so we must divide the total donated charge
+        # by the number of donations
+        contributions_by_neigh = {}
         for i, neighs in rm_to_neigh.items():
-            # print(f"{i=}, {neighs=}")
+            for neigh in neighs:
+                contributions_by_neigh.setdefault(neigh, 0)
+                contributions_by_neigh[neigh] += 1
+        for i, neighs in rm_to_neigh.items():
             ok_charges[i] += idx_rm_to_formal_charge[i]
             for idx in neighs:
                 newidx = idx - sum([i <= idx for i in idx_rm_to_formal_charge]) 
-                # print(f"{idx=} {newidx=}")
-                ok_charges[i] += chrg_by_heavy_atom[newidx]
+                ok_charges[i] += h_chrg_by_heavy_atom[newidx] / contributions_by_neigh[idx]
         charges = ok_charges
     return charges
 
