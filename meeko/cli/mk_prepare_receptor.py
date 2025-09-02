@@ -575,9 +575,10 @@ def main():
         elif ":" in item: #expect format resname:sdf
             resname, sdf_file = item.split(":", 1)
             template_json = sdf_to_json(sdf_file, resname)
-            templates.add_json_from_dict(template_json)
+            templates.add_dict(template_json)
         else:
             print("--add_templates must be either a JSON file or resname:file.sdf")
+            sys.exit(2)
     
     # create polymers
     if args.read_with_prody is not None:

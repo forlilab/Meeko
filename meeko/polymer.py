@@ -689,11 +689,7 @@ class ResidueChemTemplates(BaseJSONParsable):
         self.add_dict(data)
         return
     
-    def add_json_from_dict(self, data: dict):
-        """
-        Add residue templates from a Python dictionary
-        """
-        self.add_dict(data)
+
 
     @staticmethod
     def _check_missing_padders(residue_templates, padders):
