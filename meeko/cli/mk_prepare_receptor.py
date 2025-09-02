@@ -38,6 +38,25 @@ else:
 path_to_this_script = pathlib.Path(__file__).resolve()
 
 
+def sdf_to_json(sdf_path: str, resname: str) -> dict:
+    """Convert an SDF file into a residue template JSON."""
+
+    mol = Chem.SDMolSupplier(sdf_path, removeHs=False)[0]
+    mol = Chem.AddHs(mol)  # ensure explicit Hs
+    smiles = Chem.MolToSmiles(mol)
+    atom_names = [str(i) for i in range(mol.GetNumAtoms())]
+
+    return {
+        "ambiguous": {resname: [resname]},
+        "residue_templates": {
+            resname: {
+                "smiles": smiles,
+                "atom_name": atom_names,
+                "link_labels": {}
+            }
+        }
+    }
+
 def parse_cmdline_res(string):
     """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
     blocks = ("," + string).split(":")
@@ -179,7 +198,7 @@ def get_args():
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
     config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
-    config_group.add_argument("--add_templates", help="[.json]", metavar="JSON_FILENAME", nargs="+", default=[])
+    config_group.add_argument("--add_templates", help="Additional residue templates. Can be a JSON file path or 'resname:file.sdf'.", action="append", default=[])
     config_group.add_argument("--cache_templates", 
                               help=(
                                   "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
@@ -549,8 +568,16 @@ def main():
             sys.exit(1)
     else: 
         templates = ResidueChemTemplates.create_from_defaults()
-    for fn in args.add_templates:
-        templates.add_json_file(fn)
+
+    for item in args.add_templates:
+        if item.endswith(".json"):
+            templates.add_json_file(item)
+        elif ":" in item: #expect format resname:sdf
+            resname, sdf_file = item.split(":", 1)
+            template_json = sdf_to_json(sdf_file, resname)
+            templates.add_json_from_dict(template_json)
+        else:
+            print("--add_templates must be either a JSON file or resname:file.sdf")
     
     # create polymers
     if args.read_with_prody is not None:
