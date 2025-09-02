@@ -688,6 +688,8 @@ class ResidueChemTemplates(BaseJSONParsable):
         data = json.loads(jsonstr)
         self.add_dict(data)
         return
+    
+
 
     @staticmethod
     def _check_missing_padders(residue_templates, padders):
