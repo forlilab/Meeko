@@ -382,6 +382,13 @@ class PDBQTWriterLegacy:
     def _make_pdbqt_line(
         count, atom_name, res_name, chain, res_num, coord, charge, atom_type, icode=""
     ):
+        if atom_type is None:
+            msg = "Can't write PDBQT because atom_type is None.\n"
+            msg += "Probably, MoleculePreparation was instantiated with a configuration that does not assign atom types.\n"
+            msg += "For example, mk_prep = MoleculePreparation(load_atom_params='vina_params') assigns atomic radii and\n"
+            msg += "other properties, but not atom types. The default for load_atom_params is 'ad4_types'.\n"
+            msg += "From command line scripts, this option is usually set in JSON files passed to option --mk_config.\n"
+            raise ValueError(msg)
         record_type = "ATOM"
         alt_id = " "
         occupancy = 1.0
