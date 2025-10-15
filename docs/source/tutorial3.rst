@@ -155,7 +155,7 @@ Docking Calculation
 ===================
 
 The tethered docking does **not** use a ligand file as input (specified with ``-L`` or ``--lfile`` flag).
-Instead, it uses only the flexible side chain file, which containes the ligand
+Instead, it uses only the flexible side chain file, which contains the ligand
 and the residue side chain. This file is passed to the ``-F`` or ``--flexres`` flag.
 
 The previously generated GPF file (``3kgd_receptorH_rigid.gpf``), together with the PDBQT file of the rigid part of the receptor (``3kgd_receptorH_rigid.pdbqt``), will be used to compute the grid maps: 
@@ -164,8 +164,10 @@ The previously generated GPF file (``3kgd_receptorH_rigid.gpf``), together with 
 
    ./autogrid4 -p 3kgd_receptorH_rigid.gpf
 
+Please note that the GPF from the reactive docking tutorial :ref:`tutorial2` has additional parameters for reactive docking,
+and therefore the maps cannot be reused in this example, even though the filenames and commands are similar.
+
 To run the docking calculation, we pass the ligand and side chain ``HIE_AMP.pdbqt`` as a flexible residue file.
-The output file will have basename ``HIE_AMP``.  
 
 .. code-block:: bash
 
@@ -173,8 +175,7 @@ The output file will have basename ``HIE_AMP``.
    --ffile 3kgd_receptorH_rigid.maps.fld \
    --resnam HIE_AMP
 
-Please note that the GPF from the reactive docking tutorial :ref:`tutorial2` has additional parameters for reactive docking,
-and therefore the maps cannot be reused in this example, even though the filenames and commands are similar.
+The output file will have basename ``HIE_AMP``.  
 
 Export the Docking Poses
 ========================
