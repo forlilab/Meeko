@@ -1050,9 +1050,15 @@ class Polymer(BaseJSONParsable):
 
         polymer = cls({}, {}, residue_chem_templates)
 
-        polymer.monomers = {
-            k: Monomer.from_dict(v) for k, v in obj["monomers"].items()
-        }
+        polymer.monomers = {}
+        templates = residue_chem_templates.residue_templates
+        for k, v in obj["monomers"].items():
+            monomer = Monomer.from_dict(v)
+            if monomer.template is None:  # JSON-bound only from v0.7.0
+                # try to recover template from stored templates
+                residue_key = monomer.residue_template_key
+                monomer.template = templates.get(residue_key, None)
+            polymer.monomers[k] = monomer
         polymer.log = obj["log"]
 
         return polymer
@@ -1689,13 +1695,6 @@ class Polymer(BaseJSONParsable):
                 atom_names,
             )
             monomers[residue_key].template = template
-            if template is not None and template.link_labels is not None:
-                mapping_inv = monomers[
-                    residue_key
-                ].mapidx_from_raw  # {j: i for (i, j) in mapping.items()}
-                # TODO check here mapping_inv unnused
-                link_labels = {i: label for i, label in template.link_labels.items()}
-                monomers[residue_key].link_labels = link_labels
 
         return monomers, log
 
@@ -1724,7 +1723,7 @@ class Polymer(BaseJSONParsable):
             mapidx_pad = {atom.GetIdx(): atom.GetIdx() for atom in padded_mol.GetAtoms()}
             padded_links = set()
 
-            for atom_index, link_label in monomer.link_labels.items():
+            for atom_index, link_label in monomer.template.link_labels.items():
                 if (atom_index, link_label) in padded_links:
                     continue
 
@@ -1773,7 +1772,7 @@ class Polymer(BaseJSONParsable):
             inv_map = {v: k for k, v in mapidx_pad.items()}
             padded_H_idxs = []
 
-            for atom_index in monomer.link_labels:
+            for atom_index in monomer.template.link_labels:
                 heavy_atom = monomer.rdkit_mol.GetAtomWithIdx(atom_index)
                 for neighbor in heavy_atom.GetNeighbors():
                     if neighbor.GetAtomicNum() != 1:
@@ -2385,7 +2384,7 @@ class Monomer(BaseJSONParsable):
         self.is_movable = False
         self.mapidx_from_raw = self._invert_mapping(self.mapidx_to_raw)
 
-        # (JSON-unbound) computed attributes
+        # (JSON-unbound in v0.6.1) computed attributes (JSON-bound in v0.7.0)
         # TODO convert link indices/labels in template to rdkit_mol indices herein
         # self.link_labels = {}
         self.template = None
@@ -2423,6 +2422,7 @@ class Monomer(BaseJSONParsable):
             "is_flexres_atom": obj.is_flexres_atom,
             "is_movable": obj.is_movable,
             "molsetup_mapidx": obj.molsetup_mapidx,
+            "template": serialize_optional(ResidueTemplate.json_encoder, obj.template),
         }
     
     # Keys to check for deserialized JSON 
@@ -2439,6 +2439,7 @@ class Monomer(BaseJSONParsable):
         "is_flexres_atom",
         "is_movable",
         "mapidx_from_raw",
+        "template",
     })
 
     @classmethod
@@ -2474,6 +2475,10 @@ class Monomer(BaseJSONParsable):
         monomer.is_flexres_atom=obj["is_flexres_atom"]
         monomer.is_movable=obj["is_movable"]
         monomer.mapidx_from_raw = mapidx_from_raw
+        if "template" in obj:
+            monomer.template = ResidueTemplate.from_dict(obj["template"])
+        else:  # v0.6.1 did not serialize the template
+            monomer.template = None
 
         return monomer
     # endregion
