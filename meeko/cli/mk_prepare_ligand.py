@@ -7,7 +7,7 @@ import argparse
 from datetime import datetime
 import io
 import os
-from os import linesep as eol
+eol="\n"
 import sys
 import json
 import tarfile
@@ -33,7 +33,6 @@ else:
 
 
 def cmd_lineparser():
-    backend = "rdkit"
 
     conf_parser = argparse.ArgumentParser(
         description=__doc__,
@@ -46,13 +45,6 @@ def cmd_lineparser():
         help="configure MoleculePreparation from JSON file. Overriden by command line args.",
     )
     confargs, remaining_argv = conf_parser.parse_known_args()
-
-    config = MoleculePreparation.get_defaults_dict()
-
-    if confargs.config_file is not None:
-        with open(confargs.config_file) as f:
-            c = json.load(f)
-            config.update(c)
 
     parser = (
         argparse.ArgumentParser()
@@ -214,9 +206,13 @@ def cmd_lineparser():
     )
     config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "zero"),
+        choices=("gasteiger", "espaloma", "zero", "read"),
         help="default is 'gasteiger', 'zero' sets all zeros",
         default="gasteiger",
+    )
+    config_group.add_argument(
+        "--charge_atom_prop",
+        help="set atom partial charges from an RDKit atom property based on the input file. The default is 'PartialCharge' for SDF and '_TriposPartialCharge' for MOL2 unless overriden by a user defined property name. ",
     )
     config_group.add_argument(
         "--bad_charge_ok",
@@ -234,6 +230,12 @@ def cmd_lineparser():
         dest="remove_smiles",
         action="store_true",
         help="do not write smiles as remark to pdbqt",
+    )
+    config_group.add_argument(
+        "--rename_atoms",
+        dest="rename_atoms",
+        action="store_true",
+        help="rename atoms: the new name will be the original name and its (1-based) index in MoleculeSetup",
     )
     reactive_group = parser.add_argument_group("Reactive docking")
     reactive_group.add_argument(
@@ -273,6 +275,18 @@ def cmd_lineparser():
         help="indices (1-based) of the SMARTS atoms that will be attached (default: 1 2)",
     )
 
+    config = MoleculePreparation.get_defaults_dict()
+
+    if confargs.config_file is not None:
+        with open(confargs.config_file) as f:
+            c = json.load(f)
+            config.update(c)
+
+    # Command line arguments should override the config file only for options
+    # set explicitly by the user. The config file still has priority over the
+    # defaults set in argparse. To achieve this, we reset the argparse
+    # defaults to the values from the config file. Then, we can just update
+    # variable `config` with the values parsed with argparse
     parser.set_defaults(**config)
     args = parser.parse_args(remaining_argv)
 
@@ -293,12 +307,13 @@ def cmd_lineparser():
             sys.exit(2)
         args.reactive_smarts_idx -= 1  # convert from 1- to 0-index
 
-    # command line arguments override config
+    # This is where command line arguments override config file.
+    # Relies on key/parameter names being equal.
+    # Deliberate mismatch for add_atom_types/add_atom_types_json, as these
+    # are extended below instead of being replaced
     for key in config:
         if key in args.__dict__:
             config[key] = args.__dict__[key]
-
-    config["load_atom_params"] = args.load_atom_params
 
     if args.add_atom_types_json is not None:
         additional_ats = []
@@ -308,7 +323,9 @@ def cmd_lineparser():
                 additional_ats.append(at)
             elif type(at) == list:
                 additional_ats.extend(at)
-        config["add_atom_types"] = additional_ats
+        if config["add_atom_types"] is None:
+            config["add_atom_types"] = []
+        config["add_atom_types"] += additional_ats
 
     if args.multimol_output_dir is not None or args.multimol_prefix is not None:
         if args.output_pdbqt_filename is not None:
@@ -329,7 +346,8 @@ def cmd_lineparser():
     num_required_covalent_args += int(args.tether_smarts is not None)
     if num_required_covalent_args not in [0, 3]:
         print(
-            "Error: --receptor, --rec_residue, and --tether_smarts are all required for covalent docking."
+            "Error: --receptor, --rec_residue, and --tether_smarts are all required for covalent docking.",
+            file=sys.stderr,
         )
         sys.exit(2)
     is_covalent = num_required_covalent_args == 3
@@ -364,7 +382,7 @@ def cmd_lineparser():
         indices[0] = indices[0] - 1  # convert from 1- to 0-index
         indices[1] = indices[1] - 1
 
-    return args, config, backend, is_covalent
+    return args, config, is_covalent
 
 
 class Output:
@@ -495,27 +513,27 @@ class Output:
             return tuple("mk%d" % (i + 1) for i in range(len(molsetups)))
 
 def main():
-    args, config, backend, is_covalent = cmd_lineparser()
+    args, config, is_covalent = cmd_lineparser()
     input_molecule_filename = args.input_molecule_filename
 
     # read input
     input_fname, ext = os.path.splitext(input_molecule_filename)
     ext = ext[1:].lower()
-    if backend == "rdkit":
-        parsers = {
-            "sdf": Chem.SDMolSupplier,
-            "mol2": rdkitutils.Mol2MolSupplier,
-            "mol": Chem.SDMolSupplier,
-        }
-        if not ext in parsers:
-            print(
-                "*ERROR* Format [%s] not in supported formats [%s]"
-                % (ext, "/".join(list(parsers.keys())))
-            )
-            sys.exit(1)
-        mol_supplier = parsers[ext](
-            input_molecule_filename, removeHs=False
-        )  # input must have explicit H
+
+    parsers = {
+        "sdf": Chem.SDMolSupplier,
+        "mol2": rdkitutils.Mol2MolSupplier,
+        "mol": Chem.SDMolSupplier,
+    }
+    if not ext in parsers:
+        print(
+            "Error: Format [%s] not in supported formats [%s]"
+            % (ext, "/".join(list(parsers.keys())))
+        )
+        sys.exit(1)
+    mol_supplier = parsers[ext](
+        input_molecule_filename, removeHs=False
+    )  # input must have explicit H
     
     # configure output writer
     if args.output_pdbqt_filename is None:
@@ -543,13 +561,24 @@ def main():
         rec_prody_mol = prody_parser(rec_filename)
         covalent_builder = CovalentBuilder(rec_prody_mol, args.rec_residue)
 
-    input_mol_counter = 0
     input_mol_skipped = 0
     input_mol_with_failure = (
         0  # if reactive or covalent, each mol can yield multiple PDBQT
     )
     nr_failures = 0
     is_after_first = False
+
+    if  config["charge_atom_prop"] is not None: 
+        if config["charge_model"] != "read": 
+            print(f'Error: --charge_atom_prop must be used with --charge_model "read", but the current charge_model is "{config["charge_model"]}". ',
+                  file=sys.stderr,)
+            sys.exit(1)
+    elif config["charge_model"] == "read":  
+        if ext=="sdf":
+            config["charge_atom_prop"] = "PartialCharge"
+        elif ext=="mol2": 
+            config["charge_atom_prop"] = "_TriposPartialCharge"
+
     preparator = MoleculePreparation.from_config(config)
     for mol in mol_supplier:
         if is_after_first and output.is_multimol == False:
@@ -561,8 +590,7 @@ def main():
             break
 
         # check that molecule was successfully loaded
-        if backend == "rdkit":
-            is_valid = mol is not None
+        is_valid = mol is not None
         input_mol_skipped += int(is_valid == False)
         if not is_valid:
             continue
@@ -587,6 +615,7 @@ def main():
                     cov_lig.mol,
                     root_atom_index=root_atom_index,
                     not_terminal_atoms=[root_atom_index],
+                    rename_atoms=args.rename_atoms,
                 )
                 chain, res, num = cov_lig.res_id
                 suffixes = output.get_suffixes(molsetups)
@@ -610,7 +639,15 @@ def main():
                         print(error_msg, file=sys.stderr)
 
         else:
-            molsetups = preparator.prepare(mol)
+            try: 
+                molsetups = preparator.prepare(mol, rename_atoms=args.rename_atoms)
+            except Exception as error_msg: 
+                nr_failures += 1
+                this_mol_had_failure = True
+                print(error_msg, file=sys.stderr)
+                input_mol_with_failure += int(this_mol_had_failure)
+                continue
+
             if len(molsetups) > 1:
                 output.is_multimol = True
             suffixes = output.get_suffixes(molsetups)

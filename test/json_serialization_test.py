@@ -7,19 +7,13 @@ import pytest
 
 from meeko import (
     Monomer,
-    MonomerEncoder,
     Polymer,
-    PolymerEncoder,
     MoleculePreparation,
     MoleculeSetup,
-    MoleculeSetupEncoder,
     RDKitMoleculeSetup,
     ResiduePadder,
-    ResiduePadderEncoder,
     ResidueTemplate,
-    ResidueTemplateEncoder,
     ResidueChemTemplates,
-    ResidueChemTemplatesEncoder,
     PDBQTWriterLegacy,
 )
 
@@ -31,12 +25,19 @@ from rdkit.Chem import rdChemReactions
 
 from meeko.utils.pdbutils import PDBAtomInfo
 
+try:
+    import openforcefields
+    _got_openff = True
+except ImportError as err:
+    _got_openff = False
+
 # from ..meeko.utils.pdbutils import PDBAtomInfo
 
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
 
 # Test Data
 ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
+ahhy_v061_json = pkgdir / "test/polymer_data/AHHY-v0.6.1.json"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
@@ -45,6 +46,11 @@ just_one_ALA_missing = (
 chem_templates = ResidueChemTemplates.create_from_defaults()
 mk_prep = MoleculePreparation()
 
+def test_read_v061_polymer():
+    with open(ahhy_v061_json) as f:
+        json_str = f.read()
+    polymer = Polymer.from_json(json_str)
+    return
 
 # region Fixtures
 @pytest.fixture
@@ -124,8 +130,8 @@ def test_rdkit_molsetup_encoding_decoding(populated_rdkit_molsetup):
     # we will need to make other tests for those empty fields.
     # Encode and decode MoleculeSetup from json
     starting_molsetup = populated_rdkit_molsetup
-    json_str = json.dumps(starting_molsetup, cls=MoleculeSetupEncoder)
-    decoded_molsetup = json.loads(json_str, object_hook=RDKitMoleculeSetup.from_json)
+    json_str = starting_molsetup.to_json() 
+    decoded_molsetup = RDKitMoleculeSetup.from_json(json_str)
 
     # First asserts that all types are as expected
     assert isinstance(starting_molsetup, RDKitMoleculeSetup)
@@ -155,10 +161,9 @@ def test_monomer_encoding_decoding(populated_monomer):
     # Starts by getting a Monomer object, converting it to a json string, and then decoding the string into
     # a new Monomer object
     starting_monomer = populated_monomer
-    json_str = json.dumps(starting_monomer, cls=MonomerEncoder)
-    decoded_monomer = json.loads(
-        json_str, object_hook=polymer.monomer_json_decoder
-    )
+    json_str = starting_monomer.to_json()
+
+    decoded_monomer = Monomer.from_json(json_str)
 
     # Asserts that the starting and ending objects have the expected Monomer type
     assert isinstance(starting_monomer, Monomer)
@@ -185,10 +190,8 @@ def test_pdbqt_writing_from_decoded_polymer(populated_polymer):
 
     starting_polymer = populated_polymer
     starting_pdbqt = PDBQTWriterLegacy.write_from_polymer(starting_polymer)
-    json_str = json.dumps(starting_polymer, cls=PolymerEncoder)
-    decoded_polymer = json.loads(
-        json_str, object_hook=polymer.polymer_json_decoder
-    )
+    json_str = starting_polymer.to_json()
+    decoded_polymer = Polymer.from_json(json_str)
     decoded_pdbqt = PDBQTWriterLegacy.write_from_polymer(decoded_polymer) 
     assert decoded_pdbqt == starting_pdbqt
     return
@@ -213,10 +216,8 @@ def test_residue_template_encoding_decoding(populated_residue_template):
     # Starts by getting a ResidueTemplate object, converting it to a json string, and then decoding the string into
     # a new ResidueTemplate object
     starting_template = populated_residue_template
-    json_str = json.dumps(starting_template, cls=ResidueTemplateEncoder)
-    decoded_template = json.loads(
-        json_str, object_hook=polymer.residue_template_json_decoder
-    )
+    json_str = starting_template.to_json()
+    decoded_template = ResidueTemplate.from_json(json_str)
 
     # Asserts that the starting and ending objects have the expected ResidueTemplate type
     assert isinstance(starting_template, ResidueTemplate)
@@ -245,10 +246,8 @@ def test_residue_padder_encoding_decoding(populated_residue_padder):
     # Starts by getting a ResiduePadder object, converting it to a json string, and then decoding the string into
     # a new ResiduePadder object
     starting_padder = populated_residue_padder
-    json_str = json.dumps(starting_padder, cls=ResiduePadderEncoder)
-    decoded_padder = json.loads(
-        json_str, object_hook=polymer.residue_padder_json_decoder
-    )
+    json_str = starting_padder.to_json()
+    decoded_padder = ResiduePadder.from_json(json_str)
 
     # Asserts that the starting and ending objects have the expected ResiduePadder type
     assert isinstance(starting_padder, ResiduePadder)
@@ -277,10 +276,8 @@ def test_residue_chem_templates_encoding_decoding(populated_residue_chem_templat
     # Starts by getting a ResidueChemTemplates object, converting it to a json string, and then decoding the string into
     # a new ResidueChemTemplates object
     starting_templates = populated_residue_chem_templates
-    json_str = json.dumps(starting_templates, cls=ResidueChemTemplatesEncoder)
-    decoded_templates = json.loads(
-        json_str, object_hook=polymer.residue_chem_templates_json_decoder
-    )
+    json_str = starting_templates.to_json()
+    decoded_templates = ResidueChemTemplates.from_json(json_str)
 
     # Asserts that the starting and ending objects have the expected ResidueChemTemplates type
     assert isinstance(starting_templates, ResidueChemTemplates)
@@ -315,10 +312,8 @@ def test_polymer_encoding_decoding(
         populated_polymer_missing,
     )
     for starting_polymer in polymers:
-        json_str = json.dumps(starting_polymer, cls=PolymerEncoder)
-        decoded_polymer = json.loads(
-            json_str, object_hook=polymer.polymer_json_decoder
-        )
+        json_str = starting_polymer.to_json()
+        decoded_polymer  = Polymer.from_json(json_str)
 
         # Asserts that the starting and ending objects have the expected Polymer type
         assert isinstance(starting_polymer, Polymer)
@@ -328,6 +323,44 @@ def test_polymer_encoding_decoding(
         check_polymer_equality(decoded_polymer, starting_polymer)
     return
 
+
+def test_load_reference_json():
+    fn = str(pkgdir/"test"/"polymer_data"/"AHHY_reference_fewer_templates.json")
+    with open(fn) as f:
+        json_string = f.read()
+    polymer = Polymer.from_json(json_string)
+    assert len(polymer.get_valid_monomers()) == 4
+    return
+
+
+@pytest.mark.skipif(not _got_openff, reason="requires openff-forcefields")
+def test_dihedral_equality():
+    mk_prep = MoleculePreparation(
+        merge_these_atom_types=(),
+        dihedral_model="openff",
+    )
+    fn = str(pkgdir/"test"/"flexibility_data"/"non_sequential_atom_ordering_01.mol")
+    mol = Chem.MolFromMolFile(fn, removeHs=False)
+    starting_molsetup = mk_prep(mol)[0]
+    json_str = starting_molsetup.to_json()
+    decoded_molsetup = RDKitMoleculeSetup.from_json(json_str)
+    check_molsetup_equality(starting_molsetup, decoded_molsetup)
+    return
+
+
+def test_broken_bond(): 
+    fn = str(pkgdir / "test" / "macrocycle_data" / "lorlatinib.mol")
+    mol = Chem.MolFromMolFile(fn, removeHs=False)
+    mk_prep_untyped = MoleculePreparation(untyped_macrocycles=True)
+    starting_molsetup = mk_prep_untyped(mol)[0]
+    decoded_molsetup = RDKitMoleculeSetup.from_json(starting_molsetup.to_json())
+    count_rotatable = 0
+    count_breakable = 0
+    for bond_id, bond_info in decoded_molsetup.bond_info.items():
+        count_rotatable += bond_info.rotatable
+        count_breakable += bond_info.breakable
+    assert count_rotatable == 9
+    assert count_breakable == 1
 
 # endregion
 
@@ -357,8 +390,6 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
 
     # Going through and checking MoleculeSetup attributes
     assert decoded_obj.name == starting_obj.name
-    assert isinstance(decoded_obj.is_sidechain, bool)
-    assert decoded_obj.is_sidechain == starting_obj.is_sidechain
     assert isinstance(decoded_obj.pseudoatom_count, int)
     assert decoded_obj.pseudoatom_count == starting_obj.pseudoatom_count
 
@@ -413,6 +444,11 @@ def check_molsetup_equality(decoded_obj: MoleculeSetup, starting_obj: MoleculeSe
             decoded_obj.restraints[idx], starting_obj.restraints[idx]
         )
 
+    # dihedrals
+    assert decoded_obj.dihedral_partaking_atoms == starting_obj.dihedral_partaking_atoms
+    assert decoded_obj.dihedral_interactions == starting_obj.dihedral_interactions
+    assert decoded_obj.dihedral_labels == starting_obj.dihedral_labels
+
     # Checking flexibility model
     for key in starting_obj.flexibility_model:
         assert key in decoded_obj.flexibility_model
@@ -436,12 +472,8 @@ def check_atom_equality(decoded_obj: Atom, starting_obj: Atom):
     -------
     None
     """
-    correct_val_type = True
     # np.array conversion checks
     assert isinstance(decoded_obj.coord, numpy.ndarray)
-    for i_vec in decoded_obj.interaction_vectors:
-        correct_val_type = correct_val_type and isinstance(i_vec, numpy.ndarray)
-    assert correct_val_type
 
     # Checks for equality between decoded and original fields
     assert isinstance(decoded_obj.index, int)
@@ -514,13 +546,6 @@ def check_ring_equality(decoded_obj: Ring, starting_obj: Ring):
     """
     assert isinstance(decoded_obj.ring_id, tuple)
     assert decoded_obj.ring_id == starting_obj.ring_id
-    assert isinstance(decoded_obj.corner_flip, bool)
-    assert decoded_obj.corner_flip == starting_obj.corner_flip
-    assert len(decoded_obj.graph) == len(starting_obj.graph)
-    for idx, val in enumerate(starting_obj.graph):
-        assert decoded_obj.graph[idx] == val
-    assert isinstance(decoded_obj.is_aromatic, bool)
-    assert decoded_obj.is_aromatic == starting_obj.is_aromatic
     return
 
 
@@ -762,6 +787,5 @@ def check_polymer_equality(
     # Checks log equality
     assert decoded_obj.log == starting_obj.log
     return
-
 
 # endregion

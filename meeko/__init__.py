@@ -4,7 +4,7 @@
 # Meeko
 #
 
-__version__ = "0.6.1"
+__version__ = "0.7.1"
 
 try:
     import prody
@@ -16,7 +16,6 @@ else:
 from .preparation import MoleculePreparation
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetup
-from .molsetup import MoleculeSetupEncoder
 from .molsetup import Restraint
 from .molsetup import UniqAtomParams
 from .utils import rdkitutils
@@ -30,13 +29,7 @@ from .polymer import Monomer
 from .polymer import ResiduePadder
 from .polymer import ResidueTemplate
 from .polymer import ResidueChemTemplates
-from .polymer import PolymerEncoder
-from .polymer import MonomerEncoder
-from .polymer import ResiduePadderEncoder
-from .polymer import ResidueTemplateEncoder
-from .polymer import ResidueChemTemplatesEncoder
 from .polymer import add_rotamers_to_polymer_molsetups
-from .polymer import polymer_json_decoder
 from .polymer import PolymerCreationError
 from .molecule_pdbqt import PDBQTMolecule
 from .rdkit_mol_create import RDKitMolCreate
@@ -60,12 +53,10 @@ rdkit_logger.handlers[0].setFormatter(
 )
 rdBase.LogToPythonLogger()
 
-__all__ = ['MoleculePreparation', 'RDKitMoleculeSetup', 'MoleculeSetupEncoder',
+__all__ = ['MoleculePreparation', 'RDKitMoleculeSetup', 
            'pdbutils', 'geomutils', 'rdkitutils', 'utils',
            'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
            'Polymer', 'Monomer', 'ResiduePadder', 'ResidueTemplate', 'ResidueChemTemplates',
-           'PolymerEncoder', 'MonomerEncoder', 'ResiduePadderEncoder', 'ResidueTemplateEncoder',
-           'ResidueChemTemplatesEncoder',
            'add_rotamers_to_polymer_molsetups',
            'RDKitMolCreate',
            'PDBQTWriterLegacy',

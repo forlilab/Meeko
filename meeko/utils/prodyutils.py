@@ -1,3 +1,4 @@
+import logging
 from typing import Union
 from typing import Optional
 import numpy as np
@@ -14,6 +15,8 @@ from prody.atomic.selection import Selection
 from prody.atomic.segment import Segment
 from prody.atomic.chain import Chain
 from prody.atomic.residue import Residue
+
+logger = logging.getLogger(__name__)
 
 # used to convert from and to element symbols ans atomic number
 periodic_table = Chem.GetPeriodicTable()
@@ -217,7 +220,7 @@ def prody_to_rdkit(
     else:
         bonds = None
     if bonds is not None:
-        print("THIS CODE PATH IS UNTESTED (bonds in prody_to_rdkit)")
+        logger.info("THIS CODE PATH IS UNTESTED (bonds in prody_to_rdkit)")
         mol = Chem.EditableMol(rdmol)
         mol.BeginBatchEdit()
         for bond in bonds:
@@ -231,7 +234,7 @@ def prody_to_rdkit(
             # bond_type = bond_types[bond[-1]]
             bond_order = 1
             bond_type = _bondtypes[bond_order]
-            print("bonds", bond_indices, bond)
+            logger.debug(f"bonds {bond_indices} {bond}")
             mol.AddBond(bond_indices[0], bond_indices[1], bond_type)
 
         mol.CommitBatchEdit()
@@ -265,27 +268,27 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         pdb_id = sys.argv[1]
         selection_string = sys.argv[2]
-    print("- parsing protein %s..." % pdb_id, end="")
+    logger.info("- parsing protein %s..." % pdb_id)
     prot = prody.parseMMCIF(pdb_id, headers=True)
 
     # uncomment this to perceive bonds with ProDy (slow)
     # prot.inferBonds()
-    print(">> %d atoms" % len(prot))
+    logger.info(">> %d atoms" % len(prot))
     # http://prody.csb.pitt.edu/manual/reference/atomic/select.html#module-prody.atomic.select
     sel = prot.select(selection_string)
     # sel = prot.select("resname THR resnum 1")
-    print('- selected %d atoms with the string "%s"' % (len(sel), selection_string))
+    logger.info('- selected %d atoms with the string "%s"' % (len(sel), selection_string))
     # x = input()
-    print("- converting selection to RDKit...")
+    logger.info("- converting selection to RDKit...")
     frag = prody_to_rdkit(sel)
     writer = Chem.SDWriter("fragment.sdf")
     writer.write(frag)
     writer.close()
-    print("  [ written fragment.sdf ]")
+    logger.info("  [ written fragment.sdf ]")
 
-    print("- converting the entire input as RDKit...")
+    logger.info("- converting the entire input as RDKit...")
     whole = prody_to_rdkit(prot)
     writer = Chem.SDWriter("whole.sdf")
     writer.write(whole)
     writer.close()
-    print("  [ written whole.sdf ]")
+    logger.info("  [ written whole.sdf ]")

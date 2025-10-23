@@ -6,6 +6,7 @@
 
 from collections import defaultdict
 from operator import itemgetter
+import warnings
 
 from .molsetup import Bond
 
@@ -36,6 +37,7 @@ class FlexMacrocycle:
         double_bond_penalty: float = DEFAULT_DOUBLE_BOND_PENALTY,
         max_breaks: int = DEFAULT_MAX_BREAKS,
         allow_break_atype_A: bool = False,
+        untyped: bool = False,
     ):
         """
         Initialize macrocycle typer.
@@ -50,6 +52,8 @@ class FlexMacrocycle:
         max_breaks: int
         allow_break_type_A: bool
             Allow breaking bonds involving atoms typed A, default is False.
+        untyped: bool
+            Does not use atom typing, any rotatable bond can break
         """
         self._min_ring_size = min_ring_size
         self._max_ring_size = max_ring_size
@@ -57,6 +61,7 @@ class FlexMacrocycle:
         self._double_bond_penalty = double_bond_penalty
         self.max_breaks = max_breaks
         self.allow_break_atype_A = allow_break_atype_A
+        self.untyped = untyped
 
         self.setup = None
         self.breakable_rings = None
@@ -83,9 +88,7 @@ class FlexMacrocycle:
             setup.rings.keys()
         ):  # ring_id are the atom indices in each ring
             size = len(ring_id)
-            if setup.rings[ring_id].is_aromatic:
-                rigid_rings.append(ring_id)
-            elif size < self._min_ring_size:
+            if size < self._min_ring_size:
                 rigid_rings.append(ring_id)
                 # do not add rings > _max_ring_size to rigid_rings
                 # because bonds in rigid rings will not be breakable
@@ -117,6 +120,8 @@ class FlexMacrocycle:
         bond = Bond.get_bond_id(bond[0], bond[1])
         if not self.setup.bond_info[bond].rotatable:
             return -1
+        if self.untyped:
+            return 100
         atom_idx1, atom_idx2 = bond
         for i in (atom_idx1, atom_idx2):
             atype = self.setup.get_atom_type(i)
@@ -329,7 +334,7 @@ class FlexMacrocycle:
         return broken_rings
 
     def show_macrocycle_scores(self, setup):
-        print("Warning: not showing macrocycle scores, check implementation.")
+        warnings.warn("Not showing macrocycle scores, check implementation.", RuntimeWarning)
         return
         if setup is not None:
             print("\n==============[ MACROCYCLE SCORES ]================")

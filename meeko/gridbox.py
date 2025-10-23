@@ -1,4 +1,4 @@
-from os import linesep as eol
+eol="\n"
 import pathlib
 import numpy as np
 

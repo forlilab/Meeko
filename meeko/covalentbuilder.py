@@ -1,9 +1,11 @@
 from collections import namedtuple
+import logging
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdGeometry
 import prody
 import warnings
 
+logger = logging.getLogger(__name__)
 
 from collections import defaultdict
 def nested_dict():
@@ -76,10 +78,10 @@ class CovalentBuilder(object):
             sel_string.append("resnum %s" % res_num)
         sel_string.append("(name %s or name %s)" % (atname1, atname2))
         sel_string = " and ".join(sel_string)
-        print("CovalentBuilder> searching for residue:",sel_string)
+        logger.info("CovalentBuilder> searching for residue: %s" % sel_string)
         found = self.rec.select( sel_string )
         if found is None:
-            print("ERROR: no residue found with the following specification: chain[%s] residue[%s] number[%s] atom names [%s,%s]"% (
+            logger.error("ERROR: no residue found with the following specification: chain[%s] residue[%s] number[%s] atom names [%s,%s]"% (
                 chid, res_type, res_num, atname1, atname2))
             raise ValueError
         return (found, atname1, atname2)
@@ -109,7 +111,7 @@ class CovalentBuilder(object):
             if None in self.residues[res_id]:
                 c,r,n = res_id
                 f = [ x['atname'] if not x is None else "None" for x in  self.residues[res_id]]
-                print("WARNING: one or more atoms are missing in residue %s:%s%d (requested: %s,%s | found: %s,%s)" % (c,r,n,at1,at2, f[0], f[1]) )
+                warnings.warn("One or more atoms are missing in residue %s:%s%d (requested: %s,%s | found: %s,%s)" % (c,r,n,at1,at2, f[0], f[1]), RuntimeWarning)
                 if not allow_missing:
                     raise ValueError
                 del self.residues[res_id]
@@ -150,7 +152,7 @@ class CovalentBuilder(object):
         found = mol.GetSubstructMatches(patt)
         #print("CovalentBuilder> ligand patterns found: ", found, "[ use only first: %s ]" % first_only)
         if len(found)>1 and first_only:
-            print("WARNING: the specified ligand pattern returned more than one match: [%d] (potential ambiguity?)" % len(found))
+            warnings.warn("The specified ligand pattern returned more than one match: [%d] (potential ambiguity?)" % len(found), RuntimeWarning)
         for f in found:
             #print("CovalentBuilder> processing:", f, "with ", smarts_indices)
             indices.append([f[x] for x in smarts_indices])

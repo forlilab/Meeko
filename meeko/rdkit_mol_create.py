@@ -8,6 +8,7 @@
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
+from meeko.utils.rdkitutils import set_h_isotope_atom_coords
 from io import StringIO
 import json
 
@@ -321,17 +322,19 @@ class RDKitMolCreate:
             x, y, z = [float(coord) for coord in ligand_coordinates[pdbqt_index]]
             conf.SetAtomPosition(mol_index, Point3D(x, y, z))
             coord_is_set[mol_index] = True
-        mol.AddConformer(conf, assignId=True)
+
         # some hydrogens (isotopes) may have no coordinate set yet
+        h_isotope_pos_assignment = set_h_isotope_atom_coords(mol, conf = conf)
+        if h_isotope_pos_assignment:
+            for idx in h_isotope_pos_assignment: 
+                conf.SetAtomPosition(idx, h_isotope_pos_assignment[idx])
+                coord_is_set[idx] = True
+        mol.AddConformer(conf, assignId=True)
+        
         for i, is_set in enumerate(coord_is_set):
             if not is_set:
-                atom = mol.GetAtomWithIdx(i)
-                if atom.GetAtomicNum() != 1:
-                    raise RuntimeError("Only H allowed to be in SMILES but not in PDBQT")
-                neigh = atom.GetNeighbors()
-                if len(neigh) != 1:
-                    raise RuntimeError("Expected H to have one neighbor")
-                AllChem.SetTerminalAtomCoords(mol, i, neigh[0].GetIdx())
+                raise RuntimeError(f"Unable to set position for atom # {i} from docked pose in the created RDKit mol. ")
+
         return mol
     
     

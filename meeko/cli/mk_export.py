@@ -7,7 +7,7 @@ import argparse
 import gzip
 import pathlib
 import sys
-from os import linesep as eol
+eol="\n"
 import warnings
 import copy
 import numpy as np

@@ -163,3 +163,23 @@ def test_offsite_charges():
     smiles = Chem.MolToSmiles(rdkit_mols[0])
     assert type(smiles) == str
     assert len(smiles) > 0
+
+def test_chiral_deutorated():
+    def export_wrapper(mk_prep, mol):
+        molsetup = mk_prep(mol)[0]
+        pdbqt_str, is_ok, err = PDBQTWriterLegacy.write_string(molsetup)
+        assert is_ok
+        pdbqt_mol = PDBQTMolecule(pdbqt_str, skip_typing=True)
+        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol)
+        return mol_list[0]  # not multi-mol or flexrex
+    mk_prep = MoleculePreparation()
+    l_gly_fn = str(datadir / "chiral_deutorated_L_gly.sdf")
+    d_gly_fn = str(datadir / "chiral_deutorated_D_gly.sdf")
+    l_gly = next(Chem.SDMolSupplier(l_gly_fn, removeHs=False))
+    d_gly = next(Chem.SDMolSupplier(d_gly_fn, removeHs=False))
+    l_gly_exported = export_wrapper(mk_prep, l_gly)
+    d_gly_exported = export_wrapper(mk_prep, d_gly)
+    Chem.AssignStereochemistryFrom3D(l_gly_exported)
+    Chem.AssignStereochemistryFrom3D(d_gly_exported)
+    assert Chem.MolToSmiles(l_gly_exported) == Chem.MolToSmiles(l_gly)
+    assert Chem.MolToSmiles(d_gly_exported) == Chem.MolToSmiles(d_gly)

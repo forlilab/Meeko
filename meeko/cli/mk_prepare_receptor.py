@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 import argparse
+import logging
 import json
 import math
-from os import linesep as eol
+eol="\n"
 import pathlib
 import sys
 
@@ -17,11 +18,11 @@ from meeko import MoleculeSetup
 from meeko import ResidueChemTemplates
 from meeko import PDBQTWriterLegacy
 from meeko import Polymer
-from meeko import PolymerEncoder
 from meeko import PolymerCreationError
 from meeko import reactive_typer
 from meeko import get_reactive_config
 from meeko import gridbox
+from meeko import pdbutils
 from meeko import __file__ as pkg_init_path
 from rdkit import Chem
 
@@ -36,6 +37,25 @@ else:
 
 path_to_this_script = pathlib.Path(__file__).resolve()
 
+
+def sdf_to_json(sdf_path: str, resname: str) -> dict:
+    """Convert an SDF file into a residue template JSON."""
+
+    mol = Chem.SDMolSupplier(sdf_path, removeHs=False)[0]
+    mol = Chem.AddHs(mol)  # ensure explicit Hs
+    smiles = Chem.MolToSmiles(mol)
+    atom_names = [str(i) for i in range(mol.GetNumAtoms())]
+
+    return {
+        "ambiguous": {resname: [resname]},
+        "residue_templates": {
+            resname: {
+                "smiles": smiles,
+                "atom_name": atom_names,
+                "link_labels": {}
+            }
+        }
+    }
 
 def parse_cmdline_res(string):
     """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
@@ -117,6 +137,11 @@ def get_args():
         metavar="PDB_FILENAME",
         help="reads PDB, not PDBQT, and does not use ProDy",
     )
+    io_group.add_argument(
+        "--read_pqr",
+        metavar="PQR_FILENAME",
+        help="reads PQR and does not use ProDy",
+    )
     need_prody_msg = ""
     # if prody is not installed, the help message is extended to tell
     # the user how to install prody
@@ -164,13 +189,27 @@ def get_args():
         help="config file for Vina with box dimensions (filename defaults to --output_basename when not specified_",
         nargs="*",
         action=required_length(0, 1))
-
+    io_group.add_argument(
+        "--debug_fn",
+        help="log debug level to filename",
+    )
 
     config_group = parser.add_argument_group("Receptor perception")
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
     config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
-    config_group.add_argument("--add_templates", help="[.json]", metavar="JSON_FILENAME", nargs="+", default=[])
+    config_group.add_argument("--add_templates", help="Additional residue templates. Can be a JSON file path or 'resname:file.sdf'.", action="append", default=[])
+    config_group.add_argument("--cache_templates", 
+                              help=(
+                                  "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
+                                  "(optionally) a provided JSON filename. " 
+                                  "Default cache filename is: $HOME/.meeko_residue_chem_templates_cached.json) "
+                                  "When the caching is ON, the templates for polymer construction will be read from "
+                                  "the specified cache file and updates may be made to the same file in a cumulative manner. " 
+                              ), 
+                              nargs = "?", 
+                              default=False,
+    )
     config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
         "-a", "--allow_bad_res",
@@ -186,9 +225,22 @@ def get_args():
         default=[],
         help='specify the flexible residues by the chain ID and residue number, e.g. -f ":42,B:23" is equivalent to -f ":42" -f "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
     )
+    config_group.add_argument(
+        "-t",
+        "--rot_terminal_group",
+        action="append",
+        default=[],
+        help='specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
+    )
+    
+    config_group.add_argument(
+        "--charge_model",
+        choices=("gasteiger", "espaloma", "zero", "read"),
+        help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
+        default=None,
+    )
 
     box_group = parser.add_argument_group("Size and center of grid box")
-
     box_group.add_argument(
         "--box_size", help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float,
         metavar=("X", "Y", "Z"),
@@ -261,17 +313,35 @@ def get_args():
         help="r_eq scaling for 1-4 interaction across reactive atoms",
     )
     args = parser.parse_args()
+
+    if args.debug_fn:
+        logger = logging.getLogger()
+        logger.setLevel("DEBUG")
+        formatter = logging.Formatter("%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s [%(name)s@%(filename)s:%(lineno)d]", datefmt='%Y-%m-%d %H:%M:%S')
+        handler = logging.FileHandler(args.debug_fn)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.debug("Starting to log")
     
-    if args.read_pdb is None and args.read_with_prody is None:
+    num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)])
+
+    if num_input_flags == 0:
         parser.print_help()
-        msg = "Need input filename: use either -i/--read_with_prody or --read_pdb"
+        msg = "Need input filename: use either -i/--read_with_prody, --read_pdb or --read_pqr"
         print(eol + msg)
         sys.exit(2)
 
-    if args.read_pdb is not None and args.read_with_prody is not None:
-        msg = "Can't use both -i/--read_with_prody and --read_pdb"
+    if num_input_flags > 1:
+        msg = "Can't use more than one at a time from -i/--read_with_prody, --read_pdb and --read_pqr"
         print(eol + msg, file=sys.stderr)
         sys.exit(2)
+
+    if args.cache_templates is not False:
+        if args.cache_templates is None:
+            print(f"--cache_templates is turned on, but a name is not provided. The default filename ($HOME/.meeko_residue_chem_templates_cached.json) will be used. ", 
+                file=sys.stderr)
+            default_cache_fn = ".meeko_residue_chem_templates_cached.json"
+            args.cache_templates = str(pathlib.Path.home() / default_cache_fn)
 
     if args.write_gpf is not None and args.write_pdbqt is None:
         # there's a few of places that assume this condition has been checked
@@ -451,6 +521,13 @@ def main():
         for res_id in parse_cmdline_res(string):
             if res_id not in reactive_flexres:
                 nonreactive_flexres.add(res_id)
+
+    # Process residue ID of residues with rotatable terminal group
+    rot_term_res = set()
+    for string in args.rot_terminal_group:
+        for res_id in parse_cmdline_res(string):
+            if res_id not in reactive_flexres and res_id not in nonreactive_flexres:
+                rot_term_res.add(res_id)
     
     
     set_template = {}
@@ -468,17 +545,55 @@ def main():
     if args.delete_residues is not None:
         delete_residues = parse_cmdline_res(args.delete_residues)
     
+    # read mk_config if provided
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
-        mk_prep = MoleculePreparation.from_config(mk_config)
     else:
-        mk_prep = MoleculePreparation()
+        mk_config = {}
+    
+    # update config by inputs from arguments
+    if args.charge_model is not None: 
+        mk_config["charge_model"] = args.charge_model
+    if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
+        if args.read_pqr is None:
+            print("Error: --charge_model read requires --read_pqr")
+            sys.exit(2)
+        mk_config["charge_atom_prop"] = "PQRCharge"
+
+    # initialize MoleculePreparation with config
+    mk_prep = MoleculePreparation.from_config(mk_config)
     
     # load templates for mapping
-    templates = ResidueChemTemplates.create_from_defaults()
-    for fn in args.add_templates:
-        templates.add_json_file(fn)
+    if args.cache_templates:
+        cache_file = args.cache_templates
+
+        try:
+            with open(cache_file, "r") as f:
+                json_str = f.read()
+            templates = ResidueChemTemplates.from_json(json_str)
+        except FileNotFoundError:
+            print(f"WARNING: specified cache file for residue chem templates not found. " + eol +
+                  f"The initial templates will be default, and a new cache will be created at {cache_file}. ", 
+                  file=sys.stderr, 
+                  )
+            templates = ResidueChemTemplates.create_from_defaults()
+        except Exception as e:
+            print(f"An error occurred with --cache_templates: {e}")
+            sys.exit(1)
+    else: 
+        templates = ResidueChemTemplates.create_from_defaults()
+
+    for item in args.add_templates:
+        if item.endswith(".json"):
+            templates.add_json_file(item)
+        elif ":" in item: #expect format resname:sdf
+            resname, sdf_file = item.split(":", 1)
+            template_json = sdf_to_json(sdf_file, resname)
+            templates.add_dict(template_json)
+        else:
+            print("--add_templates must be either a JSON file or resname:file.sdf")
+            sys.exit(2)
     
     # create polymers
     if args.read_with_prody is not None:
@@ -506,7 +621,7 @@ def main():
             except PolymerCreationError as e:
                 print(e)
                 sys.exit(1)
-    else:
+    elif args.read_pdb is not None:
         with open(args.read_pdb) as f:
             pdb_string = f.read()
         try:
@@ -524,7 +639,39 @@ def main():
         except PolymerCreationError as e:
             print(e)
             sys.exit(1)
+    else: # args.read_pqr is not None
+        with open(args.read_pqr) as f:
+            pdb_string = f.read()
+        try:
+            print("Reading a PQR file. The following options or configurations will be ignored: ")
+            print("  - default_altloc")
+            print("  - wanted_altloc")
+
+            if mk_prep.charge_model!="read":
+                print(f"Only reading structures from PQR. ")
+                print(f"Charge model of choice: {mk_prep.charge_model}")
+            else:
+                print("Reading structures and partial charges from PQR. ") 
+            
+            polymer = Polymer.from_pqr_string(
+                pdb_string,
+                templates,  # residue_templates, padders, ambiguous,
+                mk_prep,
+                set_template,
+                delete_residues,
+                args.allow_bad_res,
+                blunt_ends=blunt_ends,
+            )
+        except PolymerCreationError as e:
+            print(e)
+            sys.exit(1)
     
+    
+    # Update residue chem template cache
+    if args.cache_templates: 
+        updated_templates_json_strs = templates.to_json()
+        with open(cache_file, 'w') as f:
+            f.write(updated_templates_json_strs)
     
     # Use residue name in the input structure file to find reactive atom name
     # According to the mapping of residue name and reactive atom name
@@ -541,9 +688,36 @@ def main():
                 print("no default reactive name for %s, " % input_resname)
                 print("use --reactive_name or --reactive_name_specific" + eol)
                 sys.exit(2)
+
+    # Use residue name in input file to confirm
+    # requested rotatable terminal group residues are eligible
+    rotatable_termgrp_residues_allowed = [
+        "SER",
+        "LYS",
+        "TYR",
+        "CYS",
+        "HIS",
+        "HIE",
+        "HID",
+        "HIP",
+        "ASN",
+        "GLN",
+        "THR",
+        "MET",
+    ]
+    for res_id in rot_term_res:
+        if res_id not in polymer.monomers:
+            print("resid %s not found in input receptor file" % res_id)
+            sys.exit(2)
+        input_resname = polymer.monomers[res_id].input_resname
+        if input_resname not in rotatable_termgrp_residues_allowed:
+            print(f"{input_resname} (resid {res_id}) is not a valid residue for use with --rot_terminal_group."+ eol)
+            print("Available residues are: ")
+            print(", ".join(rotatable_termgrp_residues_allowed))
+            sys.exit(2)
     
     # Print nonreactive and reactive flexible residues specs
-    if len(nonreactive_flexres) + len(reactive_flexres) > 0:
+    if len(nonreactive_flexres) + len(reactive_flexres) + len(rot_term_res) > 0:
         print()
         print("Flexible residues:")
         print("chain resnum is_reactive reactive_atom")
@@ -554,6 +728,12 @@ def main():
                 chain, resnum = res_id.split(":")
                 react_atom = ""
                 print(string % (chain, resnum, False, react_atom))
+
+        if len(rot_term_res) > 0:
+            for res_id in rot_term_res:
+                chain, resnum = res_id.split(":")
+                react_atom = ""
+                print(string % (chain, resnum, False, react_atom), "(rotatable terminal group)")
     
         if len(reactive_flexres) > 0:
             for res_id in reactive_flexres_name:
@@ -590,6 +770,16 @@ def main():
     
     for res_id in all_flexres:
         polymer.flexibilize_sidechain(res_id, mk_prep)
+
+    # add rotatable terminal groups
+    mk_prep_rigid_nonTerm = MoleculePreparation(
+        rigidify_bonds_smarts=["[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"],
+        rigidify_bonds_indices=[(0, 1)],
+    )
+
+    for res_id in rot_term_res:
+        polymer.monomers[res_id].parameterize(mk_prep_rigid_nonTerm, res_id)
+        polymer.flexibilize_sidechain(res_id, mk_prep_rigid_nonTerm)
     
     
     any_lig_base_types = [
@@ -604,9 +794,7 @@ def main():
         "SA",
         "S",
         "Cl",
-        "CL",
         "Br",
-        "BR",
         "I",
         "Si",
         "B",
@@ -623,16 +811,19 @@ def main():
         else:  # args.write_json is empty list (was used without arg)
             fn = str(outpath) + ".json"
         with open(fn, "w") as f:
-            json.dump(polymer, f, cls=PolymerEncoder)
+            f.write(polymer.to_json())
         written_files_log["filename"].append(fn)
         written_files_log["description"].append("parameterized receptor")
     
     if args.write_pdb is not None:
-        fn = args.write_pdb[0]
+        if args.write_pdb:
+            fn = args.write_pdb[0]
+        else:  
+            raise ValueError("--write_pdb requires a filename")
         with open(fn, "w") as f:
             f.write(polymer.to_pdb())
         written_files_log["filename"].append(fn)
-        written_files_log["description"].append("receptor")
+        written_files_log["description"].append("processed receptor PDB")
     
     if args.write_pdbqt is not None:
         if args.write_pdbqt:
@@ -647,12 +838,11 @@ def main():
         pdbqt_tuple = PDBQTWriterLegacy.write_from_polymer(polymer)
         rigid_pdbqt, flex_pdbqt_dict = pdbqt_tuple
     
-        if len(all_flexres) == 0:
+        if len(all_flexres) + len(rot_term_res) == 0:
             box_center = args.box_center
             rigid_fn = fn_base + ".pdbqt"
             flex_fn = None
         else:
-            print(f"{reactive_flexres=}")
             all_flex_pdbqt = ""
             reactive_flexres_count = 0
             for res_id, flexres_pdbqt in flex_pdbqt_dict.items():
@@ -661,10 +851,11 @@ def main():
             rigid_fn = fn_base + "_rigid.pdbqt"
             flex_fn = fn_base + "_flex.pdbqt"
         
-            written_files_log["filename"].append(flex_fn)
-            written_files_log["description"].append("flexible receptor input file")
-            with open(flex_fn, "w") as f:
-                f.write(all_flex_pdbqt)
+            if all_flex_pdbqt:
+                written_files_log["filename"].append(flex_fn)
+                written_files_log["description"].append("flexible receptor input file")
+                with open(flex_fn, "w") as f:
+                    f.write(all_flex_pdbqt)
         
         written_files_log["filename"].append(rigid_fn)
         written_files_log["description"].append("static (i.e., rigid) receptor input file")
@@ -730,7 +921,7 @@ def main():
         elif args.box_enveloping is not None:
             ft = pathlib.Path(args.box_enveloping).suffix
             suppliers = {
-                ".pdb": Chem.MolFromPDBFile,
+                ".pdb": None,  # overriden below, needed here as valid type
                 ".mol": Chem.MolFromMolFile,
                 ".mol2": Chem.MolFromMol2File,
                 ".sdf": Chem.SDMolSupplier,
@@ -741,6 +932,9 @@ def main():
                     success=False,
                     error_msg=f"Given --box_enveloping file type {ft} not readable!"
                 )
+            elif ft == ".pdb":
+                pdbstr = pdbutils.strip_altloc_from_pdb_file(args.box_enveloping)
+                ligmol = Chem.MolFromPDBBlock(pdbstr, removeHs=False, sanitize=False)
             elif ft != ".sdf" and ft != ".pdbqt":
                 ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)
             elif ft == ".sdf":

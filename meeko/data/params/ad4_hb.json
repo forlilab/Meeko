@@ -1,4 +1,5 @@
 {"ad4_hb": [
+    {               "ad4_hb_hydrogen": false, "smarts": "[*]"},
     {               "ad4_hb_hydrogen": true, "smarts": "[#1][#7,#8,#9,#15,#16]"},
     {"ad4_hb_rij": 1.9, "ad4_hb_epsij": 5.0, "smarts": "[#8]"},
     {"ad4_hb_rij": 1.9, "ad4_hb_epsij": 5.0, "smarts": "[#7;!+1;!+2;!$([#7X3v3][a]);!$([#7X3v3][#6X3v4])]"},

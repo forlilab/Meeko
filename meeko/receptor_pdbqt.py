@@ -6,7 +6,7 @@
 
 from collections import defaultdict
 import json
-from os import linesep as eol
+eol="\n"
 
 import numpy as np
 from scipy import spatial

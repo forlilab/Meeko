@@ -41,16 +41,25 @@ From conda-forge
 
     micromamba install meeko
 
+Other tools like ``mamba`` or ``conda`` can also be used. Note that ``conda``
+is significantly slower.
+
 
 From PyPI
-------------------------
+---------
 
 .. code-block:: bash
 
     pip install meeko
 
-If using micromamba or a similar package manager, ``pip`` installs the package
-in the active environment.
+If using ``micromamba`` or a similar package manager, ``pip`` installs the
+package in the active environment. The following dependencies required:
+``python``, ``numpy``, ``scipy``, ``gemmi``, and ``rdkit``.
+
+Installing with ``pip`` does not check for missing dependencies or attempt to
+resolve conflicts between versions. That information is included on the
+conda-forge recipe and used by a package manager like
+``mamba`` or ``micromamba``.
 
 
 From source
