@@ -1520,6 +1520,38 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         }
         rdkit_molsetup.rmsd_symmetry_indices = list(map(string_to_tuple, obj["rmsd_symmetry_indices"]))
         return rdkit_molsetup
+
+    def to_rdkit(self):
+        mol = Chem.Mol(self.mol)
+        json_str = self.to_json()  # self.mol is contained herein
+        d = json.loads(json_str)
+        json_str = json.dumps(d, indent=2)  # makes lines shorter
+        mol.SetProp("MeekoRDKitMoleculeSetup", json_str)
+        return mol
+
+    @classmethod
+    def from_rdkit(cls, rdkit_mol):
+        if not rdkit_mol.HasProp("MeekoRDKitMoleculeSetup"):
+            raise ValueError("missing property MeekoRDKitMoleculeSetup")
+        json_str = rdkit_mol.GetProp("MeekoRDKitMoleculeSetup")
+        molsetup = cls.from_json(json_str)
+        # let's check that the molecule inside the serialized molsetup
+        # matches the rdkit_mol that contains the serialized molsetup
+        p = Chem.SmilesWriteParams()
+        p.doIsomericSmiles = False
+        inner_smiles = Chem.MolToSmiles(molsetup.mol)
+        outer_smiles = Chem.MolToSmiles(rdkit_mol)
+        # maybe rdkit_mol had H stripped
+        inner_smiles_noH = Chem.MolToSmiles(Chem.RemoveHs(molsetup.mol))
+        if inner_smiles != outer_smiles and inner_smiles_noH != outer_smiles:
+            inner_name = None  
+            outer_name = None
+            if molsetup.mol.HasProp("_Name"):
+                inner_name = molsetup.mol.GetProp("_Name")
+            if rdkit_mol.HasProp("_Name"):
+                outer_name = rdkit_mol.GetProp("_Name")
+            raise ValueError(f"mol inside molsetup inside mol differ {inner_name=} {outer_name=} {inner_smiles=} {outer_smiles=} {inner_smiles_noH=}")
+        return molsetup
     # endregion
 
     def copy(self):

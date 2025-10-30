@@ -4,6 +4,8 @@ import meeko
 import numpy
 import pathlib
 import pytest
+from io import StringIO
+from io import BytesIO
 
 from meeko import (
     Monomer,
@@ -362,6 +364,24 @@ def test_broken_bond():
     assert count_rotatable == 9
     assert count_breakable == 1
 
+
+def test_rdkit_with_serialized_molsetup_as_prop():
+    fn = str(pkgdir / "test" / "macrocycle_data" / "lorlatinib.mol")
+    mol = Chem.MolFromMolFile(fn, removeHs=False)
+    original_molsetup = mk_prep(mol)[0]
+    mol_with_molsetup = original_molsetup.to_rdkit()
+    f = StringIO() 
+    w = Chem.SDWriter(f)
+    w.write(mol_with_molsetup)
+    w.close()
+    f.seek(0)
+    b = BytesIO(f.read().encode())
+    mol_from_sdf = next(Chem.ForwardSDMolSupplier(b))
+    print(Chem.MolToSmiles(mol_from_sdf))
+    molsetup_from_sdf = RDKitMoleculeSetup.from_rdkit(mol_from_sdf)
+    print(Chem.MolToSmiles(molsetup_from_sdf.mol))
+    check_molsetup_equality(original_molsetup, molsetup_from_sdf)
+    return
 # endregion
 
 
