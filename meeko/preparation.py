@@ -162,7 +162,7 @@ class MoleculePreparation:
             raise NotImplementedError("load_offatom_params not implemented")
         self.load_offatom_params = load_offatom_params
 
-        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read"]
+        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl"]
         if charge_model not in allowed_charge_models:
             raise ValueError(
                 "unrecognized charge_model: %s, allowed options are: %s"
@@ -538,7 +538,7 @@ class MoleculePreparation:
             mol,
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings,
-            compute_gasteiger_charges=self.charge_model == "gasteiger",
+            charge_model= self.charge_model,
             read_charges_from_prop=self.charge_atom_prop,
             conformer_id=conformer_id,
         )
@@ -569,7 +569,7 @@ class MoleculePreparation:
                 self.espaloma_model.set_espaloma_charges(setup, molgraph)
             else:
                 setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
-
+        
 
         # merge hydrogens (or any terminal atoms)
         indices = set()

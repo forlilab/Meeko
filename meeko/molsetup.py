@@ -21,6 +21,8 @@ import rdkit.Chem
 from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
 
+from openff.toolkit import Molecule
+
 from .utils.jsonutils import rdkit_mol_from_json, tuple_to_string, string_to_tuple
 from .utils.jsonutils import convert_to_tuple_keyed_dict
 from .utils.jsonutils import convert_to_int_keyed_dict
@@ -1544,7 +1546,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         mol: Chem.Mol,
         keep_chorded_rings: bool = False,
         keep_equivalent_rings: bool = False,
-        compute_gasteiger_charges: bool = True,
+        charge_model: str = "gasteiger",
         read_charges_from_prop: str = None,
         conformer_id: int = -1,
     ):
@@ -1600,7 +1602,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
-        molsetup.init_atom(compute_gasteiger_charges, read_charges_from_prop, coords)
+        molsetup.init_atom(charge_model, read_charges_from_prop, coords)
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         # molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
@@ -1615,7 +1617,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         return molsetup
 
-    def init_atom(self, compute_gasteiger_charges: bool, read_charges_from_prop: str, coords: list[np.ndarray]):
+    def init_atom(self, charge_model: str, read_charges_from_prop: str, coords: list[np.ndarray]):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
 
@@ -1631,12 +1633,32 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         None
         """
         # extract/generate charges
-        if compute_gasteiger_charges: 
+        if charge_model == "gasteiger": 
             if read_charges_from_prop is not None: 
-                raise ValueError(
-                    "Conflicting options: compute_gasteiger_charges and read_charges_from_prop cannot both be set. "
-                )
-            charges = rdkitutils.compute_gasteiger_charges(self.mol)
+                raise ValueError("Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set.")
+            
+            try:
+                charges = rdkitutils.compute_gasteiger_charges(self.mol)
+            except Exception as e:
+                print("gasteiger charge computation failed with: ")
+                print(e)
+        elif charge_model == "nagl":
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set.")
+            
+            # compute nagl charges
+            # note this requires the latest openff versions
+            mol_off = Molecule.from_rdkit(self.mol)
+            try:
+                mol_off.assign_partial_charges(
+                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt",
+                    )
+                charges = mol_off.partial_charges.magnitude
+            except Exception as e:
+                print("NAGL charge computation failed with with exception:")
+                print(e)
+                print("Make sure you've installed the latest version of openff")
+
         elif read_charges_from_prop is not None: 
             if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
                 raise ValueError(
@@ -1656,6 +1678,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 )  
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
+
+
+
         # register atom
         for a in self.mol.GetAtoms():
             idx = a.GetIdx()
