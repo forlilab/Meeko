@@ -21,8 +21,6 @@ import rdkit.Chem
 from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
 
-from openff.toolkit import Molecule
-
 from .utils.jsonutils import rdkit_mol_from_json, tuple_to_string, string_to_tuple
 from .utils.jsonutils import convert_to_tuple_keyed_dict
 from .utils.jsonutils import convert_to_int_keyed_dict
@@ -1642,12 +1640,19 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             except Exception as e:
                 print("gasteiger charge computation failed with: ")
                 print(e)
+        
         elif charge_model == "nagl":
             if read_charges_from_prop is not None: 
                 raise ValueError("Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set.")
             
             # compute nagl charges
             # note this requires the latest openff versions
+            try:
+                from openff.toolkit import Molecule
+            except ImportError:
+                print("A recent version of OpenFF is required for NAGL charges")
+
+            
             mol_off = Molecule.from_rdkit(self.mol)
             try:
                 mol_off.assign_partial_charges(
