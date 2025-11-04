@@ -212,10 +212,14 @@ def get_args():
     )
     config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
-        "-a", "--allow_bad_res",
+        "-x", "--delete_bad_res",
         action="store_true",
-        help="delete residues with missing atoms instead of raising error",
+        help="delete residues that don't match templates instead of raising error",
     )
+
+    # keep -a/--allow_bad_res for backwards compatibility, superseeded by -x/--delete_bad_res
+    config_group.add_argument("-a", "--allow_bad_res", action="store_true", help=argparse.SUPPRESS)
+
     config_group.add_argument("--default_altloc", help="default alternate location (overridden by --wanted_altloc)")
     config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
     config_group.add_argument(
@@ -408,7 +412,8 @@ def get_args():
 
 def main():
     args = get_args()
-    
+    delete_bad_res = args.allow_bad_res or args.delete_bad_res
+
     if args.wanted_altloc is None:
         wanted_altloc = None
     else:
@@ -613,7 +618,7 @@ def main():
                     mk_prep,
                     set_template,
                     delete_residues,
-                    args.allow_bad_res,
+                    delete_bad_res,
                     blunt_ends=blunt_ends,
                     wanted_altloc=wanted_altloc,
                     default_altloc=args.default_altloc,
@@ -631,7 +636,7 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
-                args.allow_bad_res,
+                delete_bad_res,
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
@@ -659,7 +664,7 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
-                args.allow_bad_res,
+                delete_bad_res,
                 blunt_ends=blunt_ends,
             )
         except PolymerCreationError as e:
