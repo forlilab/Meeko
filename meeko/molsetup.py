@@ -1191,8 +1191,6 @@ class MoleculeSetup(BaseJSONParsable):
         -------
         None
         """
-        volume = lambda r: np.pi * 4.0 * r**3 / 3.0 
-        radius = lambda v: np.cbrt(3.0 * v / (4.0 * np.pi))
         if merge_rmin_half and "rmin_half" not in self.atom_params:
             raise ValueError("can't merge rmin_half because it's not in atom_params")
         for index in indices:
@@ -1209,7 +1207,7 @@ class MoleculeSetup(BaseJSONParsable):
                 continue
             r_neigh = self.atom_params["rmin_half"][neighbor_index]
             r_source = self.atom_params["rmin_half"][index]
-            new_r = radius(volume(r_neigh) + volume(r_source))
+            new_r = np.cbrt(r_neigh**3 + r_source**3)
             self.atom_params["rmin_half"][neighbor_index] = new_r
             self.atom_params["rmin_half"][index] = 0.0
         return
