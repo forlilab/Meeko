@@ -11,13 +11,11 @@ from dataclasses import asdict, dataclass, field
 import json
 eol="\n"
 import logging
-import sys
 import warnings
 from typing import Union
 from typing import Optional, Any
 
 import numpy as np
-import rdkit.Chem
 from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
 
@@ -1177,7 +1175,7 @@ class MoleculeSetup(BaseJSONParsable):
 
     # endregion
 
-    def merge_terminal_atoms(self, indices) -> None:
+    def merge_terminal_atoms(self, indices, merge_rmin_half=False) -> None:
         """
         Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
         other atom.
@@ -1186,11 +1184,15 @@ class MoleculeSetup(BaseJSONParsable):
         ----------
         indices: list
             A list of indices to merge
+        merge_rmin_half: bool
+            Defaults to false because everything currently defaults to AD4 scoring, and those radii are already united atom.
 
         Returns
         -------
         None
         """
+        if merge_rmin_half and "rmin_half" not in self.atom_params:
+            raise ValueError("can't merge rmin_half because it's not in atom_params")
         for index in indices:
             if len(self.get_neighbors(index)) != 1:
                 msg = "Atempted to merge atom %d with %d neighbors. "
@@ -1201,6 +1203,13 @@ class MoleculeSetup(BaseJSONParsable):
             self.atoms[neighbor_index].charge += self.get_charge(index)
             self.atoms[index].charge = 0.0
             self.atoms[index].is_ignore = True
+            if not merge_rmin_half:
+                continue
+            r_neigh = self.atom_params["rmin_half"][neighbor_index]
+            r_source = self.atom_params["rmin_half"][index]
+            new_r = np.cbrt(r_neigh**3 + r_source**3)
+            self.atom_params["rmin_half"][neighbor_index] = new_r
+            self.atom_params["rmin_half"][index] = 0.0
         return
 
     # NOTE: This is a candidate for moving to utils
