@@ -1661,13 +1661,19 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             except ImportError:
                 print("A recent version of OpenFF is required for NAGL charges")
 
-            
-            mol_off = Molecule.from_rdkit(self.mol)
+            # assign stereochemistry
+            # ?test?
+            # Chem.AssignStereochemistryFrom3D(self.mol)
+
+            mol_off = Molecule.from_rdkit(self.mol, allow_undefined_stereo=True, hydrogens_are_explicit=True)
+
             try:
+
                 mol_off.assign_partial_charges(
-                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt",
+                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt"
                     )
-                charges = mol_off.partial_charges.magnitude
+
+                charges = mol_off.partial_charges.magnitude.tolist()
             except Exception as e:
                 print("NAGL charge computation failed with with exception:")
                 print(e)
