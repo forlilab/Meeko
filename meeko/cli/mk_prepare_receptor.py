@@ -1,30 +1,36 @@
 #!/usr/bin/env python
 
 import argparse
-import logging
 import json
+import logging
 import math
-eol="\n"
+
+eol = "\n"
 import pathlib
 import sys
 
 import numpy as np
-
-from meeko.reactive import atom_name_to_molsetup_index, assign_reactive_types_by_index
-from meeko import PDBQTMolecule
-from meeko import RDKitMolCreate
-from meeko import MoleculePreparation
-from meeko import MoleculeSetup
-from meeko import ResidueChemTemplates
-from meeko import PDBQTWriterLegacy
-from meeko import Polymer
-from meeko import PolymerCreationError
-from meeko import reactive_typer
-from meeko import get_reactive_config
-from meeko import gridbox
-from meeko import pdbutils
-from meeko import __file__ as pkg_init_path
 from rdkit import Chem
+
+from meeko import (
+    MoleculePreparation,
+    MoleculeSetup,
+    PDBQTMolecule,
+    PDBQTWriterLegacy,
+    Polymer,
+    PolymerCreationError,
+    RDKitMolCreate,
+    ResidueChemTemplates,
+    get_reactive_config,
+    gridbox,
+    pdbutils,
+    reactive_typer,
+)
+from meeko import __file__ as pkg_init_path
+from meeko.reactive import (
+    assign_reactive_types_by_index,
+    atom_name_to_molsetup_index,
+)
 
 try:
     import prody
@@ -52,10 +58,11 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
             resname: {
                 "smiles": smiles,
                 "atom_name": atom_names,
-                "link_labels": {}
+                "link_labels": {},
             }
-        }
+        },
     }
+
 
 def parse_cmdline_res(string):
     """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
@@ -80,7 +87,9 @@ def parse_cmdline_res_assign(string):
 
     output = {}
     nr_assignments = string.count("=")
-    string = "," + string  # enables `residues =` below to work in first iteraton
+    string = (
+        "," + string
+    )  # enables `residues =` below to work in first iteraton
     tmp = string.split("=")
     for i in range(nr_assignments):
         residues = tmp[i].split(",")[1:]
@@ -118,6 +127,7 @@ def check(success, error_msg):
         print("Error: " + error_msg, file=sys.stderr)
         sys.exit(2)
 
+
 def required_length(nmin, nmax):
     class RequiredLength(argparse.Action):
         def __call__(self, parser, namespace, values, option_string=None):
@@ -126,7 +136,9 @@ def required_length(nmin, nmax):
                 msg += " {nmin} and {nmax} arguments"
                 raise argparse.ArgumentTypeError(msg)
             setattr(namespace, self.dest, values)
+
     return RequiredLength
+
 
 def get_args():
     parser = TalkativeParser()
@@ -151,24 +163,28 @@ def get_args():
         "-i",
         "--read_with_prody",
         metavar="MACROMOL_FILENAME",
-        help=f"reads PDB/mmCIF file with Prody{need_prody_msg}")
+        help=f"reads PDB/mmCIF file with Prody{need_prody_msg}",
+    )
     io_group.add_argument(
         "-o",
         "--output_basename",
         help="default basename for --write options used without filename",
     )
     io_group.add_argument(
-        "-p", "--write_pdbqt",
+        "-p",
+        "--write_pdbqt",
         metavar="PDBQT_FILENAME",
         nargs="*",
         help="adds _rigid/_flex with flexible residues (filename defaults to --output_basename when not specified)",
     )
     io_group.add_argument(
-        "-j", "--write_json",
+        "-j",
+        "--write_json",
         metavar="JSON_FILENAME",
         help="parameterized receptor (filename defaults to --output_basename when not specified)",
         nargs="*",
-        action=required_length(0, 1))
+        action=required_length(0, 1),
+    )
 
     io_group.add_argument(
         "--write_pdb",
@@ -182,42 +198,66 @@ def get_args():
         metavar="GPF_FILENAME",
         help="autogrid input file (filename defaults to --output_basename when not specified)",
         nargs="*",
-        action=required_length(0, 1))
+        action=required_length(0, 1),
+    )
     io_group.add_argument(
-        "-v", "--write_vina_box",
+        "-v",
+        "--write_vina_box",
         metavar="VINA_BOX_FILENAME",
         help="config file for Vina with box dimensions (filename defaults to --output_basename when not specified_",
         nargs="*",
-        action=required_length(0, 1))
+        action=required_length(0, 1),
+    )
     io_group.add_argument(
         "--debug_fn",
         help="log debug level to filename",
     )
 
     config_group = parser.add_argument_group("Receptor perception")
-    config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
-    config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
-    config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
-    config_group.add_argument("--add_templates", help="Additional residue templates. Can be a JSON file path or 'resname:file.sdf'.", action="append", default=[])
-    config_group.add_argument("--cache_templates", 
-                              help=(
-                                  "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
-                                  "(optionally) a provided JSON filename. " 
-                                  "Default cache filename is: $HOME/.meeko_residue_chem_templates_cached.json) "
-                                  "When the caching is ON, the templates for polymer construction will be read from "
-                                  "the specified cache file and updates may be made to the same file in a cumulative manner. " 
-                              ), 
-                              nargs = "?", 
-                              default=False,
-    )
-    config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
-        "-a", "--allow_bad_res",
+        "-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID"
+    )
+    config_group.add_argument(
+        "-d", "--delete_residues", help="e.g. A:350,B:15,16,17"
+    )
+    config_group.add_argument(
+        "-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0"
+    )
+    config_group.add_argument(
+        "--add_templates",
+        help="Additional residue templates. Can be a JSON file path or 'resname:file.sdf'.",
+        action="append",
+        default=[],
+    )
+    config_group.add_argument(
+        "--cache_templates",
+        help=(
+            "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
+            "(optionally) a provided JSON filename. "
+            "Default cache filename is: $HOME/.meeko_residue_chem_templates_cached.json) "
+            "When the caching is ON, the templates for polymer construction will be read from "
+            "the specified cache file and updates may be made to the same file in a cumulative manner. "
+        ),
+        nargs="?",
+        default=False,
+    )
+    config_group.add_argument(
+        "--mk_config", help="[.json]", metavar="JSON_FILENAME"
+    )
+    config_group.add_argument(
+        "-a",
+        "--allow_bad_res",
         action="store_true",
         help="delete residues with missing atoms instead of raising error",
     )
-    config_group.add_argument("--default_altloc", help="default alternate location (overridden by --wanted_altloc)")
-    config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
+    config_group.add_argument(
+        "--default_altloc",
+        help="default alternate location (overridden by --wanted_altloc)",
+    )
+    config_group.add_argument(
+        "--wanted_altloc",
+        help="require altloc for specific residues, e.g. :5=B,B:17=A",
+    )
     config_group.add_argument(
         "-f",
         "--flexres",
@@ -232,7 +272,7 @@ def get_args():
         default=[],
         help='specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
     )
-    
+
     config_group.add_argument(
         "--charge_model",
         choices=("gasteiger", "espaloma", "zero", "read"),
@@ -242,8 +282,16 @@ def get_args():
 
     box_group = parser.add_argument_group("Size and center of grid box")
     box_group.add_argument(
-        "--box_size", help="size of grid box (x, y, z) in Angstrom", nargs=3, type=float,
+        "--box_size",
+        help="size of grid box (x, y, z) in Angstrom",
+        nargs=3,
+        type=float,
         metavar=("X", "Y", "Z"),
+    )
+    box_group.add_argument(
+        "--box_only",
+        action="store_true",
+        help="Write only box info (Vina config and .box.pdb) without a receptor. Use with (--box_center & --box_size) or (--box_enveloping & --padding). --write_gpf is not allowed.",
     )
     box_group.add_argument(
         "--box_center",
@@ -263,7 +311,9 @@ def get_args():
         help="Box will envelop atoms in this file [.sdf .mol .mol2 .pdb .pdbqt]",
     )
     box_group.add_argument(
-        "--padding", help="padding around atoms passed to --box_enveloping [A]", type=float
+        "--padding",
+        help="padding around atoms passed to --box_enveloping [A]",
+        type=float,
     )
 
     reactive_group = parser.add_argument_group("Reactive")
@@ -272,7 +322,7 @@ def get_args():
         "--reactive_flexres",
         action="append",
         default=[],
-        help='same as --flexres but for reactive residues (max 8)',
+        help="same as --flexres but for reactive residues (max 8)",
     )
     reactive_group.add_argument(
         "--reactive_name",
@@ -317,18 +367,31 @@ def get_args():
     if args.debug_fn:
         logger = logging.getLogger()
         logger.setLevel("DEBUG")
-        formatter = logging.Formatter("%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s [%(name)s@%(filename)s:%(lineno)d]", datefmt='%Y-%m-%d %H:%M:%S')
+        formatter = logging.Formatter(
+            "%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s [%(name)s@%(filename)s:%(lineno)d]",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
         handler = logging.FileHandler(args.debug_fn)
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.debug("Starting to log")
-    
-    num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)])
 
-    if num_input_flags == 0:
+    num_input_flags = sum(
+        [
+            flag is not None
+            for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)
+        ]
+    )
+
+    # Allow no receptor input only in box-only mode
+    if num_input_flags == 0 and not args.box_only:
         parser.print_help()
         msg = "Need input filename: use either -i/--read_with_prody, --read_pdb or --read_pqr"
         print(eol + msg)
+        sys.exit(2)
+    if args.box_only and num_input_flags > 0:
+        msg = "--box_only cannot be combined with receptor inputs (-i/--read_with_prody, --read_pdb, --read_pqr)"
+        print(eol + msg, file=sys.stderr)
         sys.exit(2)
 
     if num_input_flags > 1:
@@ -338,15 +401,17 @@ def get_args():
 
     if args.cache_templates is not False:
         if args.cache_templates is None:
-            print(f"--cache_templates is turned on, but a name is not provided. The default filename ($HOME/.meeko_residue_chem_templates_cached.json) will be used. ", 
-                file=sys.stderr)
+            print(
+                f"--cache_templates is turned on, but a name is not provided. The default filename ($HOME/.meeko_residue_chem_templates_cached.json) will be used. ",
+                file=sys.stderr,
+            )
             default_cache_fn = ".meeko_residue_chem_templates_cached.json"
             args.cache_templates = str(pathlib.Path.home() / default_cache_fn)
 
     if args.write_gpf is not None and args.write_pdbqt is None:
         # there's a few of places that assume this condition has been checked
         msg = "--write_gpf requires --write_pdbqt because autogrid expects"
-        msg += " the GPF file to point to the PDBQT file." 
+        msg += " the GPF file to point to the PDBQT file."
         print(eol + msg)
         sys.exit(2)
 
@@ -373,7 +438,10 @@ def get_args():
             [(args.box_size is not None), (args.padding is not None)]
         )
 
-        box_specs = [(nr_boxcenter_specs, "box center"), (nr_boxsize_specs, "box size")]
+        box_specs = [
+            (nr_boxcenter_specs, "box center"),
+            (nr_boxsize_specs, "box size"),
+        ]
 
         for spec_count, spec_type in box_specs:
             if spec_count > 1:
@@ -381,9 +449,7 @@ def get_args():
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
             elif spec_count < 1:
-                msg = (
-                    f"missing {spec_type} to write .gpf file for autogrid4. {box_help}"
-                )
+                msg = f"missing {spec_type} to write .gpf file for autogrid4. {box_help}"
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
 
@@ -408,7 +474,171 @@ def get_args():
 
 def main():
     args = get_args()
-    
+
+    # -------------------------------
+    # Early exit path: BOX-ONLY MODE
+    # -------------------------------
+    if args.box_only:
+        # Disallow GPF in box-only mode (needs receptor PDBQT linkage)
+        if args.write_gpf is not None:
+            print(
+                "Command line error: --box_only cannot be used with --write_gpf",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+        # Must have some way to derive filenames
+        if args.write_vina_box is None and args.output_basename is None:
+            print(
+                "Command line error: --box_only requires either -v/--write_vina_box or -o/--output_basename",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+        # Validate box specs (center+size) OR (enveloping+padding)
+        nr_boxcenter_specs = sum(
+            [
+                (args.box_center is not None),
+                (
+                    args.box_center_off_reactive_res
+                ),  # not supported here, will be rejected below
+                (args.box_enveloping is not None),
+            ]
+        )
+        nr_boxsize_specs = sum(
+            [
+                (args.box_size is not None),
+                (args.padding is not None),
+            ]
+        )
+
+        if args.box_center_off_reactive_res:
+            print(
+                "Command line error: --box_center_off_reactive_res requires a receptor and is not allowed with --box_only",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+        # Ensure exactly one center spec and one size spec
+        if nr_boxcenter_specs != 1 or nr_boxsize_specs != 1:
+            box_help = """
+    In --box_only mode, set the box center and size with one of:
+      1) --box_center and --box_size
+      2) --box_enveloping and --padding
+    """
+            print(
+                "Command line error: missing or conflicting box specs."
+                + box_help,
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+        # Compute box_center, box_size
+        if args.box_center is not None:
+            box_center = args.box_center
+            if args.box_size is None:
+                print(
+                    "Command line error: --box_center requires --box_size in --box_only mode",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            box_size = args.box_size
+        else:
+            # --box_enveloping + --padding
+            ft = pathlib.Path(args.box_enveloping).suffix.lower()
+            suppliers = {
+                ".pdb": None,  # overridden below
+                ".mol": Chem.MolFromMolFile,
+                ".mol2": Chem.MolFromMol2File,
+                ".sdf": Chem.SDMolSupplier,
+                ".pdbqt": None,
+            }
+            if ft not in suppliers:
+                print(
+                    f"Command line error: Given --box_enveloping file type {ft} not readable!",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            if ft == ".pdb":
+                pdbstr = pdbutils.strip_altloc_from_pdb_file(
+                    args.box_enveloping
+                )
+                ligmol = Chem.MolFromPDBBlock(
+                    pdbstr, removeHs=False, sanitize=False
+                )
+            elif ft == ".sdf":
+                ligmol = suppliers[ft](
+                    args.box_enveloping, removeHs=False, sanitize=False
+                )[0]
+            elif ft == ".pdbqt":
+                ligmol = RDKitMolCreate.from_pdbqt_mol(
+                    PDBQTMolecule.from_file(args.box_enveloping)
+                )[0]
+            else:
+                ligmol = suppliers[ft](
+                    args.box_enveloping, removeHs=False, sanitize=False
+                )
+
+            if ligmol is None:
+                print(
+                    "Command line error: failed to read ligand file for --box_enveloping",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+
+            box_center, box_size = gridbox.calc_box(
+                ligmol.GetConformer().GetPositions(), args.padding
+            )
+
+        # Determine output filenames
+        if args.output_basename is not None:
+            outpath = pathlib.Path(args.output_basename)
+        else:
+            outpath = None
+
+        if args.write_vina_box is not None:
+            if args.write_vina_box:
+                box_vina_fn = args.write_vina_box[0]
+            else:
+                # default from -o if provided
+                if outpath is None:
+                    print(
+                        "Command line error: -v/--write_vina_box used without filename and no -o/--output_basename given",
+                        file=sys.stderr,
+                    )
+                    sys.exit(2)
+                box_vina_fn = str(outpath) + ".box.txt"
+        else:
+            # Not provided, but -o exists (enforced above)
+            box_vina_fn = str(outpath) + ".box.txt"
+
+        # Write outputs
+        with open(box_vina_fn, "w") as f:
+            f.write(gridbox.box_to_vina_string(box_center, box_size))
+
+        if outpath is not None:
+            box_fn = str(outpath) + ".box.pdb"
+        else:
+            # suffix .pdb even if box_vina_fn does not end with ".txt"
+            box_fn = box_vina_fn.replace(".txt", "") + ".pdb"
+
+        with open(box_fn, "w") as f:
+            f.write(
+                gridbox.box_to_pdb_string(box_center, box_size, spacing=1.0)
+            )
+
+        # Report
+        print()
+        print("Files written:")
+        longest = max(len(box_vina_fn), len(box_fn))
+        fmt = "%%%ds <-- %%s" % longest
+        print(fmt % (box_vina_fn, "Vina-style box dimension file"))
+        print(fmt % (box_fn, "PDB file to visualize the grid box"))
+        return 0
+    # -------------------------------
+    # End BOX-ONLY MODE
+    # -------------------------------
+
     if args.wanted_altloc is None:
         wanted_altloc = None
     else:
@@ -419,14 +649,13 @@ def main():
                 msg = "Wanted atloc cannot be an empty string or a string with just space"
                 print("Command line error: " + msg, file=sys.stderr)
                 sys.exit(2)
-    
-    
+
     # Ensure meaningful default_altloc
-    if args.default_altloc is not None and args.default_altloc.strip()=="":
+    if args.default_altloc is not None and args.default_altloc.strip() == "":
         msg = "Allowed atloc cannot be an empty string or a string with just space"
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    
+
     # check write options have default if used without argument
     write_flags = [
         args.write_pdbqt,
@@ -445,7 +674,7 @@ def main():
         msg += " --output_basename to set a default"
         print(msg)
         sys.exit(2)
-    
+
     # Default mapping of residue name and reactive atom name
     reactive_atom = {
         "SER": "OG",
@@ -458,7 +687,7 @@ def main():
         "THR": "OG1",
         "MET": "SD",
     }
-    
+
     # Process custom mapping of residue name and reactive atom name
     modified = set()
     for react_name_str in args.reactive_name:
@@ -473,7 +702,7 @@ def main():
             sys.exit(2)
         modified.add(resname)
         reactive_atom[resname] = name
-    
+
     # Process specified mapping of residue ID and reactive atom name
     modified = set()
     reactive_flexres_name = {}
@@ -490,7 +719,7 @@ def main():
                 sys.exit(2)
             modified.add(res_id)
             reactive_flexres_name[res_id] = res_assign[res_id]
-    
+
     # Process residue ID of reactive flexible residues without specified reactive atom
     reactive_flexres = set(reactive_flexres_name)
     for resid_string in args.reactive_flexres:
@@ -499,22 +728,27 @@ def main():
             if res_id not in reactive_flexres:
                 reactive_flexres.add(res_id)
                 reactive_flexres_name[res_id] = ""
-    
+
     # Evaluate number of reactive flexible residues
     if len(reactive_flexres) > 8:
-        msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
+        msg = "got %d reactive_flexres but maximum is 8." % (
+            len(args.reactive_flexres)
+        )
         print("Command line error: " + msg, file=sys.stderr)
         sys.exit(2)
-    
+
     # Evaluate compatibility with other options
     if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
         msg = (
-            "--box_center_off_reactive_res can be used only with one reactive" + eol
+            "--box_center_off_reactive_res can be used only with one reactive"
+            + eol
         )
-        msg += "residue, but %d reactive residues are set" % len(reactive_flexres_name)
+        msg += "residue, but %d reactive residues are set" % len(
+            reactive_flexres_name
+        )
         print("Command line error:" + msg, file=sys.stderr)
         sys.exit(2)
-    
+
     # Process residue ID of nonreactive flexible residues
     nonreactive_flexres = set()
     for string in args.flexres:
@@ -526,36 +760,38 @@ def main():
     rot_term_res = set()
     for string in args.rot_terminal_group:
         for res_id in parse_cmdline_res(string):
-            if res_id not in reactive_flexres and res_id not in nonreactive_flexres:
+            if (
+                res_id not in reactive_flexres
+                and res_id not in nonreactive_flexres
+            ):
                 rot_term_res.add(res_id)
-    
-    
+
     set_template = {}
     if args.set_template is not None:
         set_template = parse_cmdline_res_assign(args.set_template)
-    
+
     blunt_ends = []
     if args.blunt_ends is not None:
         j = parse_cmdline_res_assign(args.blunt_ends)
         # TODO parse also input/raw atom names, easier than indices
         j = [(k, int(v)) for k, v in j.items()]
         blunt_ends.extend(j)
-    
+
     delete_residues = []
     if args.delete_residues is not None:
         delete_residues = parse_cmdline_res(args.delete_residues)
-    
+
     # read mk_config if provided
     if args.mk_config is not None:
         with open(args.mk_config) as f:
             mk_config = json.load(f)
     else:
         mk_config = {}
-    
+
     # update config by inputs from arguments
-    if args.charge_model is not None: 
+    if args.charge_model is not None:
         mk_config["charge_model"] = args.charge_model
-    if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
+    if "charge_model" in mk_config and mk_config["charge_model"] == "read":
         if args.read_pqr is None:
             print("Error: --charge_model read requires --read_pqr")
             sys.exit(2)
@@ -563,7 +799,7 @@ def main():
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
-    
+
     # load templates for mapping
     if args.cache_templates:
         cache_file = args.cache_templates
@@ -573,34 +809,42 @@ def main():
                 json_str = f.read()
             templates = ResidueChemTemplates.from_json(json_str)
         except FileNotFoundError:
-            print(f"WARNING: specified cache file for residue chem templates not found. " + eol +
-                  f"The initial templates will be default, and a new cache will be created at {cache_file}. ", 
-                  file=sys.stderr, 
-                  )
+            print(
+                f"WARNING: specified cache file for residue chem templates not found. "
+                + eol
+                + f"The initial templates will be default, and a new cache will be created at {cache_file}. ",
+                file=sys.stderr,
+            )
             templates = ResidueChemTemplates.create_from_defaults()
         except Exception as e:
             print(f"An error occurred with --cache_templates: {e}")
             sys.exit(1)
-    else: 
+    else:
         templates = ResidueChemTemplates.create_from_defaults()
 
     for item in args.add_templates:
         if item.endswith(".json"):
             templates.add_json_file(item)
-        elif ":" in item: #expect format resname:sdf
+        elif ":" in item:  # expect format resname:sdf
             resname, sdf_file = item.split(":", 1)
             template_json = sdf_to_json(sdf_file, resname)
             templates.add_dict(template_json)
         else:
-            print("--add_templates must be either a JSON file or resname:file.sdf")
+            print(
+                "--add_templates must be either a JSON file or resname:file.sdf"
+            )
             sys.exit(2)
-    
+
     # create polymers
     if args.read_with_prody is not None:
         if not _got_prody:
             print(_prody_import_error, file=sys.stderr)
-            print("option --read_with_prody requires Prody, which is not installed.")
-            print("Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)")
+            print(
+                "option --read_with_prody requires Prody, which is not installed."
+            )
+            print(
+                "Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)"
+            )
             sys.exit(2)
         ext = pathlib.Path(args.read_with_prody).suffix[1:].lower()
         if ext in SUPPORTED_PRODY_FORMATS:
@@ -639,20 +883,22 @@ def main():
         except PolymerCreationError as e:
             print(e)
             sys.exit(1)
-    else: # args.read_pqr is not None
+    else:  # args.read_pqr is not None
         with open(args.read_pqr) as f:
             pdb_string = f.read()
         try:
-            print("Reading a PQR file. The following options or configurations will be ignored: ")
+            print(
+                "Reading a PQR file. The following options or configurations will be ignored: "
+            )
             print("  - default_altloc")
             print("  - wanted_altloc")
 
-            if mk_prep.charge_model!="read":
+            if mk_prep.charge_model != "read":
                 print(f"Only reading structures from PQR. ")
                 print(f"Charge model of choice: {mk_prep.charge_model}")
             else:
-                print("Reading structures and partial charges from PQR. ") 
-            
+                print("Reading structures and partial charges from PQR. ")
+
             polymer = Polymer.from_pqr_string(
                 pdb_string,
                 templates,  # residue_templates, padders, ambiguous,
@@ -665,14 +911,13 @@ def main():
         except PolymerCreationError as e:
             print(e)
             sys.exit(1)
-    
-    
+
     # Update residue chem template cache
-    if args.cache_templates: 
+    if args.cache_templates:
         updated_templates_json_strs = templates.to_json()
-        with open(cache_file, 'w') as f:
+        with open(cache_file, "w") as f:
             f.write(updated_templates_json_strs)
-    
+
     # Use residue name in the input structure file to find reactive atom name
     # According to the mapping of residue name and reactive atom name
     for res_id in reactive_flexres:
@@ -711,18 +956,24 @@ def main():
             sys.exit(2)
         input_resname = polymer.monomers[res_id].input_resname
         if input_resname not in rotatable_termgrp_residues_allowed:
-            print(f"{input_resname} (resid {res_id}) is not a valid residue for use with --rot_terminal_group."+ eol)
+            print(
+                f"{input_resname} (resid {res_id}) is not a valid residue for use with --rot_terminal_group."
+                + eol
+            )
             print("Available residues are: ")
             print(", ".join(rotatable_termgrp_residues_allowed))
             sys.exit(2)
-    
+
     # Print nonreactive and reactive flexible residues specs
-    if len(nonreactive_flexres) + len(reactive_flexres) + len(rot_term_res) > 0:
+    if (
+        len(nonreactive_flexres) + len(reactive_flexres) + len(rot_term_res)
+        > 0
+    ):
         print()
         print("Flexible residues:")
         print("chain resnum is_reactive reactive_atom")
         string = "%5s%7s%12s%14s"
-    
+
         if len(nonreactive_flexres) > 0:
             for res_id in nonreactive_flexres:
                 chain, resnum = res_id.split(":")
@@ -733,14 +984,17 @@ def main():
             for res_id in rot_term_res:
                 chain, resnum = res_id.split(":")
                 react_atom = ""
-                print(string % (chain, resnum, False, react_atom), "(rotatable terminal group)")
-    
+                print(
+                    string % (chain, resnum, False, react_atom),
+                    "(rotatable terminal group)",
+                )
+
         if len(reactive_flexres) > 0:
             for res_id in reactive_flexres_name:
                 chain, resnum = res_id.split(":")
                 react_atom = reactive_flexres_name[res_id]
                 print(string % (chain, resnum, True, react_atom))
-    
+
     # Assign reactive atom types for atoms in reactive flexible residues
     reactive_prefix = 1
     for res_id in reactive_flexres:
@@ -750,9 +1004,13 @@ def main():
             polymer.monomers[res_id], reactive_aname
         )
         if reactive_atomi is None:
-            print(f"cannot find reactive atom name {reactive_aname} from residue {res_id} in input receptor file")
+            print(
+                f"cannot find reactive atom name {reactive_aname} from residue {res_id} in input receptor file"
+            )
             sys.exit(2)
-        reactive_atypes = assign_reactive_types_by_index(polymer.monomers[res_id].molsetup, reactive_atomi)
+        reactive_atypes = assign_reactive_types_by_index(
+            polymer.monomers[res_id].molsetup, reactive_atomi
+        )
         # set reactive atom types
         nr_atom = len(polymer.monomers[res_id].molsetup.atoms)
         for atom_index in range(nr_atom):
@@ -764,24 +1022,25 @@ def main():
                     atom_index
                 ].atom_type = f"{reactive_prefix}{reactive_atypes[atom_index]}"
         reactive_prefix += 1
-    
+
     # Combine nonreactive and reactive flexible residues into one set
     all_flexres = nonreactive_flexres.union(reactive_flexres)
-    
+
     for res_id in all_flexres:
         polymer.flexibilize_sidechain(res_id, mk_prep)
 
     # add rotatable terminal groups
     mk_prep_rigid_nonTerm = MoleculePreparation(
-        rigidify_bonds_smarts=["[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"],
+        rigidify_bonds_smarts=[
+            "[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"
+        ],
         rigidify_bonds_indices=[(0, 1)],
     )
 
     for res_id in rot_term_res:
         polymer.monomers[res_id].parameterize(mk_prep_rigid_nonTerm, res_id)
         polymer.flexibilize_sidechain(res_id, mk_prep_rigid_nonTerm)
-    
-    
+
     any_lig_base_types = [
         "HD",
         "C",
@@ -799,12 +1058,12 @@ def main():
         "Si",
         "B",
     ]
-    
+
     if args.output_basename is not None:
         outpath = pathlib.Path(args.output_basename)
-    
+
     written_files_log = {"filename": [], "description": []}
-    
+
     if args.write_json is not None:
         if args.write_json:
             fn = args.write_json[0]
@@ -814,30 +1073,32 @@ def main():
             f.write(polymer.to_json())
         written_files_log["filename"].append(fn)
         written_files_log["description"].append("parameterized receptor")
-    
+
     if args.write_pdb is not None:
         if args.write_pdb:
             fn = args.write_pdb[0]
-        else:  
+        else:
             raise ValueError("--write_pdb requires a filename")
         with open(fn, "w") as f:
             f.write(polymer.to_pdb())
         written_files_log["filename"].append(fn)
         written_files_log["description"].append("processed receptor PDB")
-    
+
     if args.write_pdbqt is not None:
         if args.write_pdbqt:
             if args.write_pdbqt[0].endswith(".pdbqt"):
                 # may need to suffix _rigid/_flex with flexres
-                fn_base = str(pathlib.Path(args.write_pdbqt[0]).with_suffix(""))
+                fn_base = str(
+                    pathlib.Path(args.write_pdbqt[0]).with_suffix("")
+                )
             else:
                 fn_base = args.write_pdbqt[0]
         else:
             fn_base = str(outpath)
-    
+
         pdbqt_tuple = PDBQTWriterLegacy.write_from_polymer(polymer)
         rigid_pdbqt, flex_pdbqt_dict = pdbqt_tuple
-    
+
         if len(all_flexres) + len(rot_term_res) == 0:
             box_center = args.box_center
             rigid_fn = fn_base + ".pdbqt"
@@ -847,21 +1108,25 @@ def main():
             reactive_flexres_count = 0
             for res_id, flexres_pdbqt in flex_pdbqt_dict.items():
                 all_flex_pdbqt += flexres_pdbqt
-        
+
             rigid_fn = fn_base + "_rigid.pdbqt"
             flex_fn = fn_base + "_flex.pdbqt"
-        
+
             if all_flex_pdbqt:
                 written_files_log["filename"].append(flex_fn)
-                written_files_log["description"].append("flexible receptor input file")
+                written_files_log["description"].append(
+                    "flexible receptor input file"
+                )
                 with open(flex_fn, "w") as f:
                     f.write(all_flex_pdbqt)
-        
+
         written_files_log["filename"].append(rigid_fn)
-        written_files_log["description"].append("static (i.e., rigid) receptor input file")
+        written_files_log["description"].append(
+            "static (i.e., rigid) receptor input file"
+        )
         with open(rigid_fn, "w") as f:
             f.write(rigid_pdbqt)
-    
+
     def warn_flexres_outside_box(polymer, box_center, box_size):
         for res_id, res in polymer.monomers.items():
             if not res.is_movable:
@@ -869,7 +1134,9 @@ def main():
             for atom in res.molsetup.atoms:
                 if not res.is_flexres_atom[atom.index]:
                     continue
-                if gridbox.is_point_outside_box(atom.coord, box_center, box_size, spacing=1.0):
+                if gridbox.is_point_outside_box(
+                    atom.coord, box_center, box_size, spacing=1.0
+                ):
                     print(
                         "WARNING: Flexible residue outside box." + eol,
                         file=sys.stderr,
@@ -880,7 +1147,7 @@ def main():
                         file=sys.stderr,
                     )
                     break  # only need to warn once
-    
+
     skip_gpf = args.write_gpf is None and args.write_vina_box is None
     if not skip_gpf:
         if args.box_center is not None:
@@ -893,10 +1160,14 @@ def main():
             for res_id in reactive_flexres:
                 molsetup = polymer.monomers[res_id].molsetup
                 calpha_idx = [
-                    atom.index for atom in molsetup.atoms if atom.pdbinfo.name == "CA"
+                    atom.index
+                    for atom in molsetup.atoms
+                    if atom.pdbinfo.name == "CA"
                 ]
                 cbeta_idx = [
-                    atom.index for atom in molsetup.atoms if atom.pdbinfo.name == "CB"
+                    atom.index
+                    for atom in molsetup.atoms
+                    if atom.pdbinfo.name == "CB"
                 ]
                 if len(calpha_idx) != 1:
                     check(
@@ -930,15 +1201,23 @@ def main():
             if ft not in suppliers.keys():
                 check(
                     success=False,
-                    error_msg=f"Given --box_enveloping file type {ft} not readable!"
+                    error_msg=f"Given --box_enveloping file type {ft} not readable!",
                 )
             elif ft == ".pdb":
-                pdbstr = pdbutils.strip_altloc_from_pdb_file(args.box_enveloping)
-                ligmol = Chem.MolFromPDBBlock(pdbstr, removeHs=False, sanitize=False)
+                pdbstr = pdbutils.strip_altloc_from_pdb_file(
+                    args.box_enveloping
+                )
+                ligmol = Chem.MolFromPDBBlock(
+                    pdbstr, removeHs=False, sanitize=False
+                )
             elif ft != ".sdf" and ft != ".pdbqt":
-                ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)
+                ligmol = suppliers[ft](
+                    args.box_enveloping, removeHs=False, sanitize=False
+                )
             elif ft == ".sdf":
-                ligmol = suppliers[ft](args.box_enveloping, removeHs=False, sanitize=False)[
+                ligmol = suppliers[ft](
+                    args.box_enveloping, removeHs=False, sanitize=False
+                )[
                     0
                 ]  # assume we only want first molecule in file
             else:  # .pdbqt
@@ -947,15 +1226,14 @@ def main():
                 )[
                     0
                 ]  # assume we only want first molecule in file
-    
+
             box_center, box_size = gridbox.calc_box(
                 ligmol.GetConformer().GetPositions(), args.padding
             )
         else:
             print("Error: No box center specified.", file=sys.stderr)
             sys.exit(2)
-    
-    
+
         if args.write_gpf is not None:
             if args.write_gpf:
                 gpf_fn = args.write_gpf[0]
@@ -971,7 +1249,7 @@ def main():
             )
             with open(ff_fn, "w") as f:
                 f.write(gridbox.boron_silicon_atompar)
-    
+
             rec_types = [
                 "HD",
                 "C",
@@ -1000,28 +1278,30 @@ def main():
                 any_lig_base_types,
                 ff_param_fname=ff_fn.name,
             )
-    
+
             written_files_log["filename"].append(str(gpf_fn))
             written_files_log["description"].append("autogrid input file")
             with open(gpf_fn, "w") as f:
                 f.write(gpf_string)
-    
+
         # write gridbox vina format
         if args.write_vina_box is not None:
             if args.write_vina_box:
                 box_vina_fn = args.write_vina_box[0]
             else:
                 box_vina_fn = str(outpath) + ".box.txt"
-    
+
             written_files_log["filename"].append(box_vina_fn)
-            written_files_log["description"].append("Vina-style box dimension file")
+            written_files_log["description"].append(
+                "Vina-style box dimension file"
+            )
             with open(box_vina_fn, "w") as f:
                 f.write(gridbox.box_to_vina_string(box_center, box_size))
-    
+
         # write a PDB for the box
         if args.write_vina_box is not None or args.write_gpf is not None:
             if args.output_basename is not None:
-                box_fn = str(outpath) + ".box.pdb" 
+                box_fn = str(outpath) + ".box.pdb"
             elif args.write_gpf is not None:
                 # relies on --write_gpf forcing --write_pdbqt which sets rigid_fn
                 box_fn = str(pathlib.Path(rigid_fn).with_suffix(".box.pdb"))
@@ -1029,20 +1309,27 @@ def main():
                 # suffix .pdb even if box_vina_fn does not end with ".txt"
                 box_fn = box_vina_fn.replace(".txt", "") + ".pdb"
             written_files_log["filename"].append(box_fn)
-            written_files_log["description"].append("PDB file to visualize the grid box")
+            written_files_log["description"].append(
+                "PDB file to visualize the grid box"
+            )
             with open(box_fn, "w") as f:
-                f.write(gridbox.box_to_pdb_string(box_center, box_size, spacing=1.0))
-    
+                f.write(
+                    gridbox.box_to_pdb_string(
+                        box_center, box_size, spacing=1.0
+                    )
+                )
+
         warn_flexres_outside_box(polymer, box_center, box_size)
-    
-    
+
     # configuration info for AutoDock-GPU reactive docking
     if len(reactive_flexres) > 0 and args.write_pdbqt is not None:
         any_lig_reac_types = []
         for order in (1, 2, 3):
             for t in any_lig_base_types:
-                any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
-    
+                any_lig_reac_types.append(
+                    reactive_typer.get_reactive_atype(t, order)
+                )
+
         rec_reac_types = []
         for line in all_flex_pdbqt.split(eol):
             if line.startswith("ATOM") or line.startswith("HETATM"):
@@ -1050,7 +1337,7 @@ def main():
                 basetype, _ = reactive_typer.get_basetype_and_order(atype)
                 if basetype is not None:  # is None if not reactive
                     rec_reac_types.append(line[77:].strip())
-    
+
         derivtypes, modpairs, collisions = get_reactive_config(
             any_lig_reac_types,
             rec_reac_types,
@@ -1059,7 +1346,7 @@ def main():
             args.r_eq_13_scaling,
             args.r_eq_14_scaling,
         )
-    
+
         if len(collisions) > 0:
             collision_str = ""
             for t1, t2 in collisions:
@@ -1072,7 +1359,7 @@ def main():
             )
             with open(collision_fn, "w") as f:
                 f.write(collision_str)
-    
+
         # The maps block is to tell AutoDock-GPU the base types for the reactive types.
         # This could be done with -T/--derivtypes, but putting derivtypes and intnbp
         # lines in a single configuration file simplifies the command line call.
@@ -1088,7 +1375,7 @@ def main():
         config = "ligand_types " + " ".join(all_types) + eol
         config += "fld %s.maps.fld" % map_prefix + eol
         config += map_block
-    
+
         # in modpairs (dict): types are keys, parameters are values
         # now we will write a configuration file with nbp keywords
         # that AD-GPU reads using the --import_dpf flag
@@ -1096,36 +1383,53 @@ def main():
         line = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + eol
         nbp_count = 0
         for (t1, t2), param in modpairs.items():
-            config += line % (param["r_eq"], param["eps"], param["n"], param["m"], t1, t2)
+            config += line % (
+                param["r_eq"],
+                param["eps"],
+                param["n"],
+                param["m"],
+                t1,
+                t2,
+            )
             nbp_count += 1
         config_fn = str(outpath.with_suffix(".reactive_config"))
         written_files_log["filename"].append(config_fn)
-        written_files_log["description"].append("reactive parameters for AutoDock-GPU")
+        written_files_log["description"].append(
+            "reactive parameters for AutoDock-GPU"
+        )
         with open(config_fn, "w") as f:
             f.write(config)
         print()
-        print("For reactive docking, pass the configuration file to AutoDock-GPU:")
+        print(
+            "For reactive docking, pass the configuration file to AutoDock-GPU:"
+        )
         print(
             "    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>"
             % (config_fn, flex_fn)
         )
         print()
-    
+
     if written_files_log["filename"]:
         print()
         print("Files written:")
         longest_fn = max([len(fn) for fn in written_files_log["filename"]])
         line = "%%%ds <-- " % longest_fn + "%s"
-        for fn, desc in zip(written_files_log["filename"], written_files_log["description"]):
+        for fn, desc in zip(
+            written_files_log["filename"], written_files_log["description"]
+        ):
             print(line % (fn, desc))
         if (
-            args.output_basename is not None and
-            args.output_basename.endswith(".pdbqt") and
-            args.write_pdbqt is None
+            args.output_basename is not None
+            and args.output_basename.endswith(".pdbqt")
+            and args.write_pdbqt is None
         ):
             print()
-            print("PDBQT files were NOT written. Use -p/--write_pdbqt for that.")
-            print("Note that -o/--output_basename just sets a default for --write flags")
+            print(
+                "PDBQT files were NOT written. Use -p/--write_pdbqt for that."
+            )
+            print(
+                "Note that -o/--output_basename just sets a default for --write flags"
+            )
             print()
     else:
         print()
@@ -1138,13 +1442,16 @@ def main():
         print("  -g/--write_gpf")
         print("  -v/--write_vina_box")
         print("")
-        print("Use -o/--output_basename, or set a filename after each --write flag")
+        print(
+            "Use -o/--output_basename, or set a filename after each --write flag"
+        )
         print("")
         print("Recommended for AutoDock-GPU:")
         print("  -o my_receptor -p -j -g")
         print("")
         print("Recommended for AutoDock-Vina:")
         print("  -o my_receptor -p -j -v")
+
 
 if __name__ == "__main__":
     sys.exit(main())
