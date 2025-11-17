@@ -137,6 +137,9 @@ class MoleculePreparation:
         remove_smiles
         """
 
+        if type(merge_these_atom_types) not in (list, set, tuple):
+            raise ValueError("you probably forgot '.from_config' in MoleculePreparation.from_config(mk_config)")
+
         self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
         self.merge_rmin_half = merge_rmin_half
