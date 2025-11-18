@@ -771,16 +771,21 @@ def main():
     for res_id in all_flexres:
         polymer.flexibilize_sidechain(res_id, mk_prep)
 
-    # add rotatable terminal groups
-    mk_prep_rigid_nonTerm = MoleculePreparation(
-        rigidify_bonds_smarts=["[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"],
-        rigidify_bonds_indices=[(0, 1)],
-    )
-
+    # Make terminal groups rotatable by rigidifying everything except the
+    # terminal group and then making the residue flexible. The definition of
+    # sidechain is dynamic: whatever is allowed to rotate constitutes the
+    # sidechain (for PDBQT writing purposes).
+    rot_term_smarts = "[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"
+    rot_term_indices = (0, 1)
+    mk_config_rot_term = mk_config.copy()
+    mk_config_rot_term.setdefault("rigidify_bonds_smarts", [])
+    mk_config_rot_term.setdefault("rigidify_bonds_indices", [])
+    mk_config_rot_term["rigidify_bonds_smarts"].append(rot_term_smarts)
+    mk_config_rot_term["rigidify_bonds_indices"].append(rot_term_indices)
+    mk_prep_rot_term = MoleculePreparation.from_config(mk_config_rot_term)
     for res_id in rot_term_res:
-        polymer.monomers[res_id].parameterize(mk_prep_rigid_nonTerm, res_id)
-        polymer.flexibilize_sidechain(res_id, mk_prep_rigid_nonTerm)
-    
+        polymer.monomers[res_id].parameterize(mk_prep_rot_term, res_id)
+        polymer.flexibilize_sidechain(res_id, mk_prep_rot_term)
     
     any_lig_base_types = [
         "HD",
