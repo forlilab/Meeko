@@ -185,6 +185,7 @@ class RDKitMolCreate:
         pdbqt_mol,
         only_cluster_leads=False,
         keep_flexres=False,
+        only_hs_with_coords=False,
     ):
         # todo: add pseudo-water (W atoms, variable nr each pose)
         if only_cluster_leads and len(pdbqt_mol._pose_data["cluster_leads_sorted"]) == 0:
@@ -235,7 +236,7 @@ class RDKitMolCreate:
 
             # add Hs only after all poses are added as conformers
             # because Chem.AddHs() will affect all conformers at once 
-            mol = cls.add_hydrogens(mol, coordinates_all_poses, h_parent) 
+            mol = cls.add_hydrogens(mol, coordinates_all_poses, h_parent, only_hs_with_coords)
 
             mol_list.append(mol)
         return mol_list
@@ -339,10 +340,11 @@ class RDKitMolCreate:
     
     
     @staticmethod
-    def add_hydrogens(mol, coordinates_list, h_parent):
+    def add_hydrogens(mol, coordinates_list, h_parent, only_hs_with_coords):
         """Add hydrogen atoms to ligand RDKit mol, adjust the positions of
             polar hydrogens to match pdbqt
         """
+        nr_atoms_before_add_hs = mol.GetNumAtoms()  # some Hs might already be there
         mol = Chem.AddHs(mol, addCoords=True)
         conformers = list(mol.GetConformers())
         num_hydrogens = int(len(h_parent) / 2)
@@ -365,6 +367,15 @@ class RDKitMolCreate:
                         break
                 used_h.append(h_rdkit_index)
                 conf.SetAtomPosition(h_rdkit_index, Point3D(x, y, z))
+        if only_hs_with_coords:
+            with Chem.RWMol(mol) as rwmol:
+                for idx in range(nr_atoms_before_add_hs, mol.GetNumAtoms()):
+                    atom = rwmol.GetAtomWithIdx(idx)
+                    if atom.GetAtomicNum() != 1 or idx in used_h:
+                        continue
+                    rwmol.RemoveAtom(idx)
+            Chem.SanitizeMol(rwmol)
+            mol = rwmol.GetMol()
         return mol
 
     @staticmethod
@@ -398,67 +409,11 @@ class RDKitMolCreate:
             if len(expected_names) != len(set(expected_names)):
                 raise RuntimeError("repeated atom names in cls.flexres[%s]" % resname)
 
-    @classmethod
-    def add_sandbox_coordinates(cls, dlgstring, rdmol, index_map, h_parent, groupname=None):
-        # this function does not deal with implicit H, at least not yet
-        index_map = [i + 1 for i in index_map] # 1-indexing like in PDBQT
-        h_parent = [i + 1 for i in h_parent] # 1-indexing like in PDBQT
-        coordinates = []
-        energy = {"inter": [], "intra": [], "dlg_pose_idx": []}
-        is_atom_block = False
-        for line in dlgstring.split('\n'):
-            if line.startswith("Pose:") or line.startswith("Extra Pose:"):
-                if line.startswith("Pose:"):
-                    pose_idx = int(line.split()[1])
-                elif line.startswith("Extra Pose:"):
-                    pose_idx = int(line.split()[2])
-                if len(coordinates) > 0:
-                    if len(coordinates[-1]) == 0: 
-                        # if pose info was missing, just delete data
-                        energy["dlg_pose_idx"].pop(-1)
-                        coordinates.pop(-1)
-                energy["dlg_pose_idx"].append(pose_idx)
-                coordinates.append([])
-            elif line.startswith("DOCKED: USER    (1) Final Intermolecular Energy     ="):
-                energy["inter"].append(float(line.split()[7]))
-            elif line.startswith("DOCKED: USER    (2) Final Total Internal Energy     ="):
-                energy["intra"].append(float(line.split()[8]))
-            elif line.startswith("DOCKED: @<TRIPOS>ATOM"):
-                is_atom_block = True
-            elif line.startswith("DOCKED: @<TRIPOS>BOND"):
-                is_atom_block = False
-            elif is_atom_block:
-                fields = line.split()
-                name = fields[8]
-                if groupname is None or name == groupname:
-                    x, y, z = float(fields[3]), float(fields[4]), float(fields[5])
-                    coordinates[-1].append([x, y, z])
-
-        if not (len(coordinates) == len(energy["inter"]) == len(energy["intra"])):
-            msg = "parsed energies differs from number of coordinates\n"
-            msg += "len(coordinates) = %d\n" % len(coordinates)
-            msg += "len(intra) = %d\n" % len(energy["intra"])
-            msg += "len(inter) = %d\n" % len(energy["inter"])
-            raise RuntimeError(msg)
-
-        scores = [energy["inter"][i] + energy["intra"][i] for i in range(len(coordinates))]
-        idxsort = [pair[0] for pair in sorted(enumerate(scores), key=lambda pair: pair[1])]
-        sorted_coordinates = []
-        for index in idxsort:
-            cls.add_pose_to_mol(rdmol, coordinates[index], index_map)
-            sorted_coordinates.append(coordinates[index])
-
-        rdmol = cls.add_hydrogens(rdmol, sorted_coordinates, h_parent)
-
-        for key in energy:
-            energy[key] = [energy[key][i] for i in idxsort]
-        return rdmol, energy
-
     @staticmethod
-    def write_sd_string(pdbqt_mol, only_cluster_leads=False, keep_flexres=False):
+    def write_sd_string(pdbqt_mol, only_cluster_leads=False, keep_flexres=False, only_hs_with_coords=False):
         sio = StringIO()
         f = Chem.SDWriter(sio)
-        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads, keep_flexres)
+        mol_list = RDKitMolCreate.from_pdbqt_mol(pdbqt_mol, only_cluster_leads, keep_flexres, only_hs_with_coords)
         failures = [i for i, mol in enumerate(mol_list) if mol is None]
         combined_mol = RDKitMolCreate.combine_rdkit_mols(mol_list)
         if combined_mol is None:
