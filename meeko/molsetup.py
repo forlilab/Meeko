@@ -11,13 +11,11 @@ from dataclasses import asdict, dataclass, field
 import json
 eol="\n"
 import logging
-import sys
 import warnings
 from typing import Union
 from typing import Optional, Any
 
 import numpy as np
-import rdkit.Chem
 from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
 
@@ -1177,7 +1175,7 @@ class MoleculeSetup(BaseJSONParsable):
 
     # endregion
 
-    def merge_terminal_atoms(self, indices) -> None:
+    def merge_terminal_atoms(self, indices, merge_rmin_half=False) -> None:
         """
         Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
         other atom.
@@ -1186,11 +1184,15 @@ class MoleculeSetup(BaseJSONParsable):
         ----------
         indices: list
             A list of indices to merge
+        merge_rmin_half: bool
+            Defaults to false because everything currently defaults to AD4 scoring, and those radii are already united atom.
 
         Returns
         -------
         None
         """
+        if merge_rmin_half and "rmin_half" not in self.atom_params:
+            raise ValueError("can't merge rmin_half because it's not in atom_params")
         for index in indices:
             if len(self.get_neighbors(index)) != 1:
                 msg = "Atempted to merge atom %d with %d neighbors. "
@@ -1201,6 +1203,13 @@ class MoleculeSetup(BaseJSONParsable):
             self.atoms[neighbor_index].charge += self.get_charge(index)
             self.atoms[index].charge = 0.0
             self.atoms[index].is_ignore = True
+            if not merge_rmin_half:
+                continue
+            r_neigh = self.atom_params["rmin_half"][neighbor_index]
+            r_source = self.atom_params["rmin_half"][index]
+            new_r = np.cbrt(r_neigh**3 + r_source**3)
+            self.atom_params["rmin_half"][neighbor_index] = new_r
+            self.atom_params["rmin_half"][index] = 0.0
         return
 
     # NOTE: This is a candidate for moving to utils
@@ -1544,7 +1553,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         mol: Chem.Mol,
         keep_chorded_rings: bool = False,
         keep_equivalent_rings: bool = False,
-        compute_gasteiger_charges: bool = True,
+        charge_model: str = "gasteiger",
         read_charges_from_prop: str = None,
         conformer_id: int = -1,
     ):
@@ -1600,7 +1609,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
-        molsetup.init_atom(compute_gasteiger_charges, read_charges_from_prop, coords)
+        molsetup.init_atom(charge_model, read_charges_from_prop, coords)
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         # molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
@@ -1615,7 +1624,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         return molsetup
 
-    def init_atom(self, compute_gasteiger_charges: bool, read_charges_from_prop: str, coords: list[np.ndarray]):
+    def init_atom(self, charge_model: str, read_charges_from_prop: str, coords: list[np.ndarray]):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
 
@@ -1631,12 +1640,45 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         None
         """
         # extract/generate charges
-        if compute_gasteiger_charges: 
+        if charge_model == "gasteiger": 
             if read_charges_from_prop is not None: 
-                raise ValueError(
-                    "Conflicting options: compute_gasteiger_charges and read_charges_from_prop cannot both be set. "
-                )
-            charges = rdkitutils.compute_gasteiger_charges(self.mol)
+                raise ValueError("Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set.")
+            
+            try:
+                charges = rdkitutils.compute_gasteiger_charges(self.mol)
+            except Exception as e:
+                print("gasteiger charge computation failed with: ")
+                print(e)
+        
+        elif charge_model == "nagl":
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set.")
+            
+            # compute nagl charges
+            # note this requires the latest openff versions
+            try:
+                from openff.toolkit import Molecule
+            except ImportError:
+                print("A recent version of OpenFF is required for NAGL charges")
+
+            # assign stereochemistry
+            # ?test?
+            # Chem.AssignStereochemistryFrom3D(self.mol)
+
+            mol_off = Molecule.from_rdkit(self.mol, allow_undefined_stereo=True, hydrogens_are_explicit=True)
+
+            try:
+
+                mol_off.assign_partial_charges(
+                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt"
+                    )
+
+                charges = mol_off.partial_charges.magnitude.tolist()
+            except Exception as e:
+                print("NAGL charge computation failed with with exception:")
+                print(e)
+                print("Make sure you've installed the latest version of openff")
+
         elif read_charges_from_prop is not None: 
             if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
                 raise ValueError(
@@ -1656,6 +1698,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 )  
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
+
+
+
         # register atom
         for a in self.mol.GetAtoms():
             idx = a.GetIdx()
