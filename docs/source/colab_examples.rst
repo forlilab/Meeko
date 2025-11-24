@@ -22,7 +22,7 @@ Overview
 *Major Python packages used* 
 
 * **RDKit** `https://rdkit.org/ <https://rdkit.org/>`_ 
-* **Molscrub (formerly scrubber)** `https://github.com/forlilab/molscrub <https://github.com/forlilab/molscrub>`_ 
+* **Molscrub** `https://github.com/forlilab/molscrub <https://github.com/forlilab/molscrub>`_ 
 * **Meeko** `https://github.com/forlilab/Meeko <https://github.com/forlilab/Meeko>`_ 
 * **ProDy** `http://www.bahargroup.org/prody/ <http://www.bahargroup.org/prody/>`_ 
 * **cctbx-base** (for reduce2) `https://github.com/cctbx/cctbx_project <https://github.com/cctbx/cctbx_project>`_ 
@@ -35,7 +35,7 @@ Overview
 [Vina] Basic Docking
 ------------------------
 
-`Run on Colab! <https://colab.research.google.com/drive/1cHSl78lBPUc_J1IZxLgN4GwD_ADmohVU?usp=sharing>`_
+`Run on Colab! <https://colab.research.google.com/drive/1QahrO_MNDnKSM87-toQ9ZWhBNnT5hwvZ?usp=sharing>`_
 
 The **basic docking example** is a rewrite based on the original basic docking example in the `Vina documentation <https://autodock-vina.readthedocs.io/en/latest/>`_. In this example, a small molecule ligand (Imatinib, PDB token `STI <https://www1.rcsb.org/ligand/STI>`_) is docked back to a hollow protein structure of mouse c-Abl (PDB token `1IEP <https://www1.rcsb.org/structure/1IEP>`_) to reproduce the complex structure. A docked pose that closely resembles the original position of the ligand is expected among the top-ranked poses. 
 
