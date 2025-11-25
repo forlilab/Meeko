@@ -43,7 +43,7 @@ The **basic docking example** is a rewrite based on the original basic docking e
 [Vina] Flexible Docking
 ------
 
-`Run on Colab! <https://colab.research.google.com/drive/1cazEckGbvl9huWzpxXpd_Qaj0_NipWcz?usp=sharing>`_
+`Run on Colab! <https://colab.research.google.com/drive/1g_wfclMgGUSoCFkWWOT8vOfryAitf2z_?usp=sharing>`_
 
 The **flexible docking example** is a rewrite based on the original flexible docking example in the `Vina documentation <https://autodock-vina.readthedocs.io/en/latest/>`_. In this example, a variant of Imatinib (PDB token `PRC <https://www1.rcsb.org/ligand/PRC>`_) is docked back to a hollow protein structure of mouse c-Abl (PDB token `1FPU <https://www1.rcsb.org/structure/1FPU>`_) to reproduce the complex structure. Additionally, Thr315 is set to be a flexible residue. A docked pose that closely resembles the original position of the ligand and **a flipped Thr315** are expected among the top-ranked poses. 
 
