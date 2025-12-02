@@ -13,6 +13,8 @@ Meeko is developed by the [Forli lab](https://forlilab.org/) at the
 [Center for Computational Structural Biology (CCSB)](https://ccsb.scripps.edu)
 at [Scripps Research](https://www.scripps.edu/).
 
+If you use this, please cite: ["Meeko: molecule parameterization and software interoperability for docking and beyond"](https://chemrxiv.org/engage/chemrxiv/article-details/68c054243e708a7649fa21d3)
+
 
 ## Documentation
 
