@@ -1727,7 +1727,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             rotatable = int(b.GetBondType()) == 1
             self.add_bond(idx1, idx2, rotatable=rotatable)
 
-    def find_pattern(self, smarts: str):
+    def find_pattern(self, smarts: str, uniquify=False, max_matches=int(1e7)):
         """
         Given a SMARTS pattern, finds substruct matches in the molecule.
 
@@ -1741,8 +1741,14 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         The substruct matches in the RDKit Mol for the given SMARTS.
         """
         p = Chem.MolFromSmarts(smarts)
-        nr_atoms = self.mol.GetNumAtoms()
-        return self.mol.GetSubstructMatches(p, maxMatches=nr_atoms)
+        # the default maxMatches is 1000, which is insufficient for very large molecules
+        # a very flexible smarts "[*]~[*]~[*](~[*])~[*]~[*]" produced 2.1 M matches
+        # with a molecule (protein) consisting of 10k arginines. The default herein
+        # is very generous at 10 M
+        # OpenFF uses uniquify=False. If we don't do that we parameterize only one of
+        # the water H with TIP3P parameters from OpenFF XML files (the other H gets
+        # general hydroxyl parameters)
+        return self.mol.GetSubstructMatches(p, uniquify=uniquify, maxMatches=max_matches)
 
     def get_mol_name(self):
         """
