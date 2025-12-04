@@ -56,6 +56,20 @@ def test_dihedral_indexing():
     assert a_nr == b_nr
     return
 
+@pytest.mark.skipif(not _got_openff, reason="requires openff-forcefields")
+def test_openff_water():
+    etkdg_v3 = Chem.rdDistGeom.ETKDGv3()
+    water = Chem.MolFromSmiles("O")
+    water = Chem.AddHs(water)
+    Chem.rdDistGeom.EmbedMolecule(water, etkdg_v3)
+    mk_prep = MoleculePreparation(load_atom_params=["openff"]) 
+    molsetup = mk_prep(water)[0]
+    rmin_half = molsetup.atom_params["rmin_half"]
+    epsilon = molsetup.atom_params["epsilon"]
+    assert rmin_half[1] == rmin_half[2] 
+    assert epsilon[1] == epsilon[2] 
+    return
+
 def test_merge_rmin_half():
     methanol = Chem.AddHs(Chem.MolFromSmiles("CO"))
     etkdg_v3 = rdDistGeom.ETKDGv3()

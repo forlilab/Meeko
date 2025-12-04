@@ -99,7 +99,7 @@ class AtomTyper:
             for line in offatom_params[smartsgroup]:
                 # SMARTS
                 smarts = str(line["smarts"])
-                hits = molsetup.find_pattern(smarts)
+                hits = molsetup.find_pattern(smarts, uniquify=True)  # NOTE uniquifying
                 # atom indexes in smarts string
                 smarts_idxs = [0]
                 if "IDX" in line:
