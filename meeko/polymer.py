@@ -1893,13 +1893,17 @@ class Polymer(BaseJSONParsable):
             wanted_altloc = {}
         raw_input_mols = {}
         for reskey, atom_field_list in blocks_by_residue.items():
-            requested_altloc = wanted_altloc.get(reskey, None)
-            pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
-                atom_field_list,
-                requested_altloc,
-                default_altloc,
-            )
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
+            requested_altloc = wanted_altloc.get(reskey, None)  
+            try:
+                pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
+                    atom_field_list,
+                    requested_altloc,
+                    default_altloc,
+                )
+            except:
+                msg = f"unable to build rdkit mol for residue {resname} corresponding to key {reskey}"
+                raise RuntimeError(msg) 
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
 
         return raw_input_mols
