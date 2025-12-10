@@ -1367,6 +1367,18 @@ class Polymer(BaseJSONParsable):
             raise ValueError(f"{residue_id=} not in valid monomers")
         return self.monomers[residue_id].flexibilize(mk_prep)
 
+    def inflexibilize_sidechain(self, residue_id, mk_prep):
+        if residue_id not in self.get_valid_monomers():
+            raise ValueError(f"{residue_id=} not in valid monomers")
+        return self.monomers[residue_id].inflexibilize(mk_prep)
+
+    def inflexibilize_all(self, mk_prep):
+        for residue_id, monomer in self.get_valid_monomers().items():
+            if monomer.is_movable:
+                monomer.inflexibilize(mk_prep, residue_id)
+        return
+
+
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
         """
@@ -2607,6 +2619,12 @@ class Monomer(BaseJSONParsable):
             for atom_idx, body_idx in rigid_index_by_atom.items():
                 if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
                     self.is_flexres_atom[atom_idx] = True
+        return
+
+    def inflexibilize(self, mk_prep, residue_id):
+        self.is_movable = False
+        self.parameterize(mk_prep, residue_id)  # must be after is_movable=False
+        self.is_flexres_atom = [False for _ in self.molsetup.atoms]
         return
 
     def _set_pdbinfo(self, residue_id):
