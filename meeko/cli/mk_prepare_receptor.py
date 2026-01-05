@@ -196,7 +196,7 @@ def get_args():
     
     config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "zero", "read"),
+        choices=("gasteiger", "espaloma", "nagl", "zero", "read"),
         help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
         default=None,
     )
