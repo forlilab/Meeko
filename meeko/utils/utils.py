@@ -427,6 +427,53 @@ def parse_begin_res(string):
     return f"{chain}:{resnum}{icode}"
 
 
+def parse_cmdline_res(string):
+    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
+    blocks = ("," + string).split(":")
+    nr_blocks = len(blocks) - 1
+    keys = []
+    for i in range(nr_blocks):
+        chain = blocks[i].split(",")[-1]
+        if i + 1 == nr_blocks:
+            resnums = blocks[i + 1].split(",")
+        else:
+            resnums = blocks[i + 1].split(",")[:-1]
+        if len(resnums) == 0:
+            raise ValueError(f"missing residue in {resnums}")
+        for resnum in resnums:
+            keys.append(f"{chain}:{resnum}")
+    return keys
+
+
+def parse_cmdline_res_assign(string):
+    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}"""
+
+    output = {}
+    nr_assignments = string.count("=")
+    string = "," + string  # enables `residues =` below to work in first iteraton
+    tmp = string.split("=")
+    for i in range(nr_assignments):
+        residues = tmp[i].split(",")[1:]
+        assigned_name = tmp[i + 1].split(",")[0]
+        chain = ""
+        for residue in residues:
+            fields = residue.split(":")
+            if len(fields) == 1:
+                resnum = fields[0]
+            elif len(fields) == 2:
+                chain = fields[0]
+                resnum = fields[1]
+            else:
+                raise ValueError(f"too many : in {residue}")
+            if len(resnum) == 0:
+                raise ValueError(f"missing residue in {residues}")
+            key = f"{chain}:{resnum}"
+            if key in output:
+                raise ValueError(f"repeated {key} in {residue}")
+            output[key] = assigned_name
+    return output
+
+
 # def writeList(filename, inlist, mode = 'w', addNewLine = False):
 #     if addNewLine: nl = "\n"
 #     else: nl = ""

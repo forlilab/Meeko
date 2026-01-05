@@ -11,6 +11,8 @@ import sys
 import numpy as np
 
 from meeko.reactive import atom_name_to_molsetup_index, assign_reactive_types_by_index
+from meeko.utils.utils import parse_cmdline_res
+from meeko.utils.utils import parse_cmdline_res_assign
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
@@ -56,52 +58,6 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
             }
         }
     }
-
-def parse_cmdline_res(string):
-    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
-    blocks = ("," + string).split(":")
-    nr_blocks = len(blocks) - 1
-    keys = []
-    for i in range(nr_blocks):
-        chain = blocks[i].split(",")[-1]
-        if i + 1 == nr_blocks:
-            resnums = blocks[i + 1].split(",")
-        else:
-            resnums = blocks[i + 1].split(",")[:-1]
-        if len(resnums) == 0:
-            raise ValueError(f"missing residue in {resnums}")
-        for resnum in resnums:
-            keys.append(f"{chain}:{resnum}")
-    return keys
-
-
-def parse_cmdline_res_assign(string):
-    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}"""
-
-    output = {}
-    nr_assignments = string.count("=")
-    string = "," + string  # enables `residues =` below to work in first iteraton
-    tmp = string.split("=")
-    for i in range(nr_assignments):
-        residues = tmp[i].split(",")[1:]
-        assigned_name = tmp[i + 1].split(",")[0]
-        chain = ""
-        for residue in residues:
-            fields = residue.split(":")
-            if len(fields) == 1:
-                resnum = fields[0]
-            elif len(fields) == 2:
-                chain = fields[0]
-                resnum = fields[1]
-            else:
-                raise ValueError(f"too many : in {residue}")
-            if len(resnum) == 0:
-                raise ValueError(f"missing residue in {residues}")
-            key = f"{chain}:{resnum}"
-            if key in output:
-                raise ValueError(f"repeated {key} in {residue}")
-            output[key] = assigned_name
-    return output
 
 
 class TalkativeParser(argparse.ArgumentParser):
@@ -800,16 +756,21 @@ def main():
     for res_id in all_flexres:
         polymer.flexibilize_sidechain(res_id, mk_prep)
 
-    # add rotatable terminal groups
-    mk_prep_rigid_nonTerm = MoleculePreparation(
-        rigidify_bonds_smarts=["[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"],
-        rigidify_bonds_indices=[(0, 1)],
-    )
-
+    # Make terminal groups rotatable by rigidifying everything except the
+    # terminal group and then making the residue flexible. The definition of
+    # sidechain is dynamic: whatever is allowed to rotate constitutes the
+    # sidechain (for PDBQT writing purposes).
+    rot_term_smarts = "[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"
+    rot_term_indices = (0, 1)
+    mk_config_rot_term = mk_config.copy()
+    mk_config_rot_term.setdefault("rigidify_bonds_smarts", [])
+    mk_config_rot_term.setdefault("rigidify_bonds_indices", [])
+    mk_config_rot_term["rigidify_bonds_smarts"].append(rot_term_smarts)
+    mk_config_rot_term["rigidify_bonds_indices"].append(rot_term_indices)
+    mk_prep_rot_term = MoleculePreparation.from_config(mk_config_rot_term)
     for res_id in rot_term_res:
-        polymer.monomers[res_id].parameterize(mk_prep_rigid_nonTerm, res_id)
-        polymer.flexibilize_sidechain(res_id, mk_prep_rigid_nonTerm)
-    
+        polymer.monomers[res_id].parameterize(mk_prep_rot_term, res_id)
+        polymer.flexibilize_sidechain(res_id, mk_prep_rot_term)
     
     any_lig_base_types = [
         "HD",

@@ -493,11 +493,11 @@ class PDBQTWriterLegacy:
                 success = False
             c = atom.charge
             if not bad_charge_ok and (
-                type(c) != float and type(c) != int or math.isnan(c) or math.isinf(c)
+                type(c) not in (np.float32, np.float64, float, int) or math.isnan(c) or math.isinf(c)
             ):
                 error_msg += (
-                    "atom number %d has non finite charge, mol name: %s, charge: %s\n"
-                    % (atom.index, setup.get_mol_name(), str(c))
+                    "atom number %d has non finite charge, mol name: %s, charge: %s, type: %s\n"
+                    % (atom.index, setup.get_mol_name(), str(c), type(c))
                 )
                 success = False
 
