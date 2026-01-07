@@ -105,7 +105,7 @@ class MoleculePreparation:
         reactive_smarts=None,
         reactive_smarts_idx=None,
         add_index_map=False,
-        remove_smiles=False
+        remove_smiles=False,
     ):
         """
 
@@ -160,10 +160,6 @@ class MoleculePreparation:
         self.load_atom_params = load_atom_params
         self.add_atom_types = add_atom_types
 
-        # will save props that will be passed through, 
-        # like json charges, but could be used for other props. 
-        self.misc_props = None
-
         self.atom_params = self.get_atom_params(
             input_atom_params, load_atom_params, add_atom_types, self.packaged_params
         )
@@ -172,7 +168,7 @@ class MoleculePreparation:
             raise NotImplementedError("load_offatom_params not implemented")
         self.load_offatom_params = load_offatom_params
 
-        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl", "json"]
+        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl"]
         if charge_model not in allowed_charge_models:
             raise ValueError(
                 "unrecognized charge_model: %s, allowed options are: %s"
@@ -264,7 +260,6 @@ class MoleculePreparation:
         if bad_keys:
             warnings.warn(f"Ignore unexpected keys: {bad_keys}")
         config = {k: v for k,v in config.items() if k in expected_keys}
-
         p = cls(**config)
         return p
     
@@ -552,7 +547,6 @@ class MoleculePreparation:
             charge_model= self.charge_model,
             read_charges_from_prop=self.charge_atom_prop,
             conformer_id=conformer_id,
-            misc_props = self.misc_props
         )
 
         self.check_external_ring_break(setup, delete_ring_bonds, glue_pseudo_atoms)

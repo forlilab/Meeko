@@ -196,8 +196,8 @@ def get_args():
     
     config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "nagl", "zero", "json", "read"),
-        help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr, 'json' reads from json input",
+        choices=("gasteiger", "espaloma", "nagl", "zero", "read"),
+        help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
         default=None,
     )
 
@@ -608,15 +608,6 @@ def main():
             json_string = f.read()
         try:
             polymer = Polymer.from_json(json_string)
-            polymer_charges = {}
-            if args.charge_model == "json":
-                for res, mon in polymer.monomers.items():
-                    charges = []
-                    for atom in mon.molsetup.atoms:
-                        charges.append(atom.charge)
-                    polymer_charges[res] = charges
-
-
             pdb_string = polymer.to_pdb()
 
             polymer = Polymer.from_pdb_string(
@@ -629,9 +620,7 @@ def main():
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
-                props = polymer_charges
             )
-
         except PolymerCreationError as e:
             print(e)
             sys.exit(1)

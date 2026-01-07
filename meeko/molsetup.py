@@ -1556,7 +1556,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         charge_model: str = "gasteiger",
         read_charges_from_prop: str = None,
         conformer_id: int = -1,
-        misc_props = None
     ):
         """
 
@@ -1610,7 +1609,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
-        molsetup.init_atom(charge_model, read_charges_from_prop, coords, misc_props)
+        molsetup.init_atom(charge_model, read_charges_from_prop, coords)
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         # molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
@@ -1625,11 +1624,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         return molsetup
 
-    def init_atom(self, 
-                  charge_model: str, 
-                  read_charges_from_prop: str, 
-                  coords: list[np.ndarray], 
-                  misc_props: list):
+    def init_atom(self, charge_model: str, read_charges_from_prop: str, coords: list[np.ndarray]):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
 
@@ -1646,7 +1641,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         """
         # extract/generate charges
         if charge_model == "gasteiger": 
-
             if read_charges_from_prop is not None: 
                 raise ValueError("Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set.")
             
@@ -1702,13 +1696,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 raise ValueError(
                     f"The list of charges based on atom property name {read_charges_from_prop} contains None. "
                 )  
-            
-        elif charge_model == "json":
-            if misc_props is None:
-                raise ValueError(
-                    f"No charges were extracted from the json input. Check input for correctness."
-                )
-            charges = misc_props
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
 
