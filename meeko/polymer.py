@@ -762,6 +762,7 @@ class Polymer(BaseJSONParsable):
         set_template: dict[str, str] = None,
         blunt_ends: list[tuple[str, int]] = None,
         get_atomprop_from_raw: dict = None,
+        props: dict = None
     ):
         """
         Parameters
@@ -935,7 +936,7 @@ class Polymer(BaseJSONParsable):
             monomer.molsetup_mapidx = mapidx_from_pad
 
         if mk_prep is not None:
-            self.parameterize(mk_prep, get_atomprop_from_raw = get_atomprop_from_raw)
+            self.parameterize(mk_prep, get_atomprop_from_raw = get_atomprop_from_raw, props=props)
 
         return
     
@@ -1076,7 +1077,8 @@ class Polymer(BaseJSONParsable):
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc=None,
-        default_altloc=None
+        default_altloc=None,
+        props = None
     ):
         """
 
@@ -1092,6 +1094,7 @@ class Polymer(BaseJSONParsable):
         blunt_ends
         wanted_altloc
         default_altloc
+        props
 
         Returns
         -------
@@ -1136,6 +1139,7 @@ class Polymer(BaseJSONParsable):
                         " than one bond between them"
                     )
                     raise NotImplementedError(msg)
+
         polymer = cls(
             raw_input_mols,
             bonds,
@@ -1143,6 +1147,7 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            props = props
         )
 
         unmatched_res = polymer.get_ignored_monomers()
@@ -1347,7 +1352,7 @@ class Polymer(BaseJSONParsable):
 
         return polymer
 
-    def parameterize(self, mk_prep, get_atomprop_from_raw = None):
+    def parameterize(self, mk_prep, get_atomprop_from_raw = None, props = None):
         """
 
         Parameters
@@ -1360,7 +1365,10 @@ class Polymer(BaseJSONParsable):
         """
 
         for residue_id in self.get_valid_monomers():
-            self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
+            self.monomers[residue_id].parameterize(mk_prep, 
+                                                   residue_id, 
+                                                   get_atomprop_from_raw = get_atomprop_from_raw, 
+                                                   props = props[residue_id])
 
     def flexibilize_sidechain(self, residue_id, mk_prep):
         if residue_id not in self.get_valid_monomers():
@@ -2519,7 +2527,7 @@ class Monomer(BaseJSONParsable):
         self.atom_names = atom_names_list
         return
 
-    def parameterize(self, mk_prep, residue_id, get_atomprop_from_raw: dict = None):
+    def parameterize(self, mk_prep, residue_id, get_atomprop_from_raw: dict = None, props: list = None):
 
         if get_atomprop_from_raw: 
             if any(not isinstance(prop_name, str) for prop_name in get_atomprop_from_raw.keys()): 
@@ -2537,6 +2545,11 @@ class Monomer(BaseJSONParsable):
                         prop_value = str(default_value)
                     atom.SetProp(prop_name, prop_value)
 
+        # give list of residue charges in case of json
+        # mk_prep then handles it internally
+        if mk_prep.charge_model == "json":
+            mk_prep.misc_props = props
+        
         molsetups = mk_prep(self.padded_mol)
         if len(molsetups) != 1:
             raise NotImplementedError(f"need 1 molsetup but got {len(molsetups)}")
