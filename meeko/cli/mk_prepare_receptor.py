@@ -96,7 +96,7 @@ def get_args():
     io_group.add_argument(
         "--read_json",
         metavar="JSON_FILENAME",
-        help="reads json receptor, probably prepared by meeko",
+        help="reads json receptor, probably prepared by meeko. Existing parameters and flexres are lost.",
     )
     io_group.add_argument(
         "--read_pqr",
