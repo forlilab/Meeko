@@ -850,7 +850,7 @@ def export_chem_templates_to_json(cc_list: list[ChemicalComponent], json_fname: 
         return json_str
 
 
-def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str: 
+def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2, ignore_https_cert = False) -> str: 
     """
     Fetch a CIF file from the RCSB PDB website for a given residue name.
 
@@ -875,6 +875,10 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
     """
     url = f"https://files.rcsb.org/ligands/download/{resname}.cif"
     file_path = f"{resname}.cif"
+    print(f"{ignore_https_cert}")
+    if ignore_https_cert:
+        import ssl
+        ssl._create_default_https_context = ssl._create_unverified_context
     for retry in range(max_retries):
         try:
             with urllib.request.urlopen(url) as response:
@@ -897,7 +901,7 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2) -> str:
                 logger.info(f"Download failed for {resname}. Error: {e}. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
             else:
-                err = f"Max retries reached. Could not download CIF file for {resname}. Error: {e}"
+                err = f"Max retries reached. Could not download CIF file for {resname}. If this is a certificate error and you trust rcsb.org is not spoofed, you could try the --ignore_https_cert option. Error: {e}"
                 raise RuntimeError(err) from e
 
 # Default chemical groups for deprotonate
@@ -912,7 +916,7 @@ acidic_proton_loc_canonical = {
     }
 
 # Standard pipelines
-def build_noncovalent_CC(basename: str) -> ChemicalComponent: 
+def build_noncovalent_CC(basename: str, ignore_https_cert = False) -> ChemicalComponent: 
     """
     Build a noncovalent chemical component from a CIF file.
 
@@ -927,7 +931,7 @@ def build_noncovalent_CC(basename: str) -> ChemicalComponent:
         The constructed ChemicalComponent instance.
     """
     with ChemicalComponent_LoggingControler(): 
-        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename), basename)
+        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename, ignore_https_cert=ignore_https_cert), basename)
         if cc_from_cif is None:
             return None
 
@@ -1057,7 +1061,7 @@ class NA_recipe:
 def build_linked_CCs(basename: str, embed_allowed_smarts: str = None, 
                      cap_allowed_smarts: str = None, cap_protonate: bool = False, 
                      pattern_to_label_mapping_standard = dict[str, str], 
-                     variant_dict = dict[str, tuple]) -> list[ChemicalComponent]: 
+                     variant_dict = dict[str, tuple], ignore_https_cert = False) -> list[ChemicalComponent]: 
     """
     Build a linked chemical component from a CIF file.
 
@@ -1084,7 +1088,7 @@ def build_linked_CCs(basename: str, embed_allowed_smarts: str = None,
         List of ChemicalComponent instances with the added variants.
     """
     with ChemicalComponent_LoggingControler(): 
-        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename), basename)
+        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename, ignore_https_cert=ignore_https_cert), basename)
         if cc_from_cif is None:
             return None
         

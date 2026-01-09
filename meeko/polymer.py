@@ -763,6 +763,7 @@ class Polymer(BaseJSONParsable):
         set_template: dict[str, str] = None,
         blunt_ends: list[tuple[str, int]] = None,
         get_atomprop_from_raw: dict = None,
+        ignore_https_cert = False,
     ):
         """
         Parameters
@@ -870,7 +871,7 @@ class Polymer(BaseJSONParsable):
             if unbound_unknown_res: 
                 for resname in set(unbound_unknown_res.values()): 
                     try: 
-                        cc = build_noncovalent_CC(resname)
+                        cc = build_noncovalent_CC(resname, ignore_https_cert=ignore_https_cert)
                         fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
                         residue_templates.update({resname: ResidueTemplate(
                                                     smiles = fetch_template_dict['smiles'],
@@ -885,7 +886,7 @@ class Polymer(BaseJSONParsable):
                 failed_build = set()
                 try: 
                     for resname in set(bonded_unknown_res.values()): 
-                        cc_list = build_linked_CCs(resname)
+                        cc_list = build_linked_CCs(resname, ignore_https_cert=ignore_https_cert)
                         if not cc_list: 
                             failed_build.add(resname)
                         else:
@@ -1073,6 +1074,7 @@ class Polymer(BaseJSONParsable):
         mk_prep,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
@@ -1088,6 +1090,7 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
@@ -1166,6 +1169,7 @@ class Polymer(BaseJSONParsable):
         mk_prep,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
@@ -1179,6 +1183,7 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
@@ -1264,6 +1269,7 @@ class Polymer(BaseJSONParsable):
         mk_prep,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
@@ -1279,6 +1285,7 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
