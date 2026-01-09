@@ -133,6 +133,11 @@ def get_args():
         metavar="PDB_FILENAME",
     )
     io_group.add_argument(
+        "--ignore_https_cert",
+        action="store_true",
+        help="Ignore https certificate errors when downloading from PDB database (potentially dangerous if rscb.org were spoofed, please only use as a last resort) ",
+    )
+    io_group.add_argument(
         "-g",
         "--write_gpf",
         metavar="GPF_FILENAME",
@@ -569,6 +574,7 @@ def main():
                     mk_prep,
                     set_template,
                     delete_residues,
+                    args.ignore_https_cert,
                     args.allow_bad_res,
                     blunt_ends=blunt_ends,
                     wanted_altloc=wanted_altloc,
@@ -587,6 +593,7 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
+                args.ignore_https_cert,
                 args.allow_bad_res,
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
@@ -615,6 +622,7 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
+                args.ignore_https_cert,
                 args.allow_bad_res,
                 blunt_ends=blunt_ends,
             )
