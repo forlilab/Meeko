@@ -875,8 +875,8 @@ def fetch_from_pdb(resname: str, max_retries = 5, backoff_factor = 2, ignore_htt
     """
     url = f"https://files.rcsb.org/ligands/download/{resname}.cif"
     file_path = f"{resname}.cif"
-    print(f"{ignore_https_cert}")
     if ignore_https_cert:
+        logger.warning(f"Ignoring https certificate of {url}.")
         import ssl
         ssl._create_default_https_context = ssl._create_unverified_context
     for retry in range(max_retries):

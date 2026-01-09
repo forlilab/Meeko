@@ -782,6 +782,7 @@ class Polymer(BaseJSONParsable):
             A dict mapping residue IDs in the format <chain>:<resnum> such as "A:42" to ResidueTemplate instances.
         blunt_ends: list (tuple (string, int))
             A list of tuples where each tuple is residue IDs and 0-based atom index, e.g.; ("A:42", 0)
+        ignore_https_cert: Ignore https cert of PDB database (rcsb.org) when True
 
         Returns
         -------
@@ -1147,6 +1148,8 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            None,
+            ignore_https_cert
         )
 
         unmatched_res = polymer.get_ignored_monomers()
@@ -1238,6 +1241,7 @@ class Polymer(BaseJSONParsable):
             set_template,
             blunt_ends,
             get_atomprop_from_raw = {"PQRCharge": 0.},
+            ignore_https_cert=ignore_https_cert
         )
 
         if polymer.log["matched_with_H_anomaly"]:
@@ -1343,6 +1347,8 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            None,
+            ignore_https_cert
         )
         unmatched_res = polymer.get_ignored_monomers()
         handle_parsing_situations(
