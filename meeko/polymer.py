@@ -437,8 +437,9 @@ def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
     used_h = (
         set()
     )  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
+    to_del = {k: atom.GetIdx() for k, atom in to_del.items()}
     for h_index, parent in to_del.items():
-        for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
+        for atom in tmpmol.GetAtomWithIdx(parent).GetNeighbors():
             has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
             if atom.GetAtomicNum() == 1 and has_new_position:
                 if atom.GetIdx() not in used_h:
