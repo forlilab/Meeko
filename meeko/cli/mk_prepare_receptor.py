@@ -94,6 +94,11 @@ def get_args():
         help="reads PDB, not PDBQT, and does not use ProDy",
     )
     io_group.add_argument(
+        "--read_json",
+        metavar="JSON_FILENAME",
+        help="reads json receptor, probably prepared by meeko. Existing parameters and flexres are lost.",
+    )
+    io_group.add_argument(
         "--read_pqr",
         metavar="PQR_FILENAME",
         help="reads PQR and does not use ProDy",
@@ -131,6 +136,11 @@ def get_args():
         help="prepared receptor (must specify filename)",
         nargs="*",
         metavar="PDB_FILENAME",
+    )
+    io_group.add_argument(
+        "--ignore_https_cert",
+        action="store_true",
+        help="Ignore https certificate errors when downloading from PDB database (potentially dangerous if rscb.org were spoofed, please only use as a last resort) ",
     )
     io_group.add_argument(
         "-g",
@@ -198,7 +208,7 @@ def get_args():
 
     config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "zero", "read", "nagl"),
+        choices=("gasteiger", "espaloma", "nagl", "zero", "read"),
         help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
         default=None,
     )
@@ -286,16 +296,16 @@ def get_args():
         logger.addHandler(handler)
         logger.debug("Starting to log")
     
-    num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)])
+    num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody, args.read_json)])
 
     if num_input_flags == 0:
         parser.print_help()
-        msg = "Need input filename: use either -i/--read_with_prody, --read_pdb or --read_pqr"
+        msg = "Need input filename: use either -i/--read_with_prody, --read_pdb, --read_json, or --read_pqr"
         print(eol + msg)
         sys.exit(2)
 
     if num_input_flags > 1:
-        msg = "Can't use more than one at a time from -i/--read_with_prody, --read_pdb and --read_pqr"
+        msg = "Can't use more than one at a time from -i/--read_with_prody, --read_pdb, --read_json, and --read_pqr"
         print(eol + msg, file=sys.stderr)
         sys.exit(2)
 
@@ -578,6 +588,7 @@ def main():
                     mk_prep,
                     set_template,
                     delete_residues,
+                    args.ignore_https_cert,
                     args.allow_bad_res,
                     blunt_ends=blunt_ends,
                     wanted_altloc=wanted_altloc,
@@ -590,6 +601,31 @@ def main():
         with open(args.read_pdb) as f:
             pdb_string = f.read()
         try:
+            polymer = Polymer.from_pdb_string(
+                pdb_string,
+                templates,  # residue_templates, padders, ambiguous,
+                mk_prep,
+                set_template,
+                delete_residues,
+                args.ignore_https_cert,
+                args.allow_bad_res,
+                blunt_ends=blunt_ends,
+                wanted_altloc=wanted_altloc,
+                default_altloc=args.default_altloc,
+            )
+        except PolymerCreationError as e:
+            print(e)
+            sys.exit(1)
+    elif args.read_json is not None:
+        # simple approach
+        # convert to pdb and go through the same route as above.
+        # Ensures user options are respected
+        with open(args.read_json) as f:
+            json_string = f.read()
+        try:
+            polymer = Polymer.from_json(json_string)
+            pdb_string = polymer.to_pdb()
+
             polymer = Polymer.from_pdb_string(
                 pdb_string,
                 templates,  # residue_templates, padders, ambiguous,
@@ -624,6 +660,7 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
+                args.ignore_https_cert,
                 args.allow_bad_res,
                 blunt_ends=blunt_ends,
             )
