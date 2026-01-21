@@ -789,6 +789,7 @@ class Polymer(BaseJSONParsable):
         ------
         ValueError:
         """
+        
 
         # TODO simplify SMARTS for adjacent res in padders
 
@@ -2537,7 +2538,7 @@ class Monomer(BaseJSONParsable):
                         prop_value = str(default_value)
                     atom.SetProp(prop_name, prop_value)
 
-        molsetups = mk_prep(self.padded_mol)
+        molsetups = mk_prep(mol=self.padded_mol, template_key = self.residue_template_key)
         if len(molsetups) != 1:
             raise NotImplementedError(f"need 1 molsetup but got {len(molsetups)}")
         molsetup = molsetups[0]

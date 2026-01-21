@@ -188,10 +188,17 @@ def get_args():
         default=[],
         help='specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
     )
+
     
     config_group.add_argument(
+        "--recompute_charges",
+        help="recompute charges with the given charge model instead of reading from template",
+        action="store_true",
+    )
+
+    config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "zero", "read"),
+        choices=("gasteiger", "espaloma", "zero", "read", "nagl"),
         help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
         default=None,
     )
@@ -511,6 +518,8 @@ def main():
     # update config by inputs from arguments
     if args.charge_model is not None: 
         mk_config["charge_model"] = args.charge_model
+        mk_config["compute_charges"] = args.recompute_charges
+        print("jani debug, recompute_charges", args.recompute_charges)
     if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
         if args.read_pqr is None:
             print("Error: --charge_model read requires --read_pqr")
