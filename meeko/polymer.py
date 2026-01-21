@@ -35,6 +35,7 @@ from .chemtempgen import build_noncovalent_CC
 from .chemtempgen import build_linked_CCs
 
 import numpy as np
+from tqdm import tqdm
 
 data_path = files("meeko") / "data"
 periodic_table = Chem.GetPeriodicTable()
@@ -1376,8 +1377,7 @@ class Polymer(BaseJSONParsable):
 
         print("    Parametrizing Monomers     ")
         print("    ----------------------     ")
-        for residue_id in self.get_valid_monomers():
-
+        for residue_id in tqdm(self.get_valid_monomers(), desc="Monomers: "):
             self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
 
     def flexibilize_sidechain(self, residue_id, mk_prep):
