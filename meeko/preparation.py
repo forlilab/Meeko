@@ -209,15 +209,10 @@ class MoleculePreparation:
                 % (dihedral_model, allowed_dihedral_models)
             )
 
-        if self.compute_charges:
-            #not sure if this is the best way to handle this.
-            dihedral_model = "openff"
-
-
         self.dihedral_model = dihedral_model
         self.dihedral_params = dihedral_list
 
-        if self.compute_charges and (dihedral_model == "espaloma" or charge_model == "espaloma"):
+        if dihedral_model == "espaloma" or (charge_model == "espaloma" and self.compute_charges):
             self.espaloma_model = EspalomaTyper()
 
         self.reactive_smarts = reactive_smarts
@@ -574,21 +569,20 @@ class MoleculePreparation:
 
         # Convert molecule to graph and apply trained Espaloma model
         # skip if charges are read from template
-        if self.compute_charges:
-            if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
-                if mol.GetNumAtoms() > 1:
-                    molgraph = self.espaloma_model.get_espaloma_graph(setup)
+        if self.dihedral_model == "espaloma" or (self.charge_model == "espaloma" and self.compute_charges):
+            if mol.GetNumAtoms() > 1:
+                molgraph = self.espaloma_model.get_espaloma_graph(setup)
 
-            # Grab dihedrals from graph node and set them to the molsetup
-            if self.dihedral_model == "espaloma" and mol.GetNumAtoms() > 3:
-                self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
+        # Grab dihedrals from graph node and set them to the molsetup
+        if self.dihedral_model == "espaloma" and mol.GetNumAtoms() > 3:
+            self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
 
-            # Grab charges from graph node and set them to the molsetup
-            if self.charge_model == "espaloma":
-                if mol.GetNumAtoms() > 1:
-                    self.espaloma_model.set_espaloma_charges(setup, molgraph)
-                else:
-                    setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
+        # Grab charges from graph node and set them to the molsetup
+        if self.charge_model == "espaloma" and self.compute_charges:
+            if mol.GetNumAtoms() > 1:
+                self.espaloma_model.set_espaloma_charges(setup, molgraph)
+            else:
+                setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
             
 
         # merge hydrogens (or any terminal atoms)
