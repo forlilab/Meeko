@@ -1607,7 +1607,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         # Creating and populating the molecule setup with properties from RDKit as well as calculated values from our
         # functions
-        print("jani debug, before init_atom")
+
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
@@ -1654,8 +1654,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         -------
         None
         """
-
-        print("jani debug, compute charges: ", compute_charges)
 
         if compute_charges:
             # extract/generate charges
@@ -1718,11 +1716,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             else:
                 charges = [0.0] * self.mol.GetNumAtoms()
         else: # read from template json
-            print("reading charges from template")
             charges = self.get_charges_from_template(mol, charge_model, template_key)
-            print("jani debug, charges for template: ", template_key)
-            print(charges)
-
 
         # register atom
         for a in self.mol.GetAtoms():
@@ -1775,10 +1769,11 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         # substructure match between template mol and padded mol
         template_struct = charge_template[template_key]
         template_mol = Chem.MolFromMolBlock(template_struct['molblock'], removeHs=False)
-        match_indices = mol.GetSubstructMatches(template_mol)
+        self.template_mol = template_mol
+        match_indices = list(template_mol.GetSubstructMatch(mol))
 
         # check for mismatch
-        if len(match_indices[0]) != mol.GetNumAtoms():
+        if len(match_indices) != mol.GetNumAtoms():
             l1 = len(match_indices[0])
             l2 = mol.GetNumAtoms()
             raise ValueError(f"Mismatch between template mol ({l1} atoms) and padded mol ({l2} atoms). Abandoning prep!")
@@ -1792,12 +1787,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         elif charge_model == "gasteiger":
             charges = template_struct['gasteiger_charges']
         else:
-            raise ValueError("Incompatible charge model requested from charge template")
+            raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
         
         # make sure order of charge is same for both version of the residue
         charges = np.array(charges)
         charges = [float(x) for x in charges[match_indices]]
-
+        
         return charges
 
 

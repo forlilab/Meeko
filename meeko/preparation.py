@@ -543,7 +543,7 @@ class MoleculePreparation:
             raise TypeError(
                 "Molecule is not an instance of supported types: %s" % type(mol)
             )
-        print("jani debug, before from_mol")
+
         setup_class = self._classes_setup[mol_type]
         setup = setup_class.from_mol(
             mol,

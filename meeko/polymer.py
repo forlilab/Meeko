@@ -1374,7 +1374,10 @@ class Polymer(BaseJSONParsable):
 
         """
 
+        print("    Parametrizing Monomers     ")
+        print("    ----------------------     ")
         for residue_id in self.get_valid_monomers():
+
             self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
 
     def flexibilize_sidechain(self, residue_id, mk_prep):
@@ -2579,12 +2582,14 @@ class Monomer(BaseJSONParsable):
                 charges.append(atom.charge)
                 not_ignored_idxs.append(atom.index)
         charges = rectify_charges(charges, net_charge, decimals=3)
+
         for i, j in enumerate(not_ignored_idxs):
             molsetup.atoms[j].charge = charges[i]
         self._set_pdbinfo(residue_id)
 
         if self.is_movable:
             self.flexibilize(mk_prep)
+        
         return
 
     def flexibilize(self, mk_prep):

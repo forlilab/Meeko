@@ -529,7 +529,12 @@ def main():
     if args.charge_model is not None: 
         mk_config["charge_model"] = args.charge_model
         mk_config["compute_charges"] = args.recompute_charges
-        print("jani debug, recompute_charges", args.recompute_charges)
+        if args.recompute_charges:
+            # use green text
+            print(f"\033[32m Charges will be computed from scratch with charge model {args.charge_model}\n \033[0m")
+        else:
+            print(f"\033[32m Charges for charge model {args.charge_model} will be read from template file \n \033[0m")
+
     if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
         if args.read_pqr is None:
             print("Error: --charge_model read requires --read_pqr")
