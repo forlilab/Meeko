@@ -1786,6 +1786,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             charges = template_struct['espaloma_charges']
         elif charge_model == "gasteiger":
             charges = template_struct['gasteiger_charges']
+        elif charge_model == "zero":
+            charges = [0.0] * self.mol.GetNumAtoms()
         else:
             raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
         
