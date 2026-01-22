@@ -591,6 +591,27 @@ class ResidueChemTemplates(BaseJSONParsable):
         self.padders = padders
         self.ambiguous = ambiguous
 
+        # also read charge template here
+        # TODO add option for custom charge template to be inputed. 
+        self.template_charges = ResidueChemTemplates._read_template_charge("template_charges")
+    
+    @classmethod
+    def _read_template_charge(cls, filename):
+        data_path = files("meeko") / "data"
+        json_file = ResidueChemTemplates.lookup_filename(filename, data_path)
+        try:
+        # Open the file in read mode ('r') using a context manager
+            with open(json_file, 'r') as file:
+                # Deserialize the JSON data into a Python dictionary
+                template_charge = json.load(file)
+        except FileNotFoundError:
+            print("Error: The file 'template_charges.json' was not found.") #
+        except json.JSONDecodeError as e:
+            print(f"Error: Failed to decode template_charges.json from the file: {e}") #
+        
+        return template_charge
+
+
     # region JSON-interchange functions
     @classmethod
     def json_encoder(cls, obj: "ResidueChemTemplates") -> Optional[dict[str, Any]]:
@@ -1494,6 +1515,7 @@ class Polymer(BaseJSONParsable):
         """
 
         residue_templates = residue_chem_templates.residue_templates
+        template_charges = residue_chem_templates.template_charges
         monomers = {}
         log = {
             "chosen_by_fewest_missing_H": {},
@@ -1725,6 +1747,7 @@ class Polymer(BaseJSONParsable):
                 atom_names,
             )
             monomers[residue_key].template = template
+            monomers[residue_key].template_charge = template_charges[template_key]
 
         return monomers, log
 
@@ -2422,6 +2445,7 @@ class Monomer(BaseJSONParsable):
         # TODO convert link indices/labels in template to rdkit_mol indices herein
         # self.link_labels = {}
         self.template = None
+        self.template_charge = None
 
     @staticmethod
     def _invert_mapping(mapping):
@@ -2555,7 +2579,9 @@ class Monomer(BaseJSONParsable):
                         prop_value = str(default_value)
                     atom.SetProp(prop_name, prop_value)
 
-        molsetups = mk_prep(mol=self.padded_mol, template_key = self.residue_template_key)
+        molsetups = mk_prep(mol=self.padded_mol, 
+                            template_key = self.residue_template_key, 
+                            template_charge = self.template_charge)
         if len(molsetups) != 1:
             raise NotImplementedError(f"need 1 molsetup but got {len(molsetups)}")
         molsetup = molsetups[0]
@@ -3047,7 +3073,9 @@ class ResidueTemplate(BaseJSONParsable):
         mol = Chem.MolFromSmiles(smiles, ps)
         self.check(mol, link_labels, atom_names)
         self.mol = mol
-    
+
+
+
     # region JSON-interchange functions
     @classmethod
     def json_encoder(cls, obj: "ResidueTemplate") -> Optional[dict[str, Any]]:

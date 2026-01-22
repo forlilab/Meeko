@@ -564,6 +564,7 @@ def main():
     else: 
         templates = ResidueChemTemplates.create_from_defaults()
 
+
     for item in args.add_templates:
         if item.endswith(".json"):
             templates.add_json_file(item)

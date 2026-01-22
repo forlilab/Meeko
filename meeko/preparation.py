@@ -507,7 +507,8 @@ class MoleculePreparation:
         glue_pseudo_atoms=None,
         conformer_id=-1,
         rename_atoms=False,
-        template_key=None
+        template_key=None,
+        template_charge=None
     ):
         """
         Create an RDKitMoleculeSetup from an RDKit Mol object.
@@ -553,7 +554,8 @@ class MoleculePreparation:
             read_charges_from_prop=self.charge_atom_prop,
             conformer_id=conformer_id,
             compute_charges=self.compute_charges, 
-            template_key=template_key
+            template_key=template_key,
+            template_charge=template_charge
         )
 
         self.check_external_ring_break(setup, delete_ring_bonds, glue_pseudo_atoms)

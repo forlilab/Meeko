@@ -1557,7 +1557,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         read_charges_from_prop: str = None,
         conformer_id: int = -1,
         compute_charges: bool = False, 
-        template_key: str = None
+        template_key: str = None,
+        template_charge: dict = None
     ):
         """
 
@@ -1618,7 +1619,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                            coords, 
                            compute_charges=compute_charges, 
                            mol = mol, 
-                           template_key=template_key)
+                           template_key = template_key, 
+                           template_charge = template_charge)
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         # molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
@@ -1639,7 +1641,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                   coords: list[np.ndarray], 
                   compute_charges: bool = False,
                   mol: Chem.Mol|None = None, 
-                  template_key: str | None = None):
+                  template_key: str | None = None,
+                  template_charge: str | None = None):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
 
@@ -1716,7 +1719,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             else:
                 charges = [0.0] * self.mol.GetNumAtoms()
         else: # read from template json
-            charges = self.get_charges_from_template(mol, charge_model, template_key)
+            charges = self.get_charges_from_template(mol, charge_model, template_key, template_charge)
 
         # register atom
         for a in self.mol.GetAtoms():
@@ -1735,6 +1738,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             mol: Chem.Mol, 
             charge_model: str, 
             template_key: str, 
+            template_charge: dict, 
     ):
         """
         Obtain charges from template json
@@ -1750,25 +1754,24 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             raise ValueError(
                     f"No rdkit mol generated for current residue. "
                 )
-        from .polymer import ResidueChemTemplates
-        from importlib.resources import files
+        # from .polymer import ResidueChemTemplates
+        # from importlib.resources import files
 
-        # read json template
-        data_path = files("meeko") / "data"
-        json_file = ResidueChemTemplates.lookup_filename("template_charges", data_path)
-        try:
-        # Open the file in read mode ('r') using a context manager
-            with open(json_file, 'r') as file:
-                # Deserialize the JSON data into a Python dictionary
-                charge_template = json.load(file)
-        except FileNotFoundError:
-            print("Error: The file 'template_charges.json' was not found.") #
-        except json.JSONDecodeError as e:
-            print(f"Error: Failed to decode JSON from the file: {e}") #
+        # # read json template
+        # data_path = files("meeko") / "data"
+        # json_file = ResidueChemTemplates.lookup_filename("template_charges", data_path)
+        # try:
+        # # Open the file in read mode ('r') using a context manager
+        #     with open(json_file, 'r') as file:
+        #         # Deserialize the JSON data into a Python dictionary
+        #         charge_template = json.load(file)
+        # except FileNotFoundError:
+        #     print("Error: The file 'template_charges.json' was not found.") #
+        # except json.JSONDecodeError as e:
+        #     print(f"Error: Failed to decode JSON from the file: {e}") #
 
         # substructure match between template mol and padded mol
-        template_struct = charge_template[template_key]
-        template_mol = Chem.MolFromMolBlock(template_struct['molblock'], removeHs=False)
+        template_mol = Chem.MolFromMolBlock(template_charge['molblock'], removeHs=False)
         self.template_mol = template_mol
         match_indices = list(template_mol.GetSubstructMatch(mol))
 
@@ -1781,11 +1784,11 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         # get appropriate charge array
         if charge_model == "nagl":
-            charges = template_struct['nagl_charges']
+            charges = template_charge['nagl_charges']
         elif charge_model == "espaloma":
-            charges = template_struct['espaloma_charges']
+            charges = template_charge['espaloma_charges']
         elif charge_model == "gasteiger":
-            charges = template_struct['gasteiger_charges']
+            charges = template_charge['gasteiger_charges']
         elif charge_model == "zero":
             charges = [0.0] * self.mol.GetNumAtoms()
         else:
