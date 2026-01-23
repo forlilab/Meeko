@@ -1482,6 +1482,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         self.atom_to_ring_id = {}
         self.rmsd_symmetry_indices = ()
 
+        self.compute_charges = False
+
     # region JSON-interchange functions
     @classmethod
     def json_encoder(cls, obj: "RDKitMoleculeSetup") -> Optional[dict[str, Any]]:
@@ -1612,13 +1614,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
+        molsetup.compute_charges = compute_charges
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
         molsetup.init_atom(charge_model, 
                            read_charges_from_prop, 
                            coords, 
-                           compute_charges=compute_charges, 
-                           mol = mol, 
                            template_key = template_key, 
                            template_charge = template_charge)
         molsetup.init_bond()
@@ -1639,8 +1640,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                   charge_model: str, 
                   read_charges_from_prop: str, 
                   coords: list[np.ndarray], 
-                  compute_charges: bool = False,
-                  mol: Chem.Mol|None = None, 
                   template_key: str | None = None,
                   template_charge: str | None = None):
         """
@@ -1661,74 +1660,17 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         # Quick sanity check
         if template_key == None:
             print("No template key available, so charges are computed from scratch.")
-            compute_charges=True
+            self.compute_charges=True
 
         if charge_model == "read":
             #pqr option, leave this here for now. 
-            compute_charges = True
+            # since read pqr is computed by the first function. 
+            self.compute_charges = True
 
-        if compute_charges:
-            # extract/generate charges
-            if charge_model == "gasteiger": 
-                if read_charges_from_prop is not None: 
-                    raise ValueError("Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set.")
-                
-                try:
-                    charges = rdkitutils.compute_gasteiger_charges(self.mol)
-                except Exception as e:
-                    print("gasteiger charge computation failed with: ")
-                    print(e)
-            
-            elif charge_model == "nagl":
-                if read_charges_from_prop is not None: 
-                    raise ValueError("Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set.")
-                
-                # compute nagl charges
-                # note this requires the latest openff versions
-                try:
-                    from openff.toolkit import Molecule
-                except ImportError:
-                    print("A recent version of OpenFF is required for NAGL charges")
-
-                # assign stereochemistry
-                # ?test?
-                # Chem.AssignStereochemistryFrom3D(self.mol)
-
-                mol_off = Molecule.from_rdkit(self.mol, allow_undefined_stereo=True, hydrogens_are_explicit=True)
-
-                try:
-
-                    mol_off.assign_partial_charges(
-                        partial_charge_method="openff-gnn-am1bcc-1.0.0.pt"
-                        )
-
-                    charges = mol_off.partial_charges.magnitude.tolist()
-                except Exception as e:
-                    print("NAGL charge computation failed with with exception:")
-                    print(e)
-                    print("Make sure you've installed the latest version of openff")
-
-            elif read_charges_from_prop is not None: 
-                if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
-                    raise ValueError(
-                        f"Invalid atom property name for read_charges_from_prop: expected a nonempty string (str), but got {type(read_charges_from_prop).__name__} instead. "
-                    )
-                charges = [
-                            float(atom.GetProp(read_charges_from_prop)) 
-                            if atom.HasProp(read_charges_from_prop) else None
-                            for atom in self.mol.GetAtoms()
-                        ]
-                if None in charges: 
-                    for idx, charge in enumerate(charges):
-                        if charge is None:
-                            logger.error(f"Charge at index {idx} is None.")
-                    raise ValueError(
-                        f"The list of charges based on atom property name {read_charges_from_prop} contains None. "
-                    )  
-            else:
-                charges = [0.0] * self.mol.GetNumAtoms()
+        if self.compute_charges:
+            charges = self.calculate_charges(charge_model, read_charges_from_prop)
         else: # read from template json
-            charges = self.get_charges_from_template(mol, charge_model, template_key, template_charge)
+            charges = self.get_charges_from_template(charge_model, template_charge)
 
         # register atom
         for a in self.mol.GetAtoms():
@@ -1742,11 +1684,77 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 is_ignore=False,
             )
 
+    def calculate_charges(
+            self,
+            charge_model: str,
+            read_charges_from_prop: str, 
+
+    ):
+        # extract/generate charges
+        if charge_model == "gasteiger": 
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set.")
+            
+            try:
+                charges = rdkitutils.compute_gasteiger_charges(self.mol)
+            except Exception as e:
+                print("gasteiger charge computation failed with: ")
+                print(e)
+        
+        elif charge_model == "nagl":
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set.")
+            
+            # compute nagl charges
+            # note this requires the latest openff versions
+            try:
+                from openff.toolkit import Molecule
+            except ImportError:
+                print("A recent version of OpenFF is required for NAGL charges")
+
+            # assign stereochemistry
+            # ?test?
+            # Chem.AssignStereochemistryFrom3D(self.mol)
+
+            mol_off = Molecule.from_rdkit(self.mol, allow_undefined_stereo=True, hydrogens_are_explicit=True)
+
+            try:
+
+                mol_off.assign_partial_charges(
+                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt"
+                    )
+
+                charges = mol_off.partial_charges.magnitude.tolist()
+            except Exception as e:
+                print("NAGL charge computation failed with with exception:")
+                print(e)
+                print("Make sure you've installed the latest version of openff")
+
+        elif read_charges_from_prop is not None: 
+            if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
+                raise ValueError(
+                    f"Invalid atom property name for read_charges_from_prop: expected a nonempty string (str), but got {type(read_charges_from_prop).__name__} instead. "
+                )
+            charges = [
+                        float(atom.GetProp(read_charges_from_prop)) 
+                        if atom.HasProp(read_charges_from_prop) else None
+                        for atom in self.mol.GetAtoms()
+                    ]
+            if None in charges: 
+                for idx, charge in enumerate(charges):
+                    if charge is None:
+                        logger.error(f"Charge at index {idx} is None.")
+                raise ValueError(
+                    f"The list of charges based on atom property name {read_charges_from_prop} contains None. "
+                )  
+        else:
+            charges = [0.0] * self.mol.GetNumAtoms()
+
+        return charges
+
     def get_charges_from_template(
             self,
-            mol: Chem.Mol, 
             charge_model: str, 
-            template_key: str, 
             template_charge: dict, 
     ):
         """
@@ -1759,7 +1767,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         :param template_key: Description
         :type template_key: str
         """
-        if mol is None:
+        if self.mol is None:
             raise ValueError(
                     f"No rdkit mol generated for current residue. "
                 )
@@ -1767,12 +1775,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         # substructure match between template mol and padded mol
         template_mol = Chem.MolFromMolBlock(template_charge['molblock'], removeHs=False)
         self.template_mol = template_mol
-        match_indices = list(template_mol.GetSubstructMatch(mol))
+        match_indices = list(template_mol.GetSubstructMatch(self.mol))
 
         # check for mismatch
-        if len(match_indices) != mol.GetNumAtoms():
+        if len(match_indices) != self.mol.GetNumAtoms():
             l1 = len(match_indices[0])
-            l2 = mol.GetNumAtoms()
+            l2 = self.mol.GetNumAtoms()
             raise ValueError(f"Mismatch between template mol ({l1} atoms) and padded mol ({l2} atoms). Abandoning prep!")
         
 
