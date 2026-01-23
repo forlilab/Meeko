@@ -190,6 +190,204 @@ def find_inter_mols_bonds(mols_dict):
                     bonds[key].append(value)
     return bonds
 
+def find_inter_mols_bonds_kdtree_fast(mols_dict, covalent_radius, periodic_table, allowance=1.2):
+    keys = list(mols_dict.keys())
+
+    all_xyz = []
+    all_z = []
+    all_mol_id = []
+    all_atom_id = []
+
+    missing = set()
+    for mol_i, k in enumerate(keys):
+        mol = mols_dict[k][0]
+        xyz = mol.GetConformer().GetPositions()
+        zs = np.fromiter((a.GetAtomicNum() for a in mol.GetAtoms()), dtype=np.int32)
+
+        for z0 in np.unique(zs):
+            if int(z0) not in covalent_radius:
+                missing.add(int(z0))
+
+        n = xyz.shape[0]
+        all_xyz.append(xyz)
+        all_z.append(zs)
+        all_mol_id.append(np.full(n, mol_i, dtype=np.int32))
+        all_atom_id.append(np.arange(n, dtype=np.int32))
+
+    if missing:
+        syms = [periodic_table.GetElementSymbol(z) for z in sorted(missing)]
+        raise RuntimeError(f"Missing covalent radii for elements: {', '.join(syms)}")
+
+    xyz = np.vstack(all_xyz).astype(np.float64, copy=False)
+    z = np.concatenate(all_z)
+    mol_id = np.concatenate(all_mol_id)
+    atom_id = np.concatenate(all_atom_id)
+
+    rad = np.array([covalent_radius[int(zi)] for zi in z], dtype=np.float64)
+
+    max_r = 2.0 * allowance * float(max(covalent_radius.values()))
+
+    from scipy.spatial import cKDTree
+    tree = cKDTree(xyz)
+
+    # Avoid Python set from query_pairs; keep it in C/Fortran land
+    # COO gives us row/col indices + distance values directly.
+    coo = tree.sparse_distance_matrix(tree, max_r, output_type="coo_matrix")
+
+    i = coo.row.astype(np.int64, copy=False)
+    j = coo.col.astype(np.int64, copy=False)
+
+    # sparse_distance_matrix includes (i,i) with distance 0 sometimes depending on SciPy;
+    # and includes both (i,j) and (j,i) depending on options/version. Enforce i<j.
+    keep = i < j
+    i = i[keep]
+    j = j[keep]
+    dist2 = np.square(coo.data[keep]).astype(np.float64, copy=False)
+
+    # inter-residue only
+    inter = mol_id[i] != mol_id[j]
+    i = i[inter]
+    j = j[inter]
+    dist2 = dist2[inter]
+
+    if i.size == 0:
+        return {}
+
+    # element-specific covalent cutoff
+    thresh2 = np.square(allowance * (rad[i] + rad[j]))
+    ok = dist2 < thresh2
+    i = i[ok]
+    j = j[ok]
+    if i.size == 0:
+        return {}
+
+    # Canonical (mol_i, mol_j) ordering
+    mi = mol_id[i]
+    mj = mol_id[j]
+    swap = mi > mj
+    if np.any(swap):
+        i_s = i.copy()
+        j_s = j.copy()
+        mi_s = mi.copy()
+        mj_s = mj.copy()
+        i_s[swap], j_s[swap] = j_s[swap], i_s[swap]
+        mi_s[swap], mj_s[swap] = mj_s[swap], mi_s[swap]
+        i, j, mi, mj = i_s, j_s, mi_s, mj_s
+
+    # Build dict (still Python; if this dominates, return arrays instead — see below)
+    bonds = {}
+    for a_glob, b_glob, ma, mb in zip(i, j, mi, mj):
+        key = (keys[int(ma)], keys[int(mb)])
+        val = (int(atom_id[int(a_glob)]), int(atom_id[int(b_glob)]))
+        bonds.setdefault(key, []).append(val)
+
+    return bonds
+
+def find_inter_mols_bonds_kdtree(mols_dict, covalent_radius, periodic_table, allowance=1.2):
+    """
+    mols_dict: mapping key -> (rdkit_mol, whatever)
+    returns: dict[(key_i, key_j)] -> list[(atom_i, atom_j)]
+    """
+
+    # ---- flatten all atoms into arrays ----
+    keys = list(mols_dict.keys())
+
+    all_xyz = []
+    all_z = []
+    all_mol_id = []
+    all_atom_id = []
+
+    # Pre-check radii availability once (fast fail)
+    missing = set()
+
+    for mol_i, k in enumerate(keys):
+        mol = mols_dict[k][0]
+        conf = mol.GetConformer()
+        xyz = conf.GetPositions()  # (n_i, 3) numpy array
+
+        zs = np.array([a.GetAtomicNum() for a in mol.GetAtoms()], dtype=np.int32)
+        for z in np.unique(zs):
+            if z not in covalent_radius:
+                missing.add(z)
+
+        n = xyz.shape[0]
+        all_xyz.append(xyz)
+        all_z.append(zs)
+        all_mol_id.append(np.full(n, mol_i, dtype=np.int32))
+        all_atom_id.append(np.arange(n, dtype=np.int32))
+
+    if missing:
+        syms = [periodic_table.GetElementSymbol(int(z)) for z in sorted(missing)]
+        raise RuntimeError(
+            f"Missing covalent radii for elements: {', '.join(syms)}"
+        )
+
+    xyz = np.vstack(all_xyz)
+    z = np.concatenate(all_z)
+    mol_id = np.concatenate(all_mol_id)
+    atom_id = np.concatenate(all_atom_id)
+
+    # radii per atom (vector)
+    # (safe because we pre-checked)
+    rad = np.array([covalent_radius[int(zi)] for zi in z], dtype=np.float64)
+
+    # ---- global cutoff for candidate generation ----
+    max_possible_covalent_radius = 2.0 * allowance * float(max(covalent_radius.values()))
+
+    # ---- KD-tree neighbor search ----
+    from scipy.spatial import cKDTree
+    tree = cKDTree(xyz)
+
+    # candidate atom pairs within max cutoff
+    # returns set of (i, j) with i < j
+    cand = np.array(list(tree.query_pairs(r=max_possible_covalent_radius)), dtype=np.int64)
+    if cand.size == 0:
+        return {}
+
+    i = cand[:, 0]
+    j = cand[:, 1]
+
+    # keep only inter-monomer pairs
+    inter = mol_id[i] != mol_id[j]
+    i = i[inter]
+    j = j[inter]
+    if i.size == 0:
+        return {}
+
+    # ---- element-specific covalent cutoff filter ----
+    # threshold^2 = (allowance * (r_i + r_j))^2
+    thresh2 = (allowance * (rad[i] + rad[j])) ** 2
+
+    d = xyz[i] - xyz[j]
+    dist2 = np.einsum("ij,ij->i", d, d)
+
+    ok = dist2 < thresh2
+    i = i[ok]
+    j = j[ok]
+    if i.size == 0:
+        return {}
+
+    # ---- build result dict in your original format ----
+    bonds = {}
+    mi = mol_id[i]
+    mj = mol_id[j]
+
+    # ensure deterministic (key_i, key_j) ordering
+    swap = mi > mj
+    i2 = i.copy()
+    j2 = j.copy()
+    mi2 = mi.copy()
+    mj2 = mj.copy()
+    i2[swap], j2[swap] = j2[swap], i2[swap]
+    mi2[swap], mj2[swap] = mj2[swap], mi2[swap]
+
+    for a_glob, b_glob, ma, mb in zip(i2, j2, mi2, mj2):
+        key = (keys[int(ma)], keys[int(mb)])
+        val = (int(atom_id[int(a_glob)]), int(atom_id[int(b_glob)]))
+        bonds.setdefault(key, []).append(val)
+
+    return bonds
+
 
 def mapping_by_mcs(mol, ref):
     """
@@ -1150,7 +1348,11 @@ class Polymer(BaseJSONParsable):
                 unparsed_res.append(res_id)
             else:
                 raw_input_mols[res_id] = (mol, resname)
-        bonds = find_inter_mols_bonds(raw_input_mols)
+
+        import time
+
+        bonds = find_inter_mols_bonds_kdtree(raw_input_mols, covalent_radius, periodic_table, 1.2)
+
         if bonds_to_delete is not None:
             for res1, res2 in bonds_to_delete:
                 popped = ()
@@ -1747,7 +1949,10 @@ class Polymer(BaseJSONParsable):
                 atom_names,
             )
             monomers[residue_key].template = template
-            monomers[residue_key].template_charge = template_charges[template_key]
+            if template_key is not None:
+                monomers[residue_key].template_charge = template_charges[template_key]
+            else:
+                monomers[residue_key].template_charge = None
 
         return monomers, log
 

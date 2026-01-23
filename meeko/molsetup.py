@@ -1658,6 +1658,15 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         None
         """
 
+        # Quick sanity check
+        if template_key == None:
+            print("No template key available, so charges are computed from scratch.")
+            compute_charges=True
+
+        if charge_model == "read":
+            #pqr option, leave this here for now. 
+            compute_charges = True
+
         if compute_charges:
             # extract/generate charges
             if charge_model == "gasteiger": 
@@ -1754,21 +1763,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             raise ValueError(
                     f"No rdkit mol generated for current residue. "
                 )
-        # from .polymer import ResidueChemTemplates
-        # from importlib.resources import files
-
-        # # read json template
-        # data_path = files("meeko") / "data"
-        # json_file = ResidueChemTemplates.lookup_filename("template_charges", data_path)
-        # try:
-        # # Open the file in read mode ('r') using a context manager
-        #     with open(json_file, 'r') as file:
-        #         # Deserialize the JSON data into a Python dictionary
-        #         charge_template = json.load(file)
-        # except FileNotFoundError:
-        #     print("Error: The file 'template_charges.json' was not found.") #
-        # except json.JSONDecodeError as e:
-        #     print(f"Error: Failed to decode JSON from the file: {e}") #
 
         # substructure match between template mol and padded mol
         template_mol = Chem.MolFromMolBlock(template_charge['molblock'], removeHs=False)

@@ -546,6 +546,12 @@ class MoleculePreparation:
             )
 
         setup_class = self._classes_setup[mol_type]
+
+        # make sure template charge is populated:
+        if template_charge == None:
+            self.compute_charges=True
+            print("residue missing from template. Charge will be computed from scratch.")
+
         setup = setup_class.from_mol(
             mol,
             keep_chorded_rings=self.keep_chorded_rings,
