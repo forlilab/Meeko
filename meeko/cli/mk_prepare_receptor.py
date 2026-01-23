@@ -628,6 +628,7 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
+                args.ignore_https_cert,
                 delete_bad_res,
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
