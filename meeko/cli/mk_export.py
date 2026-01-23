@@ -44,6 +44,8 @@ def cmd_lineparser():
                         help="write all AutoDock-GPU poses, not just cluster leads.")
     parser.add_argument('-k', '--keep_flexres_sdf', action='store_true',
                         help="add flexres, if any, to SDF ouput")
+    parser.add_argument('--only_hs_with_coords', help="do not add Hs without position from docking",
+                        action='store_true')
     parser.add_argument('-', '--',  dest='redirect_stdout', action='store_true',
                         help="do not write SDF file, just print it to STDOUT")
     return parser.parse_args()
@@ -59,6 +61,7 @@ def main():
     all_dlg_poses = args.all_dlg_poses
     keep_flexres_sdf = args.keep_flexres_sdf
     redirect_stdout = args.redirect_stdout
+    only_hs_with_coords = args.only_hs_with_coords
     
     if (
         (write_sdf is not None or write_pdb is not None) and
@@ -105,6 +108,7 @@ def main():
                 pdbqt_mol,
                 only_cluster_leads=only_cluster_leads,
                 keep_flexres=keep_flexres_sdf,
+                only_hs_with_coords=only_hs_with_coords,
         )
         for i in failures:
             warnings.warn("molecule %d not converted to RDKit/SD File" % i)

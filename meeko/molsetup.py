@@ -11,13 +11,11 @@ from dataclasses import asdict, dataclass, field
 import json
 eol="\n"
 import logging
-import sys
 import warnings
 from typing import Union
 from typing import Optional, Any
 
 import numpy as np
-import rdkit.Chem
 from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
 
@@ -1177,7 +1175,7 @@ class MoleculeSetup(BaseJSONParsable):
 
     # endregion
 
-    def merge_terminal_atoms(self, indices) -> None:
+    def merge_terminal_atoms(self, indices, merge_rmin_half=False) -> None:
         """
         Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
         other atom.
@@ -1186,11 +1184,15 @@ class MoleculeSetup(BaseJSONParsable):
         ----------
         indices: list
             A list of indices to merge
+        merge_rmin_half: bool
+            Defaults to false because everything currently defaults to AD4 scoring, and those radii are already united atom.
 
         Returns
         -------
         None
         """
+        if merge_rmin_half and "rmin_half" not in self.atom_params:
+            raise ValueError("can't merge rmin_half because it's not in atom_params")
         for index in indices:
             if len(self.get_neighbors(index)) != 1:
                 msg = "Atempted to merge atom %d with %d neighbors. "
@@ -1201,6 +1203,13 @@ class MoleculeSetup(BaseJSONParsable):
             self.atoms[neighbor_index].charge += self.get_charge(index)
             self.atoms[index].charge = 0.0
             self.atoms[index].is_ignore = True
+            if not merge_rmin_half:
+                continue
+            r_neigh = self.atom_params["rmin_half"][neighbor_index]
+            r_source = self.atom_params["rmin_half"][index]
+            new_r = np.cbrt(r_neigh**3 + r_source**3)
+            self.atom_params["rmin_half"][neighbor_index] = new_r
+            self.atom_params["rmin_half"][index] = 0.0
         return
 
     # NOTE: This is a candidate for moving to utils
@@ -1652,13 +1661,19 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             except ImportError:
                 print("A recent version of OpenFF is required for NAGL charges")
 
-            
-            mol_off = Molecule.from_rdkit(self.mol)
+            # assign stereochemistry
+            # ?test?
+            # Chem.AssignStereochemistryFrom3D(self.mol)
+
+            mol_off = Molecule.from_rdkit(self.mol, allow_undefined_stereo=True, hydrogens_are_explicit=True)
+
             try:
+
                 mol_off.assign_partial_charges(
-                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt",
+                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt"
                     )
-                charges = mol_off.partial_charges.magnitude
+
+                charges = mol_off.partial_charges.magnitude.tolist()
             except Exception as e:
                 print("NAGL charge computation failed with with exception:")
                 print(e)
@@ -1712,7 +1727,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             rotatable = int(b.GetBondType()) == 1
             self.add_bond(idx1, idx2, rotatable=rotatable)
 
-    def find_pattern(self, smarts: str):
+    def find_pattern(self, smarts: str, uniquify=False, max_matches=int(1e7)):
         """
         Given a SMARTS pattern, finds substruct matches in the molecule.
 
@@ -1726,8 +1741,14 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         The substruct matches in the RDKit Mol for the given SMARTS.
         """
         p = Chem.MolFromSmarts(smarts)
-        nr_atoms = self.mol.GetNumAtoms()
-        return self.mol.GetSubstructMatches(p, maxMatches=nr_atoms)
+        # the default maxMatches is 1000, which is insufficient for very large molecules
+        # a very flexible smarts "[*]~[*]~[*](~[*])~[*]~[*]" produced 2.1 M matches
+        # with a molecule (protein) consisting of 10k arginines. The default herein
+        # is very generous at 10 M
+        # OpenFF uses uniquify=False. If we don't do that we parameterize only one of
+        # the water H with TIP3P parameters from OpenFF XML files (the other H gets
+        # general hydroxyl parameters)
+        return self.mol.GetSubstructMatches(p, uniquify=uniquify, maxMatches=max_matches)
 
     def get_mol_name(self):
         """
