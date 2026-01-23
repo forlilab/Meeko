@@ -27,7 +27,7 @@ class BondTyperLegacy:
 
         # tertiary amides with non-identical substituents will be allowed to rotate
         tertiary_amides = [
-            x for x in setup.find_pattern("[NX3]([!#1])([!#1])-[CX3]=[O,N,S]")
+            x for x in setup.find_pattern("[NX3]([!#1])([!#1])-[CX3]=[O,N,S]", uniquify=True)
         ]
         equivalent_atoms = setup.get_equivalent_atoms()
         num_amides_removed = 0

@@ -81,6 +81,7 @@ class MoleculePreparation:
     def __init__(
         self,
         merge_these_atom_types=("H",),
+        merge_rmin_half=False,
         hydrate=False,
         flexible_amides=False,
         rigid_macrocycles=False,
@@ -111,6 +112,7 @@ class MoleculePreparation:
         Parameters
         ----------
         merge_these_atom_types
+        merge_rmin_half
         hydrate
         flexible_amides
         rigid_macrocycles
@@ -135,8 +137,12 @@ class MoleculePreparation:
         remove_smiles
         """
 
+        if type(merge_these_atom_types) not in (list, set, tuple):
+            raise ValueError("you probably forgot '.from_config' in MoleculePreparation.from_config(mk_config)")
+
         self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
+        self.merge_rmin_half = merge_rmin_half
         self.hydrate = hydrate
         self.flexible_amides = flexible_amides
         self.rigid_macrocycles = rigid_macrocycles
@@ -162,7 +168,7 @@ class MoleculePreparation:
             raise NotImplementedError("load_offatom_params not implemented")
         self.load_offatom_params = load_offatom_params
 
-        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read"]
+        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl"]
         if charge_model not in allowed_charge_models:
             raise ValueError(
                 "unrecognized charge_model: %s, allowed options are: %s"
@@ -538,7 +544,7 @@ class MoleculePreparation:
             mol,
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings,
-            compute_gasteiger_charges=self.charge_model == "gasteiger",
+            charge_model= self.charge_model,
             read_charges_from_prop=self.charge_atom_prop,
             conformer_id=conformer_id,
         )
@@ -569,7 +575,7 @@ class MoleculePreparation:
                 self.espaloma_model.set_espaloma_charges(setup, molgraph)
             else:
                 setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
-
+        
 
         # merge hydrogens (or any terminal atoms)
         indices = set()
@@ -577,7 +583,7 @@ class MoleculePreparation:
             for atom in setup.atoms:
                 if atom.atom_type == atype_to_merge:
                     indices.add(atom.index)
-        setup.merge_terminal_atoms(indices)
+        setup.merge_terminal_atoms(indices, self.merge_rmin_half)
 
         # 3.  assign bond types
         #     - all single bonds rotatable except some amides and SMARTS rigidification

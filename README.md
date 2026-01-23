@@ -1,7 +1,7 @@
 # Meeko: interface for AutoDock
 
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
-[![PyPI version fury.io](https://img.shields.io/badge/version-0.6.1-green.svg)](https://pypi.python.org/pypi/meeko/)
+[![PyPI version fury.io](https://img.shields.io/badge/version-0.7.1-green.svg)](https://pypi.python.org/pypi/meeko/)
 [![Documentation Status](https://readthedocs.org/projects/meeko/badge/?version=release)](https://meeko.readthedocs.io/en/release/?badge=release)
 
 Meeko prepares the input for AutoDock and processes its output.
@@ -12,6 +12,8 @@ and nucleic acids (receptors).
 Meeko is developed by the [Forli lab](https://forlilab.org/) at the
 [Center for Computational Structural Biology (CCSB)](https://ccsb.scripps.edu)
 at [Scripps Research](https://www.scripps.edu/).
+
+If you use this, please cite: ["Meeko: molecule parameterization and software interoperability for docking and beyond"](https://pubs.acs.org/doi/full/10.1021/acs.jcim.5c02271)
 
 
 ## Documentation

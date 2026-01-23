@@ -21,10 +21,10 @@ def find_files(directory):
 
 setup(
     name="meeko",
-    version='0.6.1',
+    version='0.7.1',
     author="Forli Lab",
     author_email="forli@scripps.edu",
-    url="https://github.com/ccsb-scripps/meeko",
+    url="https://github.com/forlilab/meeko",
     description='Python package for preparing small molecule for docking',
     long_description=open(os.path.join(base_dir, 'README.md')).read(),
     long_description_content_type="text/markdown",

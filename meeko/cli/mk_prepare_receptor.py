@@ -11,6 +11,8 @@ import sys
 import numpy as np
 
 from meeko.reactive import atom_name_to_molsetup_index, assign_reactive_types_by_index
+from meeko.utils.utils import parse_cmdline_res
+from meeko.utils.utils import parse_cmdline_res_assign
 from meeko import PDBQTMolecule
 from meeko import RDKitMolCreate
 from meeko import MoleculePreparation
@@ -38,51 +40,24 @@ else:
 path_to_this_script = pathlib.Path(__file__).resolve()
 
 
-def parse_cmdline_res(string):
-    """ "A:5,7,BB:12C  ->  "A:5", "A:7", "BB:12C" """
-    blocks = ("," + string).split(":")
-    nr_blocks = len(blocks) - 1
-    keys = []
-    for i in range(nr_blocks):
-        chain = blocks[i].split(",")[-1]
-        if i + 1 == nr_blocks:
-            resnums = blocks[i + 1].split(",")
-        else:
-            resnums = blocks[i + 1].split(",")[:-1]
-        if len(resnums) == 0:
-            raise ValueError(f"missing residue in {resnums}")
-        for resnum in resnums:
-            keys.append(f"{chain}:{resnum}")
-    return keys
+def sdf_to_json(sdf_path: str, resname: str) -> dict:
+    """Convert an SDF file into a residue template JSON."""
 
+    mol = Chem.SDMolSupplier(sdf_path, removeHs=False)[0]
+    mol = Chem.AddHs(mol)  # ensure explicit Hs
+    smiles = Chem.MolToSmiles(mol)
+    atom_names = [str(i) for i in range(mol.GetNumAtoms())]
 
-def parse_cmdline_res_assign(string):
-    """convert "A:5,7=CYX,A:19A,B:17=HID" to {"A:5": "CYX", "A:7": "CYX", ":19A": "HID"}"""
-
-    output = {}
-    nr_assignments = string.count("=")
-    string = "," + string  # enables `residues =` below to work in first iteraton
-    tmp = string.split("=")
-    for i in range(nr_assignments):
-        residues = tmp[i].split(",")[1:]
-        assigned_name = tmp[i + 1].split(",")[0]
-        chain = ""
-        for residue in residues:
-            fields = residue.split(":")
-            if len(fields) == 1:
-                resnum = fields[0]
-            elif len(fields) == 2:
-                chain = fields[0]
-                resnum = fields[1]
-            else:
-                raise ValueError(f"too many : in {residue}")
-            if len(resnum) == 0:
-                raise ValueError(f"missing residue in {residues}")
-            key = f"{chain}:{resnum}"
-            if key in output:
-                raise ValueError(f"repeated {key} in {residue}")
-            output[key] = assigned_name
-    return output
+    return {
+        "ambiguous": {resname: [resname]},
+        "residue_templates": {
+            resname: {
+                "smiles": smiles,
+                "atom_name": atom_names,
+                "link_labels": {}
+            }
+        }
+    }
 
 
 class TalkativeParser(argparse.ArgumentParser):
@@ -117,6 +92,11 @@ def get_args():
         "--read_pdb",
         metavar="PDB_FILENAME",
         help="reads PDB, not PDBQT, and does not use ProDy",
+    )
+    io_group.add_argument(
+        "--read_json",
+        metavar="JSON_FILENAME",
+        help="reads json receptor, probably prepared by meeko. Existing parameters and flexres are lost.",
     )
     io_group.add_argument(
         "--read_pqr",
@@ -158,6 +138,11 @@ def get_args():
         metavar="PDB_FILENAME",
     )
     io_group.add_argument(
+        "--ignore_https_cert",
+        action="store_true",
+        help="Ignore https certificate errors when downloading from PDB database (potentially dangerous if rscb.org were spoofed, please only use as a last resort) ",
+    )
+    io_group.add_argument(
         "-g",
         "--write_gpf",
         metavar="GPF_FILENAME",
@@ -179,7 +164,7 @@ def get_args():
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
     config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
-    config_group.add_argument("--add_templates", help="[.json]", metavar="JSON_FILENAME", nargs="+", default=[])
+    config_group.add_argument("--add_templates", help="Additional residue templates. Can be a JSON file path or 'resname:file.sdf'.", action="append", default=[])
     config_group.add_argument("--cache_templates", 
                               help=(
                                   "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
@@ -193,10 +178,14 @@ def get_args():
     )
     config_group.add_argument("--mk_config", help="[.json]", metavar="JSON_FILENAME")
     config_group.add_argument(
-        "-a", "--allow_bad_res",
+        "-x", "--delete_bad_res",
         action="store_true",
-        help="delete residues with missing atoms instead of raising error",
+        help="delete residues that don't match templates instead of raising error",
     )
+
+    # keep -a/--allow_bad_res for backwards compatibility, superseeded by -x/--delete_bad_res
+    config_group.add_argument("-a", "--allow_bad_res", action="store_true", help=argparse.SUPPRESS)
+
     config_group.add_argument("--default_altloc", help="default alternate location (overridden by --wanted_altloc)")
     config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
     config_group.add_argument("--forgive_extra_bonds",
@@ -210,8 +199,16 @@ def get_args():
         help='specify the flexible residues by the chain ID and residue number, e.g. -f ":42,B:23" is equivalent to -f ":42" -f "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
     )
     config_group.add_argument(
+        "-t",
+        "--rot_terminal_group",
+        action="append",
+        default=[],
+        help='specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
+    )
+    
+    config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "zero", "read"),
+        choices=("gasteiger", "espaloma", "nagl", "zero", "read"),
         help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
         default=None,
     )
@@ -299,16 +296,16 @@ def get_args():
         logger.addHandler(handler)
         logger.debug("Starting to log")
     
-    num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody)])
+    num_input_flags = sum([flag is not None for flag in (args.read_pdb, args.read_pqr, args.read_with_prody, args.read_json)])
 
     if num_input_flags == 0:
         parser.print_help()
-        msg = "Need input filename: use either -i/--read_with_prody, --read_pdb or --read_pqr"
+        msg = "Need input filename: use either -i/--read_with_prody, --read_pdb, --read_json, or --read_pqr"
         print(eol + msg)
         sys.exit(2)
 
     if num_input_flags > 1:
-        msg = "Can't use more than one at a time from -i/--read_with_prody, --read_pdb and --read_pqr"
+        msg = "Can't use more than one at a time from -i/--read_with_prody, --read_pdb, --read_json, and --read_pqr"
         print(eol + msg, file=sys.stderr)
         sys.exit(2)
 
@@ -384,7 +381,8 @@ def get_args():
 
 def main():
     args = get_args()
-    
+    delete_bad_res = args.allow_bad_res or args.delete_bad_res
+
     if args.wanted_altloc is None:
         wanted_altloc = None
     else:
@@ -497,6 +495,13 @@ def main():
         for res_id in parse_cmdline_res(string):
             if res_id not in reactive_flexres:
                 nonreactive_flexres.add(res_id)
+
+    # Process residue ID of residues with rotatable terminal group
+    rot_term_res = set()
+    for string in args.rot_terminal_group:
+        for res_id in parse_cmdline_res(string):
+            if res_id not in reactive_flexres and res_id not in nonreactive_flexres:
+                rot_term_res.add(res_id)
     
     
     set_template = {}
@@ -552,8 +557,17 @@ def main():
             sys.exit(1)
     else: 
         templates = ResidueChemTemplates.create_from_defaults()
-    for fn in args.add_templates:
-        templates.add_json_file(fn)
+
+    for item in args.add_templates:
+        if item.endswith(".json"):
+            templates.add_json_file(item)
+        elif ":" in item: #expect format resname:sdf
+            resname, sdf_file = item.split(":", 1)
+            template_json = sdf_to_json(sdf_file, resname)
+            templates.add_dict(template_json)
+        else:
+            print("--add_templates must be either a JSON file or resname:file.sdf")
+            sys.exit(2)
     
     # create polymers
     if args.read_with_prody is not None:
@@ -573,7 +587,8 @@ def main():
                     mk_prep,
                     set_template,
                     delete_residues,
-                    args.allow_bad_res,
+                    args.ignore_https_cert,
+                    delete_bad_res,
                     blunt_ends=blunt_ends,
                     wanted_altloc=wanted_altloc,
                     default_altloc=args.default_altloc,
@@ -592,7 +607,33 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
-                args.allow_bad_res,
+                args.ignore_https_cert,
+                delete_bad_res,
+                blunt_ends=blunt_ends,
+                wanted_altloc=wanted_altloc,
+                default_altloc=args.default_altloc,
+            )
+        except PolymerCreationError as e:
+            print(e)
+            sys.exit(1)
+    elif args.read_json is not None:
+        # simple approach
+        # convert to pdb and go through the same route as above.
+        # Ensures user options are respected
+        with open(args.read_json) as f:
+            json_string = f.read()
+        try:
+            polymer = Polymer.from_json(json_string)
+            pdb_string = polymer.to_pdb()
+
+            polymer = Polymer.from_pdb_string(
+                pdb_string,
+                templates,  # residue_templates, padders, ambiguous,
+                mk_prep,
+                set_template,
+                delete_residues,
+                args.ignore_https_cert,
+                delete_bad_res,
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
@@ -621,7 +662,8 @@ def main():
                 mk_prep,
                 set_template,
                 delete_residues,
-                args.allow_bad_res,
+                args.ignore_https_cert,
+                delete_bad_res, 
                 blunt_ends=blunt_ends,
                 forgive_extra_bonds=args.forgive_extra_bonds,
             )
@@ -651,9 +693,36 @@ def main():
                 print("no default reactive name for %s, " % input_resname)
                 print("use --reactive_name or --reactive_name_specific" + eol)
                 sys.exit(2)
+
+    # Use residue name in input file to confirm
+    # requested rotatable terminal group residues are eligible
+    rotatable_termgrp_residues_allowed = [
+        "SER",
+        "LYS",
+        "TYR",
+        "CYS",
+        "HIS",
+        "HIE",
+        "HID",
+        "HIP",
+        "ASN",
+        "GLN",
+        "THR",
+        "MET",
+    ]
+    for res_id in rot_term_res:
+        if res_id not in polymer.monomers:
+            print("resid %s not found in input receptor file" % res_id)
+            sys.exit(2)
+        input_resname = polymer.monomers[res_id].input_resname
+        if input_resname not in rotatable_termgrp_residues_allowed:
+            print(f"{input_resname} (resid {res_id}) is not a valid residue for use with --rot_terminal_group."+ eol)
+            print("Available residues are: ")
+            print(", ".join(rotatable_termgrp_residues_allowed))
+            sys.exit(2)
     
     # Print nonreactive and reactive flexible residues specs
-    if len(nonreactive_flexres) + len(reactive_flexres) > 0:
+    if len(nonreactive_flexres) + len(reactive_flexres) + len(rot_term_res) > 0:
         print()
         print("Flexible residues:")
         print("chain resnum is_reactive reactive_atom")
@@ -664,6 +733,12 @@ def main():
                 chain, resnum = res_id.split(":")
                 react_atom = ""
                 print(string % (chain, resnum, False, react_atom))
+
+        if len(rot_term_res) > 0:
+            for res_id in rot_term_res:
+                chain, resnum = res_id.split(":")
+                react_atom = ""
+                print(string % (chain, resnum, False, react_atom), "(rotatable terminal group)")
     
         if len(reactive_flexres) > 0:
             for res_id in reactive_flexres_name:
@@ -700,7 +775,22 @@ def main():
     
     for res_id in all_flexres:
         polymer.flexibilize_sidechain(res_id, mk_prep)
-    
+
+    # Make terminal groups rotatable by rigidifying everything except the
+    # terminal group and then making the residue flexible. The definition of
+    # sidechain is dynamic: whatever is allowed to rotate constitutes the
+    # sidechain (for PDBQT writing purposes).
+    rot_term_smarts = "[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]-[#6;!$(C(=O)N);!$([#6;R1]~[#7;R1])]"
+    rot_term_indices = (0, 1)
+    mk_config_rot_term = mk_config.copy()
+    mk_config_rot_term.setdefault("rigidify_bonds_smarts", [])
+    mk_config_rot_term.setdefault("rigidify_bonds_indices", [])
+    mk_config_rot_term["rigidify_bonds_smarts"].append(rot_term_smarts)
+    mk_config_rot_term["rigidify_bonds_indices"].append(rot_term_indices)
+    mk_prep_rot_term = MoleculePreparation.from_config(mk_config_rot_term)
+    for res_id in rot_term_res:
+        polymer.monomers[res_id].parameterize(mk_prep_rot_term, res_id)
+        polymer.flexibilize_sidechain(res_id, mk_prep_rot_term)
     
     any_lig_base_types = [
         "HD",
@@ -758,7 +848,7 @@ def main():
         pdbqt_tuple = PDBQTWriterLegacy.write_from_polymer(polymer)
         rigid_pdbqt, flex_pdbqt_dict = pdbqt_tuple
     
-        if len(all_flexres) == 0:
+        if len(all_flexres) + len(rot_term_res) == 0:
             box_center = args.box_center
             rigid_fn = fn_base + ".pdbqt"
             flex_fn = None

@@ -92,6 +92,29 @@ def test_flexres_pdbqt():
     assert nr_flex_atoms == 9
 
 
+def test_rigidify():
+    f = open(ahhy_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+    )
+    ref_rot_bonds = sum([bond.rotatable for _, bond in polymer.monomers["A:2"].molsetup.bond_info.items()])
+    mk_prep2 = MoleculePreparation(
+        rigidify_bonds_smarts=["[CX4]-[CX4]"],
+        rigidify_bonds_indices=[(0, 1)],
+    )
+    polymer.parameterize(mk_prep2)
+    polymer.flexibilize_sidechain("A:2", mk_prep2)
+    flex_rot_bonds = sum([bond.rotatable for _, bond in polymer.monomers["A:2"].molsetup.bond_info.items()])
+    polymer.rigidify_all(mk_prep)
+    rigidified_rot_bonds = sum([bond.rotatable for _, bond in polymer.monomers["A:2"].molsetup.bond_info.items()])
+    assert flex_rot_bonds == 1
+    assert ref_rot_bonds > flex_rot_bonds
+    assert ref_rot_bonds == rigidified_rot_bonds
+    return
+
 def test_AHHY_all_static_residues():
     f = open(ahhy_example, "r")
     pdb_string = f.read()

@@ -113,6 +113,11 @@ Flexible and/or Reactive Options
 
    Specify the reactive atom for an individual residue by residue ID, e.g., `-s "A:42=NE2"`. The residue becomes reactive.
 
+.. option:: -t, --rot_terminal_group <residues>
+
+   specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, 
+   e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)'
+
 .. option:: --r_eq_12 <value>
 
    Set the equilibrium distance (r_eq) for reactive atoms in 1-2 interactions. Default is 1.8 Å.
