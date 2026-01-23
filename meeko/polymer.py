@@ -437,8 +437,9 @@ def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
     used_h = (
         set()
     )  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
+    to_del = {k: atom.GetIdx() for k, atom in to_del.items()}
     for h_index, parent in to_del.items():
-        for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
+        for atom in tmpmol.GetAtomWithIdx(parent).GetNeighbors():
             has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
             if atom.GetAtomicNum() == 1 and has_new_position:
                 if atom.GetIdx() not in used_h:
@@ -762,6 +763,7 @@ class Polymer(BaseJSONParsable):
         set_template: dict[str, str] = None,
         blunt_ends: list[tuple[str, int]] = None,
         get_atomprop_from_raw: dict = None,
+        ignore_https_cert = False,
     ):
         """
         Parameters
@@ -780,6 +782,7 @@ class Polymer(BaseJSONParsable):
             A dict mapping residue IDs in the format <chain>:<resnum> such as "A:42" to ResidueTemplate instances.
         blunt_ends: list (tuple (string, int))
             A list of tuples where each tuple is residue IDs and 0-based atom index, e.g.; ("A:42", 0)
+        ignore_https_cert: Ignore https cert of PDB database (rcsb.org) when True
 
         Returns
         -------
@@ -869,7 +872,7 @@ class Polymer(BaseJSONParsable):
             if unbound_unknown_res: 
                 for resname in set(unbound_unknown_res.values()): 
                     try: 
-                        cc = build_noncovalent_CC(resname)
+                        cc = build_noncovalent_CC(resname, ignore_https_cert=ignore_https_cert)
                         fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
                         residue_templates.update({resname: ResidueTemplate(
                                                     smiles = fetch_template_dict['smiles'],
@@ -884,7 +887,7 @@ class Polymer(BaseJSONParsable):
                 failed_build = set()
                 try: 
                     for resname in set(bonded_unknown_res.values()): 
-                        cc_list = build_linked_CCs(resname)
+                        cc_list = build_linked_CCs(resname, ignore_https_cert=ignore_https_cert)
                         if not cc_list: 
                             failed_build.add(resname)
                         else:
@@ -1072,6 +1075,7 @@ class Polymer(BaseJSONParsable):
         mk_prep,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
@@ -1087,6 +1091,7 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
@@ -1143,6 +1148,8 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            None,
+            ignore_https_cert
         )
 
         unmatched_res = polymer.get_ignored_monomers()
@@ -1165,6 +1172,7 @@ class Polymer(BaseJSONParsable):
         mk_prep,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
@@ -1178,6 +1186,7 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
@@ -1232,6 +1241,7 @@ class Polymer(BaseJSONParsable):
             set_template,
             blunt_ends,
             get_atomprop_from_raw = {"PQRCharge": 0.},
+            ignore_https_cert=ignore_https_cert
         )
 
         if polymer.log["matched_with_H_anomaly"]:
@@ -1263,6 +1273,7 @@ class Polymer(BaseJSONParsable):
         mk_prep,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
@@ -1278,6 +1289,7 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
@@ -1335,6 +1347,8 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            None,
+            ignore_https_cert
         )
         unmatched_res = polymer.get_ignored_monomers()
         handle_parsing_situations(
@@ -1366,6 +1380,18 @@ class Polymer(BaseJSONParsable):
         if residue_id not in self.get_valid_monomers():
             raise ValueError(f"{residue_id=} not in valid monomers")
         return self.monomers[residue_id].flexibilize(mk_prep)
+
+    def rigidify_sidechain(self, residue_id, mk_prep):
+        if residue_id not in self.get_valid_monomers():
+            raise ValueError(f"{residue_id=} not in valid monomers")
+        return self.monomers[residue_id].rigidify(mk_prep)
+
+    def rigidify_all(self, mk_prep):
+        for residue_id, monomer in self.get_valid_monomers().items():
+            if monomer.is_movable:
+                monomer.rigidify(mk_prep, residue_id)
+        return
+
 
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
@@ -1893,13 +1919,17 @@ class Polymer(BaseJSONParsable):
             wanted_altloc = {}
         raw_input_mols = {}
         for reskey, atom_field_list in blocks_by_residue.items():
-            requested_altloc = wanted_altloc.get(reskey, None)
-            pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
-                atom_field_list,
-                requested_altloc,
-                default_altloc,
-            )
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
+            requested_altloc = wanted_altloc.get(reskey, None)  
+            try:
+                pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
+                    atom_field_list,
+                    requested_altloc,
+                    default_altloc,
+                )
+            except:
+                msg = f"unable to build rdkit mol for residue {resname} corresponding to key {reskey}"
+                raise RuntimeError(msg) 
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
 
         return raw_input_mols
@@ -2603,6 +2633,12 @@ class Monomer(BaseJSONParsable):
             for atom_idx, body_idx in rigid_index_by_atom.items():
                 if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
                     self.is_flexres_atom[atom_idx] = True
+        return
+
+    def rigidify(self, mk_prep, residue_id):
+        self.is_movable = False
+        self.parameterize(mk_prep, residue_id)  # must be after is_movable=False
+        self.is_flexres_atom = [False for _ in self.molsetup.atoms]
         return
 
     def _set_pdbinfo(self, residue_id):
