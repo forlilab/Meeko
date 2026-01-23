@@ -27,7 +27,7 @@ from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.rdkitutils import AtomField
 from .utils.rdkitutils import _aux_altloc_mol_build
-from .utils.rdkitutils import covalent_radius
+from .utils.covalent_radius_table import covalent_radius
 from .utils.pdbutils import PDBAtomInfo
 from .utils.rdkitutils import getPdbInfoNoNull
 from .chemtempgen import export_chem_templates_to_json
@@ -157,7 +157,7 @@ def find_inter_mols_bonds(mols_dict,
         xyz = conf.GetPositions()  # (n_i, 3) numpy array
 
         # get z numbers
-        zs = np.array([a.GetAtomicNum() for a in mol.GetAtoms()], dtype=np.int32)
+        zs = np.array([a.GetSymbol() for a in mol.GetAtoms()])
         for z in np.unique(zs):
             if z not in covalent_radius:
                 missing.add(z)
