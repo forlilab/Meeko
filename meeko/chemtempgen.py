@@ -9,8 +9,6 @@ import re
 import atexit
 import os
 
-from meeko.utils.rdkitutils import covalent_radius
-
 from rdkit import Chem
 from rdkit.Chem import rdmolops
 
@@ -19,9 +17,7 @@ import sys, logging
 
 logger = logging.getLogger(__name__)
 
-
-# Constants
-list_of_AD_elements_as_AtomicNum = list(covalent_radius.keys())
+list_of_AD_elements_as_AtomicNum = [1, 5, 6, 7, 8, 9, 11, 12, 14, 15, 16, 17, 20, 25, 26, 30, 34, 35, 53]
 metal_AtomicNums = {12, 20, 25, 26, 30}  # Mg: 12, Ca: 20, Mn: 25, Fe: 26, Zn: 30
 
 # Utility Functions
