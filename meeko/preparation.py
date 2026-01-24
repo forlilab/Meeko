@@ -604,7 +604,7 @@ class MoleculePreparation:
         
 
         # restore value of self.compute_charges
-        if template_charge == None:
+        if temp_compute_charges:
             self.compute_charges=temp_compute_charges
 
         # merge hydrogens (or any terminal atoms)
