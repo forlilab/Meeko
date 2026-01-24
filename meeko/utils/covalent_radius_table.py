@@ -130,3 +130,8 @@ covalent_radius = {
     "Ts": 1.60,
     "Og": 1.60
 }
+
+# hack to avoid bonds with common salts and metals
+salts_and_metals = ["Na", "Mg", "Ca", "Mn", "Fe", "Zn"]
+for element in salts_and_metals:
+    covalent_radius[element] = 0.0
