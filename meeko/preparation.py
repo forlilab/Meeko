@@ -549,9 +549,9 @@ class MoleculePreparation:
 
 
 
-        print("jani debug, compute charges", self.compute_charges)
         # make sure template charge is populated
         # otherwise, charges must be computed or read elsewhere.
+        temp_compute_charges = None
         if template_charge == None and self.compute_charges == False:
             temp_compute_charges = self.compute_charges
             self.compute_charges=True
@@ -604,7 +604,7 @@ class MoleculePreparation:
         
 
         # restore value of self.compute_charges
-        if temp_compute_charges:
+        if temp_compute_charges is not None:
             self.compute_charges=temp_compute_charges
 
         # merge hydrogens (or any terminal atoms)

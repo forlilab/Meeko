@@ -1661,6 +1661,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         if template_key == None and self.compute_charges == False:
             raise ValueError("Template key is none and compute_charges is false. Something has gone terribly wrong. ")
 
+        temp_compute_charges = None
         if charge_model == "read":
             # pqr option, leave this here for now. 
             # since read pqr is computed by the first function. 
@@ -1672,7 +1673,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         else: # read from template json
             charges = self.get_charges_from_template(charge_model, template_charge)
 
-        if temp_compute_charges:
+        if temp_compute_charges is not None:
             # restore variable
             self.compute_charges = temp_compute_charges
 
