@@ -1759,13 +1759,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
     ):
         """
         Obtain charges from template json
-        
-        :param mol: Description
-        :type mol: Chem.mol
-        :param charge_model: Description
-        :type charge_model: str
-        :param template_key: Description
-        :type template_key: str
+
         """
         if self.mol is None:
             raise ValueError(
@@ -1785,16 +1779,17 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         
 
         # get appropriate charge array
-        if charge_model == "nagl":
-            charges = template_charge['nagl_charges']
-        elif charge_model == "espaloma":
-            charges = template_charge['espaloma_charges']
-        elif charge_model == "gasteiger":
-            charges = template_charge['gasteiger_charges']
-        elif charge_model == "zero":
-            charges = [0.0] * self.mol.GetNumAtoms()
-        else:
-            raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
+        match charge_model:
+            case "nagl":
+                charges = template_charge['nagl_charges']
+            case "espaloma": 
+                charges = template_charge['espaloma_charges']
+            case "gasteiger":
+                charges = template_charge['gasteiger_charges']
+            case "zero":
+                charges = [0.0] * self.mol.GetNumAtoms()
+            case _:
+                raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
         
         # make sure order of charge is same for both version of the residue
         charges = np.array(charges)
