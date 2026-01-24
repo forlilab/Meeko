@@ -1349,9 +1349,8 @@ class Polymer(BaseJSONParsable):
             else:
                 raw_input_mols[res_id] = (mol, resname)
 
-        import time
 
-        bonds = find_inter_mols_bonds_kdtree(raw_input_mols, covalent_radius, periodic_table, 1.2)
+        bonds = find_inter_mols_bonds(raw_input_mols)
 
         if bonds_to_delete is not None:
             for res1, res2 in bonds_to_delete:

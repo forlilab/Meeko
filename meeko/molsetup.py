@@ -1663,11 +1663,11 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             self.compute_charges=True
 
         if charge_model == "read":
-            #pqr option, leave this here for now. 
+            # pqr option, leave this here for now. 
             # since read pqr is computed by the first function. 
             self.compute_charges = True
 
-        if self.compute_charges:
+        if self.compute_charges: # not from template --recompute_charges option
             charges = self.calculate_charges(charge_model, read_charges_from_prop)
         else: # read from template json
             charges = self.get_charges_from_template(charge_model, template_charge)
