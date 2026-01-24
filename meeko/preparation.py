@@ -548,9 +548,11 @@ class MoleculePreparation:
         setup_class = self._classes_setup[mol_type]
 
 
+
+        print("jani debug, compute charges", self.compute_charges)
         # make sure template charge is populated
         # otherwise, charges must be computed or read elsewhere.
-        if template_charge == None:
+        if template_charge == None and self.compute_charges == False:
             temp_compute_charges = self.compute_charges
             self.compute_charges=True
             if self.charge_model == "read":

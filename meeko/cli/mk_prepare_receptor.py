@@ -205,8 +205,8 @@ def get_args():
 
     
     config_group.add_argument(
-        "--recompute_charges",
-        help="recompute charges with the given charge model instead of reading from template",
+        "--compute_charges",
+        help="compute charges from scratch with the given charge model instead of reading from template",
         action="store_true",
     )
 
@@ -530,15 +530,18 @@ def main():
     else:
         mk_config = {}
     
+    mk_config["compute_charges"] = args.compute_charges
+
     # update config by inputs from arguments
+
     if args.charge_model is not None: 
         mk_config["charge_model"] = args.charge_model
-        mk_config["compute_charges"] = args.recompute_charges
-        if args.recompute_charges:
-            # use green text
-            print(f"\033[32m Charges will be computed from scratch with charge model {args.charge_model}\n \033[0m")
-        else:
-            print(f"\033[32m Charges for charge model {args.charge_model} will be read from template file \n \033[0m")
+
+    if mk_config["compute_charges"]:
+        # use green text
+        print(f"\033[32m Charges will be computed from scratch with charge model {mk_config['charge_model']}\n \033[0m")
+    else:
+        print(f"\033[32m Charges for charge model {mk_config['charge_model']} will be read from template file \n \033[0m")
 
     if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
         if args.read_pqr is None:
