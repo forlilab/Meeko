@@ -1658,19 +1658,24 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         """
 
         # Quick sanity check
-        if template_key == None:
-            print("No template key available, so charges are computed from scratch.")
-            self.compute_charges=True
+        if template_key == None and self.compute_charges == False:
+            raise ValueError("Template key is none and compute_charges is false. Something has gone terribly wrong. ")
 
         if charge_model == "read":
             # pqr option, leave this here for now. 
             # since read pqr is computed by the first function. 
+            temp_compute_Charges = self.compute_charges
             self.compute_charges = True
 
         if self.compute_charges: # not from template --recompute_charges option
             charges = self.calculate_charges(charge_model, read_charges_from_prop)
         else: # read from template json
             charges = self.get_charges_from_template(charge_model, template_charge)
+
+        if charge_model == "read":
+            # restore variable
+            self.compute_charges = temp_compute_Charges
+
 
         # register atom
         for a in self.mol.GetAtoms():
