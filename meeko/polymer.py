@@ -2152,6 +2152,7 @@ class Polymer(BaseJSONParsable):
             # Update hydrogen positions and add hydrogens
             inv_map = {v: k for k, v in mapidx_pad.items()}
             padded_H_idxs = []
+            padded_H_idxs_in_rdkit_mol = []
 
             for atom_index in monomer.template.link_labels:
                 heavy_atom = monomer.rdkit_mol.GetAtomWithIdx(atom_index)
@@ -2163,10 +2164,17 @@ class Polymer(BaseJSONParsable):
                     padded_idx = inv_map.get(neighbor.GetIdx())
                     if padded_idx is not None:
                         padded_H_idxs.append(padded_idx)
+                        padded_H_idxs_in_rdkit_mol.append(neighbor.GetIdx())
 
             update_H_positions(padded_mol, padded_H_idxs)
-            padded_mol = Chem.AddHs(padded_mol, addCoords=True)
             padded_mols[residue_id] = (padded_mol, mapidx_pad)
+
+            # update added H positions in Monomer.rdkit_mol, just in case anyone
+            # considers those positions (as Polymer.to_pdb() used to).
+            source = padded_mol.GetConformer()
+            destination = monomer.rdkit_mol.GetConformer()
+            for i, j in zip(padded_H_idxs, padded_H_idxs_in_rdkit_mol):
+                destination.SetAtomPosition(j, source.GetAtomPosition(i))
 
         # Validate all bonds were used twice (A padded with B, and B with A)
         err_msg = ""
@@ -2535,15 +2543,16 @@ class Polymer(BaseJSONParsable):
         atom_count = 0
         pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                      {:>2s} "
         pdb_line += eol
-        for res_id in self.get_valid_monomers():
-            rdkit_mol = self.monomers[res_id].rdkit_mol
+        for res_id, monomer in self.get_valid_monomers().items():
+            rdkit_mol = monomer.rdkit_mol
             if res_id in new_positions:
                 positions = get_updated_positions(
-                    self.monomers[res_id],
+                    monomer,
                     new_positions[res_id],
                 )
             else:
-                positions = rdkit_mol.GetConformer().GetPositions()
+                rdkit_to_padded = {j: i for i, j in monomer.molsetup_mapidx.items()}
+                positions = [monomer.molsetup.atoms[rdkit_to_padded[i]].coord for i in range(rdkit_mol.GetNumAtoms())]
 
             chain, resnum = res_id.split(":")
             if resnum[-1].isalpha():
@@ -2556,14 +2565,14 @@ class Polymer(BaseJSONParsable):
             for i, atom in enumerate(rdkit_mol.GetAtoms()):
                 atom_count += 1
                 props = atom.GetPropsAsDict()
-                atom_name = self.monomers[res_id].atom_names[i]
+                atom_name = monomer.atom_names[i]
                 x, y, z = positions[i]
                 element = mini_periodic_table[atom.GetAtomicNum()]
                 pdbout += pdb_line.format(
                     "ATOM",
                     atom_count,
                     atom_name,
-                    self.monomers[res_id].input_resname,
+                    monomer.input_resname,
                     chain,
                     resnum,
                     icode,
