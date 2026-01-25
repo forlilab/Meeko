@@ -35,17 +35,17 @@ Install the required Python packages through ``conda-forge``
 
 .. code-block:: bash
 
-   micromamba install -c conda-forge cctbx-base numpy scipy rdkit gemmi -y
+   micromamba install -c conda-forge cctbx-base meeko numpy scipy rdkit gemmi autogrid -y
 
 Install the additional packages and data from GitHub repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- (Python package) scrubber 
+- (Python package) Molscrub
+Git Repository: `Forlilab Molscrub <https://github.com/forlilab/molscrub>`_
 
 .. code-block:: bash
 
-   git clone --single-branch --branch develop https://github.com/forlilab/scrubber.git
-   cd scrubber; pip install --use-pep517 -e .; cd ..
+   pip install molscrub
 
 - (Python package) ProDy 
 
@@ -223,7 +223,6 @@ For output control: We are expecting at least two types of files, the receptor P
     Flexible residues:
     chain resnum is_reactive reactive_atom
         A    309        True           NE2
-    reactive_flexres={'A:309'}
 
     For reactive docking, pass the configuration file to AutoDock-GPU:
         autodock_gpu -C 1 --import_dpf 3kgd_receptorH.reactive_config --flexres 3kgd_receptorH_flex.pdbqt -L <ligand_filename>
@@ -277,17 +276,6 @@ And to run the docking calculation, the ligand PDBQT file (``AMP.pdbqt``), the f
     ./adgpu --lfile AMP.pdbqt --flexres 3kgd_receptorH_flex.pdbqt \
     --ffile 3kgd_receptorH_rigid.maps.fld --import_dpf 3kgd_receptorH.reactive_config \
     --resnam AMP
-
-.. _T4_executables:
-
-If you're running these calculations on Google T4 backends, here are the pre-compiled executables of autogrid4 and adgpu specifically for T4: 
-
-- autodock-gpu v1.5.3-2e658c3
-`autodock_gpu_128wi <https://github.com/rwxayheee/Colabs/blob/b18a4c61f68647838ac987aacec8b66b0ab3426c/Compiled_for_Colab/AutoDock-GPU_v1.5.3_develop/autodock_gpu_128wi>`_
-`adgpu_analysis <https://github.com/rwxayheee/Colabs/blob/b18a4c61f68647838ac987aacec8b66b0ab3426c/Compiled_for_Colab/AutoDock-GPU_v1.5.3_develop/adgpu_analysis>`_
-
-- autogrid v4.2.6
-`autogrid4 <https://github.com/rwxayheee/Colabs/blob/acd2972f4afbf8c5299ebf0686534f466bf6f81b/Compiled_for_Colab/AutoGird_v4.2.6/autogrid4>`_
 
 Export the Docking Poses
 ========================

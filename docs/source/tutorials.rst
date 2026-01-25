@@ -11,4 +11,6 @@ including vina, autodock-gpu, ringtail, and molscrub.
    tutorial1
    tutorial2
    tutorial3
+   tutorial4a
+   tutorial4b
    tutorial_anchored
