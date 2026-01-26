@@ -15,17 +15,10 @@ Ligand Preparation
 
 Acetylcholinesterase (AChE) is a well-studied target for drug discovery, particularly in the context of neurodegenerative diseases. In this section, we will prepare two sets of ligands for virtual screening against AChE using AutoDock-GPU. The process involves converting SMILES strings to molecular structures, applying protonation state assignment, generating conformers, and saving the prepared ligands in PDBQT format for docking. 
 
-<<<<<<< HEAD
-Specifically, we will retrieve the curated ligand set from the DUD-E dataset, where human AChE is listed under the target tage "aces/P22303". The ligand set includes both actives and decoys, which may be used to evaluate the performance of the established docking-selection protocol. As a minimum requirement, you need to download "aces/actives_final.ism" and "aces/decoys_final.ism", which contain the SMILES strings and ligand names. 
-=======
 Specifically, we will retrieve the curated ligand set from the DUD-E dataset, where human AChE is listed under the target tag "aces/P22303". Docking results with both the active and decoy ligand sets may be used to evaluate the performance of the established docking-selection protocol. To achieve a relatively balanced combined dataset, only the first 500 ligands in the decoy ligand set will be processed. As a minimum requirement, you need to download "aces/actives_final.ism" and "aces/decoys_final.ism", which contain the SMILES strings and ligand names as the starting information of the ligands. 
->>>>>>> 44e2b91 ((doc) outline of 4b)
 
-<<<<<<< HEAD
-In regard to the precedure, we will use the `molscrub` package to assign protonation states and generate ligand conformers. Then, we will use the corresponding writer functions in `meeko` to save the prepared ligands into PDBQT files, which are the required input format for AutoDock-GPU. The ligand preparation process will be parallelized using the `multiprocessing` module to speed up the processing time. 
-=======
 Regarding the procedure, we will use the `molscrub` package to assign protonation states and generate ligand conformers. Then, we will use the respective writer functions in `meeko` to save the prepared ligand molecules into PDBQT files, which are the required input format for AutoDock-GPU. The ligand preparation process will be parallelized using the `multiprocessing` module to speed up the processing time. 
->>>>>>> 4d23608 (format and spelling fixes)
+
 
 The following Python script demonstrates the ligand preparation process with possible multiprocessing. This is a complete Python script and you may use Python from terminal to execute this script. 
 
