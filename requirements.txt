@@ -1,0 +1,5 @@
+numpy
+ProDy
+rdkit
+scipy
+tomli
