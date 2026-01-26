@@ -1818,10 +1818,10 @@ class Polymer(BaseJSONParsable):
             H_miss = all_stats["H_missing"][index]
             H_excess = all_stats["H_excess"][index]
             if H_miss or H_excess: 
-                log["matched_with_H_anomaly"][residue_key] = (
+                log["matched_with_H_anomaly"][residue_key] = [
                     template_key, 
                     {"H_miss": H_miss, "H_excess": len(H_excess)}
-                )
+                ]
             bond_excess = all_stats["bonded_atoms_excess"][index]
             if bond_excess:
                 log["matched_with_excess_bond"].append(residue_key)
