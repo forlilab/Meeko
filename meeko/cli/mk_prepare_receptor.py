@@ -206,7 +206,7 @@ def get_args():
     
     config_group.add_argument(
         "--compute_charges",
-        help="compute charges from scratch with the given charge model instead of reading from template",
+        help="compute charges from scratch with the given charge model instead of reading from template (note: this option is slower)",
         action="store_true",
     )
 
