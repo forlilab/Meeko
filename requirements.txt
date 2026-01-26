@@ -1,4 +1,5 @@
 numpy
+gemmi
 ProDy
 rdkit
 scipy
