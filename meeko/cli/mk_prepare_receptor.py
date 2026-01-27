@@ -188,6 +188,9 @@ def get_args():
 
     config_group.add_argument("--default_altloc", help="default alternate location (overridden by --wanted_altloc)")
     config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
+    config_group.add_argument("--forgive_extra_bonds",
+        action="store_true",
+        help="allows processing clashed structures because templates match even with excess bonds to other residues at the expense of causing unpredictable problems and potentially matching incorrect templates")
     config_group.add_argument(
         "-f",
         "--flexres",
@@ -607,6 +610,7 @@ def main():
                     blunt_ends=blunt_ends,
                     wanted_altloc=wanted_altloc,
                     default_altloc=args.default_altloc,
+                    forgive_extra_bonds=args.forgive_extra_bonds,
                 )
             except PolymerCreationError as e:
                 print(e)
@@ -651,6 +655,7 @@ def main():
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
+                forgive_extra_bonds=args.forgive_extra_bonds,
             )
         except PolymerCreationError as e:
             print(e)
@@ -678,6 +683,7 @@ def main():
                 args.ignore_https_cert,
                 delete_bad_res, 
                 blunt_ends=blunt_ends,
+                forgive_extra_bonds=args.forgive_extra_bonds,
             )
         except PolymerCreationError as e:
             print(e)
