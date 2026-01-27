@@ -2072,7 +2072,7 @@ class Polymer(BaseJSONParsable):
                 atom_names,
             )
             monomers[residue_key].template = template
-            if template_key is not None:
+            if template_key is not None and template_key in template_charges:
                 monomers[residue_key].template_charge = template_charges[template_key]
             else:
                 monomers[residue_key].template_charge = None

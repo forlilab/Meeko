@@ -537,12 +537,6 @@ def main():
     if args.charge_model is not None: 
         mk_config["charge_model"] = args.charge_model
 
-    if mk_config["compute_charges"]:
-        # use green text
-        print(f"\033[32m Charges will be computed from scratch with charge model {mk_config['charge_model']}\n \033[0m")
-    else:
-        print(f"\033[32m Charges for charge model {mk_config['charge_model']} will be read from template file \n \033[0m")
-
     if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
         if args.read_pqr is None:
             print("Error: --charge_model read requires --read_pqr")
@@ -551,7 +545,13 @@ def main():
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
-    
+
+    if mk_config["compute_charges"]:
+        # use green text
+        print(f"\033[32m {mk_prep.charge_model} harges will be computed from scratch\n \033[0m")
+    else:
+        print(f"\033[32m {mk_prep.charge_model} charges will be read from template file \n \033[0m")
+   
     # load templates for mapping
     if args.cache_templates:
         cache_file = args.cache_templates
