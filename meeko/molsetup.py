@@ -1482,6 +1482,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         self.atom_to_ring_id = {}
         self.rmsd_symmetry_indices = ()
 
+        self.compute_charges = False
+
     # region JSON-interchange functions
     @classmethod
     def json_encoder(cls, obj: "RDKitMoleculeSetup") -> Optional[dict[str, Any]]:
@@ -1556,6 +1558,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         charge_model: str = "gasteiger",
         read_charges_from_prop: str = None,
         conformer_id: int = -1,
+        compute_charges: bool = False, 
+        template_key: str = None,
+        template_charge: dict = None
     ):
         """
 
@@ -1565,9 +1570,10 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             RDKit Mol object to build the RDKitMoleculeSetup from.
         keep_chorded_rings: bool
         keep_equivalent_rings: bool
-        compute_gasteiger_charges: bool
+        charge_model: str
         read_charges_from_prop: str
         conformer_id: int
+        compute_charges: bool
 
         Returns
         -------
@@ -1604,12 +1610,18 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         # Creating and populating the molecule setup with properties from RDKit as well as calculated values from our
         # functions
+
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
+        molsetup.compute_charges = compute_charges
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
-        molsetup.init_atom(charge_model, read_charges_from_prop, coords)
+        molsetup.init_atom(charge_model, 
+                           read_charges_from_prop, 
+                           coords, 
+                           template_key = template_key, 
+                           template_charge = template_charge)
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         # molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
@@ -1624,7 +1636,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         return molsetup
 
-    def init_atom(self, charge_model: str, read_charges_from_prop: str, coords: list[np.ndarray]):
+    def init_atom(self, 
+                  charge_model: str, 
+                  read_charges_from_prop: str, 
+                  coords: list[np.ndarray], 
+                  template_key: str | None = None,
+                  template_charge: str | None = None):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
 
@@ -1639,6 +1656,46 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         -------
         None
         """
+
+        # Quick sanity check
+        if template_key == None and self.compute_charges == False:
+            raise ValueError("Template key is none and compute_charges is false. Something has gone terribly wrong. ")
+
+        temp_compute_charges = None
+        if charge_model == "read":
+            # pqr option, leave this here for now. 
+            # since read pqr is computed by the first function. 
+            temp_compute_charges = self.compute_charges
+            self.compute_charges = True
+
+        if self.compute_charges: # not from template --recompute_charges option
+            charges = self.calculate_charges(charge_model, read_charges_from_prop)
+        else: # read from template json
+            charges = self.get_charges_from_template(charge_model, template_charge)
+
+        if temp_compute_charges is not None:
+            # restore variable
+            self.compute_charges = temp_compute_charges
+
+
+        # register atom
+        for a in self.mol.GetAtoms():
+            idx = a.GetIdx()
+            self.add_atom(
+                atom_index=idx,
+                pdbinfo=rdkitutils.getPdbInfoNoNull(a),
+                charge=charges[idx],
+                coord=coords[idx],
+                atomic_num=a.GetAtomicNum(),
+                is_ignore=False,
+            )
+
+    def calculate_charges(
+            self,
+            charge_model: str,
+            read_charges_from_prop: str, 
+
+    ):
         # extract/generate charges
         if charge_model == "gasteiger": 
             if read_charges_from_prop is not None: 
@@ -1699,19 +1756,53 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
 
+        return charges
 
+    def get_charges_from_template(
+            self,
+            charge_model: str, 
+            template_charge: dict, 
+    ):
+        """
+        Obtain charges from template json
 
-        # register atom
-        for a in self.mol.GetAtoms():
-            idx = a.GetIdx()
-            self.add_atom(
-                atom_index=idx,
-                pdbinfo=rdkitutils.getPdbInfoNoNull(a),
-                charge=charges[idx],
-                coord=coords[idx],
-                atomic_num=a.GetAtomicNum(),
-                is_ignore=False,
-            )
+        """
+        if self.mol is None:
+            raise ValueError(
+                    f"No rdkit mol generated for current residue. "
+                )
+
+        # substructure match between template mol and padded mol
+        template_mol = Chem.MolFromMolBlock(template_charge['molblock'], removeHs=False)
+        self.template_mol = template_mol
+        match_indices = list(template_mol.GetSubstructMatch(self.mol))
+
+        # check for mismatch
+        if len(match_indices) != self.mol.GetNumAtoms():
+            l1 = len(match_indices[0])
+            l2 = self.mol.GetNumAtoms()
+            raise ValueError(f"Mismatch between template mol ({l1} atoms) and padded mol ({l2} atoms). Abandoning prep!")
+        
+
+        # get appropriate charge array
+        match charge_model:
+            case "nagl":
+                charges = template_charge['nagl_charges']
+            case "espaloma": 
+                charges = template_charge['espaloma_charges']
+            case "gasteiger":
+                charges = template_charge['gasteiger_charges']
+            case "zero":
+                charges = [0.0] * self.mol.GetNumAtoms()
+            case _:
+                raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
+        
+        # make sure order of charge is same for both version of the residue
+        charges = np.array(charges)
+        charges = [float(x) for x in charges[match_indices]]
+        
+        return charges
+
 
     def init_bond(self):
         """

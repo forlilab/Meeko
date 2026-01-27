@@ -97,7 +97,7 @@ Molecule Preparation Options
 
 .. option:: --charge_model <model>
 
-   Choose the charge model: `gasteiger`, `espaloma`, or `zero`. Default is `gasteiger`; `zero` sets all charges to zero.
+   Choose the charge model: `gasteiger`, `nagl`, `espaloma`, or `zero`. Default is `gasteiger`; `zero` sets all charges to zero.
 
 .. option:: --bad_charge_ok
 
