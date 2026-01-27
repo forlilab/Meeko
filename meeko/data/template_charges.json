@@ -67,7 +67,7 @@
         "gasteiger_charges": [
             -1.0
         ],
-        "espaloma_charges": [],
+        "espaloma_charges": [-1.0],
         "nagl_charges": [
             -1.0
         ]
@@ -78,8 +78,8 @@
         "gasteiger_charges": [
             2.0
         ],
-        "espaloma_charges": [],
-        "nagl_charges": null
+        "espaloma_charges": [2.0],
+        "nagl_charges": [2.0]
     },
     "CL": {
         "padded_smiles": "[Cl-]",
@@ -87,7 +87,7 @@
         "gasteiger_charges": [
             -1.0
         ],
-        "espaloma_charges": [],
+        "espaloma_charges": [-1.0],
         "nagl_charges": [
             -1.0
         ]
@@ -98,8 +98,8 @@
         "gasteiger_charges": [
             2.0
         ],
-        "espaloma_charges": [],
-        "nagl_charges": null
+        "espaloma_charges": [2.0],
+        "nagl_charges": [2.0]
     },
     "MN": {
         "padded_smiles": "[Mn+2]",
@@ -107,8 +107,8 @@
         "gasteiger_charges": [
             2.0
         ],
-        "espaloma_charges": [],
-        "nagl_charges": null
+        "espaloma_charges": [2.0],
+        "nagl_charges": [2.0]
     },
     "FE": {
         "padded_smiles": "[Fe+3]",
@@ -116,8 +116,8 @@
         "gasteiger_charges": [
             3.0
         ],
-        "espaloma_charges": [],
-        "nagl_charges": null
+        "espaloma_charges": [3.0],
+        "nagl_charges": [3.0]
     },
     "ZN": {
         "padded_smiles": "[Zn+2]",
@@ -125,8 +125,8 @@
         "gasteiger_charges": [
             2.0
         ],
-        "espaloma_charges": [],
-        "nagl_charges": null
+        "espaloma_charges": [2.0],
+        "nagl_charges": [2.0]
     },
     "BR": {
         "padded_smiles": "[Br-]",
@@ -134,7 +134,7 @@
         "gasteiger_charges": [
             -1.0
         ],
-        "espaloma_charges": [],
+        "espaloma_charges": [-1.0],
         "nagl_charges": [
             -1.0
         ]
@@ -145,7 +145,7 @@
         "gasteiger_charges": [
             -1.0
         ],
-        "espaloma_charges": [],
+        "espaloma_charges": [-1.0],
         "nagl_charges": [
             -1.0
         ]
