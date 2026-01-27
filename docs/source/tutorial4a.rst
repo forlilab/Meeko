@@ -19,6 +19,7 @@ Specifically, we will retrieve the curated ligand set from the DUD-E dataset, wh
 
 Regarding the procedure, we will use the `molscrub` package to assign protonation states and generate ligand conformers. Then, we will use the respective writer functions in `meeko` to save the prepared ligand molecules into PDBQT files, which are the required input format for AutoDock-GPU. The ligand preparation process will be parallelized using the `multiprocessing` module to speed up the processing time. 
 
+
 The following Python script demonstrates the ligand preparation process with possible multiprocessing. This is a complete Python script and you may use Python from terminal to execute this script. 
 
 .. code-block:: python

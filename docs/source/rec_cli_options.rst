@@ -86,8 +86,14 @@ Receptor Perception Options
 .. option:: --wanted_altloc <location>
    Specify alternate locations for particular residues, e.g., `:5=B,B:17=A`.
 
+.. option:: --compute_charges
+   Flag to request that charges be computed from scratch. Default is to read 
+   pre-calculated charges from template, which is much faster.
+
 .. option:: --charge_model [gasteiger, nagl, espaloma, zero, read]
-   Specify charge model to use. 
+   Specify charge model to use. Charges will be computed or extracted from template depending 
+   on the `--compute_charges` flag. Note that computing Nagl or Espaloma charges from scratch 
+   can be slow. 
    Default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr
 
 

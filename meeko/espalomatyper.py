@@ -63,6 +63,7 @@ class EspalomaTyper:
         for j in range(i+1, len(molsetup.atoms)):
             if molsetup.get_charge(j) != 0.:
                 raise RuntimeError("expected zero charge beyond real atoms, at this point")
+        
             
     def set_espaloma_dihedrals(self, molsetup: RDKitMoleculeSetup, molgraph):
         """Grab dihedrals from graph node and set them to the molsetup """
