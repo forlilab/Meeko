@@ -1,6 +1,5 @@
 numpy
 gemmi
-ProDy
 rdkit
 scipy
 tomli
