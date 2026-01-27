@@ -188,6 +188,9 @@ def get_args():
 
     config_group.add_argument("--default_altloc", help="default alternate location (overridden by --wanted_altloc)")
     config_group.add_argument("--wanted_altloc", help="require altloc for specific residues, e.g. :5=B,B:17=A")
+    config_group.add_argument("--forgive_extra_bonds",
+        action="store_true",
+        help="allows processing clashed structures because templates match even with excess bonds to other residues at the expense of causing unpredictable problems and potentially matching incorrect templates")
     config_group.add_argument(
         "-f",
         "--flexres",
@@ -537,12 +540,6 @@ def main():
     if args.charge_model is not None: 
         mk_config["charge_model"] = args.charge_model
 
-    if mk_config["compute_charges"]:
-        # use green text
-        print(f"\033[32m Charges will be computed from scratch with charge model {mk_config['charge_model']}\n \033[0m")
-    else:
-        print(f"\033[32m Charges for charge model {mk_config['charge_model']} will be read from template file \n \033[0m")
-
     if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
         if args.read_pqr is None:
             print("Error: --charge_model read requires --read_pqr")
@@ -551,7 +548,13 @@ def main():
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
-    
+
+    if mk_config["compute_charges"]:
+        # use green text
+        print(f"\033[32m {mk_prep.charge_model} harges will be computed from scratch\n \033[0m")
+    else:
+        print(f"\033[32m {mk_prep.charge_model} charges will be read from template file \n \033[0m")
+   
     # load templates for mapping
     if args.cache_templates:
         cache_file = args.cache_templates
@@ -607,6 +610,7 @@ def main():
                     blunt_ends=blunt_ends,
                     wanted_altloc=wanted_altloc,
                     default_altloc=args.default_altloc,
+                    forgive_extra_bonds=args.forgive_extra_bonds,
                 )
             except PolymerCreationError as e:
                 print(e)
@@ -651,6 +655,7 @@ def main():
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
+                forgive_extra_bonds=args.forgive_extra_bonds,
             )
         except PolymerCreationError as e:
             print(e)
@@ -678,6 +683,7 @@ def main():
                 args.ignore_https_cert,
                 delete_bad_res, 
                 blunt_ends=blunt_ends,
+                forgive_extra_bonds=args.forgive_extra_bonds,
             )
         except PolymerCreationError as e:
             print(e)
