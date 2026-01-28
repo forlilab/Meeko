@@ -31,7 +31,7 @@ Please check if a similar bug has been reported and, if not, [open an issue](htt
 Visit the docs for a more complete description. One option is conda or mamba:
 
 ```bash
-micromamba install meeko
+micromamba install -c conda-forge meeko
 ```
 
 or from PyPI:
