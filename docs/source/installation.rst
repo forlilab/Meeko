@@ -27,12 +27,12 @@ The conda-forge recipe includes the list of dependencies, and using `micromamba`
 will install them automatically. But we didn't add them to the Python package
 configuration, to allow the user to control dependencies manually. 
 
-Meeko requires Python 3.10 or later, and `scipy`, `rdkit`, `gemmi`, and `tdqm`,
+Meeko requires Python 3.10 or later, and `scipy`, `rdkit`, `gemmi`, and `tqdm`,
 which can be installed from PyPI with `pip`:
 
 .. code-block:: bash
 
-   pip install scipy rdkit gemmi tdqm
+   pip install scipy rdkit gemmi tqdm
 
 If using Python 3.8 or 3.9, please see :ref:`suport-py38` for details. 
 
