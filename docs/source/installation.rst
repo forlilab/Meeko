@@ -64,7 +64,7 @@ useful only for development. It can be installed with:
 
    micromamba install -c conda-forge openff-forcefields
 
-`OpenFF Toolkiti <https://docs.openforcefield.org/projects/toolkit>`__ is used to assing
+`OpenFF Toolkit <https://docs.openforcefield.org/projects/toolkit>`__ is used to assign
 NAGL charges, useful only for development. See `installation instructions <https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html>`__
 
 
