@@ -1,0 +1,6 @@
+numpy
+gemmi
+rdkit
+scipy
+tomli
+tqdm

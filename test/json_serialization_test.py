@@ -33,13 +33,13 @@ except ImportError as err:
 
 # from ..meeko.utils.pdbutils import PDBAtomInfo
 
-pkgdir = pathlib.Path(meeko.__file__).parents[1]
+DATA = pathlib.Path(__file__).resolve().parent 
+ahhy_example = DATA / "polymer_data" / "AHHY.pdb"
+ahhy_v061_json = DATA / "polymer_data" /  "AHHY-v0.6.1.json"
 
-# Test Data
-ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
-ahhy_v061_json = pkgdir / "test/polymer_data/AHHY-v0.6.1.json"
+
 just_one_ALA_missing = (
-    pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
+    DATA / "polymer_data" / "just-one-ALA-missing-CB.pdb"
 )
 
 # Polymer creation data
@@ -307,6 +307,7 @@ def test_polymer_encoding_decoding(
     """
     # Starts by getting a Polymer object, converting it to a json string, and then decoding the string into
     # a new Polymer object
+
     polymers = (
         populated_polymer,
         populated_polymer_missing,
@@ -325,7 +326,7 @@ def test_polymer_encoding_decoding(
 
 
 def test_load_reference_json():
-    fn = str(pkgdir/"test"/"polymer_data"/"AHHY_reference_fewer_templates.json")
+    fn = str(DATA / "polymer_data"/"AHHY_reference_fewer_templates.json")
     with open(fn) as f:
         json_string = f.read()
     polymer = Polymer.from_json(json_string)
@@ -339,7 +340,7 @@ def test_dihedral_equality():
         merge_these_atom_types=(),
         dihedral_model="openff",
     )
-    fn = str(pkgdir/"test"/"flexibility_data"/"non_sequential_atom_ordering_01.mol")
+    fn = str(DATA/"flexibility_data"/"non_sequential_atom_ordering_01.mol")
     mol = Chem.MolFromMolFile(fn, removeHs=False)
     starting_molsetup = mk_prep(mol)[0]
     json_str = starting_molsetup.to_json()
@@ -349,7 +350,7 @@ def test_dihedral_equality():
 
 
 def test_broken_bond(): 
-    fn = str(pkgdir / "test" / "macrocycle_data" / "lorlatinib.mol")
+    fn = str(DATA / "macrocycle_data" / "lorlatinib.mol")
     mol = Chem.MolFromMolFile(fn, removeHs=False)
     mk_prep_untyped = MoleculePreparation(untyped_macrocycles=True)
     starting_molsetup = mk_prep_untyped(mol)[0]
