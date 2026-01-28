@@ -193,7 +193,7 @@ def find_inter_mols_bonds(mols_dict,
     tree = cKDTree(xyz)
 
     # candidate atom pairs within max cutoff
-    # narrow down
+    # narrow down search
     # returns set of (i, j) with i < j
     cand = np.array(list(tree.query_pairs(r=max_possible_covalent_radius)), dtype=np.int64)
     if cand.size == 0:
@@ -1148,6 +1148,9 @@ class Polymer(BaseJSONParsable):
         padders = residue_chem_templates.padders
         ambiguous = residue_chem_templates.ambiguous
 
+        # store a copy of bonds.
+        self.bonds = bonds.copy()
+
         if set_template is None:
             set_template = {}
         else:  # make sure all resiude_id in set_template exist
@@ -1306,10 +1309,34 @@ class Polymer(BaseJSONParsable):
         "log",
     }
 
-    def stitch(self, residues_to_add: Optional[set[str]] = None, 
+    @classmethod
+    def _combine_many_mols_tree(cls, mols):
+        r"""tree-like compbination of mols iterable (nlog(n) cost).
+
+            mols: 
+            (a,b)   (c,d)
+              \       /
+               (ab, cd)
+                   |
+                 abcd   
+
+        """
+        mols = list(mols)
+        if not mols:
+            return Chem.Mol()
+        while len(mols) > 1:
+            nxt = []
+            it = iter(mols)
+            for a in it:
+                b = next(it, None)
+                nxt.append(Chem.CombineMols(a, b) if b is not None else a)
+            mols = nxt
+        return mols[0]
+
+    def to_rdkit_mol(self, residues_to_add: Optional[set[str]] = None, 
                bonds_to_use: Optional[dict[tuple[str], list[tuple[int]]]] = None):
         """returns a single rdkit molecule that results from adding bonds
-            between every chorizo residue. It may contain multiple fragments
+            between every monomer residue. It may contain multiple fragments
             if there are multiple chains or gaps. 
 
             Optionally, specify a set of residue IDs for stitching.
@@ -1336,7 +1363,13 @@ class Polymer(BaseJSONParsable):
         if bonds_to_use is None:
             bonds_to_use = {}
             resid_to_rawmols = {res_id: (self.monomers[res_id].raw_rdkit_mol, self.monomers[res_id].input_resname) for res_id in residues_to_add}
-            bonds_indexed_in_raw = find_inter_mols_bonds(resid_to_rawmols)
+
+            # check if bonds is None or empty. 
+            if self.bonds is None or not self.bonds: 
+                bonds_indexed_in_raw = find_inter_mols_bonds(resid_to_rawmols)
+            else:
+                bonds_indexed_in_raw = self.bonds
+
             invmaps = {
                 res_id: {j: i for i, j in self.monomers[res_id].mapidx_to_raw.items()}
                 for res_id in residues_to_add
@@ -1352,11 +1385,16 @@ class Polymer(BaseJSONParsable):
         
         # add residues and get offset in order
         offset = 0
+        mols = []
         for r_id in residues_to_add:
             res = self.monomers[r_id]
+            m = res.rdkit_mol
             residues_added[r_id] = offset
-            offset += res.rdkit_mol.GetNumAtoms()
-            mol = Chem.CombineMols(mol, res.rdkit_mol)
+            offset += m.GetNumAtoms()
+            # mol = Chem.CombineMols(mol, res.rdkit_mol)
+            mols.append(m)
+
+        mol = Polymer._combine_many_mols_tree(mols)
 
         # add bonds
         edit_mol = Chem.EditableMol(mol)
@@ -1374,6 +1412,7 @@ class Polymer(BaseJSONParsable):
                         order=Chem.rdchem.BondType.SINGLE
                     )
         mol = edit_mol.GetMol()
+
         
         # review added bonds and residues
         if len(bonds_spent) != len(bonds_to_use):
@@ -1382,6 +1421,12 @@ class Polymer(BaseJSONParsable):
             raise RuntimeError("nr of residues added differs from residues to add")
         
         return mol
+    
+    # for backwards compatibility. 
+    def stitch(self, residues_to_add = None, 
+               bonds_to_use = None):
+        """ Alias of polymer.to_rdkit_mol."""
+        return self.to_rdkit_mol(residues_to_add, bonds_to_use)
 
     @classmethod
     def _decode_object(cls, obj: dict[str, Any]): 
@@ -1475,14 +1520,6 @@ class Polymer(BaseJSONParsable):
 
         bonds = find_inter_mols_bonds(raw_input_mols)
 
-
-        # code for testing, leaving it for now
-        # print("testing find_inter_mols")
-        # print(len(bonds), len(bonds_old))
-        # for k,v in bonds_old.items():
-        #     print(k, bonds_old[k], bonds[k], bonds_old[k] == bonds[k])
-
-
         if bonds_to_delete is not None:
             for res1, res2 in bonds_to_delete:
                 popped = ()
@@ -1496,6 +1533,7 @@ class Polymer(BaseJSONParsable):
                         " than one bond between them"
                     )
                     raise NotImplementedError(msg)
+
         polymer = cls(
             raw_input_mols,
             bonds,
