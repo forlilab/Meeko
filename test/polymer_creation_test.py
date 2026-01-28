@@ -626,7 +626,7 @@ def test_stitch_polymer():
     )
     adjacent_disulfide = Chem.MolFromSmarts("S1CCNCCCS1")
     disulfide_then_proline = Chem.MolFromSmarts("CSSCCC(=O)N1CCCC1")
-    stitched_mol = polymer.stitch()
+    stitched_mol = polymer.to_rdkit_mol()
     assert stitched_mol.HasSubstructMatch(adjacent_disulfide)
     assert stitched_mol.HasSubstructMatch(disulfide_then_proline)
     # after serialization

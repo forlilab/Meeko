@@ -1363,8 +1363,9 @@ class Polymer(BaseJSONParsable):
         if bonds_to_use is None:
             bonds_to_use = {}
             resid_to_rawmols = {res_id: (self.monomers[res_id].raw_rdkit_mol, self.monomers[res_id].input_resname) for res_id in residues_to_add}
-            
-            if self.bonds is None: 
+
+            # check if bonds is None or empty. 
+            if self.bonds is None or not self.bonds: 
                 bonds_indexed_in_raw = find_inter_mols_bonds(resid_to_rawmols)
             else:
                 bonds_indexed_in_raw = self.bonds
