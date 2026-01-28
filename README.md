@@ -40,6 +40,12 @@ or from PyPI:
 pip install meeko
 ```
 
+to install the latest version (`develop` branch), which is likely newer than latest release:
+
+```bash
+pip install git+https://github.com/forlilab/meeko
+```
+
 ## Usage
 
 Meeko exposes a Python API to enable scripting. Here we share very minimal examples
