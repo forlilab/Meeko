@@ -9,40 +9,64 @@ If you use other package managers, please use the ``-c conda-forge`` option.
 To get micromamba, visit https://mamba.readthedocs.io/en/latest/
 
 
-Dependencies
------------------------
-
-Meeko requires the following dependencies: 
-
-- Python 3.9 or later
-
-If using Python 3.8, please see :ref:`suport-py38` for details. 
-
-- numpy
-- scipy
-- RDKit
-- gemmi
-
-Additionally, the following optional dependencies are required for some functionalities: 
-
-- ProDy
-
-If using ProDy, please ensure that your Python version is <3.12. 
-For more details see :ref:`suport-py312`. 
-
-- espaloma
-See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_
-
-
 From conda-forge
 ----------------
 
 .. code-block:: bash
 
-    micromamba install meeko
+    micromamba install -c conda-forge meeko
 
 Other tools like ``mamba`` or ``conda`` can also be used. Note that ``conda``
 is significantly slower.
+
+
+Installing dependencies manually
+--------------------------------
+
+The conda-forge recipe includes the list of dependencies, and using `micromamba`
+will install them automatically. But we didn't add them to the Python package
+configuration, to allow the user to control dependencies manually. 
+
+Meeko requires Python 3.10 or later, and `scipy`, `rdkit`, `gemmi`, and `tqdm`,
+which can be installed from PyPI with `pip`:
+
+.. code-block:: bash
+
+   pip install scipy rdkit gemmi tqdm
+
+If using Python 3.8 or 3.9, please see :ref:`suport-py38` for details. 
+
+
+Optional dependencies
+---------------------
+
+Although optional, ProDy is installed by the conda-forge recipe.
+Meeko uses Prody to parse PDB and mmCIF files. Without prody, PDB files
+can be parsed with the command line option ``--read_pdb`` and with the Python
+method ``Polymer.from_pdb_string()``. However, without ProDy it
+won't be possible to read mmCIF files or use tethered docking.
+Prody is available on PyPI and conda-forge for (at least) Python 3.11 and 3.12.
+
+.. code-block:: bash
+
+   pip install prody
+
+Espaloma can be used to assign partal charges and proper torsion parameters.
+These parameters are useful only for development.
+Not to be confused with package `espaloma_charge`. Meeko uses the `espaloma` package.
+See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_
+
+`OpenFF forcefields <https://github.com/openforcefield/openff-forcefields>`__
+is used to assign vdW and proper torsion parameters. This is
+useful only for development. It can be installed with:
+
+.. code-block:: bash
+
+   micromamba install -c conda-forge openff-forcefields
+
+`OpenFF Toolkit <https://docs.openforcefield.org/projects/toolkit>`__ is used to assign
+NAGL charges, useful only for development. See `installation instructions <https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html>`__
+
 
 
 From PyPI
@@ -81,19 +105,6 @@ the source files take immediate effect without requiring further ``pip install .
 This is useful for developers. Changes to the command line scripts may still require
 a re-installation.
 
-.. _suport-py312:
-Support for Python 3.12
------------------------
-
-Meeko runs on Python 3.12 as long as Prody is not installed. To run on 3.12,
-install all dependencies except Prody and install Meeko from source.
-
-Meeko uses Prody to parse PDB and mmCIF files. Without prody, PDB files
-can be parsed with the command line option ``--read_pdb`` and with the Python
-method ``Polymer.from_pdb_string()``. However, without ProDy it
-won't be possible to read mmCIF files or use tethered docking. Prody developers
-are working to support Python 3.12, so it is possible that Prody will work
-on Python 3.12 soon.
 
 .. _suport-py38:
 Support for Python 3.8
@@ -115,3 +126,4 @@ environment, consider the respective workarounds, such as:
 
 See a diff report of these changes in `Issue #313 <https://github.com/forlilab/Meeko/issues/313#issuecomment-2612000768>`_. 
 
+Meeko v0.8 includes `match`/`case` statements, which require Python 3.10
