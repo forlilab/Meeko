@@ -1314,9 +1314,9 @@ class Polymer(BaseJSONParsable):
         r"""tree-like compbination of mols iterable (nlog(n) cost).
 
             mols: 
-            (a,b)   (b,c)
+            (a,b)   (c,d)
               \       /
-               (ab, bc)
+               (ab, cd)
                    |
                  abcd   
 
