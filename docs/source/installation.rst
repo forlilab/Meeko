@@ -56,8 +56,8 @@ These parameters are useful only for development.
 Not to be confused with package `espaloma_charge`. Meeko uses the `espaloma` package.
 See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_
 
-`OpenFF forcefields <https://github.com/openforcefield/openff-forcefields>`__ is an optional
-dependency used to assign vdW and proper torsion parameters. This is
+`OpenFF forcefields <https://github.com/openforcefield/openff-forcefields>`__
+is used to assign vdW and proper torsion parameters. This is
 useful only for development. It can be installed with:
 
 .. code-block:: bash
