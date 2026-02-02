@@ -23,6 +23,19 @@ Meeko is written in Python and exposes functions and classes that operate on
 RDKit molecules for the ligands, leveraging RDKit's popularity to facilitate
 integration with external software that also interfaces with RDKit.
 
+Example of polymer creation using the Python API:
+
+.. code-block:: python
+
+   from meeko import Polymer 
+
+   pdb_file = "path/to/pdb/file.pdb"
+   with open(pdb_file) as f:
+      pdb_string = f.read()
+
+   polymer = Polymer.from_pdb_string(pdb_string) # accept defaults for all parameters
+
+
 Command line scripts
 --------------------
 

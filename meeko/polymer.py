@@ -33,6 +33,7 @@ from .utils.rdkitutils import getPdbInfoNoNull
 from .chemtempgen import export_chem_templates_to_json
 from .chemtempgen import build_noncovalent_CC
 from .chemtempgen import build_linked_CCs
+from .preparation import MoleculePreparation
 
 import numpy as np
 from tqdm import tqdm
@@ -1457,8 +1458,8 @@ class Polymer(BaseJSONParsable):
     def from_pdb_string(
         cls,
         pdb_string,
-        chem_templates,
-        mk_prep,
+        chem_templates=None,
+        mk_prep=None,
         set_template=None,
         residues_to_delete=None,
         ignore_https_cert=False,
@@ -1490,6 +1491,13 @@ class Polymer(BaseJSONParsable):
         -------
 
         """
+
+        #Set default mk_prep and chem_templates if not available. 
+        if chem_templates is None:
+            chem_templates = ResidueChemTemplates.create_from_defaults()
+
+        if mk_prep is None:
+            mk_prep = MoleculePreparation()
 
         tmp_raw_input_mols = cls._pdb_to_residue_mols(
             pdb_string,
@@ -1562,8 +1570,8 @@ class Polymer(BaseJSONParsable):
     def from_pqr_string(
         cls,
         pqr_string,
-        chem_templates,
-        mk_prep,
+        chem_templates=None,
+        mk_prep=None,
         set_template=None,
         residues_to_delete=None,
         ignore_https_cert=False,
@@ -1591,6 +1599,12 @@ class Polymer(BaseJSONParsable):
         -------
 
         """
+
+        #Set default mk_prep and chem_templates if not available. 
+        if chem_templates is None:
+            chem_templates = ResidueChemTemplates.create_from_defaults()
+        if mk_prep is None:
+            mk_prep = MoleculePreparation()
 
         tmp_raw_input_mols = cls._pqr_to_residue_mols(
             pqr_string,
@@ -1666,8 +1680,8 @@ class Polymer(BaseJSONParsable):
     def from_prody(
         cls,
         prody_obj: Union[Selection, AtomGroup],
-        chem_templates,
-        mk_prep,
+        chem_templates=None,
+        mk_prep=None,
         set_template=None,
         residues_to_delete=None,
         ignore_https_cert=False,
@@ -1699,6 +1713,12 @@ class Polymer(BaseJSONParsable):
         -------
 
         """
+
+        #Set default mk_prep and chem_templates if not available. 
+        if chem_templates is None:
+            chem_templates = ResidueChemTemplates.create_from_defaults()
+        if mk_prep is None:
+            mk_prep = MoleculePreparation()
 
         tmp_raw_input_mols = cls._prody_to_residue_mols(
             prody_obj,

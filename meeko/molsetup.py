@@ -1779,7 +1779,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         # check for mismatch
         if len(match_indices) != self.mol.GetNumAtoms():
-            l1 = len(match_indices[0])
+            l1 = len(match_indices)
             l2 = self.mol.GetNumAtoms()
             raise ValueError(f"Mismatch between template mol ({l1} atoms) and padded mol ({l2} atoms). Abandoning prep!")
         

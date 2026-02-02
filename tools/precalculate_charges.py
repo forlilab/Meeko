@@ -1,3 +1,5 @@
+# tool to precalculate charges based on template
+
 import json 
 
 json_file = "meeko/data/residue_chem_templates.json"
@@ -21,8 +23,6 @@ template_names = list(residue_templates.keys())
 template_smiles = [v['smiles'] for k,v in residue_templates.items()]
 template_mols = [Chem.MolFromSmiles(s) for s in template_smiles]
 template_links = [v['link_labels'] for k, v in residue_templates.items()]
-
-
 
 # Run reactions
 
