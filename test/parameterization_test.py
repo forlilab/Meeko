@@ -70,6 +70,22 @@ def test_openff_water():
     assert epsilon[1] == epsilon[2] 
     return
 
+@pytest.mark.skipif(not _got_openff, reason="requires openff-forcefields")
+def test_openff_acetate():
+    etkdg_v3 = Chem.rdDistGeom.ETKDGv3()
+    acetate = Chem.MolFromSmiles("CC(=O)[O-]")
+    acetate = Chem.AddHs(acetate)
+    Chem.rdDistGeom.EmbedMolecule(acetate, etkdg_v3)
+    mk_prep_200 = MoleculePreparation(load_atom_params=["openff"]) 
+    mk_prep_230 = MoleculePreparation(load_atom_params=["openff-2.3.0"]) 
+    molsetup_200 = mk_prep_200(acetate)[0]
+    molsetup_230 = mk_prep_230(acetate)[0]
+    rmin_half_200 = molsetup_200.atom_params["rmin_half"]
+    rmin_half_230 = molsetup_230.atom_params["rmin_half"]
+    assert rmin_half_200 != rmin_half_230
+    return
+
+
 def test_merge_rmin_half():
     methanol = Chem.AddHs(Chem.MolFromSmiles("CO"))
     etkdg_v3 = rdDistGeom.ETKDGv3()
