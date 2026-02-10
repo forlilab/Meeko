@@ -126,12 +126,23 @@ class MoleculePreparation:
         rigidify_bonds_smarts
         rigidify_bonds_indices
         input_atom_params
-        load_atom_params
+        load_atom_params: list[str]
+            the strings are JSON filenames, either somewhere in the filesystem
+            or packaged in Meeko/meeko/data/params/.
+            The default is ["ad4_types"].
+            The strings can also be an OpenFF forcefield such as
+            "openff-2.3.0". The string "openff" without a version suffix
+            specifies "openff-2.0.0" for backwards compatibility. 
         add_atom_types
         input_offatom_params
         load_offatom_params
         charge_model
-        dihedral_model
+        dihedral_model: str | None
+            string can be "espaloma" or an OpenFF force field such as
+            "openff-2.3.0". The string "openff" without a version suffix
+            specifies "openff-2.0.0" for backwards compatibility. The OpenFF
+            forcefields are available at:
+            https://github.com/openforcefield/openff-forcefields/tree/main/openforcefields/offxml
         reactive_smarts
         reactive_smarts_idx
         add_index_map
