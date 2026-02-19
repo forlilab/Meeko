@@ -126,12 +126,23 @@ class MoleculePreparation:
         rigidify_bonds_smarts
         rigidify_bonds_indices
         input_atom_params
-        load_atom_params
+        load_atom_params: list[str]
+            the strings are JSON filenames, either somewhere in the filesystem
+            or packaged in Meeko/meeko/data/params/.
+            The default is ["ad4_types"].
+            The strings can also be an OpenFF forcefield such as
+            "openff-2.3.0". The string "openff" without a version suffix
+            specifies "openff-2.0.0" for backwards compatibility. 
         add_atom_types
         input_offatom_params
         load_offatom_params
         charge_model
-        dihedral_model
+        dihedral_model: str | None
+            string can be "espaloma" or an OpenFF force field such as
+            "openff-2.3.0". The string "openff" without a version suffix
+            specifies "openff-2.0.0" for backwards compatibility. The OpenFF
+            forcefields are available at:
+            https://github.com/openforcefield/openff-forcefields/tree/main/openforcefields/offxml
         reactive_smarts
         reactive_smarts_idx
         add_index_map
@@ -198,15 +209,16 @@ class MoleculePreparation:
                     f"Invalid value for charge_atom_prop: expected a string (str), but got {type(self.charge_atom_prop).__name__} instead. "
                 )
         
-        allowed_dihedral_models = [None, "openff", "espaloma"]
         if dihedral_model in (None, "espaloma"):
             dihedral_list = []
         elif dihedral_model == "openff":
-            _, dihedral_list, _ = load_openff()
+            _, dihedral_list, _ = load_openff("openff-2.0.0")  # backward compat
+        elif dihedral_model.startswith("openff"):
+            _, dihedral_list, _ = load_openff(dihedral_model)
         else:
             raise ValueError(
                 "unrecognized dihedral_model: %s, allowed options are: %s"
-                % (dihedral_model, allowed_dihedral_models)
+                % (dihedral_model, "None, espaloma, openff-*")
             )
 
         self.dihedral_model = dihedral_model
@@ -385,15 +397,15 @@ class MoleculePreparation:
             load_atom_params = ()
         for name in load_atom_params:
             filename = None
-            if (
-                name == "openff-2.0.0" or name == "openff"
-            ):  # TODO allow multiple versions
+            if name.startswith("openff"):
                 if not _got_toml:
                     raise ImportError("need package tomli to read metal vdw param to complement openff") from _toml_import_error
-                vdw_list, _, _ = load_openff()
+                if name == "openff":
+                    name = "openff-2.0.0"
+                vdw_list, _, _ = load_openff(name)
                 with open(params_dir / "metal_vdw.toml", "rb") as f:
                     metals_vdw = toml.load(f)
-                d = {"openff-2.0.0": vdw_list + metals_vdw["vdw_params"]}
+                d = {name: vdw_list + metals_vdw["vdw_params"]}
             elif name in packaged_params:
                 filename = packaged_params[name]
             elif name.endswith(".json"):
@@ -555,10 +567,10 @@ class MoleculePreparation:
         if template_charge == None and self.compute_charges == False:
             temp_compute_charges = self.compute_charges
             self.compute_charges=True
-            if self.charge_model == "read":
-                print("No template available, or molecule is ligand.\nCharge model will be read from input mol property\n")
-            else:
-                print("Residue missing from template, or molecule is ligand.\nCharge will be computed from scratch.\n")
+            #if self.charge_model == "read":
+            #    print("No template available, or molecule is ligand.\nCharge model will be read from input mol property\n")
+            #else:
+            #    print("Residue missing from template, or molecule is ligand.\nCharge will be computed from scratch.\n")
 
         setup = setup_class.from_mol(
             mol,
