@@ -36,7 +36,6 @@ from .chemtempgen import build_linked_CCs
 from .preparation import MoleculePreparation
 
 import numpy as np
-from tqdm import tqdm
 
 data_path = files("meeko") / "data"
 periodic_table = Chem.GetPeriodicTable()
@@ -1453,6 +1452,12 @@ class Polymer(BaseJSONParsable):
 
         return polymer
     # endregion
+
+    @classmethod
+    def from_pdb_file(cls, filename, *args, **kwargs):
+        with open(filename) as f:
+            pdb_string = f.read()
+        return cls.from_pdb_string(pdb_string, *args, **kwargs)
     
     @classmethod
     def from_pdb_string(
@@ -1793,10 +1798,8 @@ class Polymer(BaseJSONParsable):
 
         """
 
-        print("    Parametrizing Monomers     ")
-        print("    ----------------------     ")
-        for residue_id in tqdm(self.get_valid_monomers(), desc="Monomers: "):
-            self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
+        for residue_id, monomer in self.get_valid_monomers().items():
+            monomer.parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
 
     def flexibilize_sidechain(self, residue_id, mk_prep):
         if residue_id not in self.get_valid_monomers():
