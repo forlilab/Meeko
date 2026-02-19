@@ -35,11 +35,15 @@ instance of ``MoleculePreparation`` and pass it to the constructor:
     )
     polymer = Polymer.from_pdb_string(pdb_string, mk_prep=mk_prep)
 
+See :doc:`lig_prep_advanced` for how to configure ``MoleculePreparation``.
+It is valid for both ligands and receptors.
+
 
 Flexible side chains
 --------------------
 
-Make a side chain flexible:
+Make a side chain flexible. Here, ``"A:3"`` is the residue ID, where
+``A`` is the chain, and ``3`` is the residue number.
 
 .. code-block:: python
 
