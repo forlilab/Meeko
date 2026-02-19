@@ -1809,7 +1809,7 @@ class Polymer(BaseJSONParsable):
     def rigidify_sidechain(self, residue_id, mk_prep):
         if residue_id not in self.get_valid_monomers():
             raise ValueError(f"{residue_id=} not in valid monomers")
-        return self.monomers[residue_id].rigidify(mk_prep)
+        return self.monomers[residue_id].rigidify(mk_prep, residue_id)
 
     def rigidify_all(self, mk_prep):
         for residue_id, monomer in self.get_valid_monomers().items():

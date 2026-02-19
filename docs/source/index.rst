@@ -102,6 +102,7 @@ to run molecular docking and virtual screening.
    Overview <rec_overview>
    Info on templates  <py_build_temp>
    Command line usage <cli_rec_prep>
+   Python bindings <py_rec_prep>
    mk_prepare_receptor.py options <rec_cli_options>
 
 .. toctree::
