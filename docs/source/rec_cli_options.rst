@@ -71,8 +71,9 @@ Receptor Perception Options
    for polymer construction will be read from the specified cache file and updates may be made to the same file in a
    cumulative manner.
 
-.. option:: --mk_config JSON_FILENAME
-   Use json config file instead of cli options
+.. option:: --mk_config
+   Can be a local json config file instead, or a the unsuffixed filename of a JSON file packaged
+   in meeko/data/mk_configs, for example --mk_config scofu1
 
 .. option:: -d, --delete_bad_res
 
