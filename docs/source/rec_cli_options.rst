@@ -72,8 +72,7 @@ Receptor Perception Options
    cumulative manner.
 
 .. option:: --mk_config
-   Can be a local json config file instead, or a the unsuffixed filename of a JSON file packaged
-   in meeko/data/mk_configs, for example --mk_config scofu1
+   local json config file [.json] or an unsuffixed (no .json) packaged file (choices: scofu1)
 
 .. option:: -d, --delete_bad_res
 

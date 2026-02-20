@@ -179,7 +179,7 @@ def get_args():
                               nargs = "?", 
                               default=False,
     )
-    config_group.add_argument("--mk_config", help="local file [.json] or packaged with meeko (scofu1)")
+    config_group.add_argument("--mk_config", help="local json config file [.json] or an unsuffixed (no .json) packaged file (choices: scofu1)")
     config_group.add_argument(
         "-x", "--delete_bad_res",
         action="store_true",
