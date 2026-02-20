@@ -179,7 +179,8 @@ def get_args():
                               nargs = "?", 
                               default=False,
     )
-    config_group.add_argument("--mk_config", help="local json config file [.json] or an unsuffixed (no .json) packaged file (choices: scofu1)")
+    config_group.add_argument("--config_file", help="local json configuration file. Overrides --config_preset option-wise. Overriden by command line options.")
+    config_group.add_argument("--config_preset", help="name of packaged configuration (choices: scofu1). Overriden by --config_file and by command line options.")
     config_group.add_argument(
         "-x", "--delete_bad_res",
         action="store_true",
@@ -529,15 +530,14 @@ def main():
     if args.delete_residues is not None:
         delete_residues = parse_cmdline_res(args.delete_residues)
     
-    if args.mk_config is not None:
-        if args.mk_config.endswith(".json"):
-            path = args.mk_config
-        else:
-            path = mk_config_dir / f"{args.mk_config}.json"
-        with open(path) as f:
-            mk_config = json.load(f)
-    else:
-        mk_config = {}
+    mk_config = {}
+    if args.config_preset is not None:
+        with open(mk_config_dir / f"{args.config_preset}.json") as f:
+            mk_config.update(json.load(f))    
+
+    if args.config_file is not None:
+        with open(args.config_file) as f:
+            mk_config.update(json.load(f))
     
     mk_config["compute_charges"] = args.compute_charges
 

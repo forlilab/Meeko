@@ -71,8 +71,13 @@ Receptor Perception Options
    for polymer construction will be read from the specified cache file and updates may be made to the same file in a
    cumulative manner.
 
-.. option:: --mk_config
-   local json config file [.json] or an unsuffixed (no .json) packaged file (choices: scofu1)
+.. option:: --config_preset
+
+   Name of packaged configuration (choices: scofu1). Overriden by --config_file and by command line options.
+
+.. option:: --config_file
+
+   Local json configuration file. Overrides --config_preset option-wise. Overriden by command line options.
 
 .. option:: -d, --delete_bad_res
 
