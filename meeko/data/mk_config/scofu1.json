@@ -1,0 +1,7 @@
+{
+    "merge_these_atom_types": [],
+    "load_atom_params": ["openff"],
+    "charge_model": "espaloma",
+    "dihedral_model": "openff",
+    "rigid_macrocycles": true
+}
