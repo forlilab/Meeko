@@ -1,0 +1,24 @@
+{
+  "mbondi": [
+    {"smarts": "[*]",           "mbondi_radius": 1.5},
+    {"smarts": "[#1]",          "mbondi_radius": 1.2},
+    {"smarts": "[#1][#8,#16]",  "mbondi_radius": 0.8},
+    {"smarts": "[#1][#6,#7]",   "mbondi_radius": 1.3},
+    {"smarts": "[#6]",          "mbondi_radius": 1.7},
+    {"smarts": "[#7]",          "mbondi_radius": 1.55},
+    {"smarts": "[#14]",         "mbondi_radius": 2.1},
+    {"smarts": "[#15]",         "mbondi_radius": 1.85},
+    {"smarts": "[#16]",         "mbondi_radius": 1.8},
+    {"smarts": "[#17]",         "mbondi_radius": 1.7}
+  ],
+  "screen": [
+    {"smarts": "[*]",           "gb_screen": 0.8},
+    {"smarts": "[#1]",          "gb_screen": 0.85},
+    {"smarts": "[#6]",          "gb_screen": 0.72},
+    {"smarts": "[#7]",          "gb_screen": 0.79},
+    {"smarts": "[#8]",          "gb_screen": 0.85},
+    {"smarts": "[#9]",          "gb_screen": 0.88},
+    {"smarts": "[#15]",         "gb_screen": 0.86},
+    {"smarts": "[#16]",         "gb_screen": 0.96}
+  ]
+}

@@ -106,3 +106,16 @@ def test_merge_rmin_half():
     c_merged = molsetup_merge.atom_params["rmin_half"][0]
     assert c_merged > c_normal
     return
+
+def test_mbondi():
+    mol = Chem.AddHs(Chem.MolFromSmiles("c1nc[nH]c1CO"))
+    etkdg_v3 = rdDistGeom.ETKDGv3()
+    rdDistGeom.EmbedMolecule(mol, etkdg_v3)
+    mk_prep = MoleculePreparation(load_atom_params="gb_mbondi")
+    molsetup = mk_prep(mol)[0]
+    print(molsetup.atom_params)
+    assert 1.3 in molsetup.atom_params["mbondi_radius"]  # H bound to N or C
+    assert 0.8 in molsetup.atom_params["mbondi_radius"]  # H bound to O or S
+    assert 1.2 not in molsetup.atom_params["mbondi_radius"]  # other H
+    assert molsetup.atom_params["gb_screen"].count(0.72) == 4  # C
+    assert molsetup.atom_params["gb_screen"].count(0.79) == 2  # N
