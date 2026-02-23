@@ -562,8 +562,11 @@ def divide_int_gracefully(integer, weights, allow_equal_weights_to_differ=False)
             raise ValueError("weights must be numeric and non-negative")
     if type(integer) is not int:
         raise ValueError("integer must be integer")
-    inv_total_weight = 1.0 / sum(weights)
-    shares = [w * inv_total_weight for w in weights]  # normalize
+    if sum(weights) < np.finfo(np.float32).eps:
+        shares = [1.0 / len(weights) for _ in weights]
+    else:
+        inv_total_weight = 1.0 / sum(weights)
+        shares = [w * inv_total_weight for w in weights]  # normalize
     result = [_snap_to_int(integer * s, tolerance=0.5) for s in shares]
     surplus = integer - sum(result)
     if surplus == 0:
