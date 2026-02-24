@@ -62,7 +62,7 @@ useful only for development. It can be installed with:
 
 .. code-block:: bash
 
-   micromamba install -c conda-forge openff-forcefields
+   micromamba install -c conda-forge "openff-forcefields>=2026"
 
 `OpenFF Toolkit <https://docs.openforcefield.org/projects/toolkit>`__ is used to assign
 NAGL charges, useful only for development. See `installation instructions <https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html>`__
