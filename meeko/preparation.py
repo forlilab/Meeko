@@ -16,6 +16,7 @@ import meeko.macrocycle
 from .molsetup import Bond
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
+from .atomtyper import add_crippen_to_molsetup
 from .espalomatyper import EspalomaTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
@@ -106,7 +107,8 @@ class MoleculePreparation:
         reactive_smarts_idx=None,
         add_index_map=False,
         remove_smiles=False,
-        compute_charges=False
+        compute_charges=False,
+        crippen=False,
     ):
         """
 
@@ -191,6 +193,7 @@ class MoleculePreparation:
         self.charge_model = charge_model
         self.compute_charges = compute_charges
         self.charge_atom_prop = charge_atom_prop
+        self.crippen = crippen
 
         if self.charge_model!="read" and self.charge_atom_prop: 
             raise ValueError(
@@ -662,6 +665,9 @@ class MoleculePreparation:
                 else:
                     new_atom_info = orig_pdbinfo._replace(name=new_name)
                     atom.pdbinfo = new_atom_info
+
+        if self.crippen:
+            add_crippen_to_molsetup(setup)
 
         if self.reactive_smarts is None:
             setups = [setup]
