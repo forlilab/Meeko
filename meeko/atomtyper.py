@@ -6,6 +6,7 @@ import warnings
 import numpy as np
 
 from .utils import pdbutils
+from rdkit.Chem import rdMolDescriptors
 
 
 class AtomTyper:
@@ -369,3 +370,12 @@ class AtomicGeometry:
         else:
             # should be np.array
             return vec / l
+
+
+def add_crippen_to_molsetup(molsetup):
+    atom_contribs = rdMolDescriptors._CalcCrippenContribs(molsetup.mol)
+    crippen = [atom[0] for atom in atom_contribs]
+    nr_pseudo_atoms = len(molsetup.atoms) - molsetup.mol.GetNumAtoms()
+    crippen += [0.0] * nr_pseudo_atoms
+    molsetup.atom_params["crippen"] = crippen
+    return None

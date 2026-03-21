@@ -23,6 +23,7 @@ from .utils import pdbutils
 from .utils import geomutils
 from .utils import utils
 from .atomtyper import AtomTyper
+from .atomtyper import add_crippen_to_molsetup
 from .receptor_pdbqt import PDBQTReceptor
 from .polymer import Polymer
 from .polymer import Monomer
