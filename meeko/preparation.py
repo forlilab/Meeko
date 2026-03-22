@@ -675,8 +675,8 @@ class MoleculePreparation:
             add_crippen_to_molsetup(setup)
 
         if self.override_ad4sol_par_including_q:
-            qasp = self.override_ad4_sol_par_including_q_qasp
-            set_ad4_sol_par_including_q(setup, qasp)
+            qasp = self.override_ad4sol_par_including_q_qasp
+            set_ad4sol_par_including_q(setup, qasp)
 
         if self.reactive_smarts is None:
             setups = [setup]

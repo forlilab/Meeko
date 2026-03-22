@@ -4,7 +4,6 @@ import pathlib
 from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 from meeko import MoleculePreparation
-from meeko import set_ad4sol_par_including_q
 import numpy as np
 import meeko
 import pytest
@@ -134,9 +133,10 @@ def test_override_ad4sol_par_including_q():
     mk_prep_mod = MoleculePreparation(
         charge_model="zero", 
         merge_these_atom_types=[],
+        override_ad4sol_par_including_q=True,
+        override_ad4sol_par_including_q_qasp=qasp,
     )
     molsetup_mod = mk_prep_mod(mol)[0]
-    set_ad4sol_par_including_q(molsetup_mod, qasp)
     mod_par = np.array(molsetup_mod.atom_params["ad4_sol_par"]) 
     assert np.max(np.abs([atom.charge for atom in molsetup_default.atoms])) > np.finfo(float).eps
     assert np.max(np.abs([atom.charge for atom in molsetup_mod.atoms])) < np.finfo(float).eps
