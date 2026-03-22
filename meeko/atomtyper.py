@@ -1,13 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
+import pathlib
 import warnings
 
 import numpy as np
-
-from .utils import pdbutils
+from rdkit import Chem
 from rdkit.Chem import rdMolDescriptors
 
+from .utils import pdbutils
+from .utils import rdkitutils
+
+pkg_dir = pathlib.Path(__file__).parents[0]
+params_dir = pkg_dir / "data" / "params"
 
 class AtomTyper:
 
@@ -378,4 +384,20 @@ def add_crippen_to_molsetup(molsetup):
     nr_pseudo_atoms = len(molsetup.atoms) - molsetup.mol.GetNumAtoms()
     crippen += [0.0] * nr_pseudo_atoms
     molsetup.atom_params["crippen"] = crippen
+    return None
+
+
+def set_ad4sol_par_including_q(molsetup, qasp):
+    # does not set ad4sol volume
+    par_fn = params_dir / "ad4_desolv_param.json"
+    with open(par_fn) as f:
+        dsolv_params = json.load(f)
+    AtomTyper._type_atoms(molsetup, dsolv_params)
+    charges = rdkitutils.compute_gasteiger_charges(molsetup.mol)
+    nonpolar_h = Chem.MolFromSmarts("[#1][!#7;!#8;!#9;!#16]")
+    for h_idx, parent_idx in molsetup.mol.GetSubstructMatches(nonpolar_h):
+        charges[parent_idx] += charges[h_idx]
+        charges[h_idx] = 0.0
+    for index, charge in enumerate(charges):
+        molsetup.atom_params["ad4_sol_par"][index] += qasp * abs(charge)
     return None
