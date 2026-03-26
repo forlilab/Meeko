@@ -9,6 +9,7 @@ import json
 eol="\n"
 import pathlib
 import warnings
+import logging
 
 from rdkit import Chem
 
@@ -48,7 +49,7 @@ params_dir = pkg_dir / "data" / "params"
 
 # DeprecationWarning is not displayed by default
 warnings.filterwarnings("default", category=DeprecationWarning)
-
+logger = logging.getLogger(__name__)
 
 class MoleculePreparation:
     """
@@ -280,9 +281,8 @@ class MoleculePreparation:
         """
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
-        if bad_keys:
-            warnings.warn(f"Ignore unexpected keys: {bad_keys}")
-        config = {k: v for k,v in config.items() if k in expected_keys}
+        for bad_key in bad_keys:
+            logger.error(f"Unexpected key: {bad_key}")
         p = cls(**config)
         return p
     
