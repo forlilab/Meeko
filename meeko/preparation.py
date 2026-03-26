@@ -9,6 +9,7 @@ import json
 eol="\n"
 import pathlib
 import warnings
+import logging
 
 from rdkit import Chem
 
@@ -17,6 +18,7 @@ from .molsetup import Bond
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
 from .atomtyper import add_crippen_to_molsetup
+from .atomtyper import set_ad4sol_par_including_q
 from .espalomatyper import EspalomaTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
@@ -47,7 +49,7 @@ params_dir = pkg_dir / "data" / "params"
 
 # DeprecationWarning is not displayed by default
 warnings.filterwarnings("default", category=DeprecationWarning)
-
+logger = logging.getLogger(__name__)
 
 class MoleculePreparation:
     """
@@ -109,6 +111,8 @@ class MoleculePreparation:
         remove_smiles=False,
         compute_charges=False,
         crippen=False,
+        override_ad4sol_par_including_q=False,
+        override_ad4sol_par_including_q_qasp=0.0,
     ):
         """
 
@@ -194,6 +198,8 @@ class MoleculePreparation:
         self.compute_charges = compute_charges
         self.charge_atom_prop = charge_atom_prop
         self.crippen = crippen
+        self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
+        self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
 
         if self.charge_model!="read" and self.charge_atom_prop: 
             raise ValueError(
@@ -275,9 +281,8 @@ class MoleculePreparation:
         """
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
-        if bad_keys:
-            warnings.warn(f"Ignore unexpected keys: {bad_keys}")
-        config = {k: v for k,v in config.items() if k in expected_keys}
+        for bad_key in bad_keys:
+            logger.error(f"Unexpected key: {bad_key}")
         p = cls(**config)
         return p
     
@@ -668,6 +673,10 @@ class MoleculePreparation:
 
         if self.crippen:
             add_crippen_to_molsetup(setup)
+
+        if self.override_ad4sol_par_including_q:
+            qasp = self.override_ad4sol_par_including_q_qasp
+            set_ad4sol_par_including_q(setup, qasp)
 
         if self.reactive_smarts is None:
             setups = [setup]

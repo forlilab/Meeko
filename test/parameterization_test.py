@@ -4,6 +4,7 @@ import pathlib
 from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 from meeko import MoleculePreparation
+import numpy as np
 import meeko
 import pytest
 
@@ -119,3 +120,25 @@ def test_mbondi():
     assert 1.2 not in molsetup.atom_params["mbondi_radius"]  # other H
     assert molsetup.atom_params["gb_screen"].count(0.72) == 4  # C
     assert molsetup.atom_params["gb_screen"].count(0.79) == 2  # N
+
+def test_override_ad4sol_par_including_q():
+    qasp = 0.01097
+    mol = Chem.AddHs(Chem.MolFromSmiles("c1nc[nH]c1CO"))
+    etkdg_v3 = rdDistGeom.ETKDGv3()
+    rdDistGeom.EmbedMolecule(mol, etkdg_v3)
+    mk_prep = MoleculePreparation(load_atom_params=["ad4_types", "ad4_desolv_volume", "ad4_desolv_param"])
+    molsetup_default = mk_prep(mol)[0]
+    ref_par = np.array(molsetup_default.atom_params["ad4_sol_par"])
+    ref_par += qasp * np.abs([atom.charge for atom in molsetup_default.atoms])
+    mk_prep_mod = MoleculePreparation(
+        charge_model="zero", 
+        merge_these_atom_types=[],
+        override_ad4sol_par_including_q=True,
+        override_ad4sol_par_including_q_qasp=qasp,
+    )
+    molsetup_mod = mk_prep_mod(mol)[0]
+    mod_par = np.array(molsetup_mod.atom_params["ad4_sol_par"]) 
+    assert np.max(np.abs([atom.charge for atom in molsetup_default.atoms])) > np.finfo(float).eps
+    assert np.max(np.abs([atom.charge for atom in molsetup_mod.atoms])) < np.finfo(float).eps
+    assert np.max(np.abs(ref_par - mod_par)) < np.finfo(float).eps
+    assert np.max(np.abs(ref_par)) > np.finfo(float).eps
