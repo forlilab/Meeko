@@ -159,7 +159,8 @@ class UniqAtomParams:
         return new_row_index
 
     def add_molsetup(
-        self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False
+        self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False,
+        remove_params=(),
     ):
         if "charge" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
             msg = '"charge" and "atom_type" found in molsetup.atom_params'
@@ -173,7 +174,7 @@ class UniqAtomParams:
             if atom.is_ignore:
                 param_idx = None
             else:
-                p = {k: v[atom.index] for (k, v) in molsetup.atom_params.items()}
+                p = {k: v[atom.index] for (k, v) in molsetup.atom_params.items() if k not in remove_params}
                 if add_atomic_nr:
                     if "atomic_nr" in p:
                         raise RuntimeError(
