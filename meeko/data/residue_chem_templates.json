@@ -196,6 +196,11 @@
 			"atom_name": ["MG"],
 			"link_labels": {}
 		},
+		"CU": {
+			"smiles": "[Cu+2]",
+			"atom_name": ["CU"],
+			"link_labels": {}
+		},
 		"CL": {
 			"smiles": "[Cl-]",
 			"atom_name": ["CL"],
