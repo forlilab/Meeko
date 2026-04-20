@@ -111,6 +111,16 @@
         "espaloma_charges": [2.0],
         "nagl_charges": [2.0]
     },
+    "CU": {
+        "padded_smiles": "[Cu+2]",
+        "molblock": "\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.0000    0.0000 Cu  0  0  0  0  0 15  0  0  0  0  0  0\nM  CHG  1   1   2\nM  END\n",
+        "gasteiger_charges": [
+            2.0
+        ],
+        "espaloma_charges": [2.0],
+        "nagl_charges": [2.0]
+    },
+
     "CL": {
         "padded_smiles": "[Cl-]",
         "molblock": "\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.0000    0.0000 Cl  0  0  0  0  0 15  0  0  0  0  0  0\nM  CHG  1   1  -1\nM  END\n",
