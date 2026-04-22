@@ -167,7 +167,7 @@ def get_args():
     config_group.add_argument("-n", "--set_template", help="e.g. A:5,7=CYX,B:17=HID")
     config_group.add_argument("-d", "--delete_residues", help="e.g. A:350,B:15,16,17")
     config_group.add_argument("-b", "--blunt_ends", help="e.g. A:123,200=2,A:1=0")
-    config_group.add_argument("--add_templates", help="Additional residue templates. Can be a JSON file path or 'resname:file.sdf'.", action="append", default=[])
+    config_group.add_argument("--add_templates", help="Additional residue templates. Can be a JSON file path or 'resname:file.sdf'. Repeat --add_templates to add multiple files.", action="append", default=[])
     config_group.add_argument("--cache_templates", 
                               help=(
                                   "Turns on caching of ResidueChemTemplates (default is OFF) by this option and "
