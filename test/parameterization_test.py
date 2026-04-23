@@ -142,3 +142,14 @@ def test_override_ad4sol_par_including_q():
     assert np.max(np.abs([atom.charge for atom in molsetup_mod.atoms])) < np.finfo(float).eps
     assert np.max(np.abs(ref_par - mod_par)) < np.finfo(float).eps
     assert np.max(np.abs(ref_par)) > np.finfo(float).eps
+
+def test_add_atom_types_with_multiple_typing_groups():
+    mol = Chem.AddHs(Chem.MolFromSmiles("c1nc[nH]c1CO"))
+    etkdg_v3 = rdDistGeom.ETKDGv3()
+    rdDistGeom.EmbedMolecule(mol, etkdg_v3)
+    mk_prep = MoleculePreparation(
+        load_atom_params=["ad4_types", "gb_mbondi"],
+        add_atom_types=[{"smarts": "[#1]", "atype": "H"}],
+    )
+    molsetup = mk_prep(mol)[0]
+    return

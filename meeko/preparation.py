@@ -468,15 +468,20 @@ class MoleculePreparation:
             atom_params.update(d)
 
         if add_atom_types is not None and len(add_atom_types) > 0:
-            group_keys = list(atom_params.keys())
-            if len(group_keys) != 1:
-                msg = "add_atom_types is usable only when there is one group of parameters"
+            group_keys_that_set_atype = set()
+            for group_key, entries in atom_params.items():
+                for entry in entries:
+                    if "atype" in entry:
+                        group_keys_that_set_atype.add(group_key)
+                        break
+            if len(group_keys_that_set_atype) != 1:
+                msg = "add_atom_types is usable only when there is one group of parameters that sets 'atype'"
                 msg += ", but there are %d groups: %s" % (
-                    len(group_keys),
-                    str(group_keys),
+                    len(group_keys_that_set_atype),
+                    str(group_keys_that_set_atype),
                 )
                 raise RuntimeError(msg)
-            key = group_keys[0]
+            key = group_keys_that_set_atype.pop()
             atom_params[key].extend(add_atom_types)
 
         return atom_params
