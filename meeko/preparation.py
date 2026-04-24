@@ -472,7 +472,7 @@ class MoleculePreparation:
         if add_atom_types is not None:
             key = "add_atom_types"
             attempts = 99
-            for attempt_index in range(atttempts):
+            for attempt_index in range(attempts):
                 if key not in atom_params:
                     atom_params[key] = add_atom_types
                     break
