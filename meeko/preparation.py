@@ -111,6 +111,7 @@ class MoleculePreparation:
         remove_smiles=False,
         compute_charges=False,
         crippen=False,
+        crippen_as_solpar=False,
         override_ad4sol_par_including_q=False,
         override_ad4sol_par_including_q_qasp=0.0,
     ):
@@ -198,6 +199,7 @@ class MoleculePreparation:
         self.compute_charges = compute_charges
         self.charge_atom_prop = charge_atom_prop
         self.crippen = crippen
+        self.crippen_as_solpar = crippen_as_solpar
         self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
         self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
 
@@ -467,22 +469,16 @@ class MoleculePreparation:
 
             atom_params.update(d)
 
-        if add_atom_types is not None and len(add_atom_types) > 0:
-            group_keys_that_set_atype = set()
-            for group_key, entries in atom_params.items():
-                for entry in entries:
-                    if "atype" in entry:
-                        group_keys_that_set_atype.add(group_key)
-                        break
-            if len(group_keys_that_set_atype) != 1:
-                msg = "add_atom_types is usable only when there is one group of parameters that sets 'atype'"
-                msg += ", but there are %d groups: %s" % (
-                    len(group_keys_that_set_atype),
-                    str(group_keys_that_set_atype),
-                )
-                raise RuntimeError(msg)
-            key = group_keys_that_set_atype.pop()
-            atom_params[key].extend(add_atom_types)
+        if add_atom_types is not None:
+            key = "add_atom_types"
+            attempts = 99
+            for attempt_index in range(attempts):
+                if key not in atom_params:
+                    atom_params[key] = add_atom_types
+                    break
+                key = f"add_atom_types_{attempt_index}"
+            if key == f"add_atom_types_{attempts}":
+                raise RuntimeError("could not find a key for add atom types, tried up to {key}")
 
         return atom_params
 
@@ -676,8 +672,12 @@ class MoleculePreparation:
                     new_atom_info = orig_pdbinfo._replace(name=new_name)
                     atom.pdbinfo = new_atom_info
 
-        if self.crippen:
+        if self.crippen or self.crippen_as_solpar:
             add_crippen_to_molsetup(setup)
+            if not self.crippen:
+                setup.atom_params["ad4_sol_par"] = setup.atom_params.pop("crippen")
+            elif self.crippen_as_solpar:
+                setup.atom_params["ad4_sol_par"] = [value for value in setup.atom_params["crippen"]]
 
         if self.override_ad4sol_par_including_q:
             qasp = self.override_ad4sol_par_including_q_qasp
