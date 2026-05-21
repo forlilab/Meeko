@@ -64,7 +64,11 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
 
 
 from ._common import check, make_talkative_parser, required_length
-from ._receptor_helpers import build_mk_config, validate_altloc_and_write_flags
+from ._receptor_helpers import (
+    build_mk_config,
+    resolve_residue_selections,
+    validate_altloc_and_write_flags,
+)
 
 # Backward-compat: third-party code may import TalkativeParser from this module.
 TalkativeParser = make_talkative_parser(path_to_this_script)
@@ -385,105 +389,16 @@ def main():
     )
 
 
-    # Default mapping of residue name and reactive atom name
-    reactive_atom = {
-        "SER": "OG",
-        "LYS": "NZ",
-        "TYR": "OH",
-        "CYS": "SG",
-        "HIE": "NE2",
-        "HID": "ND1",
-        "GLU": "OE2",
-        "THR": "OG1",
-        "MET": "SD",
-    }
-    
-    # Process custom mapping of residue name and reactive atom name
-    modified = set()
-    for react_name_str in args.reactive_name:
-        resname, name = react_name_str.split(":")
-        if resname in modified:
-            print(
-                "Command line error: repeated resname %s passed to --reactive_resname"
-                % resname
-                + eol,
-                file=sys.stderr,
-            )
-            sys.exit(2)
-        modified.add(resname)
-        reactive_atom[resname] = name
-    
-    # Process specified mapping of residue ID and reactive atom name
-    modified = set()
-    reactive_flexres_name = {}
-    for string in args.reactive_name_specific:
-        res_assign = parse_cmdline_res_assign(string)
-        for res_id in res_assign:
-            if res_id in modified:
-                print(
-                    "Command line error: repeated resid %s passed to --reactive_name_specific"
-                    % res_id
-                    + eol,
-                    file=sys.stderr,
-                )
-                sys.exit(2)
-            modified.add(res_id)
-            reactive_flexres_name[res_id] = res_assign[res_id]
-    
-    # Process residue ID of reactive flexible residues without specified reactive atom
-    reactive_flexres = set(reactive_flexres_name)
-    for resid_string in args.reactive_flexres:
-        res_list = parse_cmdline_res(resid_string)
-        for res_id in res_list:
-            if res_id not in reactive_flexres:
-                reactive_flexres.add(res_id)
-                reactive_flexres_name[res_id] = ""
-    
-    # Evaluate number of reactive flexible residues
-    if len(reactive_flexres) > 8:
-        msg = "got %d reactive_flexres but maximum is 8." % (len(args.reactive_flexres))
-        print("Command line error: " + msg, file=sys.stderr)
-        sys.exit(2)
-    
-    # Evaluate compatibility with other options
-    if len(reactive_flexres) != 1 and args.box_center_off_reactive_res:
-        msg = (
-            "--box_center_off_reactive_res can be used only with one reactive" + eol
-        )
-        msg += "residue, but %d reactive residues are set" % len(reactive_flexres_name)
-        print("Command line error:" + msg, file=sys.stderr)
-        sys.exit(2)
-    
-    # Process residue ID of nonreactive flexible residues
-    nonreactive_flexres = set()
-    for string in args.flexres:
-        for res_id in parse_cmdline_res(string):
-            if res_id not in reactive_flexres:
-                nonreactive_flexres.add(res_id)
+    residues = resolve_residue_selections(args)
+    reactive_atom = residues.reactive_atom_by_resname
+    reactive_flexres = residues.reactive_flexres
+    reactive_flexres_name = residues.reactive_flexres_name
+    nonreactive_flexres = residues.nonreactive_flexres
+    rot_term_res = residues.rot_term_res
+    set_template = residues.set_template
+    blunt_ends = residues.blunt_ends
+    delete_residues = residues.delete_residues
 
-    # Process residue ID of residues with rotatable terminal group
-    rot_term_res = set()
-    for string in args.rot_terminal_group:
-        for res_id in parse_cmdline_res(string):
-            if res_id not in reactive_flexres and res_id not in nonreactive_flexres:
-                rot_term_res.add(res_id)
-    
-    
-    set_template = {}
-    if args.set_template is not None:
-        set_template = parse_cmdline_res_assign(args.set_template)
-    
-    blunt_ends = []
-    if args.blunt_ends is not None:
-        j = parse_cmdline_res_assign(args.blunt_ends)
-        # TODO parse also input/raw atom names, easier than indices
-        j = [(k, int(v)) for k, v in j.items()]
-        blunt_ends.extend(j)
-    
-    delete_residues = []
-    if args.delete_residues is not None:
-        delete_residues = parse_cmdline_res(args.delete_residues)
-    
     mk_config = build_mk_config(args, mk_config_dir)
 
     # initialize MoleculePreparation with config
