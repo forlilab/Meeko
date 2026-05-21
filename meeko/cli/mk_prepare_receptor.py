@@ -63,29 +63,10 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
     }
 
 
-class TalkativeParser(argparse.ArgumentParser):
-    def error(self, message):
-        """overload to print_help for every error"""
-        self.print_help()
-        this_script = path_to_this_script.name
-        print("\n%s: error: %s" % (this_script, message), file=sys.stderr)
-        sys.exit(2)
+from ._common import check, make_talkative_parser, required_length
 
-
-def check(success, error_msg):
-    if not success:
-        print("Error: " + error_msg, file=sys.stderr)
-        sys.exit(2)
-
-def required_length(nmin, nmax):
-    class RequiredLength(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            if not nmin <= len(values) <= nmax:
-                msg = "fargument {self.dest} requires between"
-                msg += " {nmin} and {nmax} arguments"
-                raise argparse.ArgumentTypeError(msg)
-            setattr(namespace, self.dest, values)
-    return RequiredLength
+# Backward-compat: third-party code may import TalkativeParser from this module.
+TalkativeParser = make_talkative_parser(path_to_this_script)
 
 def get_args():
     parser = TalkativeParser()
