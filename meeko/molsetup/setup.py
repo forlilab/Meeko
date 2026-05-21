@@ -11,15 +11,8 @@ from typing import Any, Optional, Union
 
 import numpy as np
 from rdkit import Chem
-from rdkit.Chem import rdMolInterchange
 
-from ..utils.jsonutils import (
-    BaseJSONParsable,
-    convert_to_tuple_keyed_dict,
-    rdkit_mol_from_json,
-    string_to_tuple,
-    tuple_to_string,
-)
+from ..utils.jsonutils import BaseJSONParsable
 from ..utils.pdbutils import PDBAtomInfo
 from ..utils import utils
 
@@ -77,29 +70,8 @@ class MoleculeSetup(BaseJSONParsable):
 
     @classmethod
     def json_encoder(cls, obj: "MoleculeSetup") -> Optional[dict[str, Any]]:
-        output_dict = {
-            "name": obj.name,
-            "pseudoatom_count": obj.pseudoatom_count,
-            "atoms": [Atom.json_encoder(x) for x in obj.atoms],
-            "bond_info": {
-                tuple_to_string(k): Bond.json_encoder(v)
-                for k, v in obj.bond_info.items()
-            },
-            "rings": {
-                tuple_to_string(k): Ring.json_encoder(v) for k, v in obj.rings.items()
-            },
-            "ring_closure_info": obj.ring_closure_info.__dict__,
-            "rotamers": [
-                {tuple_to_string(k): v for k, v in rotamer.items()}
-                for rotamer in obj.rotamers
-            ],
-            "atom_params": obj.atom_params,
-            "restraints": [Restraint.json_encoder(x) for x in obj.restraints],
-            "flexibility_model": obj.flexibility_model.encode()
-            if isinstance(obj.flexibility_model, FlexibilityModel)
-            else obj.flexibility_model,
-        }
-        return output_dict
+        from . import io
+        return io.encode_molecule_setup(obj)
 
     expected_json_keys = {
         "name",
@@ -116,28 +88,8 @@ class MoleculeSetup(BaseJSONParsable):
 
     @classmethod
     def _decode_object(cls, obj: dict[str, Any]):
-        molsetup = cls(obj["name"])
-        molsetup.pseudoatom_count = obj["pseudoatom_count"]
-        molsetup.atoms = [Atom.from_dict(x) for x in obj["atoms"]]
-        molsetup.bond_info = {
-            string_to_tuple(k, int): Bond.from_dict(v)
-            for k, v in obj["bond_info"].items()
-        }
-        molsetup.rings = {
-            string_to_tuple(k, int): Ring.from_dict(v)
-            for k, v in obj["rings"].items()
-        }
-        molsetup.ring_closure_info = RingClosureInfo(
-            obj["ring_closure_info"]["bonds_removed"],
-            obj["ring_closure_info"]["pseudos_by_atom"],
-        )
-        molsetup.rotamers = [
-            convert_to_tuple_keyed_dict(rotamer, int) for rotamer in obj["rotamers"]
-        ]
-        molsetup.atom_params = obj["atom_params"]
-        molsetup.restraints = [Restraint.from_dict(x) for x in obj["restraints"]]
-        molsetup.flexibility_model = FlexibilityModel.decode(obj["flexibility_model"])
-        return molsetup
+        from . import io
+        return io.decode_molecule_setup(cls, obj)
 
     # ----- invariant-preserving primitives -----
 
@@ -297,21 +249,8 @@ class MoleculeSetup(BaseJSONParsable):
         return count
 
     def clean_atoms(self, remove_pseudoatoms: bool = False):
-        new_atoms = []
-        removed_atom_count = 0
-        for atom in self.atoms:
-            if remove_pseudoatoms and atom.is_pseudo_atom:
-                removed_atom_count += 1
-                continue
-            if atom.is_dummy:
-                removed_atom_count += 1
-                continue
-            atom.index = atom.index - removed_atom_count
-            new_atoms.append(atom)
-        self.atoms = new_atoms
-        if remove_pseudoatoms:
-            self.pseudoatom_count = 0
-        return removed_atom_count
+        from . import editing
+        return editing.clean_atoms(self, remove_pseudoatoms)
 
     # ----- accessors (bounds-checked) -----
 
@@ -360,15 +299,8 @@ class MoleculeSetup(BaseJSONParsable):
     def set_atom_type_from_uniq_atom_params(
         self, uniq_atom_params: UniqAtomParams, prefix: str
     ):
-        parameter_indices = uniq_atom_params.get_indices_from_atom_params(
-            self.atom_params
-        )
-        if len(parameter_indices) != len(self.atoms):
-            raise RuntimeError(
-                "Number of parameters ({len(parameter_indices)}) not equal to number of atoms in Molecule Setup ({len(self.atom_type)})"
-            )
-        for i, j in enumerate(parameter_indices):
-            self.atom_type[i] = f"{prefix}{j}"
+        from . import editing
+        return editing.set_atom_type_from_uniq_atom_params(self, uniq_atom_params, prefix)
 
     def get_is_ignore(self, atom_index: int):
         if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
@@ -384,51 +316,22 @@ class MoleculeSetup(BaseJSONParsable):
             )
         return self.atoms[atom_index].graph
 
-    # ----- chemistry-aware edits & graph algorithms -----
+    # ----- chemistry-aware edits & graph algorithms (delegate to editing.py / graph.py) -----
 
-    def merge_terminal_atoms(self, indices, merge_rmin_half=False) -> None:
-        if merge_rmin_half and "rmin_half" not in self.atom_params:
-            raise ValueError("can't merge rmin_half because it's not in atom_params")
-        for index in indices:
-            if len(self.get_neighbors(index)) != 1:
-                msg = "Atempted to merge atom %d with %d neighbors. "
-                msg += "Only atoms with one neighbor can be merged."
-                msg = msg % (index + 1, self.get_neighbors(index))
-                raise RuntimeError(msg)
-            neighbor_index = self.get_neighbors(index)[0]
-            self.atoms[neighbor_index].charge += self.get_charge(index)
-            self.atoms[index].charge = 0.0
-            self.atoms[index].is_ignore = True
-            if not merge_rmin_half:
-                continue
-            r_neigh = self.atom_params["rmin_half"][neighbor_index]
-            r_source = self.atom_params["rmin_half"][index]
-            new_r = np.cbrt(r_neigh**3 + r_source**3)
-            self.atom_params["rmin_half"][neighbor_index] = new_r
-            self.atom_params["rmin_half"][index] = 0.0
+    def merge_terminal_atoms(self, indices, merge_rmin_half: bool = False) -> None:
+        from . import editing
+        return editing.merge_terminal_atoms(self, indices, merge_rmin_half)
 
     @staticmethod
     def get_bonds_in_ring(ring: tuple) -> list[tuple]:
-        bonds = []
-        num_indices = len(ring)
-        for i in range(num_indices):
-            bond = (ring[i], ring[(i + 1) % num_indices])
-            bonds.append(Bond.get_bond_id(bond[0], bond[1]))
-        return bonds
+        from . import graph
+        return graph.get_bonds_in_ring(ring)
 
     def _recursive_graph_walk(
         self, idx: int, collected: list[int] = None, exclude: list[int] = None
     ):
-        if collected is None:
-            collected = []
-        if exclude is None:
-            exclude = []
-        for neighbor in self.get_neighbors(idx):
-            if neighbor in collected or neighbor in exclude:
-                continue
-            collected.append(neighbor)
-            self._recursive_graph_walk(neighbor, collected, exclude)
-        return collected
+        from . import graph
+        return graph.recursive_graph_walk(self, idx, collected, exclude)
 
     def write_coord_string(self) -> str:
         n = len(self.atoms)
@@ -522,19 +425,8 @@ class RDKitMoleculeSetup(MoleculeSetup, BaseJSONParsable):
 
     @classmethod
     def json_encoder(cls, obj: "RDKitMoleculeSetup") -> Optional[dict[str, Any]]:
-        output_dict = MoleculeSetup.json_encoder(obj)
-        output_dict["mol"] = rdMolInterchange.MolToJSON(obj.mol)
-        output_dict["modified_atom_positions"] = obj.modified_atom_positions
-        output_dict["dihedral_interactions"] = obj.dihedral_interactions
-        output_dict["dihedral_partaking_atoms"] = {
-            tuple_to_string(k): v for k, v in obj.dihedral_partaking_atoms.items()
-        }
-        output_dict["dihedral_labels"] = {
-            tuple_to_string(k): v for k, v in obj.dihedral_labels.items()
-        }
-        output_dict["atom_to_ring_id"] = obj.atom_to_ring_id
-        output_dict["rmsd_symmetry_indices"] = obj.rmsd_symmetry_indices
-        return output_dict
+        from . import io
+        return io.encode_rdkit_molecule_setup(obj)
 
     expected_json_keys = frozenset(
         MoleculeSetup.expected_json_keys.union(
@@ -552,27 +444,8 @@ class RDKitMoleculeSetup(MoleculeSetup, BaseJSONParsable):
 
     @classmethod
     def _decode_object(cls, obj: dict[str, Any]):
-        base_molsetup = MoleculeSetup.from_dict(obj)
-        rdkit_molsetup = cls(source=base_molsetup)
-        rdkit_molsetup.mol = rdkit_mol_from_json(obj["mol"])
-        rdkit_molsetup.modified_atom_positions = list(
-            map(int, obj["modified_atom_positions"])
-        )
-        rdkit_molsetup.dihedral_interactions = obj["dihedral_interactions"]
-        rdkit_molsetup.dihedral_partaking_atoms = convert_to_tuple_keyed_dict(
-            obj["dihedral_partaking_atoms"], int
-        )
-        rdkit_molsetup.dihedral_labels = convert_to_tuple_keyed_dict(
-            obj["dihedral_labels"], int
-        )
-        rdkit_molsetup.atom_to_ring_id = {
-            int(k): [string_to_tuple(t) for t in v]
-            for k, v in obj["atom_to_ring_id"].items()
-        }
-        rdkit_molsetup.rmsd_symmetry_indices = list(
-            map(string_to_tuple, obj["rmsd_symmetry_indices"])
-        )
-        return rdkit_molsetup
+        from . import io
+        return io.decode_rdkit_molecule_setup(cls, obj)
 
     def copy(self):
         newsetup = RDKitMoleculeSetup()
