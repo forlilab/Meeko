@@ -29,7 +29,7 @@ from .ring import (
 )
 from .restraint import Restraint
 from .uniq_atom_params import UniqAtomParams
-from .setup import MoleculeSetup, MoleculeSetupExternalToolkit, RDKitMoleculeSetup
+from .setup import MoleculeSetup, RDKitMoleculeSetup
 
 __all__ = [
     "Atom",
@@ -40,7 +40,6 @@ __all__ = [
     "Restraint",
     "UniqAtomParams",
     "MoleculeSetup",
-    "MoleculeSetupExternalToolkit",
     "RDKitMoleculeSetup",
     "DEFAULT_ATOM_TYPE",
     "DEFAULT_ATOMIC_NUM",

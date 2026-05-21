@@ -5,19 +5,14 @@ in sibling modules. This module contains the orchestration classes that hold
 them together and the RDKit-coupled subclass.
 """
 
-from abc import ABC, abstractmethod
 from copy import deepcopy
-import json
 import logging
-import warnings
 from typing import Any, Optional, Union
 
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
 
-from ..utils import rdkitutils, utils
-from ..utils.geomutils import calcDihedral  # noqa: F401 — kept for backward-compat
 from ..utils.jsonutils import (
     BaseJSONParsable,
     convert_to_tuple_keyed_dict,
@@ -26,6 +21,7 @@ from ..utils.jsonutils import (
     tuple_to_string,
 )
 from ..utils.pdbutils import PDBAtomInfo
+from ..utils import utils
 
 from .atom import (
     Atom,
@@ -44,13 +40,6 @@ from .restraint import Restraint
 from .uniq_atom_params import UniqAtomParams
 
 eol = "\n"
-
-try:
-    from misctools import StereoIsomorphism
-except ImportError as _import_misctools_error:
-    _has_misctools = False
-else:
-    _has_misctools = True
 
 logger = logging.getLogger(__name__)
 
@@ -496,59 +485,7 @@ class MoleculeSetup(BaseJSONParsable):
         print("")
 
 
-class MoleculeSetupExternalToolkit(ABC):
-    """Mixin: methods that require an external toolkit (e.g. RDKit, OpenBabel)."""
-
-    @staticmethod
-    def are_fourier_series_identical(series1: list, series2: list) -> bool:
-        index_by_periodicity1 = {
-            series1[index]["periodicity"]: index for index in range(len(series1))
-        }
-        index_by_periodicity2 = {
-            series2[index]["periodicity"]: index for index in range(len(series2))
-        }
-        if index_by_periodicity1 != index_by_periodicity2:
-            return False
-        for periodicity in index_by_periodicity1:
-            index1 = index_by_periodicity1[periodicity]
-            index2 = index_by_periodicity2[periodicity]
-            for key in ["k", "phase", "periodicity"]:
-                if series1[index1][key] != series2[index2][key]:
-                    return False
-        return True
-
-    def add_dihedral_interaction(self, fourier_series):
-        index = 0
-        for existing_fs in self.dihedral_interactions:
-            if self.are_fourier_series_identical(existing_fs, fourier_series):
-                return index
-            index += 1
-        safe_copy = json.loads(json.dumps(fourier_series))
-        self.dihedral_interactions.append(safe_copy)
-        return index
-
-    @abstractmethod
-    def init_atom(self, compute_gasteiger_charges, read_charges_from_prop, coords):
-        pass
-
-    @abstractmethod
-    def init_bond(self):
-        pass
-
-    @abstractmethod
-    def get_mol_name(self):
-        pass
-
-    @abstractmethod
-    def find_pattern(self, smarts: str):
-        pass
-
-    @abstractmethod
-    def get_smiles_and_order(self):
-        pass
-
-
-class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONParsable):
+class RDKitMoleculeSetup(MoleculeSetup, BaseJSONParsable):
     """MoleculeSetup paired with an RDKit Chem.Mol.
 
     Extra attributes
@@ -646,371 +583,82 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 setattr(newsetup, key, deepcopy(value))
         return newsetup
 
+    # ----- RDKit-coupled methods: thin wrappers that delegate to rdkit_adapter -----
+
     @classmethod
-    def from_mol(
-        cls,
-        mol: Chem.Mol,
-        keep_chorded_rings: bool = False,
-        keep_equivalent_rings: bool = False,
-        charge_model: str = "gasteiger",
-        read_charges_from_prop: str = None,
-        conformer_id: int = -1,
-        compute_charges: bool = False,
-        template_key: str = None,
-        template_charge: dict = None,
-    ):
-        if cls.has_implicit_hydrogens(mol):
-            raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
-        if mol.GetNumConformers() == 0:
-            raise ValueError(
-                "RDKit molecule does not have a conformer. Need 3D coordinates."
-            )
-        rdkit_conformer = mol.GetConformer(conformer_id)
-        if not rdkit_conformer.Is3D():
-            warnings.warn(
-                "RDKit molecule not labeled as 3D. This warning won't show again.",
-                RuntimeWarning,
-            )
-            RDKitMoleculeSetup.warned_not3D = True
-        if mol.GetNumConformers() > 1 and conformer_id == -1:
-            warnings.warn(
-                "RDKit molecule has multiple conformers. Considering only the first one.",
-                RuntimeWarning,
-            )
-        if len(Chem.GetMolFrags(mol)) != 1:
-            raise ValueError(
-                f"RDKit molecule has {len(Chem.GetMolFrags(mol))} fragments. Must have 1."
-            )
-        if mol.HasQuery():
-            raise ValueError(
-                "RDKit molecule has query. Check exotic fields (atom or bond) in SDF."
-            )
+    def from_mol(cls, mol, **kwargs):
+        from . import rdkit_adapter
+        return rdkit_adapter.from_rdkit_mol(cls, mol, **kwargs)
 
-        molsetup = cls()
-        molsetup.mol = mol
-        molsetup.atom_true_count = molsetup.get_num_mol_atoms()
-        molsetup.compute_charges = compute_charges
-        molsetup.name = molsetup.get_mol_name()
-        coords = rdkit_conformer.GetPositions()
-        molsetup.init_atom(
-            charge_model,
-            read_charges_from_prop,
-            coords,
-            template_key=template_key,
-            template_charge=template_charge,
-        )
-        molsetup.init_bond()
-        molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
-        molsetup.modified_atom_positions = []
-        return molsetup
-
-    def init_atom(
-        self,
-        charge_model: str,
-        read_charges_from_prop: str,
-        coords: list[np.ndarray],
-        template_key: str | None = None,
-        template_charge: str | None = None,
-    ):
-        if template_key is None and self.compute_charges is False:
-            raise ValueError(
-                "Template key is none and compute_charges is false. Something has gone terribly wrong. "
-            )
-
-        temp_compute_charges = None
-        if charge_model == "read":
-            temp_compute_charges = self.compute_charges
-            self.compute_charges = True
-
-        if self.compute_charges:
-            charges = self.calculate_charges(charge_model, read_charges_from_prop)
-        else:
-            charges = self.get_charges_from_template(charge_model, template_charge)
-
-        if temp_compute_charges is not None:
-            self.compute_charges = temp_compute_charges
-
-        for a in self.mol.GetAtoms():
-            idx = a.GetIdx()
-            self.add_atom(
-                atom_index=idx,
-                pdbinfo=rdkitutils.getPdbInfoNoNull(a),
-                charge=charges[idx],
-                coord=coords[idx],
-                atomic_num=a.GetAtomicNum(),
-                is_ignore=False,
-            )
-
-    def calculate_charges(self, charge_model: str, read_charges_from_prop: str):
-        if charge_model == "gasteiger":
-            if read_charges_from_prop is not None:
-                raise ValueError(
-                    "Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set."
-                )
-            try:
-                charges = rdkitutils.compute_gasteiger_charges(self.mol)
-            except Exception as e:
-                print("gasteiger charge computation failed with: ")
-                print(e)
-        elif charge_model == "nagl":
-            if read_charges_from_prop is not None:
-                raise ValueError(
-                    "Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set."
-                )
-            try:
-                from openff.toolkit import Molecule
-            except ImportError:
-                print("A recent version of OpenFF is required for NAGL charges")
-            mol_off = Molecule.from_rdkit(
-                self.mol, allow_undefined_stereo=True, hydrogens_are_explicit=True
-            )
-            try:
-                mol_off.assign_partial_charges(
-                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt"
-                )
-                charges = mol_off.partial_charges.magnitude.tolist()
-            except Exception as e:
-                print("NAGL charge computation failed with with exception:")
-                print(e)
-                print("Make sure you've installed the latest version of openff")
-        elif read_charges_from_prop is not None:
-            if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop:
-                raise ValueError(
-                    f"Invalid atom property name for read_charges_from_prop: expected a nonempty string (str), but got {type(read_charges_from_prop).__name__} instead. "
-                )
-            charges = [
-                float(atom.GetProp(read_charges_from_prop))
-                if atom.HasProp(read_charges_from_prop)
-                else None
-                for atom in self.mol.GetAtoms()
-            ]
-            if None in charges:
-                for idx, charge in enumerate(charges):
-                    if charge is None:
-                        logger.error(f"Charge at index {idx} is None.")
-                raise ValueError(
-                    f"The list of charges based on atom property name {read_charges_from_prop} contains None. "
-                )
-        else:
-            charges = [0.0] * self.mol.GetNumAtoms()
-        return charges
-
-    def get_charges_from_template(self, charge_model: str, template_charge: dict):
-        if self.mol is None:
-            raise ValueError("No rdkit mol generated for current residue. ")
-        template_mol = Chem.MolFromMolBlock(template_charge["molblock"], removeHs=False)
-        self.template_mol = template_mol
-        match_indices = list(template_mol.GetSubstructMatch(self.mol))
-        if len(match_indices) != self.mol.GetNumAtoms():
-            l1 = len(match_indices)
-            l2 = self.mol.GetNumAtoms()
-            raise ValueError(
-                f"Mismatch between template mol ({l1} atoms) and padded mol ({l2} atoms). Abandoning prep!"
-            )
-        match charge_model:
-            case "nagl":
-                charges = template_charge["nagl_charges"]
-            case "espaloma":
-                charges = template_charge["espaloma_charges"]
-            case "gasteiger":
-                charges = template_charge["gasteiger_charges"]
-            case "zero":
-                charges = [0.0] * self.mol.GetNumAtoms()
-            case _:
-                raise ValueError(
-                    "Incompatible charge model requested from charge template. Use --recompute_charges"
-                )
-        charges = np.array(charges)
-        charges = [float(x) for x in charges[match_indices]]
-        return charges
+    def init_atom(self, *args, **kwargs):
+        from . import rdkit_adapter
+        return rdkit_adapter.init_atom(self, *args, **kwargs)
 
     def init_bond(self):
-        for b in self.mol.GetBonds():
-            idx1 = b.GetBeginAtomIdx()
-            idx2 = b.GetEndAtomIdx()
-            rotatable = int(b.GetBondType()) == 1
-            self.add_bond(idx1, idx2, rotatable=rotatable)
+        from . import rdkit_adapter
+        return rdkit_adapter.init_bond(self)
 
-    def find_pattern(self, smarts: str, uniquify=False, max_matches=int(1e7)):
-        p = Chem.MolFromSmarts(smarts)
-        return self.mol.GetSubstructMatches(
-            p, uniquify=uniquify, maxMatches=max_matches
-        )
+    def calculate_charges(self, charge_model, read_charges_from_prop):
+        from . import rdkit_adapter
+        return rdkit_adapter.calculate_charges(self, charge_model, read_charges_from_prop)
+
+    def get_charges_from_template(self, charge_model, template_charge):
+        from . import rdkit_adapter
+        return rdkit_adapter.get_charges_from_template(self, charge_model, template_charge)
+
+    def find_pattern(self, smarts, uniquify=False, max_matches=int(1e7)):
+        from . import rdkit_adapter
+        return rdkit_adapter.find_pattern(self, smarts, uniquify=uniquify, max_matches=max_matches)
 
     def get_mol_name(self):
-        if self.mol.HasProp("_Name"):
-            return self.mol.GetProp("_Name")
-        return None
+        from . import rdkit_adapter
+        return rdkit_adapter.get_mol_name(self)
 
     def get_smiles_and_order(self):
-        mol_no_ignore = self.mol
-        ps = Chem.RemoveHsParameters()
-        ps.removeWithQuery = True
-        mol_noH = Chem.RemoveHs(mol_no_ignore, ps)
-        atomic_num_mol_noH = [atom.GetAtomicNum() for atom in mol_noH.GetAtoms()]
-        noH_to_H = []
-        parents_of_hs = {}
-        for index, atom in enumerate(mol_no_ignore.GetAtoms()):
-            if atom.GetAtomicNum() == 1:
-                continue
-            for i in range(len(noH_to_H), len(atomic_num_mol_noH)):
-                if atomic_num_mol_noH[i] > 1:
-                    break
-                h_atom = mol_noH.GetAtomWithIdx(len(noH_to_H))
-                assert h_atom.GetAtomicNum() == 1
-                neighbors = h_atom.GetNeighbors()
-                assert len(neighbors) == 1
-                parents_of_hs[len(noH_to_H)] = neighbors[0].GetIdx()
-                noH_to_H.append("H")
-            noH_to_H.append(index)
-        extra_hydrogens = len(atomic_num_mol_noH) - len(noH_to_H)
-        if extra_hydrogens > 0:
-            assert set(atomic_num_mol_noH[len(noH_to_H) :]) == {1}
-        for i in range(extra_hydrogens):
-            h_atom = mol_noH.GetAtomWithIdx(len(noH_to_H))
-            assert h_atom.GetAtomicNum() == 1
-            neighbors = h_atom.GetNeighbors()
-            assert len(neighbors) == 1
-            parents_of_hs[len(noH_to_H)] = neighbors[0].GetIdx()
-            noH_to_H.append("H")
-
-        hs_by_parent = {}
-        for hidx, pidx in parents_of_hs.items():
-            hs_by_parent.setdefault(pidx, [])
-            hs_by_parent[pidx].append(hidx)
-        for pidx, hidxs in hs_by_parent.items():
-            siblings_of_h = [
-                atom
-                for atom in mol_no_ignore.GetAtomWithIdx(noH_to_H[pidx]).GetNeighbors()
-                if atom.GetAtomicNum() == 1
-            ]
-            sortidx = [
-                i
-                for i, j in sorted(
-                    list(enumerate(siblings_of_h)), key=lambda x: x[1].GetIdx()
-                )
-            ]
-            if len(hidxs) == len(siblings_of_h):
-                for i, hidx in enumerate(hidxs):
-                    noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
-            elif len(hidxs) < len(siblings_of_h):
-                sibling_isotopes = [
-                    siblings_of_h[sortidx[i]].GetIsotope()
-                    for i in range(len(siblings_of_h))
-                ]
-                molnoH_isotopes = [mol_noH.GetAtomWithIdx(hidx) for hidx in hidxs]
-                matches = []
-                for i, sibling_isotope in enumerate(sibling_isotopes):
-                    for hidx in hidxs[len(matches) :]:
-                        if mol_noH.GetAtomWithIdx(hidx).GetIsotope() == sibling_isotope:
-                            matches.append(i)
-                            break
-                if len(matches) != len(hidxs):
-                    raise RuntimeError(
-                        "Number of matched isotopes %d differs from query Hs: %d"
-                        % (len(matches), len(hidxs))
-                    )
-                for hidx, i in zip(hidxs, matches):
-                    noH_to_H[hidx] = siblings_of_h[sortidx[i]].GetIdx()
-            else:
-                raise RuntimeError(
-                    "nr of Hs in mol_noH bonded to an atom exceeds nr of Hs in mol_no_ignore"
-                )
-
-        smiles = Chem.MolToSmiles(mol_noH)
-        order_string = mol_noH.GetProp("_smilesAtomOutputOrder")
-        order_string = order_string.replace(",]", "]")
-        order = json.loads(order_string)
-        order = list(np.argsort(order))
-        order = {noH_to_H[i]: order[i] + 1 for i in range(len(order))}
-
-        for atom in mol_noH.GetAtoms():
-            if atom.GetAtomicNum() == 1 and atom.GetIsotope() > 0:
-                order.pop(atom.GetIdx())
-        return smiles, order
+        from . import rdkit_adapter
+        return rdkit_adapter.get_smiles_and_order(self)
 
     def perceive_rings(self, keep_chorded_rings: bool, keep_equivalent_rings: bool):
-        old_graph = {atom.index: atom.graph for atom in self.atoms}
-        hjk_ring_detection = utils.HJKRingDetection(old_graph)
-        rings = hjk_ring_detection.scan(keep_chorded_rings, keep_equivalent_rings)
-        for ring_atom_indices in rings:
-            self.rings[ring_atom_indices] = Ring(ring_atom_indices)
+        from . import rdkit_adapter
+        return rdkit_adapter.perceive_rings(self, keep_chorded_rings, keep_equivalent_rings)
 
     def get_conformer_with_modified_positions(self, new_atom_positions):
-        new_mol = Chem.Mol(self.mol)
-        new_conformer = Chem.Conformer(self.mol.GetConformer())
-        is_set_list = [False] * self.mol.GetNumAtoms()
-        for atom_index, new_position in new_atom_positions.items():
-            new_conformer.SetAtomPosition(atom_index, new_position)
-            is_set_list[atom_index] = True
-        new_mol.RemoveAllConformers()
-        new_mol.AddConformer(new_conformer, assignId=True)
-        for atom_index, is_set in enumerate(is_set_list):
-            if not is_set and new_mol.GetAtomWithIdx(atom_index).GetAtomicNum() == 1:
-                neighbors = new_mol.GetAtomWithIdx(atom_index).GetNeighbors()
-                if len(neighbors) != 1:
-                    raise RuntimeError("Expected H to have one neighbors")
-                Chem.SetTerminalAtomCoords(new_mol, atom_index, neighbors[0].GetIdx())
-        return new_conformer
+        from . import rdkit_adapter
+        return rdkit_adapter.get_conformer_with_modified_positions(self, new_atom_positions)
 
     def get_mol_with_modified_positions(self, new_atom_positions_list=None):
-        if new_atom_positions_list is None:
-            new_atom_positions_list = self.modified_atom_positions
-        new_mol = Chem.Mol(self.mol)
-        new_mol.RemoveAllConformers()
-        for new_atom_positions in new_atom_positions_list:
-            conformer = self.get_conformer_with_modified_positions(new_atom_positions)
-            new_mol.AddConformer(conformer, assignId=True)
-        return new_mol
+        from . import rdkit_adapter
+        return rdkit_adapter.get_mol_with_modified_positions(self, new_atom_positions_list)
 
     def get_num_mol_atoms(self):
-        return self.mol.GetNumAtoms()
+        from . import rdkit_adapter
+        return rdkit_adapter.get_num_mol_atoms(self)
 
     def get_equivalent_atoms(self):
-        return list(Chem.CanonicalRankAtoms(self.mol, breakTies=False))
+        from . import rdkit_adapter
+        return rdkit_adapter.get_equivalent_atoms(self)
+
+    def restrain_to(self, target_mol, kcal_per_angstrom_square=1.0, delay_angstroms=2.0):
+        from . import rdkit_adapter
+        return rdkit_adapter.restrain_to(
+            self, target_mol, kcal_per_angstrom_square, delay_angstroms
+        )
+
+    def add_dihedral_interaction(self, fourier_series):
+        from . import rdkit_adapter
+        return rdkit_adapter.add_dihedral_interaction(self, fourier_series)
+
+    @staticmethod
+    def are_fourier_series_identical(series1, series2):
+        from . import rdkit_adapter
+        return rdkit_adapter.are_fourier_series_identical(series1, series2)
 
     @staticmethod
     def get_symmetries_for_rmsd(mol, max_matches=17):
-        mol_noHs = Chem.RemoveHs(mol)
-        matches = mol.GetSubstructMatches(
-            mol_noHs, uniquify=False, maxMatches=max_matches
-        )
-        if len(matches) == max_matches:
-            molname = mol.GetProp("_Name") if mol.HasProp("_Name") else ""
-            warnings.warn(
-                "Found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd"
-                % max_matches,
-                RuntimeWarning,
-            )
-            warnings.warn(
-                'Maybe this molecule is "too" symmetric? %s %s'
-                % (molname, Chem.MolToSmiles(mol_noHs)),
-                RuntimeWarning,
-            )
-        return matches
+        from . import rdkit_adapter
+        return rdkit_adapter.get_symmetries_for_rmsd(mol, max_matches)
 
     @staticmethod
     def has_implicit_hydrogens(mol):
-        for atom in mol.GetAtoms():
-            nr_H_neighbors = 0
-            for neighbor in atom.GetNeighbors():
-                nr_H_neighbors += int(neighbor.GetAtomicNum() == 1)
-            if atom.GetTotalNumHs(includeNeighbors=False) > nr_H_neighbors:
-                return True
-        return False
-
-    def restrain_to(
-        self, target_mol, kcal_per_angstrom_square=1.0, delay_angstroms=2.0
-    ):
-        if not _has_misctools:
-            raise ImportError(_import_misctools_error)
-        stereo_isomorphism = StereoIsomorphism()
-        mapping, idx = stereo_isomorphism(target_mol, self.mol)
-        lig_to_drive = {b: a for (a, b) in mapping}
-        target_positions = target_mol.GetConformer().GetPositions()
-        for atom_index in range(len(mapping)):
-            target_xyz = target_positions[lig_to_drive[atom_index]]
-            restraint = Restraint(
-                atom_index, target_xyz, kcal_per_angstrom_square, delay_angstroms
-            )
-            self.restraints.append(restraint)
+        from . import rdkit_adapter
+        return rdkit_adapter.has_implicit_hydrogens(mol)
