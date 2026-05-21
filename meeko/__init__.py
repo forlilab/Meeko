@@ -14,6 +14,7 @@ else:
     _has_prody = True
 
 from .preparation import MoleculePreparation
+from .prep_config import PrepConfig
 from .molsetup import RDKitMoleculeSetup
 from .molsetup import MoleculeSetup
 from .molsetup import Restraint
@@ -55,7 +56,7 @@ rdkit_logger.handlers[0].setFormatter(
 )
 rdBase.LogToPythonLogger()
 
-__all__ = ['MoleculePreparation', 'RDKitMoleculeSetup', 
+__all__ = ['MoleculePreparation', 'PrepConfig', 'RDKitMoleculeSetup',
            'pdbutils', 'geomutils', 'rdkitutils', 'utils',
            'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
            'Polymer', 'Monomer', 'ResiduePadder', 'ResidueTemplate', 'ResidueChemTemplates',

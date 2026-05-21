@@ -4,7 +4,7 @@
 # Meeko preparation
 #
 
-from inspect import signature
+from dataclasses import fields
 import json
 eol="\n"
 import pathlib
@@ -26,6 +26,7 @@ from .macrocycle import FlexMacrocycle
 from .flexibility import get_flexibility_model
 from .flexibility import update_closure_atoms
 from .flexibility import merge_terminal_atoms
+from .prep_config import PrepConfig
 from .writer import PDBQTWriterLegacy
 from .reactive import assign_reactive_types
 from .openff_xml_parser import load_openff
@@ -157,91 +158,107 @@ class MoleculePreparation:
         compute_charges
         """
 
-        if type(merge_these_atom_types) not in (list, set, tuple):
-            raise ValueError("you probably forgot '.from_config' in MoleculePreparation.from_config(mk_config)")
+        # All configuration knobs live in a typed PrepConfig dataclass; its
+        # __post_init__ does the simple validations (charge_model whitelist,
+        # reactive_smarts/idx pairing, etc.). Cross-field validation that
+        # needs derived state stays here.
+        config = PrepConfig(
+            merge_these_atom_types=merge_these_atom_types,
+            merge_rmin_half=merge_rmin_half,
+            hydrate=hydrate,
+            flexible_amides=flexible_amides,
+            rigid_macrocycles=rigid_macrocycles,
+            untyped_macrocycles=untyped_macrocycles,
+            min_ring_size=min_ring_size,
+            max_ring_size=max_ring_size,
+            keep_chorded_rings=keep_chorded_rings,
+            keep_equivalent_rings=keep_equivalent_rings,
+            double_bond_penalty=double_bond_penalty,
+            macrocycle_allow_A=macrocycle_allow_A,
+            rigidify_bonds_smarts=rigidify_bonds_smarts,
+            rigidify_bonds_indices=rigidify_bonds_indices,
+            input_atom_params=input_atom_params,
+            load_atom_params=load_atom_params,
+            add_atom_types=add_atom_types,
+            input_offatom_params=input_offatom_params,
+            load_offatom_params=load_offatom_params,
+            charge_model=charge_model,
+            charge_atom_prop=charge_atom_prop,
+            dihedral_model=dihedral_model,
+            reactive_smarts=reactive_smarts,
+            reactive_smarts_idx=reactive_smarts_idx,
+            add_index_map=add_index_map,
+            remove_smiles=remove_smiles,
+            compute_charges=compute_charges,
+            crippen=crippen,
+            crippen_as_solpar=crippen_as_solpar,
+            override_ad4sol_par_including_q=override_ad4sol_par_including_q,
+            override_ad4sol_par_including_q_qasp=override_ad4sol_par_including_q_qasp,
+        )
+        self._init_from_config(config)
 
+    def _init_from_config(self, config: PrepConfig) -> None:
+        """Populate the instance from a (validated) ``PrepConfig``.
+
+        Sets every config field as a ``self.foo`` attribute (preserves the
+        legacy attribute-read API), then builds the derived state (atom
+        params loaded from JSON, dihedral params from OpenFF, the bond /
+        macrocycle / water helpers).
+        """
+        self._config = config
         self.deprecated_setup_access = None
-        self.merge_these_atom_types = merge_these_atom_types
-        self.merge_rmin_half = merge_rmin_half
-        self.hydrate = hydrate
-        self.flexible_amides = flexible_amides
-        self.rigid_macrocycles = rigid_macrocycles
-        self.untyped_macrocycles = untyped_macrocycles
-        self.min_ring_size = min_ring_size
-        self.max_ring_size = max_ring_size
-        self.keep_chorded_rings = keep_chorded_rings
-        self.keep_equivalent_rings = keep_equivalent_rings
-        self.double_bond_penalty = double_bond_penalty
-        self.macrocycle_allow_A = macrocycle_allow_A
-        self.rigidify_bonds_smarts = rigidify_bonds_smarts
-        self.rigidify_bonds_indices = rigidify_bonds_indices
 
-        self.input_atom_params = input_atom_params
-        self.load_atom_params = load_atom_params
-        self.add_atom_types = add_atom_types
+        # Mirror every config field onto self.foo for backward compat with
+        # existing readers (mk_prep.charge_model, .merge_these_atom_types, ...).
+        for f in fields(config):
+            setattr(self, f.name, getattr(config, f.name))
 
+        # ----- derived state -----
         self.atom_params = self.get_atom_params(
-            input_atom_params, load_atom_params, add_atom_types, self.packaged_params
+            config.input_atom_params,
+            config.load_atom_params,
+            config.add_atom_types,
+            self.packaged_params,
         )
 
-        if load_offatom_params is not None:
-            raise NotImplementedError("load_offatom_params not implemented")
-        self.load_offatom_params = load_offatom_params
-
-        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl"]
-        if charge_model not in allowed_charge_models:
+        # charge_atom_prop cross-validation (depends on charge_model)
+        if self.charge_model != "read" and self.charge_atom_prop:
             raise ValueError(
-                "unrecognized charge_model: %s, allowed options are: %s"
-                % (charge_model, allowed_charge_models)
+                f"A charge_atom_prop ({self.charge_atom_prop}) is given to MoleculePreparation"
+                f" but its current charge_model is {self.charge_model}. " + eol +
+                "To read charges from atom properties in the input mol, set charge_model"
+                " to 'read' and name the property as 'charge_atom_prop'. "
             )
-
-        self.charge_model = charge_model
-        self.compute_charges = compute_charges
-        self.charge_atom_prop = charge_atom_prop
-        self.crippen = crippen
-        self.crippen_as_solpar = crippen_as_solpar
-        self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
-        self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
-
-        if self.charge_model!="read" and self.charge_atom_prop: 
-            raise ValueError(
-                f"A charge_atom_prop ({charge_atom_prop}) is given to MoleculePreparation but its current charge_model is {charge_model}. " + eol + 
-                "To read charges from atom properties in the input mol, set charge_model to 'read' and name the property as 'charge_atom_prop'. " 
-            )
-        if self.charge_model=="read":
-            if not self.charge_atom_prop: 
+        if self.charge_model == "read":
+            if not self.charge_atom_prop:
                 self.charge_atom_prop = "PartialCharge"
                 warnings.warn(
-                    "The charge_model of MoleculePreparation is set to be 'read', but a valid charge_atom_prop is not given. " + eol + 
+                    "The charge_model of MoleculePreparation is set to be 'read', but a"
+                    " valid charge_atom_prop is not given. " + eol +
                     "The default atom property ('PartialCharge') will be used. "
                 )
-            elif not isinstance(self.charge_atom_prop, str): 
+            elif not isinstance(self.charge_atom_prop, str):
                 raise ValueError(
-                    f"Invalid value for charge_atom_prop: expected a string (str), but got {type(self.charge_atom_prop).__name__} instead. "
+                    f"Invalid value for charge_atom_prop: expected a string (str), but"
+                    f" got {type(self.charge_atom_prop).__name__} instead. "
                 )
-        
-        if dihedral_model in (None, "espaloma"):
+
+        # dihedral params depend on the dihedral_model string
+        if self.dihedral_model in (None, "espaloma"):
             dihedral_list = []
-        elif dihedral_model == "openff":
-            _, dihedral_list, _ = load_openff("openff-2.0.0")  # backward compat
-        elif dihedral_model.startswith("openff"):
-            _, dihedral_list, _ = load_openff(dihedral_model)
+        elif self.dihedral_model == "openff":
+            _, dihedral_list, _ = load_openff("openff-2.0.0")
+        elif self.dihedral_model.startswith("openff"):
+            _, dihedral_list, _ = load_openff(self.dihedral_model)
         else:
             raise ValueError(
                 "unrecognized dihedral_model: %s, allowed options are: %s"
-                % (dihedral_model, "None, espaloma, openff-*")
+                % (self.dihedral_model, "None, espaloma, openff-*")
             )
-
-        self.dihedral_model = dihedral_model
         self.dihedral_params = dihedral_list
 
-        # espaloma model is instantiated later to avoid import cost if it's not needed.
+        # espaloma is instantiated lazily to avoid the import cost otherwise.
         self.espaloma_model = None
-
-        self.reactive_smarts = reactive_smarts
-        self.reactive_smarts_idx = reactive_smarts_idx
-        self.add_index_map = add_index_map
-        self.remove_smiles = remove_smiles
 
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(
@@ -254,47 +271,41 @@ class MoleculePreparation:
         self._water_builder = HydrateMoleculeLegacy()
         self._classes_setup = {Chem.rdchem.Mol: RDKitMoleculeSetup}
 
-        if input_offatom_params is None:
-            self.offatom_params = {}
-        else:
-            self.offatom_params = input_offatom_params
+        self.offatom_params = (
+            {} if self.input_offatom_params is None else self.input_offatom_params
+        )
 
-        if keep_chorded_rings and not keep_equivalent_rings:
+        if self.keep_chorded_rings and not self.keep_equivalent_rings:
             warnings.warn(
                 "keep_equivalent_rings=False ignored because keep_chorded_rings=True",
                 RuntimeWarning,
             )
-        if (reactive_smarts is None) != (reactive_smarts_idx is None):
-            raise ValueError(
-                "reactive_smarts and reactive_smarts_idx require each other"
-            )
 
     @classmethod
     def from_config(cls, config):
-        """
-
-        Parameters
-        ----------
-        config
-
-        Returns
-        -------
-
-        """
+        """Build from a kwargs dict. Unexpected keys are logged at ERROR
+        level and stripped before construction (matches legacy behavior)."""
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
         for bad_key in bad_keys:
             logger.error(f"Unexpected key: {bad_key}")
         p = cls(**config)
         return p
-    
+
     @classmethod
-    def from_json_file(cls, filename): 
+    def from_json_file(cls, filename):
         with open(filename) as f:
             jsonstr = f.read()
         alldata = json.loads(jsonstr)
-
         return cls.from_config(alldata)
+
+    @classmethod
+    def from_prep_config(cls, config: PrepConfig) -> "MoleculePreparation":
+        """Build directly from a ``PrepConfig`` instance, skipping the
+        constructor's kwarg unpacking step."""
+        inst = cls.__new__(cls)
+        inst._init_from_config(config)
+        return inst
 
     def calc_flex(
         self,
@@ -504,17 +515,9 @@ class MoleculePreparation:
 
     @classmethod
     def get_defaults_dict(cls):
-        """
-
-        Returns
-        -------
-
-        """
-        defaults = {}
-        sig = signature(cls)
-        for key in sig.parameters:
-            defaults[key] = sig.parameters[key].default
-        return defaults
+        """Return ``{kwarg_name: default_value}`` for every constructor
+        kwarg. Delegates to ``PrepConfig.get_defaults_dict``."""
+        return PrepConfig.get_defaults_dict()
 
     def __call__(self, *args, **kwargs):
         return self.prepare(*args, **kwargs)
@@ -570,29 +573,26 @@ class MoleculePreparation:
 
 
 
-        # make sure template charge is populated
-        # otherwise, charges must be computed or read elsewhere.
-        temp_compute_charges = None
-        if template_charge == None and self.compute_charges == False:
-            temp_compute_charges = self.compute_charges
-            self.compute_charges=True
-            #if self.charge_model == "read":
-            #    print("No template available, or molecule is ligand.\nCharge model will be read from input mol property\n")
-            #else:
-            #    print("Residue missing from template, or molecule is ligand.\nCharge will be computed from scratch.\n")
+        # If no template charge is provided and the user didn't ask to
+        # compute charges, fall back to "compute" for the duration of this
+        # call. This used to be done by temporarily mutating
+        # self.compute_charges; using a local variable keeps the per-call
+        # decision out of instance state.
+        effective_compute_charges = self.compute_charges
+        if template_charge is None and not self.compute_charges:
+            effective_compute_charges = True
 
         setup = setup_class.from_mol(
             mol,
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings,
-            charge_model= self.charge_model,
+            charge_model=self.charge_model,
             read_charges_from_prop=self.charge_atom_prop,
             conformer_id=conformer_id,
-            compute_charges=self.compute_charges, 
+            compute_charges=effective_compute_charges,
             template_key=template_key,
-            template_charge=template_charge
+            template_charge=template_charge,
         )
-
 
         self.check_external_ring_break(setup, delete_ring_bonds, glue_pseudo_atoms)
 
@@ -600,33 +600,28 @@ class MoleculePreparation:
         AtomTyper.type_everything(
             setup,
             self.atom_params,
-            self.charge_model, # charge_model is not accessed in type_everything
+            self.charge_model,  # charge_model is not accessed in type_everything
             self.offatom_params,
             self.dihedral_params,
         )
 
         # Convert molecule to graph and apply trained Espaloma model
-        # skip if charges are read from template
-        if self.dihedral_model == "espaloma" or (self.charge_model == "espaloma" and self.compute_charges):
+        # (skip if charges are read from template).
+        if self.dihedral_model == "espaloma" or (
+            self.charge_model == "espaloma" and effective_compute_charges
+        ):
             self.espaloma_model = EspalomaTyper()
             if mol.GetNumAtoms() > 1:
                 molgraph = self.espaloma_model.get_espaloma_graph(setup)
 
-        # Grab dihedrals from graph node and set them to the molsetup
         if self.dihedral_model == "espaloma" and mol.GetNumAtoms() > 3:
             self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
 
-        # Grab charges from graph node and set them to the molsetup
-        if self.charge_model == "espaloma" and self.compute_charges:
+        if self.charge_model == "espaloma" and effective_compute_charges:
             if mol.GetNumAtoms() > 1:
                 self.espaloma_model.set_espaloma_charges(setup, molgraph)
             else:
                 setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
-        
-
-        # restore value of self.compute_charges
-        if temp_compute_charges is not None:
-            self.compute_charges=temp_compute_charges
 
         # merge hydrogens (or any terminal atoms)
         indices = set()
