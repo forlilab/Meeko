@@ -18,6 +18,7 @@ from rdkit import Chem
 from meeko import MoleculePreparation
 from meeko import rdkitutils
 from meeko import PDBQTWriterLegacy
+from ._ligand_helpers import process_covalent_mol, process_noncovalent_mol
 
 try:
     import prody
@@ -607,64 +608,21 @@ def main():
         is_after_first = True
 
         if is_covalent:
-            for cov_lig in covalent_builder.process(
-                mol, args.tether_smarts, args.tether_smarts_indices
-            ):
-                root_atom_index = cov_lig.indices[0]
-                molsetups = preparator.prepare(
-                    cov_lig.mol,
-                    root_atom_index=root_atom_index,
-                    not_terminal_atoms=[root_atom_index],
-                    rename_atoms=args.rename_atoms,
-                )
-                chain, res, num = cov_lig.res_id
-                suffixes = output.get_suffixes(molsetups)
-                for molsetup, suffix in zip(molsetups, suffixes):
-                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(
-                        molsetup,
-                        bad_charge_ok=args.bad_charge_ok,
-                        add_index_map=args.add_index_map,
-                    )
-                    if success:
-                        pdbqt_string = (
-                            PDBQTWriterLegacy.adapt_pdbqt_for_autodock4_flexres(
-                                pdbqt_string, res, chain, num
-                            )
-                        )
-                        name = molsetup.name
-                        output(pdbqt_string, name, (cov_lig.label, suffix))
-                    else:
-                        nr_failures += 1
-                        this_mol_had_failure = True
-                        print(error_msg, file=sys.stderr)
-
+            this_failures = process_covalent_mol(
+                mol, args, preparator, covalent_builder, output
+            )
         else:
-            try: 
-                molsetups = preparator.prepare(mol, rename_atoms=args.rename_atoms)
-            except Exception as error_msg: 
-                nr_failures += 1
-                this_mol_had_failure = True
-                print(error_msg, file=sys.stderr)
-                input_mol_with_failure += int(this_mol_had_failure)
+            this_failures, raised = process_noncovalent_mol(
+                mol, name, args, preparator, output
+            )
+            if raised:
+                nr_failures += this_failures
+                input_mol_with_failure += 1
                 continue
 
-            if len(molsetups) > 1:
-                output.is_multimol = True
-            suffixes = output.get_suffixes(molsetups)
-            for molsetup, suffix in zip(molsetups, suffixes):
-                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(
-                    molsetup,
-                    bad_charge_ok=args.bad_charge_ok,
-                    add_index_map=args.add_index_map,
-                )
-                if success:
-                    output(pdbqt_string, name, (suffix,))
-                    if args.verbose:
-                        molsetup.show()
-                else:
-                    nr_failures += 1
-                    this_mol_had_failure = True
-                    print(error_msg, file=sys.stderr)
+        if this_failures:
+            nr_failures += this_failures
+            this_mol_had_failure = True
 
         input_mol_with_failure += int(this_mol_had_failure)
 
