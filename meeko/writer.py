@@ -340,450 +340,393 @@ def _aux_fourier_conversion(fourier_series):
     return "(" + ";".join(strings) + ")"
 
 
-class PDBQTWriterLegacy:
+# ---------------------------------------------------------------------------
+# Module-level functions (the actual PDBQT writer implementations)
+# ---------------------------------------------------------------------------
 
-    @staticmethod
-    def _get_pdbinfo_fitting_pdb_chars(pdbinfo):
-        """return strings and integers that are guaranteed
-        to fit within the designated chars of the PDB format"""
+def _get_pdbinfo_fitting_pdb_chars(pdbinfo):
+    """Return name/resname/resnum/chain truncated to PDB column widths."""
+    atom_name = pdbinfo.name
+    res_name = pdbinfo.resName
+    res_num = pdbinfo.resNum
+    chain = pdbinfo.chain
+    if len(atom_name) > 4:
+        atom_name = atom_name[0:4]
+    if len(res_name) > 3:
+        res_name = res_name[0:3]
+    if res_num > 9999:
+        res_num = res_num % 10000
+    if len(chain) > 1:
+        chain = chain[0:1]
+    return atom_name, res_name, res_num, chain
 
-        atom_name = pdbinfo.name
-        res_name = pdbinfo.resName
-        res_num = pdbinfo.resNum
-        chain = pdbinfo.chain
-        if len(atom_name) > 4:
-            atom_name = atom_name[0:4]
-        if len(res_name) > 3:
-            res_name = res_name[0:3]
-        if res_num > 9999:
-            res_num = res_num % 10000
-        if len(chain) > 1:
-            chain = chain[0:1]
-        return atom_name, res_name, res_num, chain
 
-    @classmethod
-    def _make_pdbqt_line_from_molsetup(cls, setup, atom_idx, count):
-        """ """
-        pdbinfo = setup.get_pdbinfo(atom_idx)
-        if pdbinfo is None:
-            pdbinfo = pdbutils.PDBAtomInfo("", "", 0, "")
-        atom_name, res_name, res_num, chain = cls._get_pdbinfo_fitting_pdb_chars(
-            pdbinfo
-        )  # TODO icode
-        coord = setup.get_coord(atom_idx)
-        atom_type = setup.get_atom_type(atom_idx)
-        charge = setup.get_charge(atom_idx)
-        pdbqt_line = cls._make_pdbqt_line(
-            count, atom_name, res_name, chain, res_num, coord, charge, atom_type
-        )
-        return pdbqt_line
+def _make_pdbqt_line(
+    count, atom_name, res_name, chain, res_num, coord, charge, atom_type, icode=""
+):
+    if atom_type is None:
+        msg = "Can't write PDBQT because atom_type is None.\n"
+        msg += "Probably, MoleculePreparation was instantiated with a configuration that does not assign atom types.\n"
+        msg += "For example, mk_prep = MoleculePreparation(load_atom_params='vina_params') assigns atomic radii and\n"
+        msg += "other properties, but not atom types. The default for load_atom_params is 'ad4_types'.\n"
+        msg += "From command line scripts, this option is usually set in JSON files passed to option --mk_config.\n"
+        raise ValueError(msg)
+    record_type = "ATOM"
+    alt_id = " "
+    occupancy = 1.0
+    temp_factor = 0.0
+    atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
+    return atom.format(
+        record_type,
+        count,
+        atom_name,
+        alt_id,
+        res_name,
+        chain,
+        res_num,
+        icode,
+        float(coord[0]),
+        float(coord[1]),
+        float(coord[2]),
+        occupancy,
+        temp_factor,
+        charge,
+        atom_type,
+    )
 
-    @staticmethod
-    def _make_pdbqt_line(
-        count, atom_name, res_name, chain, res_num, coord, charge, atom_type, icode=""
-    ):
-        if atom_type is None:
-            msg = "Can't write PDBQT because atom_type is None.\n"
-            msg += "Probably, MoleculePreparation was instantiated with a configuration that does not assign atom types.\n"
-            msg += "For example, mk_prep = MoleculePreparation(load_atom_params='vina_params') assigns atomic radii and\n"
-            msg += "other properties, but not atom types. The default for load_atom_params is 'ad4_types'.\n"
-            msg += "From command line scripts, this option is usually set in JSON files passed to option --mk_config.\n"
-            raise ValueError(msg)
-        record_type = "ATOM"
-        alt_id = " "
-        occupancy = 1.0
-        temp_factor = 0.0
-        atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
-        pdbqt_line = atom.format(
-            record_type,
-            count,
-            atom_name,
-            alt_id,
-            res_name,
-            chain,
-            res_num,
-            icode,
-            float(coord[0]),
-            float(coord[1]),
-            float(coord[2]),
-            occupancy,
-            temp_factor,
-            charge,
-            atom_type,
-        )
-        return pdbqt_line
 
-    @classmethod
-    def _walk_graph_recursive(cls, setup, node, data, edge_start=0, first=False):
-        """recursive walk of rigid bodies"""
+def _make_pdbqt_line_from_molsetup(setup, atom_idx, count):
+    pdbinfo = setup.get_pdbinfo(atom_idx)
+    if pdbinfo is None:
+        pdbinfo = pdbutils.PDBAtomInfo("", "", 0, "")
+    atom_name, res_name, res_num, chain = _get_pdbinfo_fitting_pdb_chars(pdbinfo)
+    coord = setup.get_coord(atom_idx)
+    atom_type = setup.get_atom_type(atom_idx)
+    charge = setup.get_charge(atom_idx)
+    return _make_pdbqt_line(
+        count, atom_name, res_name, chain, res_num, coord, charge, atom_type
+    )
 
-        if first:
-            data["pdbqt_buffer"].append("ROOT")
-            member_pool = sorted(setup.flexibility_model["rigid_body_members"][node])
-        else:
-            member_pool = setup.flexibility_model["rigid_body_members"][node][:]
-            member_pool.remove(edge_start)
-            member_pool = [edge_start] + member_pool
 
-        for member in member_pool:
-            if setup.get_is_ignore(member) == 1:
-                continue
-            pdbqt_line = cls._make_pdbqt_line_from_molsetup(
-                setup, member, data["count"]
+def _walk_graph_recursive(setup, node, data, edge_start=0, first=False):
+    """Recursive walk of rigid bodies, populating ``data`` with PDBQT lines."""
+    if first:
+        data["pdbqt_buffer"].append("ROOT")
+        member_pool = sorted(setup.flexibility_model["rigid_body_members"][node])
+    else:
+        member_pool = setup.flexibility_model["rigid_body_members"][node][:]
+        member_pool.remove(edge_start)
+        member_pool = [edge_start] + member_pool
+
+    for member in member_pool:
+        if setup.get_is_ignore(member) == 1:
+            continue
+        pdbqt_line = _make_pdbqt_line_from_molsetup(setup, member, data["count"])
+        data["pdbqt_buffer"].append(pdbqt_line)
+        data["numbering"][member] = data["count"]
+        data["count"] += 1
+
+    if first:
+        data["pdbqt_buffer"].append("ENDROOT")
+
+    data["visited"].append(node)
+
+    for neigh in setup.flexibility_model["rigid_body_graph"][node]:
+        if neigh in data["visited"]:
+            continue
+        begin, next_index = setup.flexibility_model["rigid_body_connectivity"][
+            node, neigh
+        ]
+        if setup.get_is_ignore(begin) or setup.get_is_ignore(next_index):
+            continue
+        begin = data["numbering"][begin]
+        end = data["count"]
+        data["pdbqt_buffer"].append("BRANCH %3d %3d" % (begin, end))
+        data = _walk_graph_recursive(setup, neigh, data, edge_start=next_index)
+        data["pdbqt_buffer"].append("ENDBRANCH %3d %3d" % (begin, end))
+
+    return data
+
+
+def _is_molsetup_ok(setup, bad_charge_ok):
+    success = True
+    error_msg = ""
+
+    if len(setup.restraints):
+        error_msg = "molsetup has restraints but these can't be written to PDBQT"
+        success = False
+
+    for atom in setup.atoms:
+        if atom.is_ignore:
+            continue
+        if atom.atom_type is None:
+            error_msg += "atom number %d has None type, mol name: %s\n" % (
+                atom.index,
+                setup.get_mol_name(),
             )
-            data["pdbqt_buffer"].append(pdbqt_line)
-            data["numbering"][member] = data["count"]  # count starts at 1
-            data["count"] += 1
-
-        if first:
-            data["pdbqt_buffer"].append("ENDROOT")
-
-        data["visited"].append(node)
-
-        for neigh in setup.flexibility_model["rigid_body_graph"][node]:
-            if neigh in data["visited"]:
-                continue
-
-            # Write the branch
-            begin, next_index = setup.flexibility_model["rigid_body_connectivity"][
-                node, neigh
-            ]
-
-            # do not write branch (or anything downstream) if any of the two atoms
-            # defining the rotatable bond are ignored
-            if setup.get_is_ignore(begin) or setup.get_is_ignore(next_index):
-                continue
-
-            begin = data["numbering"][begin]
-            end = data["count"]
-
-            data["pdbqt_buffer"].append("BRANCH %3d %3d" % (begin, end))
-            data = cls._walk_graph_recursive(setup, neigh, data, edge_start=next_index)
-            data["pdbqt_buffer"].append("ENDBRANCH %3d %3d" % (begin, end))
-
-        return data
-
-    @staticmethod
-    def _is_molsetup_ok(setup, bad_charge_ok):
-
-        success = True
-        error_msg = ""
-
-        if len(setup.restraints):
-            error_msg = "molsetup has restraints but these can't be written to PDBQT"
+            success = False
+    for atom in setup.atoms:
+        if atom.is_ignore:
+            continue
+        if atom.atom_type is None:
+            error_msg += "atom number %d has None type, mol name: %s\n" % (
+                atom.index,
+                setup.get_mol_name(),
+            )
+            success = False
+        c = atom.charge
+        if not bad_charge_ok and (
+            type(c) not in (np.float32, np.float64, float, int)
+            or math.isnan(c)
+            or math.isinf(c)
+        ):
+            error_msg += (
+                "atom number %d has non finite charge, mol name: %s, charge: %s, type: %s\n"
+                % (atom.index, setup.get_mol_name(), str(c), type(c))
+            )
             success = False
 
-        for atom in setup.atoms:
-            if atom.is_ignore:
-                continue
-            if atom.atom_type is None:
-                error_msg += "atom number %d has None type, mol name: %s\n" % (
-                    atom.index,
-                    setup.get_mol_name(),
-                )
-                success = False
-        for atom in setup.atoms:
-            if atom.is_ignore:
-                continue
-            if atom.atom_type is None:
-                error_msg += "atom number %d has None type, mol name: %s\n" % (
-                    atom.index,
-                    setup.get_mol_name(),
-                )
-                success = False
-            c = atom.charge
-            if not bad_charge_ok and (
-                type(c) not in (np.float32, np.float64, float, int) or math.isnan(c) or math.isinf(c)
-            ):
-                error_msg += (
-                    "atom number %d has non finite charge, mol name: %s, charge: %s, type: %s\n"
-                    % (atom.index, setup.get_mol_name(), str(c), type(c))
-                )
-                success = False
+    return success, error_msg
 
-        return success, error_msg
 
-    @classmethod
-    def write_string_from_polymer(cls, polymer):
-        rigid_pdbqt_string, flex_pdbqt_dict = cls.write_from_polymer(
-            polymer
-        )
-        flex_pdbqt_string = ""
-        for res_id, pdbqt_string in flex_pdbqt_dict.items():
-            flex_pdbqt_string += pdbqt_string
-        return rigid_pdbqt_string, flex_pdbqt_string
-
-    @classmethod
-    def write_from_polymer(cls, polymer):
-        rigid_pdbqt_string = ""
-        flex_pdbqt_dict = {}
-        atom_count = 0
-        flex_atom_count = 0
-        for res_id, monomer in polymer.get_valid_monomers().items():
-            chain, resnum = res_id.split(":")
-            if resnum[-1].isalpha():
-                icode = resnum[-1]
-                resnum = int(resnum[:-1])
-            else:
-                icode = ""
-                resnum = int(resnum)
-            molsetup = monomer.molsetup
-            resname = monomer.input_resname
-            if monomer.is_movable:
-                original_ignore = {atom.index: atom.is_ignore for atom in molsetup.atoms}
-                graph = molsetup.flexibility_model["rigid_body_graph"]
-                root = molsetup.flexibility_model["root"]
-                if len(graph[root]) > 1:
-                    raise RuntimeError(
-                        f"flexible residue {res_id} has {len(graph[root])}"
-                        " rotatable bonds from root, but PDBQT is limited to 1"
-                    )
-                elif len(graph[root]) == 0:
-                    logger.warning(
-                        f"flexible residue {res_id} has no movable atoms, omitting from flexres PDBQT"
-                    )
-                else:
-                    # set ignore to True for static atoms of flexible sidechains
-                    # to exclude them from the PDBQT string
-                    for atom_idx, is_flex in enumerate(monomer.is_flexres_atom):
-                            molsetup.atoms[atom_idx].is_ignore = not is_flex
-                    this_flex_pdbqt, ok, err = PDBQTWriterLegacy.write_string(
-                        molsetup, remove_smiles=True, add_index_map=True
-                    )
-                    for atom in molsetup.atoms:
-                        atom.is_ignore = original_ignore[atom.index]
-                    if not ok:
-                        raise RuntimeError(err)
-                    this_flex_pdbqt, flex_atom_count = (
-                        cls.adapt_pdbqt_for_autodock4_flexres(
-                            this_flex_pdbqt,
-                            resname,
-                            chain,
-                            str(resnum) + icode,
-                            skip_rename_ca_cb=True,
-                            atom_count=flex_atom_count,
-                        )
-                    )
-                    flex_pdbqt_dict[res_id] = this_flex_pdbqt
-
-            for atom_idx, atom in enumerate(molsetup.atoms):
-                if atom.is_ignore or monomer.is_flexres_atom[atom_idx]:
-                    continue
-                atom_type = atom.atom_type
-                coord = atom.coord
-                atom_name = atom.pdbinfo.name
-                charge = atom.charge
-                atom_count += 1
-                rigid_pdbqt_string += (
-                    cls._make_pdbqt_line(
-                        atom_count,
-                        atom_name,
-                        resname,
-                        chain,
-                        resnum,
-                        coord,
-                        charge,
-                        atom_type,
-                        icode,
-                    )
-                    + eol
-                )
-        return rigid_pdbqt_string, flex_pdbqt_dict
-
-    @classmethod
-    def write_string(
-        cls, setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False
-    ):
-        """Output a PDBQT file as a string.
-
-        Args:
-            setup: RDKitMoleculeSetup
-
-        Returns:
-            str:  PDBQT string of the molecule
-            bool: success
-            str:  error message
-        """
-
-        success, error_msg = cls._is_molsetup_ok(setup, bad_charge_ok)
-        if not success:
-            pdbqt_string = ""
-            return pdbqt_string, success, error_msg
-
-        data = {
-            "visited": [],
-            "numbering": {},
-            "pdbqt_buffer": [],
-            "count": 1,
-        }
-        atom_counter = {}
-
-        torsdof = len(setup.flexibility_model["rigid_body_graph"]) - 1
-
-        if "torsions_org" in setup.flexibility_model:
-            torsdof_org = setup.flexibility_model["torsions_org"]
-            data["pdbqt_buffer"].append(
-                "REMARK Flexibility Score: %8.3f" % setup.flexibility_model["score"]
-            )
-            active_tors = torsdof_org
+def break_long_remark_lines(strings, prefix, max_line_length=79):
+    remarks = [prefix]
+    for string in strings:
+        if (len(remarks[-1]) + len(string)) < max_line_length:
+            remarks[-1] += string
         else:
-            active_tors = torsdof
+            remarks.append(prefix + string)
+    return remarks
 
-        data = cls._walk_graph_recursive(
-            setup, setup.flexibility_model["root"], data, first=True
+
+def remark_index_map(
+    setup, numbering, order=None, prefix="REMARK INDEX MAP", missing_h=()
+):
+    """Write mapping of atom indices from input molecule to output PDBQT."""
+    if order is None:
+        order = {key: key + 1 for key in numbering}
+    strings = []
+    for key in numbering:
+        if setup.atoms[key].is_pseudo_atom:
+            continue
+        if key in missing_h:
+            continue
+        string = " %d %d" % (order[key], numbering[key])
+        strings.append(string)
+    return break_long_remark_lines(strings, prefix)
+
+
+def adapt_pdbqt_for_autodock4_flexres(
+    pdbqt_string, res, chain, num, skip_rename_ca_cb=False, atom_count=None
+):
+    """Adapt pdbqt_string to be compatible with AutoDock4 flexres requirements
+    (CA/CB naming, BEGIN_RES/END_RES, no TORSDOF). For covalent docking.
+    """
+    new_string = "BEGIN_RES %s %s %s" % (res, chain, num) + eol
+    atom_number = 0
+    offset = atom_count
+    for line in pdbqt_string.split(eol):
+        if line == "":
+            continue
+        if line.startswith("TORSDOF"):
+            continue
+        if line.startswith("ATOM"):
+            if not skip_rename_ca_cb:
+                atom_number += 1
+                if atom_number == 1:
+                    line = line[:13] + "CA" + line[15:]
+                elif atom_number == 2:
+                    line = line[:13] + "CB" + line[15:]
+            if atom_count is not None:
+                atom_count += 1
+                n = "%5d" % atom_count
+                n = n[:5]
+                line = line[:6] + n + line[11:]
+            new_string += line + eol
+            continue
+        elif offset is not None and (
+            line.startswith("BRANCH") or line.startswith("ENDBRANCH")
+        ):
+            keyword, i, j = line.split()
+            new_string += f"{keyword} {int(i)+offset:3d} {int(j)+offset:3d}" + eol
+            continue
+        new_string += line + eol
+    new_string += "END_RES %s %s %s" % (res, chain, num) + eol
+    if atom_count is None:
+        return new_string
+    return new_string, atom_count
+
+
+def write_string(setup, add_index_map=False, remove_smiles=False, bad_charge_ok=False):
+    """Render an ``RDKitMoleculeSetup`` to a PDBQT string.
+
+    Returns ``(pdbqt_string, success, error_msg)``.
+    """
+    success, error_msg = _is_molsetup_ok(setup, bad_charge_ok)
+    if not success:
+        return "", success, error_msg
+
+    data = {
+        "visited": [],
+        "numbering": {},
+        "pdbqt_buffer": [],
+        "count": 1,
+    }
+
+    torsdof = len(setup.flexibility_model["rigid_body_graph"]) - 1
+
+    if "torsions_org" in setup.flexibility_model:
+        torsdof_org = setup.flexibility_model["torsions_org"]
+        data["pdbqt_buffer"].append(
+            "REMARK Flexibility Score: %8.3f" % setup.flexibility_model["score"]
         )
+        active_tors = torsdof_org
+    else:
+        active_tors = torsdof
 
-        if add_index_map:
-            for i, remark_line in enumerate(
-                cls.remark_index_map(setup, data["numbering"])
-            ):
-                # Need to use 'insert' because data["numbering"]
-                # is populated in self._walk_graph_recursive.
-                data["pdbqt_buffer"].insert(i, remark_line)
+    data = _walk_graph_recursive(
+        setup, setup.flexibility_model["root"], data, first=True
+    )
 
-        if not remove_smiles:
-            smiles, order = setup.get_smiles_and_order()
-            missing_h = []  # hydrogens which are not in the smiles
-            strings_h_parent = []
-            for key in data["numbering"]:
-                if setup.atoms[key].is_pseudo_atom:
-                    continue
-                if key not in order:
-                    if setup.get_atomic_num(key) != 1:
-                        error_msg += (
-                            "non-Hydrogen atom unexpectedely missing from smiles!?"
-                        )
-                        error_msg += " (mol name: %s)\n" % setup.get_mol_name()
-                        pdbqt_string = ""
-                        success = False
-                        return pdbqt_string, success, error_msg
-                    missing_h.append(key)
-                    parents = setup.get_neighbors(key)
-                    parents = [
-                        i for i in parents if i < setup.true_atom_count
-                    ]  # exclude pseudos
-                    if len(parents) != 1:
-                        error_msg += (
-                            f"expected hydrogen {key} to be bonded to exactly one atom"
-                            f" but it's bonded to {parents}"
-                        )
-                        error_msg += " (mol name: %s)\n" % setup.get_mol_name()
-                        pdbqt_string = ""
-                        success = False
-                        return pdbqt_string, success, error_msg
-                    parent_idx = order[parents[0]]  # already 1-indexed
-                    string = " %d %d" % (
-                        parent_idx,
-                        data["numbering"][key],
-                    )  # key 0-indexed; _numbering[key] 1-indexed
-                    strings_h_parent.append(string)
-            remarks_h_parent = cls.break_long_remark_lines(
-                strings_h_parent, "REMARK H PARENT"
-            )
-            remark_prefix = "REMARK SMILES IDX"
-            remark_idxmap = cls.remark_index_map(
-                setup, data["numbering"], order, remark_prefix, missing_h
-            )
-            remarks = []
-            remarks.append("REMARK SMILES %s" % smiles)  # break line at 79 chars?
-            remarks.extend(remark_idxmap)
-            remarks.extend(remarks_h_parent)
+    if add_index_map:
+        for i, line in enumerate(remark_index_map(setup, data["numbering"])):
+            data["pdbqt_buffer"].insert(i, line)
 
-            for i, remark_line in enumerate(remarks):
-                # Need to use 'insert' because data["numbering"]
-                # is populated in self._walk_graph_recursive.
-                data["pdbqt_buffer"].insert(i, remark_line)
-
-        # torsdof is always going to be the one of the rigid, non-macrocyclic one
-        data["pdbqt_buffer"].append("TORSDOF %d" % active_tors)
-
-        pdbqt_string = eol.join(data["pdbqt_buffer"]) + eol
-        return pdbqt_string, success, error_msg
-
-    @classmethod
-    def remark_index_map(
-        cls, setup, numbering, order=None, prefix="REMARK INDEX MAP", missing_h=()
-    ):
-        """write mapping of atom indices from input molecule to output PDBQT
-        order[ob_index(i.e. 'key')] = smiles_index
-        """
-
-        if order is None:
-            order = {key: key + 1 for key in numbering}  # key+1 breaks OB
-        # max_line_length = 79
-        # remark_lines = []
-        # line = prefix
-        strings = []
-        for key in numbering:
+    if not remove_smiles:
+        smiles, order = setup.get_smiles_and_order()
+        missing_h = []
+        strings_h_parent = []
+        for key in data["numbering"]:
             if setup.atoms[key].is_pseudo_atom:
                 continue
-            if key in missing_h:
-                continue
-            string = " %d %d" % (order[key], numbering[key])
-            strings.append(string)
-        return cls.break_long_remark_lines(strings, prefix)
-        #    candidate_text = " %d %d" % (order[key], self._numbering[key])
-        #    if (len(line) + len(candidate_text)) < max_line_length:
-        #        line += candidate_text
-        #    else:
-        #        remark_lines.append(line)
-        #        line = 'REMARK INDEX MAP' + candidate_text
-        # remark_lines.append(line)
-        # return remark_lines
+            if key not in order:
+                if setup.get_atomic_num(key) != 1:
+                    error_msg += (
+                        "non-Hydrogen atom unexpectedely missing from smiles!?"
+                    )
+                    error_msg += " (mol name: %s)\n" % setup.get_mol_name()
+                    return "", False, error_msg
+                missing_h.append(key)
+                parents = setup.get_neighbors(key)
+                parents = [i for i in parents if i < setup.true_atom_count]
+                if len(parents) != 1:
+                    error_msg += (
+                        f"expected hydrogen {key} to be bonded to exactly one atom"
+                        f" but it's bonded to {parents}"
+                    )
+                    error_msg += " (mol name: %s)\n" % setup.get_mol_name()
+                    return "", False, error_msg
+                parent_idx = order[parents[0]]
+                strings_h_parent.append(" %d %d" % (parent_idx, data["numbering"][key]))
+        remarks_h_parent = break_long_remark_lines(strings_h_parent, "REMARK H PARENT")
+        remark_idxmap = remark_index_map(
+            setup, data["numbering"], order, "REMARK SMILES IDX", missing_h
+        )
+        remarks = ["REMARK SMILES %s" % smiles]
+        remarks.extend(remark_idxmap)
+        remarks.extend(remarks_h_parent)
+        for i, remark_line in enumerate(remarks):
+            data["pdbqt_buffer"].insert(i, remark_line)
 
-    @staticmethod
-    def break_long_remark_lines(strings, prefix, max_line_length=79):
-        remarks = [prefix]
-        for string in strings:
-            if (len(remarks[-1]) + len(string)) < max_line_length:
-                remarks[-1] += string
-            else:
-                remarks.append(prefix + string)
-        return remarks
+    data["pdbqt_buffer"].append("TORSDOF %d" % active_tors)
+    pdbqt_string = eol.join(data["pdbqt_buffer"]) + eol
+    return pdbqt_string, success, error_msg
 
-    @staticmethod
-    def adapt_pdbqt_for_autodock4_flexres(
-        pdbqt_string, res, chain, num, skip_rename_ca_cb=False, atom_count=None
-    ):
-        """adapt pdbqt_string to be compatible with AutoDock4 requirements:
-         - first and second atoms named CA and CB
-         - write BEGIN_RES / END_RES
-         - remove TORSDOF
-        this is for covalent docking (tethered)
-        """
-        new_string = "BEGIN_RES %s %s %s" % (res, chain, num) + eol
-        atom_number = 0
-        offset = atom_count
-        for line in pdbqt_string.split(eol):
-            if line == "":
-                continue
-            if line.startswith("TORSDOF"):
-                continue
-            if line.startswith("ATOM"):
-                if not skip_rename_ca_cb:
-                    atom_number += 1
-                    if atom_number == 1:
-                        line = line[:13] + "CA" + line[15:]
-                    elif atom_number == 2:
-                        line = line[:13] + "CB" + line[15:]
-                if atom_count is not None:
-                    atom_count += 1
-                    n = "%5d" % atom_count
-                    n = n[:5]
-                    line = line[:6] + n + line[11:]
-                new_string += line + eol
-                continue
-            elif offset is not None and (
-                line.startswith("BRANCH") or line.startswith("ENDBRANCH")
-            ):
-                keyword, i, j = line.split()
-                new_string += (
-                    f"{keyword} {int(i)+offset:3d} {int(j)+offset:3d}" + eol
-                )
-                continue
-            new_string += line + eol
-        new_string += "END_RES %s %s %s" % (res, chain, num) + eol
-        if atom_count is None:
-            return new_string  # just keeping backwards compatibility
+
+def write_from_polymer(polymer):
+    rigid_pdbqt_string = ""
+    flex_pdbqt_dict = {}
+    atom_count = 0
+    flex_atom_count = 0
+    for res_id, monomer in polymer.get_valid_monomers().items():
+        chain, resnum = res_id.split(":")
+        if resnum[-1].isalpha():
+            icode = resnum[-1]
+            resnum = int(resnum[:-1])
         else:
-            return new_string, atom_count
+            icode = ""
+            resnum = int(resnum)
+        molsetup = monomer.molsetup
+        resname = monomer.input_resname
+        if monomer.is_movable:
+            original_ignore = {atom.index: atom.is_ignore for atom in molsetup.atoms}
+            graph = molsetup.flexibility_model["rigid_body_graph"]
+            root = molsetup.flexibility_model["root"]
+            if len(graph[root]) > 1:
+                raise RuntimeError(
+                    f"flexible residue {res_id} has {len(graph[root])}"
+                    " rotatable bonds from root, but PDBQT is limited to 1"
+                )
+            elif len(graph[root]) == 0:
+                logger.warning(
+                    f"flexible residue {res_id} has no movable atoms, omitting from flexres PDBQT"
+                )
+            else:
+                for atom_idx, is_flex in enumerate(monomer.is_flexres_atom):
+                    molsetup.atoms[atom_idx].is_ignore = not is_flex
+                this_flex_pdbqt, ok, err = write_string(
+                    molsetup, remove_smiles=True, add_index_map=True
+                )
+                for atom in molsetup.atoms:
+                    atom.is_ignore = original_ignore[atom.index]
+                if not ok:
+                    raise RuntimeError(err)
+                this_flex_pdbqt, flex_atom_count = adapt_pdbqt_for_autodock4_flexres(
+                    this_flex_pdbqt,
+                    resname,
+                    chain,
+                    str(resnum) + icode,
+                    skip_rename_ca_cb=True,
+                    atom_count=flex_atom_count,
+                )
+                flex_pdbqt_dict[res_id] = this_flex_pdbqt
+
+        for atom_idx, atom in enumerate(molsetup.atoms):
+            if atom.is_ignore or monomer.is_flexres_atom[atom_idx]:
+                continue
+            atom_type = atom.atom_type
+            coord = atom.coord
+            atom_name = atom.pdbinfo.name
+            charge = atom.charge
+            atom_count += 1
+            rigid_pdbqt_string += (
+                _make_pdbqt_line(
+                    atom_count,
+                    atom_name,
+                    resname,
+                    chain,
+                    resnum,
+                    coord,
+                    charge,
+                    atom_type,
+                    icode,
+                )
+                + eol
+            )
+    return rigid_pdbqt_string, flex_pdbqt_dict
+
+
+def write_string_from_polymer(polymer):
+    rigid_pdbqt_string, flex_pdbqt_dict = write_from_polymer(polymer)
+    flex_pdbqt_string = "".join(flex_pdbqt_dict.values())
+    return rigid_pdbqt_string, flex_pdbqt_string
+
+
+# ---------------------------------------------------------------------------
+# Thin shim: preserves external ``PDBQTWriterLegacy.x(...)`` callers
+# ---------------------------------------------------------------------------
+
+class PDBQTWriterLegacy:
+    """Backward-compat shim. Prefer the module-level functions for new code."""
+
+    _get_pdbinfo_fitting_pdb_chars = staticmethod(_get_pdbinfo_fitting_pdb_chars)
+    _make_pdbqt_line = staticmethod(_make_pdbqt_line)
+    _make_pdbqt_line_from_molsetup = staticmethod(_make_pdbqt_line_from_molsetup)
+    _walk_graph_recursive = staticmethod(_walk_graph_recursive)
+    _is_molsetup_ok = staticmethod(_is_molsetup_ok)
+    break_long_remark_lines = staticmethod(break_long_remark_lines)
+    remark_index_map = staticmethod(remark_index_map)
+    adapt_pdbqt_for_autodock4_flexres = staticmethod(adapt_pdbqt_for_autodock4_flexres)
+    write_string = staticmethod(write_string)
+    write_from_polymer = staticmethod(write_from_polymer)
+    write_string_from_polymer = staticmethod(write_string_from_polymer)
