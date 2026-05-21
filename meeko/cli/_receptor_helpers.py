@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 
 from meeko.utils.utils import parse_cmdline_res, parse_cmdline_res_assign
 
+from ._common import check
+
 
 _DEFAULT_REACTIVE_ATOM_BY_RESNAME = {
     "SER": "OG",
@@ -327,3 +329,388 @@ def build_mk_config(args, mk_config_dir: pathlib.Path) -> dict:
         mk_config["charge_atom_prop"] = "PQRCharge"
 
     return mk_config
+
+
+# ---------------------------------------------------------------------------
+# Output-side helpers (write_json / write_pdb / write_pdbqt / GPF / Vina box /
+# reactive config / final status report).
+# ---------------------------------------------------------------------------
+
+ANY_LIG_BASE_TYPES = [
+    "HD", "C", "A", "N", "NA", "OA", "F", "P",
+    "SA", "S", "Cl", "Br", "I", "Si", "B",
+]
+
+GPF_REC_TYPES = [
+    "HD", "C", "A", "N", "NA", "OA", "F", "P",
+    "SA", "S", "Cl", "Br", "I", "Mg", "Ca", "Mn", "Fe", "Zn",
+]
+
+
+@dataclass
+class WriteState:
+    """Outputs from ``write_pdbqt_output`` that downstream phases (GPF,
+    reactive config) need to reference."""
+
+    rigid_fn: str = None
+    flex_fn: str = None
+    all_flex_pdbqt: str = ""
+
+
+def _append_log(written_files_log, fn, description):
+    written_files_log["filename"].append(str(fn))
+    written_files_log["description"].append(description)
+
+
+def write_json_output(args, polymer, outpath, written_files_log) -> None:
+    """Handle ``--write_json``."""
+    if args.write_json is None:
+        return
+    if args.write_json:
+        fn = args.write_json[0]
+    else:
+        fn = str(outpath) + ".json"
+    with open(fn, "w") as f:
+        f.write(polymer.to_json())
+    _append_log(written_files_log, fn, "parameterized receptor")
+
+
+def write_pdb_output(args, polymer, written_files_log) -> None:
+    """Handle ``--write_pdb``."""
+    if args.write_pdb is None:
+        return
+    if not args.write_pdb:
+        raise ValueError("--write_pdb requires a filename")
+    fn = args.write_pdb[0]
+    with open(fn, "w") as f:
+        f.write(polymer.to_pdb())
+    _append_log(written_files_log, fn, "processed receptor PDB")
+
+
+def write_pdbqt_output(
+    args, polymer, outpath, all_flexres, rot_term_res, written_files_log
+) -> WriteState:
+    """Handle ``--write_pdbqt`` and the rigid/flex split.
+
+    Returns ``WriteState`` carrying ``rigid_fn``, ``flex_fn``, and the
+    accumulated ``all_flex_pdbqt`` string that the GPF and reactive-config
+    phases need.
+    """
+    from meeko import PDBQTWriterLegacy
+
+    state = WriteState()
+    if args.write_pdbqt is None:
+        return state
+
+    if args.write_pdbqt:
+        if args.write_pdbqt[0].endswith(".pdbqt"):
+            fn_base = str(pathlib.Path(args.write_pdbqt[0]).with_suffix(""))
+        else:
+            fn_base = args.write_pdbqt[0]
+    else:
+        fn_base = str(outpath)
+
+    rigid_pdbqt, flex_pdbqt_dict = PDBQTWriterLegacy.write_from_polymer(polymer)
+
+    if len(all_flexres) + len(rot_term_res) == 0:
+        state.rigid_fn = fn_base + ".pdbqt"
+    else:
+        for flexres_pdbqt in flex_pdbqt_dict.values():
+            state.all_flex_pdbqt += flexres_pdbqt
+        state.rigid_fn = fn_base + "_rigid.pdbqt"
+        state.flex_fn = fn_base + "_flex.pdbqt"
+        if state.all_flex_pdbqt:
+            _append_log(written_files_log, state.flex_fn, "flexible receptor input file")
+            with open(state.flex_fn, "w") as f:
+                f.write(state.all_flex_pdbqt)
+
+    _append_log(
+        written_files_log, state.rigid_fn, "static (i.e., rigid) receptor input file"
+    )
+    with open(state.rigid_fn, "w") as f:
+        f.write(rigid_pdbqt)
+    return state
+
+
+def warn_flexres_outside_box(polymer, box_center, box_size) -> None:
+    """Print a stderr warning if any flexible residue's atom lies outside
+    the docking box."""
+    from meeko import gridbox
+
+    eol = "\n"
+    for res in polymer.monomers.values():
+        if not res.is_movable:
+            continue
+        for atom in res.molsetup.atoms:
+            if not res.is_flexres_atom[atom.index]:
+                continue
+            if gridbox.is_point_outside_box(
+                atom.coord, box_center, box_size, spacing=1.0
+            ):
+                print(
+                    "WARNING: Flexible residue outside box." + eol,
+                    file=sys.stderr,
+                )
+                print(
+                    "WARNING: Strongly recommended to use a box that encompasses"
+                    " flexible residues." + eol,
+                    file=sys.stderr,
+                )
+                return  # only need to warn once
+
+
+def resolve_box(args, polymer, reactive_flexres):
+    """Compute ``(box_center, box_size)`` from one of the supported sources:
+    ``--box_center``, ``--box_center_off_reactive_res``, or
+    ``--box_enveloping`` (PDB/MOL/MOL2/SDF/PDBQT).
+
+    Exits with code 2 if none specify a box.
+    """
+    import math
+    import numpy as np
+    from rdkit import Chem
+    from meeko import PDBQTMolecule, RDKitMolCreate, gridbox, pdbutils
+
+    if args.box_center is not None:
+        return args.box_center, args.box_size
+
+    if args.box_center_off_reactive_res:
+        box_centers = []
+        for res_id in reactive_flexres:
+            molsetup = polymer.monomers[res_id].molsetup
+            calpha_idx = [
+                atom.index for atom in molsetup.atoms if atom.pdbinfo.name == "CA"
+            ]
+            cbeta_idx = [
+                atom.index for atom in molsetup.atoms if atom.pdbinfo.name == "CB"
+            ]
+            check(
+                len(calpha_idx) == 1,
+                f"found {len(calpha_idx)} CA in {res_id} but expected 1",
+            )
+            check(
+                len(cbeta_idx) == 1,
+                f"found {len(cbeta_idx)} CB in {res_id} but expected 1",
+            )
+            ca = molsetup.get_coord(calpha_idx[0])
+            cb = molsetup.get_coord(cbeta_idx[0])
+            v = cb - ca
+            v /= math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2) + 1e-8
+            box_centers.append(ca + 5 * v)
+        return np.mean(box_centers, 0), args.box_size
+
+    if args.box_enveloping is not None:
+        ft = pathlib.Path(args.box_enveloping).suffix
+        suppliers = {
+            ".pdb": None,
+            ".mol": Chem.MolFromMolFile,
+            ".mol2": Chem.MolFromMol2File,
+            ".sdf": Chem.SDMolSupplier,
+            ".pdbqt": None,
+        }
+        if ft not in suppliers:
+            check(False, f"Given --box_enveloping file type {ft} not readable!")
+        if ft == ".pdb":
+            pdbstr = pdbutils.strip_altloc_from_pdb_file(args.box_enveloping)
+            ligmol = Chem.MolFromPDBBlock(pdbstr, removeHs=False, sanitize=False)
+        elif ft == ".pdbqt":
+            ligmol = RDKitMolCreate.from_pdbqt_mol(
+                PDBQTMolecule.from_file(args.box_enveloping)
+            )[0]
+        elif ft == ".sdf":
+            ligmol = suppliers[ft](
+                args.box_enveloping, removeHs=False, sanitize=False
+            )[0]
+        else:
+            ligmol = suppliers[ft](
+                args.box_enveloping, removeHs=False, sanitize=False
+            )
+        return gridbox.calc_box(
+            ligmol.GetConformer().GetPositions(), args.padding
+        )
+
+    print("Error: No box center specified.", file=sys.stderr)
+    sys.exit(2)
+
+
+def write_gpf_and_vina_outputs(
+    args,
+    write_state: WriteState,
+    box_center,
+    box_size,
+    outpath,
+    any_lig_base_types,
+    written_files_log,
+) -> None:
+    """Write the AutoGrid GPF file, the Vina-format box file, and the
+    visualization PDB. All gated on ``--write_gpf`` / ``--write_vina_box``.
+    """
+    from meeko import gridbox
+
+    if args.write_gpf is not None:
+        if args.write_gpf:
+            gpf_fn = args.write_gpf[0]
+        else:
+            gpf_fn = pathlib.Path(write_state.rigid_fn).with_suffix(".gpf")
+        ff_fn = pathlib.Path(gpf_fn).parents[0] / pathlib.Path(
+            "boron-silicon-atom_par.dat"
+        )
+        _append_log(
+            written_files_log,
+            ff_fn,
+            "atomic parameters for B and Si (for autogrid)",
+        )
+        with open(ff_fn, "w") as f:
+            f.write(gridbox.boron_silicon_atompar)
+
+        gpf_string, _ = gridbox.get_gpf_string(
+            box_center,
+            box_size,
+            pathlib.Path(write_state.rigid_fn).name,
+            GPF_REC_TYPES,
+            any_lig_base_types,
+            ff_param_fname=ff_fn.name,
+        )
+        _append_log(written_files_log, gpf_fn, "autogrid input file")
+        with open(gpf_fn, "w") as f:
+            f.write(gpf_string)
+
+    box_vina_fn = None
+    if args.write_vina_box is not None:
+        if args.write_vina_box:
+            box_vina_fn = args.write_vina_box[0]
+        else:
+            box_vina_fn = str(outpath) + ".box.txt"
+        _append_log(written_files_log, box_vina_fn, "Vina-style box dimension file")
+        with open(box_vina_fn, "w") as f:
+            f.write(gridbox.box_to_vina_string(box_center, box_size))
+
+    if args.write_vina_box is not None or args.write_gpf is not None:
+        if args.output_basename is not None:
+            box_fn = str(outpath) + ".box.pdb"
+        elif args.write_gpf is not None:
+            box_fn = str(pathlib.Path(write_state.rigid_fn).with_suffix(".box.pdb"))
+        else:
+            box_fn = box_vina_fn.replace(".txt", "") + ".pdb"
+        _append_log(written_files_log, box_fn, "PDB file to visualize the grid box")
+        with open(box_fn, "w") as f:
+            f.write(gridbox.box_to_pdb_string(box_center, box_size, spacing=1.0))
+
+
+def write_reactive_config(
+    args,
+    write_state: WriteState,
+    outpath,
+    any_lig_base_types,
+    written_files_log,
+) -> None:
+    """Write the AutoDock-GPU reactive-docking configuration file."""
+    from meeko import get_reactive_config, reactive_typer
+
+    eol = "\n"
+
+    any_lig_reac_types = []
+    for order in (1, 2, 3):
+        for t in any_lig_base_types:
+            any_lig_reac_types.append(reactive_typer.get_reactive_atype(t, order))
+
+    rec_reac_types = []
+    for line in write_state.all_flex_pdbqt.split(eol):
+        if line.startswith("ATOM") or line.startswith("HETATM"):
+            atype = line[77:].strip()
+            basetype, _ = reactive_typer.get_basetype_and_order(atype)
+            if basetype is not None:
+                rec_reac_types.append(line[77:].strip())
+
+    derivtypes, modpairs, collisions = get_reactive_config(
+        any_lig_reac_types,
+        rec_reac_types,
+        args.eps_12,
+        args.r_eq_12,
+        args.r_eq_13_scaling,
+        args.r_eq_14_scaling,
+    )
+
+    if collisions:
+        collision_str = ""
+        for t1, t2 in collisions:
+            collision_str += "%3s %3s" % (t1, t2) + eol
+        collision_fn = str(outpath.with_suffix(".atype_collisions"))
+        _append_log(
+            written_files_log,
+            collision_fn,
+            "type pairs (n=%d) that may lead to intra-molecular reactions"
+            % len(collisions),
+        )
+        with open(collision_fn, "w") as f:
+            f.write(collision_str)
+
+    map_block = ""
+    map_prefix = pathlib.Path(write_state.rigid_fn).with_suffix("").name
+    all_types = []
+    for basetype, reactypes in derivtypes.items():
+        all_types.append(basetype)
+        map_block += "map %s.%s.map" % (map_prefix, basetype) + eol
+        for reactype in reactypes:
+            all_types.append(reactype)
+            map_block += "map %s.%s.map" % (map_prefix, basetype) + eol
+    config = "ligand_types " + " ".join(all_types) + eol
+    config += "fld %s.maps.fld" % map_prefix + eol
+    config += map_block
+
+    line_fmt = "intnbp_r_eps %8.6f %8.6f %3d %3d %4s %4s" + eol
+    for (t1, t2), param in modpairs.items():
+        config += line_fmt % (
+            param["r_eq"], param["eps"], param["n"], param["m"], t1, t2
+        )
+    config_fn = str(outpath.with_suffix(".reactive_config"))
+    _append_log(written_files_log, config_fn, "reactive parameters for AutoDock-GPU")
+    with open(config_fn, "w") as f:
+        f.write(config)
+    print()
+    print("For reactive docking, pass the configuration file to AutoDock-GPU:")
+    print(
+        "    autodock_gpu -C 1 --import_dpf %s --flexres %s -L <ligand_filename>"
+        % (config_fn, write_state.flex_fn)
+    )
+    print()
+
+
+def print_write_summary(args, written_files_log) -> None:
+    """Final status section of the receptor CLI."""
+    if written_files_log["filename"]:
+        print()
+        print("Files written:")
+        longest_fn = max(len(fn) for fn in written_files_log["filename"])
+        line = "%%%ds <-- " % longest_fn + "%s"
+        for fn, desc in zip(
+            written_files_log["filename"], written_files_log["description"]
+        ):
+            print(line % (fn, desc))
+        if (
+            args.output_basename is not None
+            and args.output_basename.endswith(".pdbqt")
+            and args.write_pdbqt is None
+        ):
+            print()
+            print("PDBQT files were NOT written. Use -p/--write_pdbqt for that.")
+            print("Note that -o/--output_basename just sets a default for --write flags")
+            print()
+    else:
+        print()
+        print()
+        print("Receptor was prepared, but no files were written.")
+        print("")
+        print("Consider the following --write options:")
+        print("  -p/--write_pdbqt")
+        print("  -j/--write_json")
+        print("  -g/--write_gpf")
+        print("  -v/--write_vina_box")
+        print("")
+        print("Use -o/--output_basename, or set a filename after each --write flag")
+        print("")
+        print("Recommended for AutoDock-GPU:")
+        print("  -o my_receptor -p -j -g")
+        print("")
+        print("Recommended for AutoDock-Vina:")
+        print("  -o my_receptor -p -j -v")
