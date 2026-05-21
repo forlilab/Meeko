@@ -161,6 +161,143 @@ def resolve_residue_selections(args) -> ResidueSelections:
     return sel
 
 
+def build_polymer(
+    args,
+    templates,
+    mk_prep,
+    set_template: dict,
+    delete_residues: list,
+    delete_bad_res: bool,
+    blunt_ends: list,
+    wanted_altloc,
+    prody_parsers: dict,
+    got_prody: bool,
+    prody_import_error: Exception,
+):
+    """Dispatch one of the four ``--read_*`` polymer constructors.
+
+    ``--read_with_prody`` (ProDy) → ``Polymer.from_prody``
+    ``--read_pdb`` (PDB string) → ``Polymer.from_pdb_string``
+    ``--read_json`` (Meeko JSON) → reload + go through ``from_pdb_string``
+    ``--read_pqr`` (PQR string) → ``Polymer.from_pqr_string``
+
+    Exits with code 1 on ``PolymerCreationError`` (after printing the
+    error). Exits with code 2 on missing-prody (when ``--read_with_prody``).
+    """
+    from meeko import Polymer, PolymerCreationError
+
+    if args.read_with_prody is not None:
+        if not got_prody:
+            print(prody_import_error, file=sys.stderr)
+            print("option --read_with_prody requires Prody, which is not installed.")
+            print(
+                "Installable from PyPI (pip install prody) or conda-forge"
+                " (micromamba install prody)"
+            )
+            sys.exit(2)
+        ext = pathlib.Path(args.read_with_prody).suffix[1:].lower()
+        if ext not in prody_parsers:
+            print(
+                f"--read_with_prody: unsupported extension {ext!r}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        parser = prody_parsers[ext]
+        input_obj = parser(args.read_with_prody, altloc="all")
+        try:
+            return Polymer.from_prody(
+                input_obj,
+                templates,
+                mk_prep,
+                set_template,
+                delete_residues,
+                args.ignore_https_cert,
+                delete_bad_res,
+                blunt_ends=blunt_ends,
+                wanted_altloc=wanted_altloc,
+                default_altloc=args.default_altloc,
+                forgive_extra_bonds=args.forgive_extra_bonds,
+            )
+        except PolymerCreationError as e:
+            print(e)
+            sys.exit(1)
+
+    if args.read_pdb is not None:
+        with open(args.read_pdb) as f:
+            pdb_string = f.read()
+        try:
+            return Polymer.from_pdb_string(
+                pdb_string,
+                templates,
+                mk_prep,
+                set_template,
+                delete_residues,
+                args.ignore_https_cert,
+                delete_bad_res,
+                blunt_ends=blunt_ends,
+                wanted_altloc=wanted_altloc,
+                default_altloc=args.default_altloc,
+            )
+        except PolymerCreationError as e:
+            print(e)
+            sys.exit(1)
+
+    if args.read_json is not None:
+        # Load the saved polymer, dump it to PDB, then re-load through
+        # from_pdb_string so user options (set_template, blunt_ends,
+        # delete_residues, altloc, …) are applied.
+        with open(args.read_json) as f:
+            json_string = f.read()
+        try:
+            polymer = Polymer.from_json(json_string)
+            pdb_string = polymer.to_pdb()
+            return Polymer.from_pdb_string(
+                pdb_string,
+                templates,
+                mk_prep,
+                set_template,
+                delete_residues,
+                args.ignore_https_cert,
+                delete_bad_res,
+                blunt_ends=blunt_ends,
+                wanted_altloc=wanted_altloc,
+                default_altloc=args.default_altloc,
+                forgive_extra_bonds=args.forgive_extra_bonds,
+            )
+        except PolymerCreationError as e:
+            print(e)
+            sys.exit(1)
+
+    # args.read_pqr is not None
+    with open(args.read_pqr) as f:
+        pdb_string = f.read()
+    try:
+        print(
+            "Reading a PQR file. The following options or configurations will be ignored: "
+        )
+        print("  - default_altloc")
+        print("  - wanted_altloc")
+        if mk_prep.charge_model != "read":
+            print("Only reading structures from PQR. ")
+            print(f"Charge model of choice: {mk_prep.charge_model}")
+        else:
+            print("Reading structures and partial charges from PQR. ")
+        return Polymer.from_pqr_string(
+            pdb_string,
+            templates,
+            mk_prep,
+            set_template,
+            delete_residues,
+            args.ignore_https_cert,
+            delete_bad_res,
+            blunt_ends=blunt_ends,
+            forgive_extra_bonds=args.forgive_extra_bonds,
+        )
+    except PolymerCreationError as e:
+        print(e)
+        sys.exit(1)
+
+
 def build_mk_config(args, mk_config_dir: pathlib.Path) -> dict:
     """Assemble the ``MoleculePreparation`` config dict from ``--config_preset``
     JSON, ``--config_file`` JSON, and any explicit command-line overrides.

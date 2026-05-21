@@ -66,6 +66,7 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
 from ._common import check, make_talkative_parser, required_length
 from ._receptor_helpers import (
     build_mk_config,
+    build_polymer,
     resolve_residue_selections,
     validate_altloc_and_write_flags,
 )
@@ -442,107 +443,19 @@ def main():
             print("--add_templates must be either a JSON file or resname:file.sdf")
             sys.exit(2)
     
-    # create polymers
-    if args.read_with_prody is not None:
-        if not _got_prody:
-            print(_prody_import_error, file=sys.stderr)
-            print("option --read_with_prody requires Prody, which is not installed.")
-            print("Installable from PyPI (pip install prody) or conda-forge (micromamba install prody)")
-            sys.exit(2)
-        ext = pathlib.Path(args.read_with_prody).suffix[1:].lower()
-        if ext in SUPPORTED_PRODY_FORMATS:
-            parser = SUPPORTED_PRODY_FORMATS[ext]
-            input_obj = parser(args.read_with_prody, altloc="all")
-            try:
-                polymer = Polymer.from_prody(
-                    input_obj,
-                    templates,
-                    mk_prep,
-                    set_template,
-                    delete_residues,
-                    args.ignore_https_cert,
-                    delete_bad_res,
-                    blunt_ends=blunt_ends,
-                    wanted_altloc=wanted_altloc,
-                    default_altloc=args.default_altloc,
-                    forgive_extra_bonds=args.forgive_extra_bonds,
-                )
-            except PolymerCreationError as e:
-                print(e)
-                sys.exit(1)
-    elif args.read_pdb is not None:
-        with open(args.read_pdb) as f:
-            pdb_string = f.read()
-        try:
-            polymer = Polymer.from_pdb_string(
-                pdb_string,
-                templates,  # residue_templates, padders, ambiguous,
-                mk_prep,
-                set_template,
-                delete_residues,
-                args.ignore_https_cert,
-                delete_bad_res,
-                blunt_ends=blunt_ends,
-                wanted_altloc=wanted_altloc,
-                default_altloc=args.default_altloc,
-            )
-        except PolymerCreationError as e:
-            print(e)
-            sys.exit(1)
-    elif args.read_json is not None:
-        # simple approach
-        # convert to pdb and go through the same route as above.
-        # Ensures user options are respected
-        with open(args.read_json) as f:
-            json_string = f.read()
-        try:
-            polymer = Polymer.from_json(json_string)
-            pdb_string = polymer.to_pdb()
-
-            polymer = Polymer.from_pdb_string(
-                pdb_string,
-                templates,  # residue_templates, padders, ambiguous,
-                mk_prep,
-                set_template,
-                delete_residues,
-                args.ignore_https_cert,
-                delete_bad_res,
-                blunt_ends=blunt_ends,
-                wanted_altloc=wanted_altloc,
-                default_altloc=args.default_altloc,
-                forgive_extra_bonds=args.forgive_extra_bonds,
-            )
-        except PolymerCreationError as e:
-            print(e)
-            sys.exit(1)
-    else: # args.read_pqr is not None
-        with open(args.read_pqr) as f:
-            pdb_string = f.read()
-        try:
-            print("Reading a PQR file. The following options or configurations will be ignored: ")
-            print("  - default_altloc")
-            print("  - wanted_altloc")
-
-            if mk_prep.charge_model!="read":
-                print(f"Only reading structures from PQR. ")
-                print(f"Charge model of choice: {mk_prep.charge_model}")
-            else:
-                print("Reading structures and partial charges from PQR. ") 
-            
-            polymer = Polymer.from_pqr_string(
-                pdb_string,
-                templates,  # residue_templates, padders, ambiguous,
-                mk_prep,
-                set_template,
-                delete_residues,
-                args.ignore_https_cert,
-                delete_bad_res, 
-                blunt_ends=blunt_ends,
-                forgive_extra_bonds=args.forgive_extra_bonds,
-            )
-        except PolymerCreationError as e:
-            print(e)
-            sys.exit(1)
+    polymer = build_polymer(
+        args,
+        templates,
+        mk_prep,
+        set_template=set_template,
+        delete_residues=delete_residues,
+        delete_bad_res=delete_bad_res,
+        blunt_ends=blunt_ends,
+        wanted_altloc=wanted_altloc,
+        prody_parsers=SUPPORTED_PRODY_FORMATS if _got_prody else {},
+        got_prody=_got_prody,
+        prody_import_error=_prody_import_error if not _got_prody else None,
+    )
     
     
     # Update residue chem template cache
