@@ -20,6 +20,7 @@ from .atom import (
     DEFAULT_PDBINFO,
 )
 from .bond import Bond, DEFAULT_BOND_BREAKABLE, DEFAULT_BOND_ROTATABLE
+from .flex_model import FlexibilityModel
 from .ring import (
     Ring,
     RingClosureInfo,
@@ -33,6 +34,7 @@ from .setup import MoleculeSetup, MoleculeSetupExternalToolkit, RDKitMoleculeSet
 __all__ = [
     "Atom",
     "Bond",
+    "FlexibilityModel",
     "Ring",
     "RingClosureInfo",
     "Restraint",

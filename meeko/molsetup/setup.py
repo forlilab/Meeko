@@ -20,7 +20,6 @@ from ..utils import rdkitutils, utils
 from ..utils.geomutils import calcDihedral  # noqa: F401 — kept for backward-compat
 from ..utils.jsonutils import (
     BaseJSONParsable,
-    convert_to_int_keyed_dict,
     convert_to_tuple_keyed_dict,
     rdkit_mol_from_json,
     string_to_tuple,
@@ -39,6 +38,7 @@ from .atom import (
     DEFAULT_PDBINFO,
 )
 from .bond import Bond, DEFAULT_BOND_ROTATABLE
+from .flex_model import FlexibilityModel
 from .ring import Ring, RingClosureInfo
 from .restraint import Restraint
 from .uniq_atom_params import UniqAtomParams
@@ -69,7 +69,7 @@ class MoleculeSetup(BaseJSONParsable):
     rotamers: list[dict]
     atom_params: dict
     restraints: list[Restraint]
-    flexibility_model: dict
+    flexibility_model: FlexibilityModel
     """
 
     PSEUDOATOM_ATOMIC_NUM = 0
@@ -84,9 +84,7 @@ class MoleculeSetup(BaseJSONParsable):
         self.rotamers: list[dict] = []
         self.atom_params: dict = {}
         self.restraints: list = []
-        # TODO: flexibility model should become its own typed object; the dict
-        # representation is what keeps the molsetup/flexibility cycle alive.
-        self.flexibility_model = None
+        self.flexibility_model = FlexibilityModel()
 
     @classmethod
     def json_encoder(cls, obj: "MoleculeSetup") -> Optional[dict[str, Any]]:
@@ -108,17 +106,10 @@ class MoleculeSetup(BaseJSONParsable):
             ],
             "atom_params": obj.atom_params,
             "restraints": [Restraint.json_encoder(x) for x in obj.restraints],
-            "flexibility_model": obj.flexibility_model,
+            "flexibility_model": obj.flexibility_model.encode()
+            if isinstance(obj.flexibility_model, FlexibilityModel)
+            else obj.flexibility_model,
         }
-        if "rigid_body_connectivity" in obj.flexibility_model:
-            new_rigid_body_conn_dict = {
-                tuple_to_string(k): v
-                for k, v in obj.flexibility_model["rigid_body_connectivity"].items()
-            }
-            output_dict["flexibility_model"] = {
-                k: (v if k != "rigid_body_connectivity" else new_rigid_body_conn_dict)
-                for k, v in obj.flexibility_model.items()
-            }
         return output_dict
 
     expected_json_keys = {
@@ -156,22 +147,7 @@ class MoleculeSetup(BaseJSONParsable):
         ]
         molsetup.atom_params = obj["atom_params"]
         molsetup.restraints = [Restraint.from_dict(x) for x in obj["restraints"]]
-        molsetup.flexibility_model = obj["flexibility_model"]
-        if "rigid_body_connectivity" in molsetup.flexibility_model:
-            tuples_rigid_body_connectivity = {
-                string_to_tuple(k, int): string_to_tuple(v)
-                for k, v in molsetup.flexibility_model[
-                    "rigid_body_connectivity"
-                ].items()
-            }
-            molsetup.flexibility_model["rigid_body_connectivity"] = (
-                tuples_rigid_body_connectivity
-            )
-        for attribute in ["rigid_body_graph", "rigid_body_members", "rigid_index_by_atom"]:
-            if attribute in molsetup.flexibility_model:
-                molsetup.flexibility_model[attribute] = convert_to_int_keyed_dict(
-                    molsetup.flexibility_model[attribute]
-                )
+        molsetup.flexibility_model = FlexibilityModel.decode(obj["flexibility_model"])
         return molsetup
 
     # ----- invariant-preserving primitives -----

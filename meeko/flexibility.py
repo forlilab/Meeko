@@ -8,6 +8,7 @@ from copy import deepcopy
 from .utils import pdbutils
 
 from .molsetup import Bond
+from .molsetup.flex_model import FlexibilityModel
 
 
 def _calc_max_weighted_depth(
@@ -367,14 +368,7 @@ def walk_rigid_body_graph(
     if molsetup.get_is_ignore(start):
         return
     if data is None:
-        data = {
-            "visited": [],
-            "rigid_body_count": 0,
-            "rigid_index_by_atom": {},
-            "rigid_body_members": {},
-            "rigid_body_connectivity": {},
-            "rigid_body_graph": {},
-        }
+        data = FlexibilityModel()
     data["visited"].append(start)
     data["rigid_index_by_atom"][start] = data["rigid_body_count"]
     rigid_index = data["rigid_body_count"]
