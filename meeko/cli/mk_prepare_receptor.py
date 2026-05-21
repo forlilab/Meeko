@@ -64,6 +64,7 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
 
 
 from ._common import check, make_talkative_parser, required_length
+from ._receptor_helpers import build_mk_config, validate_altloc_and_write_flags
 
 # Backward-compat: third-party code may import TalkativeParser from this module.
 TalkativeParser = make_talkative_parser(path_to_this_script)
@@ -375,43 +376,15 @@ def main():
     args = get_args()
     delete_bad_res = args.allow_bad_res or args.delete_bad_res
 
-    if args.wanted_altloc is None:
-        wanted_altloc = None
-    else:
-        wanted_altloc = parse_cmdline_res_assign(args.wanted_altloc)
-        # Ensure meaningful wanted_altloc
-        for key, value in wanted_altloc.items():
-            if isinstance(value, str) and value.strip() == "":
-                msg = "Wanted atloc cannot be an empty string or a string with just space"
-                print("Command line error: " + msg, file=sys.stderr)
-                sys.exit(2)
-    
-    
-    # Ensure meaningful default_altloc
-    if args.default_altloc is not None and args.default_altloc.strip()=="":
-        msg = "Allowed atloc cannot be an empty string or a string with just space"
-        print("Command line error: " + msg, file=sys.stderr)
-        sys.exit(2)
-    
-    # check write options have default if used without argument
-    write_flags = [
-        args.write_pdbqt,
-        args.write_json,
-        args.write_gpf,
-        args.write_vina_box,
-    ]
-    needed_default = False
-    for flag in write_flags:
-        # flag is none if not used, and is empty list when used without arg
-        if flag is not None and len(flag) == 0:
-            needed_default = True
-            break
-    if needed_default and args.output_basename is None:
-        msg = "--write flags require either a filename argument or"
-        msg += " --output_basename to set a default"
-        print(msg)
-        sys.exit(2)
-    
+    validate_altloc_and_write_flags(args)
+
+    wanted_altloc = (
+        None
+        if args.wanted_altloc is None
+        else parse_cmdline_res_assign(args.wanted_altloc)
+    )
+
+
     # Default mapping of residue name and reactive atom name
     reactive_atom = {
         "SER": "OG",
@@ -511,27 +484,7 @@ def main():
     if args.delete_residues is not None:
         delete_residues = parse_cmdline_res(args.delete_residues)
     
-    mk_config = {}
-    if args.config_preset is not None:
-        with open(mk_config_dir / f"{args.config_preset}.json") as f:
-            mk_config.update(json.load(f))    
-
-    if args.config_file is not None:
-        with open(args.config_file) as f:
-            mk_config.update(json.load(f))
-    
-    mk_config["compute_charges"] = args.compute_charges
-
-    # update config by inputs from arguments
-
-    if args.charge_model is not None: 
-        mk_config["charge_model"] = args.charge_model
-
-    if "charge_model" in mk_config and mk_config["charge_model"] == "read": 
-        if args.read_pqr is None:
-            print("Error: --charge_model read requires --read_pqr")
-            sys.exit(2)
-        mk_config["charge_atom_prop"] = "PQRCharge"
+    mk_config = build_mk_config(args, mk_config_dir)
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
