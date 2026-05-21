@@ -75,6 +75,105 @@ else:
     from prody.atomic.selection import Selection
 
 
+def _resolve_unknown_residues_via_ccd(
+    unknown_res_from_input: dict,
+    unknown_res_from_assign: dict,
+    bonds: dict,
+    residue_templates: dict,
+    ambiguous: dict,
+    ignore_https_cert: bool,
+) -> None:
+    """Fetch templates for unknown residues from the RCSB CCD.
+
+    Mutates ``residue_templates`` and ``ambiguous`` in place. Side-effecting
+    on purpose: this used to be inline inside ``Polymer.__init__`` and the
+    expectation of every caller is "after this returns, the dicts contain
+    entries for the previously-unknown residues".
+
+    Raises ``PolymerCreationError`` if a fetch fails or returns no usable
+    template for any residue.
+    """
+    all_unknown_res = unknown_res_from_input.copy()
+    all_unknown_res.update(unknown_res_from_assign)
+
+    bonded_unknown_res = {
+        res_id: all_unknown_res[res_id]
+        for res_id in all_unknown_res
+        if any(res_id in respair for respair in bonds)
+    }
+    unbound_unknown_res = all_unknown_res.copy()
+    for key in bonded_unknown_res:
+        unbound_unknown_res.pop(key, None)
+
+    if unbound_unknown_res:
+        for resname in set(unbound_unknown_res.values()):
+            try:
+                cc = build_noncovalent_CC(
+                    resname, ignore_https_cert=ignore_https_cert
+                )
+                fetch_template_dict = json.loads(
+                    export_chem_templates_to_json([cc])
+                )["residue_templates"][cc.resname]
+                residue_templates.update(
+                    {
+                        resname: ResidueTemplate(
+                            smiles=fetch_template_dict["smiles"],
+                            atom_names=fetch_template_dict["atom_name"],
+                            link_labels=fetch_template_dict["link_labels"],
+                        )
+                    }
+                )
+                ambiguous[resname] = [cc.resname]
+            except Exception as e:
+                logger.warning(f"Failed building template from CCD for {resname=}")
+                raise PolymerCreationError(str(e))
+
+    if bonded_unknown_res:
+        failed_build = set()
+        try:
+            for resname in set(bonded_unknown_res.values()):
+                cc_list = build_linked_CCs(
+                    resname, ignore_https_cert=ignore_https_cert
+                )
+                if not cc_list:
+                    failed_build.add(resname)
+                else:
+                    for cc in cc_list:
+                        fetch_template_dict = json.loads(
+                            export_chem_templates_to_json([cc])
+                        )["residue_templates"][cc.resname]
+                        residue_templates.update(
+                            {
+                                cc.resname: ResidueTemplate(
+                                    smiles=fetch_template_dict["smiles"],
+                                    atom_names=fetch_template_dict["atom_name"],
+                                    link_labels=convert_to_int_keyed_dict(
+                                        fetch_template_dict["link_labels"]
+                                    ),
+                                )
+                            }
+                        )
+                        if resname in ambiguous:
+                            ambiguous[resname].append(cc.resname)
+                        else:
+                            ambiguous[resname] = [cc.resname]
+        except Exception as e:
+            raise PolymerCreationError(str(e))
+
+        if failed_build:
+            raise PolymerCreationError(
+                f"Template generation failed for unknown residues: {failed_build}, "
+                "which appear to be linking fragments. " + eol
+                + "Generation of chemical templates with modified backbones, which "
+                "involves guessing of linker positions and types, are not currently "
+                "supported. ",
+                "1. (to parameterize the residues) Use --add_templates to pass the "
+                "additional templates with valid linker_labels, " + eol
+                + "2. (to skip the residues) Use --delete_residues to ignore them. "
+                "Residues will be deleted from the prepared receptor. ",
+            )
+
+
 class Polymer(BaseJSONParsable):
     """Represents polymer with its subunits as individual RDKit molecules.
 
@@ -105,8 +204,9 @@ class Polymer(BaseJSONParsable):
         set_template: dict[str, str] = None,
         blunt_ends: list[tuple[str, int]] = None,
         get_atomprop_from_raw: dict = None,
-        ignore_https_cert = False,
-        forgive_extra_bonds: bool = False
+        ignore_https_cert: bool = False,
+        forgive_extra_bonds: bool = False,
+        allow_template_fetch: bool = True,
     ):
         """
         Parameters
@@ -206,59 +306,30 @@ class Polymer(BaseJSONParsable):
                 rec += "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. "
                 raise PolymerCreationError(err, rec)
 
+            if not allow_template_fetch:
+                rec = (
+                    "1. (to parameterize the residues) supply the missing templates explicitly via "
+                    "--add_templates or set_template" + eol
+                    + "2. (to skip the residues) Use --delete_residues to ignore them." + eol
+                    + "3. allow fetching from the RCSB CCD over the network: "
+                    "pass allow_template_fetch=True to Polymer(...)."
+                )
+                raise PolymerCreationError(err, rec)
+
             warnings.warn(err, RuntimeWarning)
-            warnings.warn("Trying to resolve unknown residues by building chemical templates... ", RuntimeWarning)
+            warnings.warn(
+                "Trying to resolve unknown residues by building chemical templates... ",
+                RuntimeWarning,
+            )
 
-            all_unknown_res = unknown_res_from_input.copy()
-            all_unknown_res.update(unknown_res_from_assign)
-
-            bonded_unknown_res = {res_id: all_unknown_res[res_id] for res_id in all_unknown_res 
-                                  if any(res_id in respair for respair in bonds)}
-
-            unbound_unknown_res = all_unknown_res.copy()
-            for key in bonded_unknown_res:
-                unbound_unknown_res.pop(key, None) 
-
-            if unbound_unknown_res: 
-                for resname in set(unbound_unknown_res.values()): 
-                    try: 
-                        cc = build_noncovalent_CC(resname, ignore_https_cert=ignore_https_cert)
-                        fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
-                        residue_templates.update({resname: ResidueTemplate(
-                                                    smiles = fetch_template_dict['smiles'],
-                                                    atom_names = fetch_template_dict['atom_name'],
-                                                    link_labels = fetch_template_dict['link_labels'])})
-                        ambiguous[resname] = [cc.resname]
-                    except Exception as e: 
-                        logger.warning(f"Failed building template from CCD for {resname=}")
-                        raise PolymerCreationError(str(e))
-
-            if bonded_unknown_res: 
-                failed_build = set()
-                try: 
-                    for resname in set(bonded_unknown_res.values()): 
-                        cc_list = build_linked_CCs(resname, ignore_https_cert=ignore_https_cert)
-                        if not cc_list: 
-                            failed_build.add(resname)
-                        else:
-                            for cc in cc_list:
-                                fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
-                                residue_templates.update({cc.resname: ResidueTemplate(
-                                                            smiles = fetch_template_dict['smiles'],
-                                                            atom_names = fetch_template_dict['atom_name'],
-                                                            link_labels = convert_to_int_keyed_dict(fetch_template_dict['link_labels']))})
-                                if resname in ambiguous: 
-                                    ambiguous[resname].append(cc.resname)
-                                else:
-                                    ambiguous[resname] = [cc.resname]
-                except Exception as e: 
-                    raise PolymerCreationError(str(e))
-                            
-                if failed_build: 
-                    raise PolymerCreationError(f"Template generation failed for unknown residues: {failed_build}, which appear to be linking fragments. " + eol
-                                            + "Generation of chemical templates with modified backbones, which involves guessing of linker positions and types, are not currently supported. ", 
-                                            "1. (to parameterize the residues) Use --add_templates to pass the additional templates with valid linker_labels, " + eol
-                                            + "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. ")
+            _resolve_unknown_residues_via_ccd(
+                unknown_res_from_input=unknown_res_from_input,
+                unknown_res_from_assign=unknown_res_from_assign,
+                bonds=bonds,
+                residue_templates=residue_templates,
+                ambiguous=ambiguous,
+                ignore_https_cert=ignore_https_cert,
+            )
 
         self.monomers, self.log = self._get_monomers(
             raw_input_mols,
