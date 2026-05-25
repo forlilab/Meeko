@@ -5,7 +5,6 @@ from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 from meeko import MoleculePreparation
 import numpy as np
-import meeko
 import pytest
 
 try:
@@ -15,10 +14,10 @@ except ImportError as err:
     _got_openff = False
 
 
-pkgdir = pathlib.Path(meeko.__file__).parents[1]
-
-lig_3zlq_a = pkgdir / "test/parameterization_data/3zlq_lig_a.sdf"
-lig_3zlq_b = pkgdir / "test/parameterization_data/3zlq_lig_b.sdf"
+workdir = pathlib.Path(__file__)
+datadir = workdir.parents[0] / "parameterization_data"
+lig_3zlq_a = datadir / "3zlq_lig_a.sdf"
+lig_3zlq_b = datadir / "3zlq_lig_b.sdf"
 
 
 def canonicalize_four_indices(four_indices):

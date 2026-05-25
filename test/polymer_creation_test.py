@@ -6,32 +6,29 @@ from meeko import Polymer
 from meeko import PDBQTWriterLegacy
 from meeko import MoleculePreparation
 from meeko import ResidueChemTemplates
-import meeko
 
 from rdkit import Chem
 import numpy as np
 
+workdir = pathlib.Path(__file__)
+datadir = workdir.parents[0] / "polymer_data"
 
-pkgdir = pathlib.Path(meeko.__file__).parents[1]
-
-ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
-pqr_example = pkgdir / "test/polymer_data/1FAS_dry.pqr"
-nphe_ser_example = pkgdir / "test/polymer_data/NPHE_SER.pdb"
-just_one_ALA_missing = (
-    pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
-)
-just_one_ALA = pkgdir / "test/polymer_data/just-one-ALA.pdb"
-just_three_residues = pkgdir / "test/polymer_data/just-three-residues.pdb"
-disulfide_bridge = pkgdir / "test/polymer_data/just_a_disulfide_bridge.pdb"
-loop_with_disulfide = pkgdir / "test/polymer_data/loop_with_disulfide.pdb"
-insertion_code = pkgdir / "test/polymer_data/1igy_B_82-83_has-icode.pdb"
-non_sequential_res = pkgdir / "test/polymer_data/non-sequential-res.pdb"
-has_altloc = pkgdir / "test/polymer_data/has-altloc.pdb"
-has_lys = pkgdir / "test/polymer_data/has-lys.pdb"
-has_lyn = pkgdir / "test/polymer_data/has-lyn.pdb"
-has_lys_resname_lyn = pkgdir / "test/polymer_data/has-lys-resname-lyn.pdb"
-disulfide_adjacent = pkgdir / "test/polymer_data/disulfide_bridge_in_adjacent_residues.pdb"
-nglu = pkgdir / "test/polymer_data/nglu.pdb"
+ahhy_example = datadir / "AHHY.pdb"
+pqr_example = datadir / "1FAS_dry.pqr"
+nphe_ser_example = datadir / "NPHE_SER.pdb"
+just_one_ALA_missing = datadir / "just-one-ALA-missing-CB.pdb"
+just_one_ALA = datadir / "just-one-ALA.pdb"
+just_three_residues = datadir / "just-three-residues.pdb"
+disulfide_bridge = datadir / "just_a_disulfide_bridge.pdb"
+loop_with_disulfide = datadir / "loop_with_disulfide.pdb"
+insertion_code = datadir / "1igy_B_82-83_has-icode.pdb"
+non_sequential_res = datadir / "non-sequential-res.pdb"
+has_altloc = datadir / "has-altloc.pdb"
+has_lys = datadir / "has-lys.pdb"
+has_lyn = datadir / "has-lyn.pdb"
+has_lys_resname_lyn = datadir / "has-lys-resname-lyn.pdb"
+disulfide_adjacent = datadir / "disulfide_bridge_in_adjacent_residues.pdb"
+nglu = datadir / "nglu.pdb"
 
 
 # TODO: add checks for untested polymer fields (e.g. input options not indicated here)
