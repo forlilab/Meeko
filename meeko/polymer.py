@@ -1371,7 +1371,7 @@ class Polymer(BaseJSONParsable):
             if self.bonds is None or not self.bonds: 
                 bonds_indexed_in_raw = find_inter_mols_bonds(resid_to_rawmols)
             else:
-                bonds_indexed_in_raw = self.bonds
+                bonds_indexed_in_raw = {(r1, r2): v for (r1, r2), v in self.bonds.items() if r1 in residues_to_add and r2 in residues_to_add}
 
             invmaps = {
                 res_id: {j: i for i, j in self.monomers[res_id].mapidx_to_raw.items()}
