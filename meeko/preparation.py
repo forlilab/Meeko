@@ -676,7 +676,11 @@ class MoleculePreparation:
 
         if self.crippen or self.crippen_as_solpar:
             add_crippen_to_molsetup(setup)
-            if self.scale_crippen_by_excl_vol:
+            if not self.crippen:  # set only ad4_sol_par
+                setup.atom_params["ad4_sol_par"] = setup.atom_params.pop("crippen")
+            elif self.crippen_as_solpar:  # set both
+                setup.atom_params["ad4_sol_par"] = [value for value in setup.atom_params["crippen"]]
+            if self.scale_crippen_by_excl_vol and self.crippen:
                 if "excl_vol" not in setup.atom_params:
                     # meeko is configurable and allows the user to supply
                     # custom excl_vol. But in the event that they didn't,
@@ -689,10 +693,6 @@ class MoleculePreparation:
                 crippen = setup.atom_params["crippen"]
                 excl_vol = setup.atom_params["excl_vol"]
                 setup.atom_params["crippen"] = [c * v for c, v in zip(crippen, excl_vol)]
-            if not self.crippen:
-                setup.atom_params["ad4_sol_par"] = setup.atom_params.pop("crippen")
-            elif self.crippen_as_solpar:
-                setup.atom_params["ad4_sol_par"] = [value for value in setup.atom_params["crippen"]]
 
         if self.override_ad4sol_par_including_q:
             qasp = self.override_ad4sol_par_including_q_qasp
