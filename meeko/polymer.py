@@ -834,12 +834,31 @@ class PolymerCreationError(RuntimeError):
         return msg
 
 
+def mol_COM(mol, conf_id = -1):
+    """center of mass for rdkit mol"""
+    # Get the conformer with 3D coordinates
+    conf = mol.GetConformer(conf_id)
+    pts = conf.GetPositions()
+    
+    # Extract atomic masses
+    # Note: Pass onlyExplicit=False to count implicit hydrogens
+    masses = np.array([atom.GetMass() for atom in mol.GetAtoms()])
+    
+    # Calculate Center of Mass
+    total_mass = masses.sum()
+    com = np.sum(pts * masses[:, np.newaxis], axis=0) / total_mass
+    
+    return com
+
+
 def handle_parsing_situations(
     unmatched_res,
     unparsed_res,
     allow_bad_res,
     res_missed_altloc,
     res_needed_altloc,
+    box_center = None,
+    bad_res_radius = None
     ):
 
     err = ""
@@ -847,7 +866,7 @@ def handle_parsing_situations(
         msg = f"- Parsing failed for: {unparsed_res}."
         if not allow_bad_res:
             err += msg + eol
-        else: 
+        else:
             msg += " Ignored due to allow_bad_res."
             logger.warning(msg)
 
@@ -856,11 +875,21 @@ def handle_parsing_situations(
         if not allow_bad_res:
             err += msg + eol
         else:
-            msg += " Ignored due to allow_bad_res."
-            logger.warning(msg)
-
+            if box_center is not None and bad_res_radius is not None:
+                for id, monomer in unmatched_res.items():
+                    com = mol_COM(monomer.raw_rdkit_mol)
+                    distance = np.linalg.norm (com - box_center)
+                    if distance >= bad_res_radius:
+                        msg += f"\nIgnored {id} due to allow_bad_res and bad_res_radius = {distance:.4f}."
+                        logger.warning(msg)
+                    else:
+                        msg += f"\nBad res {id} within the specified bad_res_radius ({distance:.4f} < {bad_res_radius})"
+                        err += msg + eol
+            else:
+                msg += " Ignored due to allow_bad_res."
+                logger.warning(msg)
     if err:
-        err += "These residues can be ignored with option allow_bad_res." + eol
+        err += "These residues can be ignored with option --allow_bad_res/--delete_bad_res." + eol
 
     if res_needed_altloc: 
         msg = f"- Residues with alternate location: {res_needed_altloc}" + eol
@@ -1477,6 +1506,7 @@ class Polymer(BaseJSONParsable):
         wanted_altloc=None,
         default_altloc=None,
         forgive_extra_bonds=False,
+        bad_res_radius = None
     ):
         """
 
@@ -1569,6 +1599,8 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center = mk_prep.box_center,
+            bad_res_radius=bad_res_radius
         )
 
         return polymer
@@ -1587,6 +1619,7 @@ class Polymer(BaseJSONParsable):
         bonds_to_delete=None,
         blunt_ends=None,
         forgive_extra_bonds=False,
+        bad_res_radius = None
     ):
         """
 
@@ -1672,12 +1705,15 @@ class Polymer(BaseJSONParsable):
             raise PolymerCreationError(msg + "These discrepancies may compromise the validity of the charge assignment from PQR, making the charges inapplicable to the processed receptor. \n")
 
         unmatched_res = polymer.get_ignored_monomers()
+
         handle_parsing_situations(
             unmatched_res,
             unparsed_res,
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center=mk_prep.box_center,
+            bad_res_radius=bad_res_radius
         )
 
         return polymer
@@ -1699,6 +1735,7 @@ class Polymer(BaseJSONParsable):
         wanted_altloc: Optional[dict]=None,
         default_altloc: Optional[str]=None,
         forgive_extra_bonds: bool=False,
+        bad_res_radius = None
     ):
         """
 
@@ -1785,6 +1822,8 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center = mk_prep.box_center,
+            bad_res_radius=bad_res_radius
         )
 
         return polymer

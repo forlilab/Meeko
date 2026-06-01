@@ -114,6 +114,7 @@ class MoleculePreparation:
         crippen_as_solpar=False,
         override_ad4sol_par_including_q=False,
         override_ad4sol_par_including_q_qasp=0.0,
+        box_center = None 
     ):
         """
 
@@ -179,6 +180,7 @@ class MoleculePreparation:
         self.input_atom_params = input_atom_params
         self.load_atom_params = load_atom_params
         self.add_atom_types = add_atom_types
+        self.box_center = box_center
 
         self.atom_params = self.get_atom_params(
             input_atom_params, load_atom_params, add_atom_types, self.packaged_params

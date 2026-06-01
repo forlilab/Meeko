@@ -63,6 +63,41 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
     }
 
 
+def getBoxFromFile(box_enveloping, padding):
+    ft = pathlib.Path(box_enveloping).suffix
+    suppliers = {
+        ".pdb": None,  # overriden below, needed here as valid type
+        ".mol": Chem.MolFromMolFile,
+        ".mol2": Chem.MolFromMol2File,
+        ".sdf": Chem.SDMolSupplier,
+        ".pdbqt": None,
+    }
+    if ft not in suppliers.keys():
+        check(
+            success=False,
+            error_msg=f"Given --box_enveloping file type {ft} not readable!"
+        )
+    elif ft == ".pdb":
+        pdbstr = pdbutils.strip_altloc_from_pdb_file(box_enveloping)
+        ligmol = Chem.MolFromPDBBlock(pdbstr, removeHs=False, sanitize=False)
+    elif ft != ".sdf" and ft != ".pdbqt":
+        ligmol = suppliers[ft](box_enveloping, removeHs=False, sanitize=False)
+    elif ft == ".sdf":
+        ligmol = suppliers[ft](box_enveloping, removeHs=False, sanitize=False)[
+            0
+        ]  # assume we only want first molecule in file
+    else:  # .pdbqt
+        ligmol = RDKitMolCreate.from_pdbqt_mol(
+            PDBQTMolecule.from_file(box_enveloping)
+        )[
+            0
+        ]  # assume we only want first molecule in file
+
+    box_center, box_size = gridbox.calc_box(
+        ligmol.GetConformer().GetPositions(), padding
+    )
+    return box_center, box_size
+
 class TalkativeParser(argparse.ArgumentParser):
     def error(self, message):
         """overload to print_help for every error"""
@@ -185,6 +220,12 @@ def get_args():
         "-x", "--delete_bad_res",
         action="store_true",
         help="delete residues that don't match templates instead of raising error",
+    )
+    config_group.add_argument(
+        "--bad_res_radius",
+        help="""specify radius from box_center outside of which unmatched residues will be deleted.
+        Must be used in conjuntion with --delete_bad_res and --box_center.
+        """,
     )
 
     # keep -a/--allow_bad_res for backwards compatibility, superseeded by -x/--delete_bad_res
@@ -552,6 +593,16 @@ def main():
             sys.exit(2)
         mk_config["charge_atom_prop"] = "PQRCharge"
 
+    # store box-center in mk_prep
+    if args.bad_res_radius is not None:
+        if args.box_center is not None:
+            mk_config["box_center"] = np.array(args.box_center.split(), dtype=float)
+        elif args.box_enveloping is not None:
+            center, size = getBoxFromFile(args.box_enveloping, 0.0)
+            mk_config["box_center"] = np.array(center)
+        else: 
+            raise ValueError("one of --box_center or --box_enveloping must be specified with --bad_res_radius")
+
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
 
@@ -617,6 +668,7 @@ def main():
                     wanted_altloc=wanted_altloc,
                     default_altloc=args.default_altloc,
                     forgive_extra_bonds=args.forgive_extra_bonds,
+                    bad_res_radius=float(args.bad_res_radius)
                 )
             except PolymerCreationError as e:
                 print(e)
@@ -636,6 +688,7 @@ def main():
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
+                bad_res_radius=float(args.bad_res_radius)
             )
         except PolymerCreationError as e:
             print(e)
@@ -662,6 +715,7 @@ def main():
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
                 forgive_extra_bonds=args.forgive_extra_bonds,
+                bad_res_radius=float(args.bad_res_radius)
             )
         except PolymerCreationError as e:
             print(e)
@@ -690,6 +744,7 @@ def main():
                 delete_bad_res, 
                 blunt_ends=blunt_ends,
                 forgive_extra_bonds=args.forgive_extra_bonds,
+                bad_res_radius=float(args.bad_res_radius)
             )
         except PolymerCreationError as e:
             print(e)
