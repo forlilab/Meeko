@@ -64,6 +64,8 @@ def sdf_to_json(sdf_path: str, resname: str) -> dict:
 
 
 def getBoxFromFile(box_enveloping, padding):
+    """Get box center and size from box_enveloping cli options
+    """
     ft = pathlib.Path(box_enveloping).suffix
     suppliers = {
         ".pdb": None,  # overriden below, needed here as valid type
