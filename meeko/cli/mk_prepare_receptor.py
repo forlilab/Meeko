@@ -734,13 +734,34 @@ def main():
         "THR",
         "MET",
     ]
+    valid_rot_res = len(rot_term_res)
+    valid_res = []
     for res_id in rot_term_res:
         if res_id not in polymer.monomers:
             print("resid %s not found in input receptor file" % res_id)
             sys.exit(2)
         input_resname = polymer.monomers[res_id].input_resname
+
         if input_resname not in rotatable_termgrp_residues_allowed:
-            print(f"{input_resname} (resid {res_id}) is not a valid residue for use with --rot_terminal_group."+ eol)
+            if delete_bad_res: 
+                print(f"{input_resname} (resid {res_id}) invalid for --rot_terminal_group, but --delete_bad_res was used, so it will be ignored.")
+                valid_rot_res -= 1
+            else:
+                print(f"{input_resname} (resid {res_id}) is not a valid residue for use with --rot_terminal_group."+ eol)
+                print("Available residues are: ")
+                print(", ".join(rotatable_termgrp_residues_allowed))
+                sys.exit(2)
+        else: 
+            valid_res.append(res_id)
+
+    
+    ## select only valid terminal residues if right options are chosen:
+    if delete_bad_res and len(rot_term_res) > 0: 
+        if valid_rot_res > 0:
+            print(f"{valid_rot_res} out of {len(rot_term_res)} are valid for --rot_terminal_group. Proceed with those.")
+            rot_term_res = valid_res
+        else:
+            print("No valid residues provided for use with --rot_term_group")
             print("Available residues are: ")
             print(", ".join(rotatable_termgrp_residues_allowed))
             sys.exit(2)
