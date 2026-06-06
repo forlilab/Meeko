@@ -393,7 +393,12 @@ class PDBQTWriterLegacy:
         alt_id = " "
         occupancy = 1.0
         temp_factor = 0.0
-        atom = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}    {:6.3f} {:<2s}"
+        # PDB convention: 1-char elements start at column 14 (prepend space)
+        # 2-char elements (second char lowercase, e.g. Fe, Cl) start at column 13
+        if len(atom_name) < 4:
+            if not (len(atom_name) >= 2 and atom_name[0].isalpha() and atom_name[1].islower()):
+                atom_name = " " + atom_name
+        atom = "{:6s}{:5d} {:<4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}  {:+8.3f} {:<2s}"
         pdbqt_line = atom.format(
             record_type,
             count,
