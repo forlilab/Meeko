@@ -226,7 +226,8 @@ def get_args():
     config_group.add_argument(
         "--bad_res_radius",
         help="""specify radius from box_center outside of which unmatched residues will be deleted.
-        Must be used in conjuntion with --delete_bad_res and --box_center.
+        Must be used in conjuntion with --delete_bad_res and --box_center or --box_enveloping.
+        When used with --box_enveloping, the radius is measured from the center of the enveloped atoms..
         """,
     )
 
