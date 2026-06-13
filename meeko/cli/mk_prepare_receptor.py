@@ -225,9 +225,10 @@ def get_args():
     )
     config_group.add_argument(
         "--bad_res_radius",
-        help="""specify radius from box_center outside of which unmatched residues will be deleted.
-        Must be used in conjuntion with --delete_bad_res and --box_center or --box_enveloping.
-        When used with --box_enveloping, the radius is measured from the center of the enveloped atoms..
+        type=float,
+        help="""delete unmatched residues whose center-of-mass is more than this distance (Angstrom)
+        outside any face of the grid box. Residues within this distance of the box (or inside it)
+        will raise an error. Requires --box_center + --box_size, or --box_enveloping.
         """,
     )
 
@@ -436,7 +437,10 @@ def get_args():
 
 def main():
     args = get_args()
-    delete_bad_res = args.allow_bad_res or args.delete_bad_res
+    if args.bad_res_radius is not None and args.delete_bad_res:
+        print("Error: --bad_res_radius and --delete_bad_res cannot be used together.", file=sys.stderr)
+        sys.exit(2)
+    delete_bad_res = args.allow_bad_res or args.delete_bad_res or (args.bad_res_radius is not None)
 
     if args.wanted_altloc is None:
         wanted_altloc = None
@@ -596,15 +600,24 @@ def main():
             sys.exit(2)
         mk_config["charge_atom_prop"] = "PQRCharge"
 
-    # store box-center in mk_prep
+    # store box center and size in mk_prep (needed for --bad_res_radius)
     if args.bad_res_radius is not None:
         if args.box_center is not None:
-            mk_config["box_center"] = np.array(args.box_center.split(), dtype=float)
+            if args.box_size is None:
+                print("Error: --box_size is required when using --bad_res_radius with --box_center.", file=sys.stderr)
+                sys.exit(2)
+            mk_config["box_center"] = np.array(args.box_center, dtype=float)
+            mk_config["box_size"] = np.array(args.box_size, dtype=float)
         elif args.box_enveloping is not None:
-            center, size = getBoxFromFile(args.box_enveloping, 0.0)
+            if args.padding is None:
+                print("Error: --padding is required when using --bad_res_radius with --box_enveloping.", file=sys.stderr)
+                sys.exit(2)
+            center, size = getBoxFromFile(args.box_enveloping, args.padding)
             mk_config["box_center"] = np.array(center)
-        else: 
-            raise ValueError("one of --box_center or --box_enveloping must be specified with --bad_res_radius")
+            mk_config["box_size"] = np.array(size)
+        else:
+            print("Error: --bad_res_radius requires --box_center/--box_size or --box_enveloping.", file=sys.stderr)
+            sys.exit(2)
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
@@ -671,7 +684,7 @@ def main():
                     wanted_altloc=wanted_altloc,
                     default_altloc=args.default_altloc,
                     forgive_extra_bonds=args.forgive_extra_bonds,
-                    bad_res_radius=float(args.bad_res_radius)
+                    bad_res_radius=args.bad_res_radius
                 )
             except PolymerCreationError as e:
                 print(e)
@@ -691,7 +704,7 @@ def main():
                 blunt_ends=blunt_ends,
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
-                bad_res_radius=float(args.bad_res_radius)
+                bad_res_radius=args.bad_res_radius
             )
         except PolymerCreationError as e:
             print(e)
@@ -718,7 +731,7 @@ def main():
                 wanted_altloc=wanted_altloc,
                 default_altloc=args.default_altloc,
                 forgive_extra_bonds=args.forgive_extra_bonds,
-                bad_res_radius=float(args.bad_res_radius)
+                bad_res_radius=args.bad_res_radius
             )
         except PolymerCreationError as e:
             print(e)
@@ -747,7 +760,7 @@ def main():
                 delete_bad_res, 
                 blunt_ends=blunt_ends,
                 forgive_extra_bonds=args.forgive_extra_bonds,
-                bad_res_radius=float(args.bad_res_radius)
+                bad_res_radius=args.bad_res_radius
             )
         except PolymerCreationError as e:
             print(e)

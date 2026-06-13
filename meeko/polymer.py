@@ -858,6 +858,7 @@ def handle_parsing_situations(
     res_missed_altloc,
     res_needed_altloc,
     box_center = None,
+    box_size = None,
     bad_res_radius = None
     ):
 
@@ -875,21 +876,26 @@ def handle_parsing_situations(
         if not allow_bad_res:
             err += msg + eol
         else:
-            if box_center is not None and bad_res_radius is not None:
+            if box_center is not None and box_size is not None and bad_res_radius is not None:
+                box_center_arr = np.array(box_center)
+                box_half = np.array(box_size) / 2.0
+                box_min = box_center_arr - box_half
+                box_max = box_center_arr + box_half
                 for id, monomer in unmatched_res.items():
                     com = mol_COM(monomer.raw_rdkit_mol)
-                    distance = np.linalg.norm (com - box_center)
-                    if distance >= bad_res_radius:
-                        msg += f"\nIgnored {id} due to allow_bad_res and bad_res_radius = {distance:.4f}."
+                    nearest_on_box = np.clip(com, box_min, box_max)
+                    dist_to_edge = np.linalg.norm(com - nearest_on_box)
+                    if dist_to_edge > bad_res_radius:
+                        msg += f"\nIgnored {id}: {dist_to_edge:.4f} A outside box (> bad_res_radius={bad_res_radius})."
                         logger.warning(msg)
                     else:
-                        msg += f"\nBad res {id} within the specified bad_res_radius ({distance:.4f} < {bad_res_radius})"
+                        msg += f"\nBad res {id} is within bad_res_radius of box edge ({dist_to_edge:.4f} A <= {bad_res_radius} A)."
                         err += msg + eol
             else:
                 msg += " Ignored due to allow_bad_res."
                 logger.warning(msg)
     if err:
-        err += "These residues can be ignored with option --allow_bad_res/--delete_bad_res." + eol
+        err += "These residues can be ignored with option --delete_bad_res or --bad_res_radius." + eol
 
     if res_needed_altloc: 
         msg = f"- Residues with alternate location: {res_needed_altloc}" + eol
@@ -1599,8 +1605,9 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
-            box_center = mk_prep.box_center,
-            bad_res_radius=bad_res_radius
+            box_center=mk_prep.box_center,
+            box_size=mk_prep.box_size,
+            bad_res_radius=bad_res_radius,
         )
 
         return polymer
@@ -1713,7 +1720,8 @@ class Polymer(BaseJSONParsable):
             res_missed_altloc,
             res_needed_altloc,
             box_center=mk_prep.box_center,
-            bad_res_radius=bad_res_radius
+            box_size=mk_prep.box_size,
+            bad_res_radius=bad_res_radius,
         )
 
         return polymer
@@ -1822,8 +1830,9 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
-            box_center = mk_prep.box_center,
-            bad_res_radius=bad_res_radius
+            box_center=mk_prep.box_center,
+            box_size=mk_prep.box_size,
+            bad_res_radius=bad_res_radius,
         )
 
         return polymer
