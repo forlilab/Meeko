@@ -618,7 +618,7 @@ def main():
             box_center = args.box_center
             box_size = args.box_size
         else:
-            box_center, box_size = getBoxFromFile(args.box_enveloping, padding)
+            box_center, box_size = getBoxFromFile(args.box_enveloping, args.padding)
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
