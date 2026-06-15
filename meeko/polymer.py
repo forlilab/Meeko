@@ -834,23 +834,6 @@ class PolymerCreationError(RuntimeError):
         return msg
 
 
-def mol_COM(mol, conf_id = -1):
-    """center of mass for rdkit mol"""
-    # Get the conformer with 3D coordinates
-    conf = mol.GetConformer(conf_id)
-    pts = conf.GetPositions()
-    
-    # Extract atomic masses
-    # Note: Pass onlyExplicit=False to count implicit hydrogens
-    masses = np.array([atom.GetMass() for atom in mol.GetAtoms()])
-    
-    # Calculate Center of Mass
-    total_mass = masses.sum()
-    com = np.sum(pts * masses[:, np.newaxis], axis=0) / total_mass
-    
-    return com
-
-
 def handle_parsing_situations(
     unmatched_res,
     unparsed_res,
@@ -859,7 +842,7 @@ def handle_parsing_situations(
     res_needed_altloc,
     box_center = None,
     box_size = None,
-    bad_res_radius = None
+    delete_bad_res_from_box_radius = None
     ):
 
     err = ""
@@ -873,29 +856,36 @@ def handle_parsing_situations(
 
     if unmatched_res:
         msg = f"- Template matching failed for: {list(unmatched_res)}"
-        if not allow_bad_res:
-            err += msg + eol
+        if allow_bad_res and delete_bad_res_from_box_radius is None:
+           msg += " Ignored due to allow_bad_res."
+           logger.warning(msg)
+        elif allow_bad_res and delete_bad_res_from_box_radius is not None:
+                raise ValueError("allow/delete_bad_res and delete_bad_res_from_box_radius are incompatible")
+        elif delete_bad_res_from_box_radius is not None:
+            if box_center is None or box_size is None:
+                raise ValueError("delete_bad_res_from_box_radius requires box_center and box_size")
+            if type(delete_bad_res_from_box_radius) not in [float, int]:
+                t = type(delete_bad_res_from_box_radius)
+                raise ValueError(f"delete_bad_res_from_box_radius must be float or int, but is {t}")
+            box_center_arr = np.array(box_center)
+            box_half = np.array(box_size) / 2.0
+            box_min = box_center_arr - box_half
+            box_max = box_center_arr + box_half
+            for id, monomer in unmatched_res.items():
+                pos = monomer.raw_rdkit_mol.GetConformer().GetPositions()
+                nearest_on_box = np.clip(pos, box_min, box_max)
+                diff = pos[:, np.newaxis, :] - nearest_on_box[np.newaxis, :, :]
+                dist_to_edge = np.min(np.linalg.norm(diff, axis=-1))
+                if dist_to_edge > delete_bad_res_from_box_radius:
+                    msg = f"\nIgnored {id}: {dist_to_edge:.4f} A outside box (> {delete_bad_res_from_box_radius=})."
+                    logger.warning(msg)
+                else:
+                    msg = f"\nBad res {id} is within radius of box edge ({dist_to_edge:.4f} <= {delete_bad_res_from_box_radius=:.4f} A)."
+                    err += msg + eol
         else:
-            if box_center is not None and box_size is not None and bad_res_radius is not None:
-                box_center_arr = np.array(box_center)
-                box_half = np.array(box_size) / 2.0
-                box_min = box_center_arr - box_half
-                box_max = box_center_arr + box_half
-                for id, monomer in unmatched_res.items():
-                    com = mol_COM(monomer.raw_rdkit_mol)
-                    nearest_on_box = np.clip(com, box_min, box_max)
-                    dist_to_edge = np.linalg.norm(com - nearest_on_box)
-                    if dist_to_edge > bad_res_radius:
-                        msg += f"\nIgnored {id}: {dist_to_edge:.4f} A outside box (> bad_res_radius={bad_res_radius})."
-                        logger.warning(msg)
-                    else:
-                        msg += f"\nBad res {id} is within bad_res_radius of box edge ({dist_to_edge:.4f} A <= {bad_res_radius} A)."
-                        err += msg + eol
-            else:
-                msg += " Ignored due to allow_bad_res."
-                logger.warning(msg)
+            err += msg + eol
     if err:
-        err += "These residues can be ignored with option --delete_bad_res or --bad_res_radius." + eol
+        err += "These residues can be ignored with option --delete_bad_res or --delete_bad_res_from_box_radius." + eol
 
     if res_needed_altloc: 
         msg = f"- Residues with alternate location: {res_needed_altloc}" + eol
@@ -1512,7 +1502,9 @@ class Polymer(BaseJSONParsable):
         wanted_altloc=None,
         default_altloc=None,
         forgive_extra_bonds=False,
-        bad_res_radius = None
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1605,9 +1597,10 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
-            box_center=mk_prep.box_center,
-            box_size=mk_prep.box_size,
-            bad_res_radius=bad_res_radius,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
+            
         )
 
         return polymer
@@ -1626,7 +1619,9 @@ class Polymer(BaseJSONParsable):
         bonds_to_delete=None,
         blunt_ends=None,
         forgive_extra_bonds=False,
-        bad_res_radius = None
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1719,9 +1714,9 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
-            box_center=mk_prep.box_center,
-            box_size=mk_prep.box_size,
-            bad_res_radius=bad_res_radius,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
         )
 
         return polymer
@@ -1743,7 +1738,9 @@ class Polymer(BaseJSONParsable):
         wanted_altloc: Optional[dict]=None,
         default_altloc: Optional[str]=None,
         forgive_extra_bonds: bool=False,
-        bad_res_radius = None
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1830,9 +1827,9 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
-            box_center=mk_prep.box_center,
-            box_size=mk_prep.box_size,
-            bad_res_radius=bad_res_radius,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
         )
 
         return polymer

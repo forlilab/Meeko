@@ -42,7 +42,6 @@ mk_prep = MoleculePreparation(
     merge_these_atom_types=["H"],
     charge_model="gasteiger",
     load_atom_params="ad4_types",
-    box_center=np.array([0. ,0. ,0.])
 )
 
 
@@ -222,13 +221,24 @@ def test_bad_res_radius():
     with open(radius_test_file, "r") as f:
         pdb_string = f.read()
     polymer = Polymer.from_pdb_string(
-                pdb_string,
-                chem_templates,
-                mk_prep,
-                allow_bad_res=True,
-                bad_res_radius=10
-                )
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        delete_bad_res_from_box_radius=0,
+        box_center=[0., 0., 0.],
+        box_size=[20, 20, 20],
+    )
     assert len(polymer.monomers) == 65
+    # change radius to zero and make sure an error is raised
+    with pytest.raises(meeko.polymer.PolymerCreationError) as excinfo:
+        polymer = Polymer.from_pdb_string(
+            pdb_string,
+            chem_templates,
+            mk_prep,
+            delete_bad_res_from_box_radius=10.0,
+            box_center=[0., 0., 0.],
+            box_size=[20, 20, 20],
+        )
 
 def test_protonated_Nterm_residue():
     f = open(nphe_ser_example, "r")
