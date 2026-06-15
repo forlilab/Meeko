@@ -840,6 +840,9 @@ def handle_parsing_situations(
     allow_bad_res,
     res_missed_altloc,
     res_needed_altloc,
+    box_center = None,
+    box_size = None,
+    delete_bad_res_from_box_radius = None
     ):
 
     err = ""
@@ -847,20 +850,42 @@ def handle_parsing_situations(
         msg = f"- Parsing failed for: {unparsed_res}."
         if not allow_bad_res:
             err += msg + eol
-        else: 
+        else:
             msg += " Ignored due to allow_bad_res."
             logger.warning(msg)
 
     if unmatched_res:
         msg = f"- Template matching failed for: {list(unmatched_res)}"
-        if not allow_bad_res:
-            err += msg + eol
+        if allow_bad_res and delete_bad_res_from_box_radius is None:
+           msg += " Ignored due to allow_bad_res."
+           logger.warning(msg)
+        elif allow_bad_res and delete_bad_res_from_box_radius is not None:
+                raise ValueError("allow/delete_bad_res and delete_bad_res_from_box_radius are incompatible")
+        elif delete_bad_res_from_box_radius is not None:
+            if box_center is None or box_size is None:
+                raise ValueError("delete_bad_res_from_box_radius requires box_center and box_size")
+            if type(delete_bad_res_from_box_radius) not in [float, int]:
+                t = type(delete_bad_res_from_box_radius)
+                raise ValueError(f"delete_bad_res_from_box_radius must be float or int, but is {t}")
+            box_center_arr = np.array(box_center)
+            box_half = np.array(box_size) / 2.0
+            box_min = box_center_arr - box_half
+            box_max = box_center_arr + box_half
+            for id, monomer in unmatched_res.items():
+                pos = monomer.raw_rdkit_mol.GetConformer().GetPositions()
+                nearest_on_box = np.clip(pos, box_min, box_max)
+                diff = pos[:, np.newaxis, :] - nearest_on_box[np.newaxis, :, :]
+                dist_to_edge = np.min(np.linalg.norm(diff, axis=-1))
+                if dist_to_edge > delete_bad_res_from_box_radius:
+                    msg = f"\nIgnored {id}: {dist_to_edge:.4f} A outside box (> {delete_bad_res_from_box_radius=})."
+                    logger.warning(msg)
+                else:
+                    msg = f"\nBad res {id} is within radius of box edge ({dist_to_edge:.4f} <= {delete_bad_res_from_box_radius=:.4f} A)."
+                    err += msg + eol
         else:
-            msg += " Ignored due to allow_bad_res."
-            logger.warning(msg)
-
+            err += msg + eol
     if err:
-        err += "These residues can be ignored with option allow_bad_res." + eol
+        err += "These residues can be ignored with option --delete_bad_res or --delete_bad_res_from_box_radius." + eol
 
     if res_needed_altloc: 
         msg = f"- Residues with alternate location: {res_needed_altloc}" + eol
@@ -1477,6 +1502,9 @@ class Polymer(BaseJSONParsable):
         wanted_altloc=None,
         default_altloc=None,
         forgive_extra_bonds=False,
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1569,6 +1597,10 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
+            
         )
 
         return polymer
@@ -1587,6 +1619,9 @@ class Polymer(BaseJSONParsable):
         bonds_to_delete=None,
         blunt_ends=None,
         forgive_extra_bonds=False,
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1672,12 +1707,16 @@ class Polymer(BaseJSONParsable):
             raise PolymerCreationError(msg + "These discrepancies may compromise the validity of the charge assignment from PQR, making the charges inapplicable to the processed receptor. \n")
 
         unmatched_res = polymer.get_ignored_monomers()
+
         handle_parsing_situations(
             unmatched_res,
             unparsed_res,
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
         )
 
         return polymer
@@ -1699,6 +1738,9 @@ class Polymer(BaseJSONParsable):
         wanted_altloc: Optional[dict]=None,
         default_altloc: Optional[str]=None,
         forgive_extra_bonds: bool=False,
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1785,6 +1827,9 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
         )
 
         return polymer
