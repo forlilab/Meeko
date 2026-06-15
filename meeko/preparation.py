@@ -112,6 +112,7 @@ class MoleculePreparation:
         compute_charges=False,
         crippen=False,
         crippen_as_solpar=False,
+        scale_crippen_by_excl_vol=False,
         override_ad4sol_par_including_q=False,
         override_ad4sol_par_including_q_qasp=0.0,
     ):
@@ -200,6 +201,7 @@ class MoleculePreparation:
         self.charge_atom_prop = charge_atom_prop
         self.crippen = crippen
         self.crippen_as_solpar = crippen_as_solpar
+        self.scale_crippen_by_excl_vol = scale_crippen_by_excl_vol
         self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
         self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
 
@@ -674,10 +676,23 @@ class MoleculePreparation:
 
         if self.crippen or self.crippen_as_solpar:
             add_crippen_to_molsetup(setup)
-            if not self.crippen:
+            if not self.crippen:  # set only ad4_sol_par
                 setup.atom_params["ad4_sol_par"] = setup.atom_params.pop("crippen")
-            elif self.crippen_as_solpar:
+            elif self.crippen_as_solpar:  # set both
                 setup.atom_params["ad4_sol_par"] = [value for value in setup.atom_params["crippen"]]
+            if self.scale_crippen_by_excl_vol and self.crippen:
+                if "excl_vol" not in setup.atom_params:
+                    # meeko is configurable and allows the user to supply
+                    # custom excl_vol. But in the event that they didn't,
+                    # and to not force the user to add "ad4_excl_vol" to
+                    # load_atom_params, let's just use the default ones.
+                    par_fn = params_dir / "ad4_excl_vol.json"
+                    with open(par_fn) as f:
+                        excl_vol_params = json.load(f)
+                    AtomTyper._type_atoms(setup, excl_vol_params)
+                crippen = setup.atom_params["crippen"]
+                excl_vol = setup.atom_params["excl_vol"]
+                setup.atom_params["crippen"] = [c * v for c, v in zip(crippen, excl_vol)]
 
         if self.override_ad4sol_par_including_q:
             qasp = self.override_ad4sol_par_including_q_qasp

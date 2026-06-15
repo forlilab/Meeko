@@ -114,12 +114,19 @@ def test_mbondi():
     rdDistGeom.EmbedMolecule(mol, etkdg_v3)
     mk_prep = MoleculePreparation(load_atom_params="gb_mbondi")
     molsetup = mk_prep(mol)[0]
-    print(molsetup.atom_params)
     assert 1.3 in molsetup.atom_params["mbondi_radius"]  # H bound to N or C
     assert 0.8 in molsetup.atom_params["mbondi_radius"]  # H bound to O or S
     assert 1.2 not in molsetup.atom_params["mbondi_radius"]  # other H
     assert molsetup.atom_params["gb_screen"].count(0.72) == 4  # C
     assert molsetup.atom_params["gb_screen"].count(0.79) == 2  # N
+
+def test_crippen_scale_by_excl_vol():
+    mol = Chem.AddHs(Chem.MolFromSmiles("c1nc[nH]c1CO"))
+    etkdg_v3 = rdDistGeom.ETKDGv3()
+    rdDistGeom.EmbedMolecule(mol, etkdg_v3)
+    mk_prep = MoleculePreparation(crippen=True, scale_crippen_by_excl_vol=True)
+    molsetup = mk_prep(mol)[0]
+    assert np.max(np.abs(molsetup.atom_params["crippen"])) > 50.0
 
 def test_override_ad4sol_par_including_q():
     qasp = 0.01097
