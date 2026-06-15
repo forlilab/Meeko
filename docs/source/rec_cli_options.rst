@@ -84,10 +84,10 @@ Receptor Perception Options
    (Flag) Ignore residues with missing atoms instead of raising an error. 
    Replaces previous option -a or --allow_bad_res
 
-.. option:: --bad_res_radius
+.. option:: --delete_bad_res_from_box_radius
 
-   specify radius from box_center outside of which unmatched residues will be deleted.
-   Must be used in conjuntion with --delete_bad_res and --box_center/--box_enveloping.
+   specify radius from box surface outside of which unmatched residues will be deleted.
+   Requires --box_center or --box_enveloping. Incompatible with --delete_bad_res.
 
 .. option:: --default_altloc <location>
 
