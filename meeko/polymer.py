@@ -3,6 +3,7 @@ import json
 import logging
 import traceback
 from importlib.resources import files
+import warnings
 eol="\n"
 from sys import exc_info
 from typing import Union
@@ -25,13 +26,14 @@ from .utils.jsonutils import convert_to_int_keyed_dict
 from .utils.rdkitutils import mini_periodic_table
 from .utils.rdkitutils import react_and_map
 from .utils.rdkitutils import AtomField
-from .utils.rdkitutils import build_one_rdkit_mol_per_altloc
 from .utils.rdkitutils import _aux_altloc_mol_build
-from .utils.rdkitutils import covalent_radius
+from .utils.covalent_radius_table import covalent_radius
 from .utils.pdbutils import PDBAtomInfo
+from .utils.rdkitutils import getPdbInfoNoNull
 from .chemtempgen import export_chem_templates_to_json
 from .chemtempgen import build_noncovalent_CC
 from .chemtempgen import build_linked_CCs
+from .preparation import MoleculePreparation
 
 import numpy as np
 
@@ -126,7 +128,122 @@ def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=
     return paths_found
 
 
-def find_inter_mols_bonds(mols_dict):
+def find_inter_mols_bonds(mols_dict, 
+                          covalent_radius=covalent_radius, 
+                          periodic_table=periodic_table, 
+                          allowance=1.2):
+    """
+    Finds all bonds within betweenr residues, adjacent or non-adjacent
+    within an atom-specific covalent radius. 
+    Uses efficient implementation of KDtrees for initial pair searching .
+
+    mols_dict: dictionary of residues and associated rdkit mols
+    returns: dict[(key_i, key_j)] -> list[(atom_i, atom_j)]
+    """
+
+    # get keys
+    keys = list(mols_dict.keys())
+
+    all_xyz = [] # coordinates of ALL atoms
+    all_z = [] # atomic nums of ALL atoms
+    all_mol_id = []
+    all_atom_id = []
+
+    # Pre-check radii availability once 
+    missing = set()
+
+    for mol_i, k in enumerate(keys):
+        mol = mols_dict[k][0]
+        conf = mol.GetConformer()
+        xyz = conf.GetPositions()  # (n_i, 3) numpy array
+
+        # get z numbers
+        zs = np.array([a.GetSymbol() for a in mol.GetAtoms()])
+        for z in np.unique(zs):
+            if z not in covalent_radius:
+                missing.add(z)
+
+        # collect all info
+        n = xyz.shape[0]
+        all_xyz.append(xyz)
+        all_z.append(zs)
+        all_mol_id.append(np.full(n, mol_i, dtype=np.int32))
+        all_atom_id.append(np.arange(n, dtype=np.int32))
+
+    if missing:
+        syms = [periodic_table.GetElementSymbol(int(z)) for z in sorted(missing)]
+        raise RuntimeError(
+            f"Missing covalent radii for elements: {', '.join(syms)}"
+        )
+
+    xyz = np.vstack(all_xyz)
+    z = np.concatenate(all_z)
+    mol_id = np.concatenate(all_mol_id)
+    atom_id = np.concatenate(all_atom_id)
+
+    # radii per atom (vector)
+    rad = np.array([covalent_radius[zi] for zi in z], dtype=np.float64)
+
+    #global cutoff for candidate generation
+    max_possible_covalent_radius = 2.0 * allowance * float(max(covalent_radius.values()))
+
+    # KDtree neighbor search
+    # fast C implementation 
+    from scipy.spatial import cKDTree
+    tree = cKDTree(xyz)
+
+    # candidate atom pairs within max cutoff
+    # narrow down search
+    # returns set of (i, j) with i < j
+    cand = np.array(list(tree.query_pairs(r=max_possible_covalent_radius)), dtype=np.int64)
+    if cand.size == 0:
+        return {}
+
+    i = cand[:, 0]
+    j = cand[:, 1]
+
+    # keep only inter-monomer pairs
+    # store appropriate atom indicces in i and j
+    inter = mol_id[i] != mol_id[j]
+    i = i[inter]
+    j = j[inter]
+    if i.size == 0:
+        return {}
+
+    # element-specific covalent cutoff filter
+    thresh2 = (allowance * (rad[i] + rad[j])) ** 2
+
+    d = xyz[i] - xyz[j]
+    dist2 = np.einsum("ij,ij->i", d, d) # get square distance of each atom
+
+    ok = dist2 < thresh2
+    i = i[ok]
+    j = j[ok]
+    if i.size == 0:
+        return {}
+
+    # build result dict
+    bonds = {}
+    mi = mol_id[i]
+    mj = mol_id[j]
+
+    # ensure deterministic (key_i, key_j) ordering
+    swap = mi > mj
+    i2 = i.copy()
+    j2 = j.copy()
+    mi2 = mi.copy()
+    mj2 = mj.copy()
+    i2[swap], j2[swap] = j2[swap], i2[swap]
+    mi2[swap], mj2[swap] = mj2[swap], mi2[swap]
+
+    for a_glob, b_glob, ma, mb in zip(i2, j2, mi2, mj2):
+        key = (keys[int(ma)], keys[int(mb)])
+        val = (int(atom_id[int(a_glob)]), int(atom_id[int(b_glob)]))
+        bonds.setdefault(key, []).append(val)
+
+    return bonds
+
+def find_inter_mols_bonds_old(mols_dict):
     """
 
     Parameters
@@ -188,6 +305,204 @@ def find_inter_mols_bonds(mols_dict):
                     bonds[key].append(value)
     return bonds
 
+def find_inter_mols_bonds_kdtree_fast(mols_dict, covalent_radius, periodic_table, allowance=1.2):
+    keys = list(mols_dict.keys())
+
+    all_xyz = []
+    all_z = []
+    all_mol_id = []
+    all_atom_id = []
+
+    missing = set()
+    for mol_i, k in enumerate(keys):
+        mol = mols_dict[k][0]
+        xyz = mol.GetConformer().GetPositions()
+        zs = np.fromiter((a.GetAtomicNum() for a in mol.GetAtoms()), dtype=np.int32)
+
+        for z0 in np.unique(zs):
+            if int(z0) not in covalent_radius:
+                missing.add(int(z0))
+
+        n = xyz.shape[0]
+        all_xyz.append(xyz)
+        all_z.append(zs)
+        all_mol_id.append(np.full(n, mol_i, dtype=np.int32))
+        all_atom_id.append(np.arange(n, dtype=np.int32))
+
+    if missing:
+        syms = [periodic_table.GetElementSymbol(z) for z in sorted(missing)]
+        raise RuntimeError(f"Missing covalent radii for elements: {', '.join(syms)}")
+
+    xyz = np.vstack(all_xyz).astype(np.float64, copy=False)
+    z = np.concatenate(all_z)
+    mol_id = np.concatenate(all_mol_id)
+    atom_id = np.concatenate(all_atom_id)
+
+    rad = np.array([covalent_radius[int(zi)] for zi in z], dtype=np.float64)
+
+    max_r = 2.0 * allowance * float(max(covalent_radius.values()))
+
+    from scipy.spatial import cKDTree
+    tree = cKDTree(xyz)
+
+    # Avoid Python set from query_pairs; keep it in C/Fortran land
+    # COO gives us row/col indices + distance values directly.
+    coo = tree.sparse_distance_matrix(tree, max_r, output_type="coo_matrix")
+
+    i = coo.row.astype(np.int64, copy=False)
+    j = coo.col.astype(np.int64, copy=False)
+
+    # sparse_distance_matrix includes (i,i) with distance 0 sometimes depending on SciPy;
+    # and includes both (i,j) and (j,i) depending on options/version. Enforce i<j.
+    keep = i < j
+    i = i[keep]
+    j = j[keep]
+    dist2 = np.square(coo.data[keep]).astype(np.float64, copy=False)
+
+    # inter-residue only
+    inter = mol_id[i] != mol_id[j]
+    i = i[inter]
+    j = j[inter]
+    dist2 = dist2[inter]
+
+    if i.size == 0:
+        return {}
+
+    # element-specific covalent cutoff
+    thresh2 = np.square(allowance * (rad[i] + rad[j]))
+    ok = dist2 < thresh2
+    i = i[ok]
+    j = j[ok]
+    if i.size == 0:
+        return {}
+
+    # Canonical (mol_i, mol_j) ordering
+    mi = mol_id[i]
+    mj = mol_id[j]
+    swap = mi > mj
+    if np.any(swap):
+        i_s = i.copy()
+        j_s = j.copy()
+        mi_s = mi.copy()
+        mj_s = mj.copy()
+        i_s[swap], j_s[swap] = j_s[swap], i_s[swap]
+        mi_s[swap], mj_s[swap] = mj_s[swap], mi_s[swap]
+        i, j, mi, mj = i_s, j_s, mi_s, mj_s
+
+    # Build dict (still Python; if this dominates, return arrays instead — see below)
+    bonds = {}
+    for a_glob, b_glob, ma, mb in zip(i, j, mi, mj):
+        key = (keys[int(ma)], keys[int(mb)])
+        val = (int(atom_id[int(a_glob)]), int(atom_id[int(b_glob)]))
+        bonds.setdefault(key, []).append(val)
+
+    return bonds
+
+def find_inter_mols_bonds_kdtree(mols_dict, covalent_radius, periodic_table, allowance=1.2):
+    """
+    mols_dict: mapping key -> (rdkit_mol, whatever)
+    returns: dict[(key_i, key_j)] -> list[(atom_i, atom_j)]
+    """
+
+    # ---- flatten all atoms into arrays ----
+    keys = list(mols_dict.keys())
+
+    all_xyz = []
+    all_z = []
+    all_mol_id = []
+    all_atom_id = []
+
+    # Pre-check radii availability once (fast fail)
+    missing = set()
+
+    for mol_i, k in enumerate(keys):
+        mol = mols_dict[k][0]
+        conf = mol.GetConformer()
+        xyz = conf.GetPositions()  # (n_i, 3) numpy array
+
+        zs = np.array([a.GetAtomicNum() for a in mol.GetAtoms()], dtype=np.int32)
+        for z in np.unique(zs):
+            if z not in covalent_radius:
+                missing.add(z)
+
+        n = xyz.shape[0]
+        all_xyz.append(xyz)
+        all_z.append(zs)
+        all_mol_id.append(np.full(n, mol_i, dtype=np.int32))
+        all_atom_id.append(np.arange(n, dtype=np.int32))
+
+    if missing:
+        syms = [periodic_table.GetElementSymbol(int(z)) for z in sorted(missing)]
+        raise RuntimeError(
+            f"Missing covalent radii for elements: {', '.join(syms)}"
+        )
+
+    xyz = np.vstack(all_xyz)
+    z = np.concatenate(all_z)
+    mol_id = np.concatenate(all_mol_id)
+    atom_id = np.concatenate(all_atom_id)
+
+    # radii per atom (vector)
+    # (safe because we pre-checked)
+    rad = np.array([covalent_radius[int(zi)] for zi in z], dtype=np.float64)
+
+    # ---- global cutoff for candidate generation ----
+    max_possible_covalent_radius = 2.0 * allowance * float(max(covalent_radius.values()))
+
+    # ---- KD-tree neighbor search ----
+    from scipy.spatial import cKDTree
+    tree = cKDTree(xyz)
+
+    # candidate atom pairs within max cutoff
+    # returns set of (i, j) with i < j
+    cand = np.array(list(tree.query_pairs(r=max_possible_covalent_radius)), dtype=np.int64)
+    if cand.size == 0:
+        return {}
+
+    i = cand[:, 0]
+    j = cand[:, 1]
+
+    # keep only inter-monomer pairs
+    inter = mol_id[i] != mol_id[j]
+    i = i[inter]
+    j = j[inter]
+    if i.size == 0:
+        return {}
+
+    # ---- element-specific covalent cutoff filter ----
+    # threshold^2 = (allowance * (r_i + r_j))^2
+    thresh2 = (allowance * (rad[i] + rad[j])) ** 2
+
+    d = xyz[i] - xyz[j]
+    dist2 = np.einsum("ij,ij->i", d, d)
+
+    ok = dist2 < thresh2
+    i = i[ok]
+    j = j[ok]
+    if i.size == 0:
+        return {}
+
+    # ---- build result dict in your original format ----
+    bonds = {}
+    mi = mol_id[i]
+    mj = mol_id[j]
+
+    # ensure deterministic (key_i, key_j) ordering
+    swap = mi > mj
+    i2 = i.copy()
+    j2 = j.copy()
+    mi2 = mi.copy()
+    mj2 = mj.copy()
+    i2[swap], j2[swap] = j2[swap], i2[swap]
+    mi2[swap], mj2[swap] = mj2[swap], mi2[swap]
+
+    for a_glob, b_glob, ma, mb in zip(i2, j2, mi2, mj2):
+        key = (keys[int(ma)], keys[int(mb)])
+        val = (int(atom_id[int(a_glob)]), int(atom_id[int(b_glob)]))
+        bonds.setdefault(key, []).append(val)
+
+    return bonds
+
 
 def mapping_by_mcs(mol, ref):
     """
@@ -247,8 +562,11 @@ def divide_int_gracefully(integer, weights, allow_equal_weights_to_differ=False)
             raise ValueError("weights must be numeric and non-negative")
     if type(integer) is not int:
         raise ValueError("integer must be integer")
-    inv_total_weight = 1.0 / sum(weights)
-    shares = [w * inv_total_weight for w in weights]  # normalize
+    if sum(weights) < np.finfo(np.float32).eps:
+        shares = [1.0 / len(weights) for _ in weights]
+    else:
+        inv_total_weight = 1.0 / sum(weights)
+        shares = [w * inv_total_weight for w in weights]  # normalize
     result = [_snap_to_int(integer * s, tolerance=0.5) for s in shares]
     surplus = integer - sum(result)
     if surplus == 0:
@@ -436,8 +754,9 @@ def update_H_positions(mol: Chem.Mol, indices_to_update: list[int]) -> None:
     used_h = (
         set()
     )  # heavy atom may have multiple H that were missing, keep track of Hs that were visited
+    to_del = {k: atom.GetIdx() for k, atom in to_del.items()}
     for h_index, parent in to_del.items():
-        for atom in tmpmol.GetAtomWithIdx(parent.GetIdx()).GetNeighbors():
+        for atom in tmpmol.GetAtomWithIdx(parent).GetNeighbors():
             has_new_position = atom.GetIdx() >= mol.GetNumAtoms() - len(to_del)
             if atom.GetAtomicNum() == 1 and has_new_position:
                 if atom.GetIdx() not in used_h:
@@ -521,6 +840,9 @@ def handle_parsing_situations(
     allow_bad_res,
     res_missed_altloc,
     res_needed_altloc,
+    box_center = None,
+    box_size = None,
+    delete_bad_res_from_box_radius = None
     ):
 
     err = ""
@@ -528,20 +850,42 @@ def handle_parsing_situations(
         msg = f"- Parsing failed for: {unparsed_res}."
         if not allow_bad_res:
             err += msg + eol
-        else: 
+        else:
             msg += " Ignored due to allow_bad_res."
             logger.warning(msg)
 
     if unmatched_res:
         msg = f"- Template matching failed for: {list(unmatched_res)}"
-        if not allow_bad_res:
-            err += msg + eol
+        if allow_bad_res and delete_bad_res_from_box_radius is None:
+           msg += " Ignored due to allow_bad_res."
+           logger.warning(msg)
+        elif allow_bad_res and delete_bad_res_from_box_radius is not None:
+                raise ValueError("allow/delete_bad_res and delete_bad_res_from_box_radius are incompatible")
+        elif delete_bad_res_from_box_radius is not None:
+            if box_center is None or box_size is None:
+                raise ValueError("delete_bad_res_from_box_radius requires box_center and box_size")
+            if type(delete_bad_res_from_box_radius) not in [float, int]:
+                t = type(delete_bad_res_from_box_radius)
+                raise ValueError(f"delete_bad_res_from_box_radius must be float or int, but is {t}")
+            box_center_arr = np.array(box_center)
+            box_half = np.array(box_size) / 2.0
+            box_min = box_center_arr - box_half
+            box_max = box_center_arr + box_half
+            for id, monomer in unmatched_res.items():
+                pos = monomer.raw_rdkit_mol.GetConformer().GetPositions()
+                nearest_on_box = np.clip(pos, box_min, box_max)
+                diff = pos[:, np.newaxis, :] - nearest_on_box[np.newaxis, :, :]
+                dist_to_edge = np.min(np.linalg.norm(diff, axis=-1))
+                if dist_to_edge > delete_bad_res_from_box_radius:
+                    msg = f"\nIgnored {id}: {dist_to_edge:.4f} A outside box (> {delete_bad_res_from_box_radius=})."
+                    logger.warning(msg)
+                else:
+                    msg = f"\nBad res {id} is within radius of box edge ({dist_to_edge:.4f} <= {delete_bad_res_from_box_radius=:.4f} A)."
+                    err += msg + eol
         else:
-            msg += " Ignored due to allow_bad_res."
-            logger.warning(msg)
-
+            err += msg + eol
     if err:
-        err += "These residues can be ignored with option allow_bad_res." + eol
+        err += "These residues can be ignored with option --delete_bad_res or --delete_bad_res_from_box_radius." + eol
 
     if res_needed_altloc: 
         msg = f"- Residues with alternate location: {res_needed_altloc}" + eol
@@ -587,6 +931,27 @@ class ResidueChemTemplates(BaseJSONParsable):
         self.residue_templates = residue_templates
         self.padders = padders
         self.ambiguous = ambiguous
+
+        # also read charge template here
+        # TODO add option for custom charge template to be inputed. 
+        self.template_charges = ResidueChemTemplates._read_template_charge("template_charges")
+    
+    @classmethod
+    def _read_template_charge(cls, filename):
+        data_path = files("meeko") / "data"
+        json_file = ResidueChemTemplates.lookup_filename(filename, data_path)
+        try:
+        # Open the file in read mode ('r') using a context manager
+            with open(json_file, 'r') as file:
+                # Deserialize the JSON data into a Python dictionary
+                template_charge = json.load(file)
+        except FileNotFoundError:
+            print("Error: The file 'template_charges.json' was not found.") #
+        except json.JSONDecodeError as e:
+            print(f"Error: Failed to decode template_charges.json from the file: {e}") #
+        
+        return template_charge
+
 
     # region JSON-interchange functions
     @classmethod
@@ -687,6 +1052,8 @@ class ResidueChemTemplates(BaseJSONParsable):
         data = json.loads(jsonstr)
         self.add_dict(data)
         return
+    
+
 
     @staticmethod
     def _check_missing_padders(residue_templates, padders):
@@ -758,6 +1125,9 @@ class Polymer(BaseJSONParsable):
         mk_prep=None,
         set_template: dict[str, str] = None,
         blunt_ends: list[tuple[str, int]] = None,
+        get_atomprop_from_raw: dict = None,
+        ignore_https_cert = False,
+        forgive_extra_bonds: bool = False
     ):
         """
         Parameters
@@ -776,6 +1146,10 @@ class Polymer(BaseJSONParsable):
             A dict mapping residue IDs in the format <chain>:<resnum> such as "A:42" to ResidueTemplate instances.
         blunt_ends: list (tuple (string, int))
             A list of tuples where each tuple is residue IDs and 0-based atom index, e.g.; ("A:42", 0)
+        ignore_https_cert: Ignore https cert of PDB database (rcsb.org) when True
+        forgive_extra_bonds: bool
+            allows processing clashed structures because templates match even with excess bonds to other residues
+            at the expense of causing unpredictable problems and potentially matching incorrect templates
 
         Returns
         -------
@@ -785,6 +1159,7 @@ class Polymer(BaseJSONParsable):
         ------
         ValueError:
         """
+        
 
         # TODO simplify SMARTS for adjacent res in padders
 
@@ -800,6 +1175,9 @@ class Polymer(BaseJSONParsable):
         residue_templates = residue_chem_templates.residue_templates
         padders = residue_chem_templates.padders
         ambiguous = residue_chem_templates.ambiguous
+
+        # store a copy of bonds.
+        self.bonds = bonds.copy()
 
         if set_template is None:
             set_template = {}
@@ -849,8 +1227,8 @@ class Polymer(BaseJSONParsable):
                 rec += "2. (to skip the residues) Use --delete_residues to ignore them. Residues will be deleted from the prepared receptor. "
                 raise PolymerCreationError(err, rec)
 
-            print(err)
-            print("Trying to resolve unknown residues by building chemical templates... ")
+            warnings.warn(err, RuntimeWarning)
+            warnings.warn("Trying to resolve unknown residues by building chemical templates... ", RuntimeWarning)
 
             all_unknown_res = unknown_res_from_input.copy()
             all_unknown_res.update(unknown_res_from_assign)
@@ -865,7 +1243,7 @@ class Polymer(BaseJSONParsable):
             if unbound_unknown_res: 
                 for resname in set(unbound_unknown_res.values()): 
                     try: 
-                        cc = build_noncovalent_CC(resname)
+                        cc = build_noncovalent_CC(resname, ignore_https_cert=ignore_https_cert)
                         fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
                         residue_templates.update({resname: ResidueTemplate(
                                                     smiles = fetch_template_dict['smiles'],
@@ -873,14 +1251,14 @@ class Polymer(BaseJSONParsable):
                                                     link_labels = fetch_template_dict['link_labels'])})
                         ambiguous[resname] = [cc.resname]
                     except Exception as e: 
-                        print(f"Failed building template from CCD for {resname=}")
+                        logger.warning(f"Failed building template from CCD for {resname=}")
                         raise PolymerCreationError(str(e))
 
             if bonded_unknown_res: 
                 failed_build = set()
                 try: 
                     for resname in set(bonded_unknown_res.values()): 
-                        cc_list = build_linked_CCs(resname)
+                        cc_list = build_linked_CCs(resname, ignore_https_cert=ignore_https_cert)
                         if not cc_list: 
                             failed_build.add(resname)
                         else:
@@ -910,6 +1288,7 @@ class Polymer(BaseJSONParsable):
             set_template,
             bonds,
             blunt_ends,
+            forgive_extra_bonds,
         )
 
         _bonds = {}
@@ -931,7 +1310,7 @@ class Polymer(BaseJSONParsable):
             monomer.molsetup_mapidx = mapidx_from_pad
 
         if mk_prep is not None:
-            self.parameterize(mk_prep)
+            self.parameterize(mk_prep, get_atomprop_from_raw = get_atomprop_from_raw)
 
         return
     
@@ -959,6 +1338,125 @@ class Polymer(BaseJSONParsable):
     }
 
     @classmethod
+    def _combine_many_mols_tree(cls, mols):
+        r"""tree-like compbination of mols iterable (nlog(n) cost).
+
+            mols: 
+            (a,b)   (c,d)
+              \       /
+               (ab, cd)
+                   |
+                 abcd   
+
+        """
+        mols = list(mols)
+        if not mols:
+            return Chem.Mol()
+        while len(mols) > 1:
+            nxt = []
+            it = iter(mols)
+            for a in it:
+                b = next(it, None)
+                nxt.append(Chem.CombineMols(a, b) if b is not None else a)
+            mols = nxt
+        return mols[0]
+
+    def to_rdkit_mol(self, residues_to_add: Optional[set[str]] = None, 
+               bonds_to_use: Optional[dict[tuple[str], list[tuple[int]]]] = None):
+        """returns a single rdkit molecule that results from adding bonds
+            between every monomer residue. It may contain multiple fragments
+            if there are multiple chains or gaps. 
+
+            Optionally, specify a set of residue IDs for stitching.
+            Defaults to stitching all monomers. 
+
+            Optionally, specify a dict for bonds to use, 
+            Defaults to stitching using all available bonds in polymer. 
+            key format: (res_id_1, res_id_2)
+            value format: [(atom_idx_1, atom_idx_2), ]
+            same format as output from function find_inter_mols_bonds, 
+            but the indices need to based on rdkit_mol. 
+        """
+        
+        # stitching all valid monomers by default
+        valid_monomers = set(self.get_valid_monomers().keys())
+        residues_to_add = residues_to_add or valid_monomers
+        residues_to_add = set(residues_to_add)
+
+        # verify if requested monomers are valid (have rdkit_mol)
+        invalid_monomers = residues_to_add - valid_monomers
+        if invalid_monomers: 
+            raise ValueError(f"Residue IDs not in valid monomers: {invalid_monomers}")
+
+        if bonds_to_use is None:
+            bonds_to_use = {}
+            resid_to_rawmols = {res_id: (self.monomers[res_id].raw_rdkit_mol, self.monomers[res_id].input_resname) for res_id in residues_to_add}
+
+            # check if bonds is None or empty. 
+            if self.bonds is None or not self.bonds: 
+                bonds_indexed_in_raw = find_inter_mols_bonds(resid_to_rawmols)
+            else:
+                bonds_indexed_in_raw = {(r1, r2): v for (r1, r2), v in self.bonds.items() if r1 in residues_to_add and r2 in residues_to_add}
+
+            invmaps = {
+                res_id: {j: i for i, j in self.monomers[res_id].mapidx_to_raw.items()}
+                for res_id in residues_to_add
+            }
+            for (res1, res2), bond_list in bonds_indexed_in_raw.items():
+                invmap1, invmap2 = invmaps[res1], invmaps[res2]
+                bonds_to_use[(res1, res2)] = [(invmap1[b[0]], invmap2[b[1]]) for b in bond_list]
+        
+        # initialize mol and residue/bond tracking
+        mol = Chem.Mol()
+        residues_added = {}
+        bonds_spent = set()
+        
+        # add residues and get offset in order
+        offset = 0
+        mols = []
+        for r_id in residues_to_add:
+            res = self.monomers[r_id]
+            m = res.rdkit_mol
+            residues_added[r_id] = offset
+            offset += m.GetNumAtoms()
+            # mol = Chem.CombineMols(mol, res.rdkit_mol)
+            mols.append(m)
+
+        mol = Polymer._combine_many_mols_tree(mols)
+
+        # add bonds
+        edit_mol = Chem.EditableMol(mol)
+        for bond_key, bond_list in bonds_to_use.items():
+            if bond_key in bonds_spent:
+                continue
+            r1, r2 = bond_key
+            if r1 in residues_added and r2 in residues_added:
+                bonds_spent.add(bond_key)
+                for bond in bond_list: 
+                    i, j = bond
+                    edit_mol.AddBond(
+                        i + residues_added[r1],
+                        j + residues_added[r2],
+                        order=Chem.rdchem.BondType.SINGLE
+                    )
+        mol = edit_mol.GetMol()
+
+        
+        # review added bonds and residues
+        if len(bonds_spent) != len(bonds_to_use):
+            raise RuntimeError("nr of bonds added differs from bonds to use")
+        if len(residues_added) != len(residues_to_add):
+            raise RuntimeError("nr of residues added differs from residues to add")
+        
+        return mol
+    
+    # for backwards compatibility. 
+    def stitch(self, residues_to_add = None, 
+               bonds_to_use = None):
+        """ Alias of polymer.to_rdkit_mol."""
+        return self.to_rdkit_mol(residues_to_add, bonds_to_use)
+
+    @classmethod
     def _decode_object(cls, obj: dict[str, Any]): 
 
         # Deserializes ResidueChemTemplates from the dict to use as an input, then constructs a Polymer object
@@ -969,27 +1467,44 @@ class Polymer(BaseJSONParsable):
 
         polymer = cls({}, {}, residue_chem_templates)
 
-        polymer.monomers = {
-            k: Monomer.from_dict(v) for k, v in obj["monomers"].items()
-        }
+        polymer.monomers = {}
+        templates = residue_chem_templates.residue_templates
+        for k, v in obj["monomers"].items():
+            monomer = Monomer.from_dict(v)
+            if monomer.template is None:  # JSON-bound only from v0.7.0
+                # try to recover template from stored templates
+                residue_key = monomer.residue_template_key
+                monomer.template = templates.get(residue_key, None)
+            polymer.monomers[k] = monomer
         polymer.log = obj["log"]
 
         return polymer
     # endregion
+
+    @classmethod
+    def from_pdb_file(cls, filename, *args, **kwargs):
+        with open(filename) as f:
+            pdb_string = f.read()
+        return cls.from_pdb_string(pdb_string, *args, **kwargs)
     
     @classmethod
     def from_pdb_string(
         cls,
         pdb_string,
-        chem_templates,
-        mk_prep,
+        chem_templates=None,
+        mk_prep=None,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc=None,
-        default_altloc=None
+        default_altloc=None,
+        forgive_extra_bonds=False,
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1000,21 +1515,142 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
         wanted_altloc
         default_altloc
+        forgive_extra_bonds
 
         Returns
         -------
 
         """
 
+        #Set default mk_prep and chem_templates if not available. 
+        if chem_templates is None:
+            chem_templates = ResidueChemTemplates.create_from_defaults()
+
+        if mk_prep is None:
+            mk_prep = MoleculePreparation()
+
         tmp_raw_input_mols = cls._pdb_to_residue_mols(
             pdb_string,
             wanted_altloc,
             default_altloc,
+        )
+
+        # from here on it duplicates self.from_prody(), but extracting
+        # this out into a function felt like it sacrificed readibility
+        # so I decided to keep the duplication.
+        _delete_residues(residues_to_delete, tmp_raw_input_mols)
+        raw_input_mols = {}
+        res_needed_altloc = []
+        res_missed_altloc = []
+        unparsed_res = []
+        for res_id, stuff in tmp_raw_input_mols.items():
+            mol, resname, missed_altloc, needed_altloc = stuff
+            if mol is None and missed_altloc:
+                res_missed_altloc.append(res_id)
+            elif mol is None and needed_altloc:
+                res_needed_altloc.append(res_id)
+            elif mol is None:
+                unparsed_res.append(res_id)
+            else:
+                raw_input_mols[res_id] = (mol, resname)
+
+        # bonds_old = find_inter_mols_bonds_old(raw_input_mols)
+
+        bonds = find_inter_mols_bonds(raw_input_mols)
+
+        if bonds_to_delete is not None:
+            for res1, res2 in bonds_to_delete:
+                popped = ()
+                if (res1, res2) in bonds:
+                    popped = bonds.pop((res1, res2))
+                elif (res2, res1) in bonds:
+                    popped = bonds.pop((res2, res1))
+                if len(popped) >= 2:
+                    msg = (
+                        "can't delete bonds for residue pairs that have more"
+                        " than one bond between them"
+                    )
+                    raise NotImplementedError(msg)
+
+        polymer = cls(
+            raw_input_mols,
+            bonds,
+            chem_templates,
+            mk_prep,
+            set_template,
+            blunt_ends,
+            None,
+            ignore_https_cert,
+            forgive_extra_bonds=forgive_extra_bonds
+        )
+
+        unmatched_res = polymer.get_ignored_monomers()
+        handle_parsing_situations(
+            unmatched_res,
+            unparsed_res,
+            allow_bad_res,
+            res_missed_altloc,
+            res_needed_altloc,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
+            
+        )
+
+        return polymer
+
+    # region adapted from from_pdb_string
+    @classmethod
+    def from_pqr_string(
+        cls,
+        pqr_string,
+        chem_templates=None,
+        mk_prep=None,
+        set_template=None,
+        residues_to_delete=None,
+        ignore_https_cert=False,
+        allow_bad_res=False,
+        bonds_to_delete=None,
+        blunt_ends=None,
+        forgive_extra_bonds=False,
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
+    ):
+        """
+
+        Parameters
+        ----------
+        pdb_string
+        chem_templates
+        mk_prep
+        set_template
+        residues_to_delete
+        ignore_https_cert
+        allow_bad_res
+        bonds_to_delete
+        blunt_ends
+        forgive_extra_bonds
+
+        Returns
+        -------
+
+        """
+
+        #Set default mk_prep and chem_templates if not available. 
+        if chem_templates is None:
+            chem_templates = ResidueChemTemplates.create_from_defaults()
+        if mk_prep is None:
+            mk_prep = MoleculePreparation()
+
+        tmp_raw_input_mols = cls._pqr_to_residue_mols(
+            pqr_string,
         )
 
         # from here on it duplicates self.from_prody(), but extracting
@@ -1049,6 +1685,7 @@ class Polymer(BaseJSONParsable):
                         " than one bond between them"
                     )
                     raise NotImplementedError(msg)
+                
         polymer = cls(
             raw_input_mols,
             bonds,
@@ -1056,33 +1693,54 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            get_atomprop_from_raw = {"PQRCharge": 0.},
+            ignore_https_cert=ignore_https_cert,
+            forgive_extra_bonds=forgive_extra_bonds,
         )
 
+        if polymer.log["matched_with_H_anomaly"]:
+            msg = ""
+            for res_id, (template_name, h_info) in polymer.log["matched_with_H_anomaly"].items():
+                h_miss = h_info.get('H_miss', 0)
+                h_excess = h_info.get('H_excess', 0)
+                msg += f"Residue {res_id} matched with template '{template_name}' has H discrepancy: {h_miss} missing, {h_excess} excess. \n"
+            raise PolymerCreationError(msg + "These discrepancies may compromise the validity of the charge assignment from PQR, making the charges inapplicable to the processed receptor. \n")
+
         unmatched_res = polymer.get_ignored_monomers()
+
         handle_parsing_situations(
             unmatched_res,
             unparsed_res,
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
         )
 
         return polymer
+    # endregion
 
-
+            
     @classmethod
     def from_prody(
         cls,
         prody_obj: Union[Selection, AtomGroup],
-        chem_templates,
-        mk_prep,
+        chem_templates=None,
+        mk_prep=None,
         set_template=None,
         residues_to_delete=None,
+        ignore_https_cert=False,
         allow_bad_res=False,
         bonds_to_delete=None,
         blunt_ends=None,
         wanted_altloc: Optional[dict]=None,
         default_altloc: Optional[str]=None,
+        forgive_extra_bonds: bool=False,
+        delete_bad_res_from_box_radius=None,
+        box_size=None,
+        box_center=None,
     ):
         """
 
@@ -1093,16 +1751,24 @@ class Polymer(BaseJSONParsable):
         mk_prep
         set_template
         residues_to_delete
+        ignore_https_cert
         allow_bad_res
         bonds_to_delete
         blunt_ends
         wanted_altloc
         default_altloc
+        forgive_extra_bonds
 
         Returns
         -------
 
         """
+
+        #Set default mk_prep and chem_templates if not available. 
+        if chem_templates is None:
+            chem_templates = ResidueChemTemplates.create_from_defaults()
+        if mk_prep is None:
+            mk_prep = MoleculePreparation()
 
         tmp_raw_input_mols = cls._prody_to_residue_mols(
             prody_obj,
@@ -1150,6 +1816,9 @@ class Polymer(BaseJSONParsable):
             mk_prep,
             set_template,
             blunt_ends,
+            None,
+            ignore_https_cert,
+            forgive_extra_bonds=forgive_extra_bonds
         )
         unmatched_res = polymer.get_ignored_monomers()
         handle_parsing_situations(
@@ -1158,11 +1827,14 @@ class Polymer(BaseJSONParsable):
             allow_bad_res,
             res_missed_altloc,
             res_needed_altloc,
+            box_center=box_center,
+            box_size=box_size,
+            delete_bad_res_from_box_radius=delete_bad_res_from_box_radius,
         )
 
         return polymer
 
-    def parameterize(self, mk_prep):
+    def parameterize(self, mk_prep, get_atomprop_from_raw = None):
         """
 
         Parameters
@@ -1174,8 +1846,25 @@ class Polymer(BaseJSONParsable):
 
         """
 
-        for residue_id in self.get_valid_monomers():
-            self.monomers[residue_id].parameterize(mk_prep, residue_id)
+        for residue_id, monomer in self.get_valid_monomers().items():
+            monomer.parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
+
+    def flexibilize_sidechain(self, residue_id, mk_prep):
+        if residue_id not in self.get_valid_monomers():
+            raise ValueError(f"{residue_id=} not in valid monomers")
+        return self.monomers[residue_id].flexibilize(mk_prep)
+
+    def rigidify_sidechain(self, residue_id, mk_prep):
+        if residue_id not in self.get_valid_monomers():
+            raise ValueError(f"{residue_id=} not in valid monomers")
+        return self.monomers[residue_id].rigidify(mk_prep, residue_id)
+
+    def rigidify_all(self, mk_prep):
+        for residue_id, monomer in self.get_valid_monomers().items():
+            if monomer.is_movable:
+                monomer.rigidify(mk_prep, residue_id)
+        return
+
 
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
@@ -1256,6 +1945,7 @@ class Polymer(BaseJSONParsable):
         set_template,
         bonds,
         blunt_ends,
+        forgive_extra_bonds=False,
     ):
         """
 
@@ -1274,10 +1964,13 @@ class Polymer(BaseJSONParsable):
         """
 
         residue_templates = residue_chem_templates.residue_templates
+        template_charges = residue_chem_templates.template_charges
         monomers = {}
         log = {
             "chosen_by_fewest_missing_H": {},
             "chosen_by_default": {},
+            "matched_with_H_anomaly": {},
+            "matched_with_excess_bond": [],
             "no_match": [],
             "no_mol": [],
             "msg": "",
@@ -1398,23 +2091,24 @@ class Polymer(BaseJSONParsable):
                         or all_stats["heavy_excess"][i]
                         or (not set(all_stats["H_excess"][i]) <= set(candidate_templates[i].link_labels) and not excess_H_ok)
                         or not all_stats["bonded_atoms_missing"][i] <= auto_blunt
-                        or len(all_stats["bonded_atoms_excess"][i])
+                        or (len(all_stats["bonded_atoms_excess"][i]) and not forgive_extra_bonds)
                     ):
                         continue
                     passed.append(i)
 
             # 3rd round
-            if len(passed) == 0: 
+            if len(passed) == 0 or any(all_stats["H_excess"][i] for i in passed): 
                 for i in range(len(candidate_templates)):
                     if (
                         all_stats["heavy_missing"][i]
                         or all_stats["heavy_excess"][i]
                         or (all_stats["H_excess"][i] and not excess_H_ok)
                         or len(all_stats["bonded_atoms_missing"][i])
-                        or len(all_stats["bonded_atoms_excess"][i])
+                        or (len(all_stats["bonded_atoms_excess"][i]) and not forgive_extra_bonds)
                     ):
                         continue
-                    passed.append(i)
+                    if i not in passed:
+                        passed.append(i)
 
             if len(passed) == 0:
                 template_key = None
@@ -1441,10 +2135,9 @@ class Polymer(BaseJSONParsable):
                 template_key = candidate_template_keys[index]
                 template = candidate_templates[index]
                 mapping = mappings[index]
-                H_miss = all_stats["H_missing"][index]
             else:
                 min_missing_H = 999999
-                for i, index in enumerate(passed):
+                for index in passed:
                     H_missed = all_stats["H_missing"][index]
                     if H_missed < min_missing_H:
                         best_idxs = []
@@ -1453,20 +2146,37 @@ class Polymer(BaseJSONParsable):
                         best_idxs.append(index)
 
                 if len(best_idxs) > 1:
-                    tied = " ".join(candidate_template_keys[i] for i in best_idxs)
-                    m = f"for {residue_key=}, {len(passed)} have passed: "
-                    tkeys = [candidate_template_keys[i] for i in passed]
-                    m += f"{tkeys} and tied for fewest missing H: {tied} "
-                    raise RuntimeError(m)
-                elif len(best_idxs) == 0:
-                    raise RuntimeError("unexpected situation")
-                else:
-                    index = best_idxs[0]
-                    template_key = candidate_template_keys[index]
-                    template = residue_templates[template_key]
-                    mapping = mappings[index]
-                    H_miss = all_stats["H_missing"][index]
-                    log["chosen_by_fewest_missing_H"][residue_key] = template_key
+                    number_excess_H = [len(all_stats["H_excess"][index]) for index in best_idxs]
+                    min_excess_H = min(number_excess_H)
+                    best_idxs = [index for index in best_idxs if len(all_stats["H_excess"][index]) == min_excess_H]
+                    
+                    if len(best_idxs) > 1: 
+                        tied = " ".join(candidate_template_keys[i] for i in best_idxs)
+                        m = f"for {residue_key=}, {len(passed)} have passed: "
+                        tkeys = [candidate_template_keys[i] for i in passed]
+                        m += f"{tkeys} and tied for fewest missing and excess H: {tied} "
+
+                        raise RuntimeError(m)
+                
+                index = best_idxs[0]
+                template_key = candidate_template_keys[index]
+                template = residue_templates[template_key]
+                mapping = mappings[index]
+                H_miss = all_stats["H_missing"][index]
+                log["chosen_by_fewest_missing_H"][residue_key] = template_key
+
+            H_miss = all_stats["H_missing"][index]
+            H_excess = all_stats["H_excess"][index]
+            if H_miss or H_excess: 
+                log["matched_with_H_anomaly"][residue_key] = [
+                    template_key, 
+                    {"H_miss": H_miss, "H_excess": len(H_excess)}
+                ]
+            bond_excess = all_stats["bonded_atoms_excess"][index]
+            if bond_excess:
+                log["matched_with_excess_bond"].append(residue_key)
+                logger.warning(f"matched with excess inter-residue bond(s): {residue_key}")
+
             if template is None:
                 rdkit_mol = None
                 atom_names = None
@@ -1488,13 +2198,10 @@ class Polymer(BaseJSONParsable):
                 atom_names,
             )
             monomers[residue_key].template = template
-            if template is not None and template.link_labels is not None:
-                mapping_inv = monomers[
-                    residue_key
-                ].mapidx_from_raw  # {j: i for (i, j) in mapping.items()}
-                # TODO check here mapping_inv unnused
-                link_labels = {i: label for i, label in template.link_labels.items()}
-                monomers[residue_key].link_labels = link_labels
+            if template_key is not None and template_key in template_charges:
+                monomers[residue_key].template_charge = template_charges[template_key]
+            else:
+                monomers[residue_key].template_charge = None
 
         return monomers, log
 
@@ -1514,140 +2221,109 @@ class Polymer(BaseJSONParsable):
         """
         padded_mols = {}
         bond_use_count = {key: 0 for key in bonds}
-        for (
-            residue_id,
-            monomer,
-        ) in monomers.items():
+
+        for residue_id, monomer in monomers.items():
             if monomer.rdkit_mol is None:
                 continue
+
             padded_mol = monomer.rdkit_mol
-            mapidx_pad = {
-                atom.GetIdx(): atom.GetIdx() for atom in padded_mol.GetAtoms()
-            }
-            for atom_index, link_label in monomer.link_labels.items():
-                adjacent_rid = None
-                adjacent_mol = None
-                adjacent_atom_index = None
+            mapidx_pad = {atom.GetIdx(): atom.GetIdx() for atom in padded_mol.GetAtoms()}
+            padded_links = set()
+
+            for atom_index, link_label in monomer.template.link_labels.items():
+                if (atom_index, link_label) in padded_links:
+                    continue
+
+                # Find all bonds involving this link atom
+                found_bond = False
                 for (r1_id, r2_id), bond_list in bonds.items():
-                    # TODO the second and subsequent bonds between a pair of
-                    # residues will not update the padding atoms with the
-                    # positions of the adjacent residues. This is OK, the same
-                    # happens for blunt residues, because the adjacent residue
-                    # is missing.
-                    i1, i2 = bond_list[0]
-                    if r1_id == residue_id and i1 == atom_index:
-                        adjacent_rid = r2_id
-                        adjacent_atom_index = i2
+                    for idx1, idx2 in bond_list:
+                        if r1_id == residue_id and idx1 == atom_index:
+                            adjacent_rid = r2_id
+                            adjacent_atom_index = idx2
+                            adjacent_mol = monomers[adjacent_rid].rdkit_mol
+                            bond_use_count[(r1_id, r2_id)] += 1
+                            found_bond = True
+                            break
+                        elif r2_id == residue_id and idx2 == atom_index:
+                            adjacent_rid = r1_id
+                            adjacent_atom_index = idx1
+                            adjacent_mol = monomers[adjacent_rid].rdkit_mol
+                            bond_use_count[(r1_id, r2_id)] += 1
+                            found_bond = True
+                            break
+                    if found_bond:
                         break
-                    elif r2_id == residue_id and i2 == atom_index:
-                        adjacent_rid = r1_id
-                        adjacent_atom_index = i1
-                        break
-                
-                if adjacent_rid is not None:
-                    adjacent_mol = monomers[adjacent_rid].rdkit_mol
-                    bond_use_count[(r1_id, r2_id)] += 1
-                
+
+                if not found_bond:
+                    adjacent_mol = None
+                    adjacent_atom_index = None
+
+                # Always call the padder
                 padded_mol, mapidx = padders[link_label](
                     padded_mol, adjacent_mol, atom_index, adjacent_atom_index
                 )
 
+                # Update mapidx_pad
                 tmp = {}
                 for i, j in enumerate(mapidx):
                     if j is None:
-                        continue  # new padding atom
+                        continue  # new atom
                     if j not in mapidx_pad:
-                        continue  # padding atom from previous iteration for another link_label
+                        continue  # previously added atom, not traceable
                     tmp[i] = mapidx_pad[j]
                 mapidx_pad = tmp
+                padded_links.add((atom_index, link_label))
 
-            # update position of hydrogens bonded to link atoms
-            inv = {j: i for (i, j) in mapidx_pad.items()}
-            padded_idxs_to_update = []
-            no_pad_idxs_to_update = []
-            for atom_index in monomer.link_labels:
+            # Update hydrogen positions and add hydrogens
+            inv_map = {v: k for k, v in mapidx_pad.items()}
+            padded_H_idxs = []
+            padded_H_idxs_in_rdkit_mol = []
+
+            for atom_index in monomer.template.link_labels:
                 heavy_atom = monomer.rdkit_mol.GetAtomWithIdx(atom_index)
                 for neighbor in heavy_atom.GetNeighbors():
                     if neighbor.GetAtomicNum() != 1:
                         continue
                     if neighbor.GetIdx() in monomer.mapidx_to_raw:
-                        # index of H exists in mapidx_to_raw, which means that
-                        # the raw_input_mol had the hydrogen. Thus, we do not
-                        # want to update its coordiantes.
-                        continue
-                    no_pad_idxs_to_update.append(neighbor.GetIdx())
-                    padded_idxs_to_update.append(inv[neighbor.GetIdx()])
-            update_H_positions(padded_mol, padded_idxs_to_update)
+                        continue  # already has a known position
+                    padded_idx = inv_map.get(neighbor.GetIdx())
+                    if padded_idx is not None:
+                        padded_H_idxs.append(padded_idx)
+                        padded_H_idxs_in_rdkit_mol.append(neighbor.GetIdx())
+
+            update_H_positions(padded_mol, padded_H_idxs)
+            padded_mols[residue_id] = (padded_mol, mapidx_pad)
+
+            # update added H positions in Monomer.rdkit_mol, just in case anyone
+            # considers those positions (as Polymer.to_pdb() used to).
             source = padded_mol.GetConformer()
             destination = monomer.rdkit_mol.GetConformer()
-            for i, j in zip(no_pad_idxs_to_update, padded_idxs_to_update):
-                destination.SetAtomPosition(i, source.GetAtomPosition(j))
-                # can invert chirality in 3D positions
+            for i, j in zip(padded_H_idxs, padded_H_idxs_in_rdkit_mol):
+                destination.SetAtomPosition(j, source.GetAtomPosition(i))
 
-            padded_mols[residue_id] = (padded_mol, mapidx_pad)
-                
-
-        # verify that all bonds resulted in padding
+        # Validate all bonds were used twice (A padded with B, and B with A)
         err_msg = ""
-        for key, count in bond_use_count.items():
-            if count != 2:
+        for (r1, r2), bond_list in bonds.items():
+            expected = 2 * len(bond_list)
+            actual = bond_use_count[(r1, r2)]
+            if actual != expected:
                 err_msg += (
-                    f"expected two paddings for {key} {bonds[key]}, padded {count}"
-                    + eol
+                    f"Expected {expected} paddings for ({r1}, {r2}) with bonds {bond_list}, "
+                    f"but got {actual}\n"
                 )
-        if len(err_msg):
+        if err_msg:
             raise RuntimeError(err_msg)
+
         return padded_mols
 
-    def flexibilize_sidechain(self, residue_id, mk_prep):
-        """
-
-        Parameters
-        ----------
-        residue_id
-        mk_prep
-
-        Returns
-        -------
-
-        """
-        monomer = self.monomers[residue_id]
-        inv = {j: i for i, j in monomer.molsetup_mapidx.items()}
-        link_atoms = [inv[i] for i in monomer.template.link_labels]
-        if len(link_atoms) == 0:
-            raise RuntimeError(
-                "can't define a sidechain without bonds to other residues"
-            )
-        # TODO: rewrite this to work better with new MoleculeSetups
-        graph = {atom.index: atom.graph for atom in monomer.molsetup.atoms}
-        for i in range(len(link_atoms) - 1):
-            start_node = link_atoms[i]
-            end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
-            backbone_paths = find_graph_paths(graph, start_node, end_nodes)
-            for path in backbone_paths:
-                for x in range(len(path) - 1):
-                    idx1 = min(path[x], path[x + 1])
-                    idx2 = max(path[x], path[x + 1])
-                    monomer.molsetup.bond_info[(idx1, idx2)].rotatable = False
-        monomer.is_movable = True
-
-        mk_prep.calc_flex(
-            monomer.molsetup,
-            root_atom_index=link_atoms[0],
-        )
-
-        molsetup = monomer.molsetup
-        is_rigid_atom = [False for _ in molsetup.atoms]
-        graph = molsetup.flexibility_model["rigid_body_graph"]
-        root_body_idx = molsetup.flexibility_model["root"]
-        conn = molsetup.flexibility_model["rigid_body_connectivity"]
-        rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
-        # from the root, use only the atom that is bonded to the only rotatable bond
-        for other_body_idx in graph[root_body_idx]:
-            root_link_atom_idx = conn[(root_body_idx, other_body_idx)][0]
-            for atom_idx, body_idx in rigid_index_by_atom.items():
-                if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
-                    monomer.is_flexres_atom[atom_idx] = True
+    
+    @staticmethod
+    def _add_if_new(to_dict, key, value, repeat_log):
+        if key in to_dict:
+            repeat_log.add(key)
+        else:
+            to_dict[key] = value
         return
 
     @staticmethod
@@ -1675,16 +2351,9 @@ class Polymer(BaseJSONParsable):
         interrupted_residues = set()
         pdb_block = []
 
-        def _add_if_new(to_dict, key, value, repeat_log):
-            if key in to_dict:
-                repeat_log.add(key)
-            else:
-                to_dict[key] = value
-            return
-
         for line in pdb_string.splitlines(True):
             if line.startswith("TER") and reskey is not None:
-                _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+                Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
                 blocks_by_residue[reskey] = pdb_block
                 pdb_block = []
                 reskey = None
@@ -1712,7 +2381,7 @@ class Polymer(BaseJSONParsable):
                     pdb_block.append(atom)
                 else:
                     if buffered_reskey is not None:
-                        _add_if_new(
+                        Polymer._add_if_new(
                             blocks_by_residue,
                             buffered_reskey,
                             pdb_block,
@@ -1722,7 +2391,7 @@ class Polymer(BaseJSONParsable):
                     pdb_block = [atom]
 
         if pdb_block:  # there was not a TER line
-            _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+            Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
 
         if interrupted_residues:
             msg = f"interrupted residues in PDB: {interrupted_residues}"
@@ -1739,12 +2408,179 @@ class Polymer(BaseJSONParsable):
             wanted_altloc = {}
         raw_input_mols = {}
         for reskey, atom_field_list in blocks_by_residue.items():
-            requested_altloc = wanted_altloc.get(reskey, None)
+            resname = list(reskey_to_resname[reskey])[0]  # verified length 1
+            requested_altloc = wanted_altloc.get(reskey, None)  
+            try:
+                pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
+                    atom_field_list,
+                    requested_altloc,
+                    default_altloc,
+                )
+            except:
+                msg = f"unable to build rdkit mol for residue {resname} corresponding to key {reskey}"
+                raise RuntimeError(msg) 
+            raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
+
+        return raw_input_mols
+    
+
+    @staticmethod
+    def _pqr_to_residue_mols(
+        pqr_string
+    ):
+        blocks_by_residue = {}
+        blocks_qr = {}
+        reskey_to_resname = {}
+        reskey = None
+        buffered_reskey = None
+
+        # residues in non-consecutive lines due to TER or another res
+        interrupted_residues = set()
+        pdb_block = []
+
+        def get_pqr_atom_items(pqr_line): 
+            """
+            based on pdb2pqr.structures.Atom.from_pqr_line
+            """
+            items = [w.strip() for w in pqr_line.split()]
+            token = items.pop(0)
+            if token in [
+                "REMARK",
+                "TER",
+                "END",
+                "HEADER",
+                "TITLE",
+                "COMPND",
+                "SOURCE",
+                "KEYWDS",
+                "EXPDTA",
+                "AUTHOR",
+                "REVDAT",
+                "JRNL",
+            ]:
+                return None
+            elif token in ["ATOM", "HETATM"]:
+                return items
+            elif token[:4] == "ATOM":
+                return token[4:] + items
+            elif token[:6] == "HETATM": 
+                return token[6:] + items
+            else:
+                err = f"Unable to parse PQR line: {pqr_line}"
+                raise ValueError(err)
+
+        def atom_from_pqr_items(atom_pqr_items: list[str]) -> tuple[AtomField, float]: 
+
+            if not atom_pqr_items: 
+                return None
+            
+            atom_serial = int(atom_pqr_items.pop(0)) # Meeko doesn't need atom_serial (ID)
+            atomname = atom_pqr_items.pop(0)
+            element = next((char for char in atomname if char.isalpha()), None)
+            if element is None: 
+                err = f"Unable to parse element from PQR atomname: {atomname}"
+                raise ValueError(err)
+            element = element.upper()
+
+            altloc = "" # PQR doesn't have altloc
+            resname = atom_pqr_items.pop(0)
+
+            token = atom_pqr_items.pop(0)
+            chainid = "" # Optional in PQR 
+            try:
+                resnum = int(token) # Must be int in PQR
+            except ValueError:
+                chainid = token
+                resnum = int(atom_pqr_items.pop(0))
+
+            token = atom_pqr_items.pop(0)
+            icode = "" # Optional in PQR 
+            try:
+                x = float(token)
+            except ValueError:
+                icode = token 
+                x = float(atom_pqr_items.pop(0))
+
+            y = float(atom_pqr_items.pop(0))
+            z = float(atom_pqr_items.pop(0))
+
+            charge = float(atom_pqr_items.pop(0))
+            radius = float(atom_pqr_items.pop(0))
+
+            return (
+                AtomField(
+                        atomname, altloc, resname, chainid,
+                        resnum, icode, x, y, z, element,
+                ), 
+                charge, radius, 
+            )
+
+        # region adapted from _pdb_to_residue_mols
+        for line in pqr_string.splitlines(True):
+            pqr_items = get_pqr_atom_items(line)
+            if pqr_items is None and reskey is not None:
+                Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+                blocks_by_residue[reskey] = pdb_block
+                blocks_qr[reskey] = block_qr
+                pdb_block = []
+                block_qr = []
+                reskey = None
+                buffered_reskey = None
+            if pqr_items:
+                atom, pqr_charge, pqr_radius = atom_from_pqr_items(pqr_items)
+                reskey = f"{atom.chain}:{atom.resnum}{atom.icode}"
+                resname = atom.resname
+                reskey_to_resname.setdefault(reskey, set())
+                reskey_to_resname[reskey].add(resname)
+
+                if reskey == buffered_reskey:  # this line continues existing residue
+                    pdb_block.append(atom)
+                    block_qr.append((pqr_charge, pqr_radius))
+                else:
+                    if buffered_reskey is not None:
+                        Polymer._add_if_new(
+                            blocks_by_residue,
+                            buffered_reskey,
+                            pdb_block,
+                            interrupted_residues,
+                        )
+                        blocks_qr[buffered_reskey] = block_qr
+                    buffered_reskey = reskey
+                    pdb_block = [atom]
+                    block_qr = [(pqr_charge, pqr_radius)]
+
+        if pdb_block:  # there was not a TER line
+            Polymer._add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+            blocks_qr[reskey] = block_qr
+
+        if interrupted_residues:
+            msg = f"interrupted residues in PDB: {interrupted_residues}"
+            raise ValueError(msg)
+
+        # verify that each identifier (e.g. "A:17" has a single resname
+        violations = {k: v for k, v in reskey_to_resname.items() if len(v) != 1}
+        if len(violations):
+            msg = "each residue key must have exactly 1 resname" + eol
+            msg += f"but got {violations=}"
+            raise ValueError(msg)
+        # endregion
+
+        raw_input_mols = {}
+
+        # PQR shouldn't have altlocs
+        requested_altloc = None
+        default_altloc = ""
+        for reskey, atom_field_list in blocks_by_residue.items():
+            requested_altloc = None
             pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
                 atom_field_list,
                 requested_altloc,
                 default_altloc,
             )
+            for atom, pqr_prop in zip(pdbmol.GetAtoms(), blocks_qr[reskey]):
+                atom.SetDoubleProp("PQRCharge", pqr_prop[0])
+                atom.SetDoubleProp("PQRRadius", pqr_prop[1])
+
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
 
@@ -1831,17 +2667,18 @@ class Polymer(BaseJSONParsable):
 
         pdbout = ""
         atom_count = 0
-        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                       {:2s} "
+        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                      {:>2s} "
         pdb_line += eol
-        for res_id in self.get_valid_monomers():
-            rdkit_mol = self.monomers[res_id].rdkit_mol
+        for res_id, monomer in self.get_valid_monomers().items():
+            rdkit_mol = monomer.rdkit_mol
             if res_id in new_positions:
                 positions = get_updated_positions(
-                    self.monomers[res_id],
+                    monomer,
                     new_positions[res_id],
                 )
             else:
-                positions = rdkit_mol.GetConformer().GetPositions()
+                rdkit_to_padded = {j: i for i, j in monomer.molsetup_mapidx.items()}
+                positions = [monomer.molsetup.atoms[rdkit_to_padded[i]].coord for i in range(rdkit_mol.GetNumAtoms())]
 
             chain, resnum = res_id.split(":")
             if resnum[-1].isalpha():
@@ -1854,14 +2691,14 @@ class Polymer(BaseJSONParsable):
             for i, atom in enumerate(rdkit_mol.GetAtoms()):
                 atom_count += 1
                 props = atom.GetPropsAsDict()
-                atom_name = self.monomers[res_id].atom_names[i]
+                atom_name = monomer.atom_names[i]
                 x, y, z = positions[i]
                 element = mini_periodic_table[atom.GetAtomicNum()]
                 pdbout += pdb_line.format(
                     "ATOM",
                     atom_count,
                     atom_name,
-                    self.monomers[res_id].input_resname,
+                    monomer.input_resname,
                     chain,
                     resnum,
                     icode,
@@ -1967,7 +2804,7 @@ def add_rotamers_to_polymer_molsetups(rotamer_states_list, polymer):
 
     state_indices_list = []
     for state_index, state_dict in enumerate(rotamer_states_list):
-        print(f"adding rotamer state {state_index + 1}")
+        logger.info(f"adding rotamer state {state_index + 1}")
         state_indices = {}
         for res_no_resname, angles in state_dict.items():
             res_with_resname = no_resname_to_resname[res_no_resname]
@@ -2067,10 +2904,11 @@ class Monomer(BaseJSONParsable):
         self.is_movable = False
         self.mapidx_from_raw = self._invert_mapping(self.mapidx_to_raw)
 
-        # (JSON-unbound) computed attributes
+        # (JSON-unbound in v0.6.1) computed attributes (JSON-bound in v0.7.0)
         # TODO convert link indices/labels in template to rdkit_mol indices herein
         # self.link_labels = {}
         self.template = None
+        self.template_charge = None
 
     @staticmethod
     def _invert_mapping(mapping):
@@ -2105,6 +2943,7 @@ class Monomer(BaseJSONParsable):
             "is_flexres_atom": obj.is_flexres_atom,
             "is_movable": obj.is_movable,
             "molsetup_mapidx": obj.molsetup_mapidx,
+            "template": serialize_optional(ResidueTemplate.json_encoder, obj.template),
         }
     
     # Keys to check for deserialized JSON 
@@ -2121,6 +2960,7 @@ class Monomer(BaseJSONParsable):
         "is_flexres_atom",
         "is_movable",
         "mapidx_from_raw",
+        "template",
     })
 
     @classmethod
@@ -2156,6 +2996,10 @@ class Monomer(BaseJSONParsable):
         monomer.is_flexres_atom=obj["is_flexres_atom"]
         monomer.is_movable=obj["is_movable"]
         monomer.mapidx_from_raw = mapidx_from_raw
+        if "template" in obj:
+            monomer.template = ResidueTemplate.from_dict(obj["template"])
+        else:  # v0.6.1 did not serialize the template
+            monomer.template = None
 
         return monomer
     # endregion
@@ -2180,9 +3024,27 @@ class Monomer(BaseJSONParsable):
         self.atom_names = atom_names_list
         return
 
-    def parameterize(self, mk_prep, residue_id):
+    def parameterize(self, mk_prep, residue_id, get_atomprop_from_raw: dict = None):
 
-        molsetups = mk_prep(self.padded_mol)
+        if get_atomprop_from_raw: 
+            if any(not isinstance(prop_name, str) for prop_name in get_atomprop_from_raw.keys()): 
+                raise ValueError(f"Atom property name must be str. Got {prop_name} ({type(prop_name)}) instead! ")
+            raw_mol = self.raw_rdkit_mol
+            atoms_in_raw_mol = [atom for atom in raw_mol.GetAtoms()]
+            mapidx_to_raw = self.mapidx_to_raw
+            molsetup_mapidx = self.molsetup_mapidx
+            for atom in self.padded_mol.GetAtoms(): 
+                atom_idx_in_raw = mapidx_to_raw.get(molsetup_mapidx.get(atom.GetIdx(), None), None)
+                for prop_name, default_value in get_atomprop_from_raw.items(): 
+                    if atom_idx_in_raw is not None: 
+                        prop_value = atoms_in_raw_mol[atom_idx_in_raw].GetProp(prop_name)
+                    else:
+                        prop_value = str(default_value)
+                    atom.SetProp(prop_name, prop_value)
+
+        molsetups = mk_prep(mol=self.padded_mol, 
+                            template_key = self.residue_template_key, 
+                            template_charge = self.template_charge)
         if len(molsetups) != 1:
             raise NotImplementedError(f"need 1 molsetup but got {len(molsetups)}")
         molsetup = molsetups[0]
@@ -2193,9 +3055,6 @@ class Monomer(BaseJSONParsable):
         for atom in molsetup.atoms:
             if atom.index not in self.molsetup_mapidx:
                 atom.is_ignore = True
-
-        # recalculate flexibility tree after setting ignored atoms
-        mk_prep.calc_flex(molsetup)
 
         # rectify charges to sum to integer (because of padding)
         if mk_prep.charge_model == "zero":
@@ -2212,9 +3071,69 @@ class Monomer(BaseJSONParsable):
                 charges.append(atom.charge)
                 not_ignored_idxs.append(atom.index)
         charges = rectify_charges(charges, net_charge, decimals=3)
+
         for i, j in enumerate(not_ignored_idxs):
             molsetup.atoms[j].charge = charges[i]
         self._set_pdbinfo(residue_id)
+
+        if self.is_movable:
+            self.flexibilize(mk_prep)
+        
+        return
+
+    def flexibilize(self, mk_prep):
+        """
+
+        Parameters
+        ----------
+        mk_prep
+
+        Returns
+        -------
+
+        """
+        inv = {j: i for i, j in self.molsetup_mapidx.items()}
+        link_atoms = [inv[i] for i in self.template.link_labels]
+        if len(link_atoms) == 0:
+            raise RuntimeError(
+                "can't define a sidechain without bonds to other residues"
+            )
+        # maybe rewrite this to work better with new MoleculeSetups
+        graph = {atom.index: atom.graph for atom in self.molsetup.atoms}
+        for i in range(len(link_atoms) - 1):
+            start_node = link_atoms[i]
+            end_nodes = [k for (j, k) in enumerate(link_atoms) if j != i]
+            backbone_paths = find_graph_paths(graph, start_node, end_nodes)
+            for path in backbone_paths:
+                for x in range(len(path) - 1):
+                    idx1 = min(path[x], path[x + 1])
+                    idx2 = max(path[x], path[x + 1])
+                    self.molsetup.bond_info[(idx1, idx2)].rotatable = False
+        self.is_movable = True
+
+        mk_prep.calc_flex(
+            self.molsetup,
+            root_atom_index=link_atoms[0],
+        )
+
+        molsetup = self.molsetup
+        ### is_rigid_atom = [False for _ in molsetup.atoms]
+        graph = molsetup.flexibility_model["rigid_body_graph"]
+        root_body_idx = molsetup.flexibility_model["root"]
+        conn = molsetup.flexibility_model["rigid_body_connectivity"]
+        rigid_index_by_atom = molsetup.flexibility_model["rigid_index_by_atom"]
+        # from the root, use only the atom that is bonded to the only rotatable bond
+        for other_body_idx in graph[root_body_idx]:
+            root_link_atom_idx = conn[(root_body_idx, other_body_idx)][0]
+            for atom_idx, body_idx in rigid_index_by_atom.items():
+                if body_idx != root_body_idx or atom_idx == root_link_atom_idx:
+                    self.is_flexres_atom[atom_idx] = True
+        return
+
+    def rigidify(self, mk_prep, residue_id):
+        self.is_movable = False
+        self.parameterize(mk_prep, residue_id)  # must be after is_movable=False
+        self.is_flexres_atom = [False for _ in self.molsetup.atoms]
         return
 
     def _set_pdbinfo(self, residue_id):
@@ -2360,7 +3279,7 @@ class ResiduePadder(BaseJSONParsable):
         # Ensure target_mol contains self.rxn's reactant
         rxn = self.rxn
         if not self._check_target_mol(target_mol):
-            print(f"target_mol ({Chem.MolToSmiles(target_mol)}) is not fully compliant with the template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)})...")
+            logger.info(f"target_mol ({Chem.MolToSmiles(target_mol)}) is not fully compliant with the template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)})...")
             # Assumes single reactant and single product
             reactant_smartsmol = rxn.GetReactantTemplate(0)
             reactant_ids = get_molAtomMapNumbers(reactant_smartsmol)
@@ -2389,7 +3308,7 @@ class ResiduePadder(BaseJSONParsable):
             fallback_product = remove_atoms_with_mapping(rxn.GetProductTemplate(0), skipping_ids)
             fallback_rxnsmarts = f"{Chem.MolToSmarts(fallback_reactant)}>>{Chem.MolToSmarts(fallback_product)}"
             rxn = rdChemReactions.ReactionFromSmarts(fallback_rxnsmarts)
-            print(f"Switched from Template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)}) to Fallback rxn ({fallback_rxnsmarts})")
+            logger.info(f"Switched from Template rxn ({rdChemReactions.ReactionToSmarts(self.rxn)}) to Fallback rxn ({fallback_rxnsmarts})")
         
         # Get adjacent_mol's reacting part that contains adjacent_required_atom_index
         if adjacent_mol is not None:
@@ -2402,12 +3321,12 @@ class ResiduePadder(BaseJSONParsable):
             # Remove unmapped atoms from Template adjacent mol SMARTS as the fallback option;
             # The unmapped atoms aren't needed for positions anyways
             else:
-                print(f"adjacent_mol ({Chem.MolToSmiles(adjacent_mol)}) is not fully compliant with the template adjacent_smarts ({Chem.MolToSmarts(self.adjacent_smartsmol)})...")
+                logger.info(f"adjacent_mol ({Chem.MolToSmiles(adjacent_mol)}) is not fully compliant with the template adjacent_smarts ({Chem.MolToSmarts(self.adjacent_smartsmol)})...")
                 adjacent_smartsmol = remove_unmapped_atoms_from_mol(self.adjacent_smartsmol)
 
                 # Evaluate adjacent mol against the fallback adjacent mol SMARTS
                 if self._check_adjacent_mol(adjacent_smartsmol, adjacent_mol, adjacent_required_atom_index):
-                     print(f"Switched from Template adjacent mol ({Chem.MolToSmarts(self.adjacent_smartsmol)}) to Fallback adjacent mol ({Chem.MolToSmarts(adjacent_smartsmol)})")
+                    logger.info(f"Switched from Template adjacent mol ({Chem.MolToSmarts(self.adjacent_smartsmol)}) to Fallback adjacent mol ({Chem.MolToSmarts(adjacent_smartsmol)})")
                 else:
                     raise RuntimeError(f"adjacent_mol doesn't contain the mapped atoms in adjacent_smartsmol.") 
             
@@ -2617,7 +3536,9 @@ class ResidueTemplate(BaseJSONParsable):
         mol = Chem.MolFromSmiles(smiles, ps)
         self.check(mol, link_labels, atom_names)
         self.mol = mol
-    
+
+
+
     # region JSON-interchange functions
     @classmethod
     def json_encoder(cls, obj: "ResidueTemplate") -> Optional[dict[str, Any]]:
@@ -2695,13 +3616,21 @@ class ResidueTemplate(BaseJSONParsable):
         for atom in input_mol.GetAtoms():
             element = "H" if atom.GetAtomicNum() == 1 else "heavy"
             if atom.GetIdx() not in mapping_inv:
-                if element == "H": 
-                    nei_idx = atom.GetNeighbors()[0].GetIdx()
-                    if nei_idx in mapping_inv: 
-                        result[element]["excess"].append(mapping_inv[nei_idx])
-                    else:
-                        result[element]["excess"].append(-1)
-                else:
+                if element == "H":
+                    if atom.GetNeighbors(): 
+                        nei_idx = atom.GetNeighbors()[0].GetIdx()
+                        if nei_idx in mapping_inv: 
+                            result[element]["excess"].append(mapping_inv[nei_idx])
+                        else:
+                            result[element]["excess"].append(-1)
+                    else: # lone hydrogen found in monomer
+                        monomer_info = getPdbInfoNoNull(atom)
+                        if monomer_info:
+                            logger.warning(f"WARNING: Lone hydrogen is ignored: \n" 
+                                            f"  {monomer_info} \n")
+                        else:
+                            logger.warning(f"WARNING: A lone hydrogen is ignored during monomer-template matching. \n")
+                else: 
                     result[element]["excess"] += 1
         return result, mapping
 

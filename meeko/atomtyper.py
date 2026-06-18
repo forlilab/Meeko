@@ -1,12 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
+import pathlib
 import warnings
 
 import numpy as np
+from rdkit import Chem
+from rdkit.Chem import rdMolDescriptors
 
 from .utils import pdbutils
+from .utils import rdkitutils
 
+pkg_dir = pathlib.Path(__file__).parents[0]
+params_dir = pkg_dir / "data" / "params"
 
 class AtomTyper:
 
@@ -99,7 +106,7 @@ class AtomTyper:
             for line in offatom_params[smartsgroup]:
                 # SMARTS
                 smarts = str(line["smarts"])
-                hits = molsetup.find_pattern(smarts)
+                hits = molsetup.find_pattern(smarts, uniquify=True)  # NOTE uniquifying
                 # atom indexes in smarts string
                 smarts_idxs = [0]
                 if "IDX" in line:
@@ -210,6 +217,8 @@ class AtomTyper:
     @staticmethod
     def _type_dihedrals(molsetup, dihedral_params):
 
+        canon = lambda x: x if x[2] > x[1] else (x[3], x[2], x[1], x[0])
+
         dihedrals = {}
 
         for line in dihedral_params:
@@ -241,6 +250,7 @@ class AtomTyper:
 
             for hit in hits:
                 atom_idxs = tuple([hit[j] for j in idxs])
+                atom_idxs = canon(atom_idxs)
                 molsetup.dihedral_partaking_atoms[atom_idxs] = dihedral_index
                 molsetup.dihedral_labels[atom_idxs] = tid
 
@@ -366,3 +376,28 @@ class AtomicGeometry:
         else:
             # should be np.array
             return vec / l
+
+
+def add_crippen_to_molsetup(molsetup):
+    atom_contribs = rdMolDescriptors._CalcCrippenContribs(molsetup.mol)
+    crippen = [atom[0] for atom in atom_contribs]
+    nr_pseudo_atoms = len(molsetup.atoms) - molsetup.mol.GetNumAtoms()
+    crippen += [0.0] * nr_pseudo_atoms
+    molsetup.atom_params["crippen"] = crippen
+    return None
+
+
+def set_ad4sol_par_including_q(molsetup, qasp):
+    # does not set ad4sol volume
+    par_fn = params_dir / "ad4_desolv_param.json"
+    with open(par_fn) as f:
+        dsolv_params = json.load(f)
+    AtomTyper._type_atoms(molsetup, dsolv_params)
+    charges = rdkitutils.compute_gasteiger_charges(molsetup.mol)
+    nonpolar_h = Chem.MolFromSmarts("[#1][!#7;!#8;!#9;!#16]")
+    for h_idx, parent_idx in molsetup.mol.GetSubstructMatches(nonpolar_h):
+        charges[parent_idx] += charges[h_idx]
+        charges[h_idx] = 0.0
+    for index, charge in enumerate(charges):
+        molsetup.atom_params["ad4_sol_par"][index] += qasp * abs(charge)
+    return None

@@ -40,7 +40,7 @@
         "HYP": ["HYP_fl", "HYP", "HYP_N", "HYP_C", "HYP_fl-ccd"],
         "MTB": ["MTB_fl", "MTB_fl-ccd"],
         "NLE": ["NLE_fl", "NLE", "NLE_N", "NLE_C", "NLE_fl-ccd", "NLE_C-ccd"],
-        "NHE": ["NHE_fl", "NHE_fl-ccd"],
+        "NHE": ["NHE", "NHE_fl", "NHE_fl-ccd"],
         "S1P": ["S1P_fl", "S1P", "S1P_N", "S1P_C", "S1P_fl-ccd"],
         "SEP": ["SEP_fl", "SEP", "SEP_N", "SEP_C", "SEP_fl-ccd", "SEP_C-ccd"],
         "T1P": ["T1P_fl", "T1P", "T1P_N", "T1P_C", "T1P_fl-ccd"],
@@ -194,6 +194,11 @@
 		"MG": {
 			"smiles": "[Mg+2]",
 			"atom_name": ["MG"],
+			"link_labels": {}
+		},
+		"CU": {
+			"smiles": "[Cu+2]",
+			"atom_name": ["CU"],
 			"link_labels": {}
 		},
 		"CL": {
@@ -865,6 +870,11 @@
             "smiles": "[H]NC([H])(C(=O)[O-])C([H])([H])C([H])([H])C([H])([H])C([H])([H])[H]",
             "atom_name": ["H2", "N", "CA", "HA", "C", "O", "OXT", "CB", "HB2", "HB3", "CG", "HG2", "HG3", "CD", "HD2", "HD3", "CE", "HE1", "HE2", "HE3"],
             "link_labels": {"1": "N-term"}
+        },
+        "NHE": {
+            "smiles": "N([H])[H]",
+            "atom_name": ["N", "HN1", "HN2"],
+            "link_labels": {"0": "N-term"}
         },
         "NHE_fl": {
             "smiles": "[H]N([H])[H]",

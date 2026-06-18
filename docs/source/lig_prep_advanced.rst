@@ -179,3 +179,59 @@ The indices are the indices of the atoms in the SMARTS strings. Note that
 we use 0-based indices from the Python API, but 1-based indices from the
 command line script. In a future version of Meeko we may use 0-based indices
 everywhere.
+
+
+Customizing atom parameters
+---------------------------
+
+The default atom types are AutoDock4 (AD4) types. Here, we illustrate accessing
+those types for ethanol using Python bindings:
+
+.. code-block:: python
+
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    from meeko import MoleculePreparation
+    
+    ethanol = Chem.MolFromSmiles("CCO")
+    ethanol = Chem.AddHs(ethanol)
+    AllChem.EmbedMolecule(ethanol)
+    mk_prep = MoleculePreparation()
+    molsetup = mk_prep(ethanol)[0]
+    atom_types = [atom.atom_type for atom in molsetup.atoms]
+    print(f"{atom_types=}")
+
+Currently, the default value for ``load_atom_params="ad4_types"``, where
+``ad4_types`` is the unsuffixed filename of a JSON file packaged with Meeko. Examples of files
+`currently distributed <https://github.com/forlilab/Meeko/tree/develop/meeko/data/params>`_
+are ``ad4_types.json``, ``ad4_hb.json``, ``ad4_vdw.json``, ``ad4_desolv_volume.json``,
+``ad4_desolv_param.json``, and ``vina_params.json``.
+
+Multiple file names can be passed in a list, and they can be local files,
+which enables making a copy of one of the packaged files and modifying it.
+For local files, the ``.json`` suffix must be included. Additionally, Meeko
+can assign vdW parameters from OpenFF force fields (as long as the ``openff-forcefields`` 
+package is installed):
+
+.. code-block:: python
+
+    param_files = [
+        "vina_params",              # <- packaged with meeko
+        "openff-2.3.0",             # <- from openff-forcefields package
+        "/path/to/local_file.json", # <- user created
+    ]
+    mk_prep = MoleculePreparation(load_atom_params=param_files)
+
+Parameters ``atom_type`` and ``charge`` are stored as attributes of the ``Atom``
+instances in a ``molsetup``. All other parameters are stored in ``molsetup.atom_params``,
+which is a dictionary where the keys are the parameter name, and the values are lists
+of the parameter values for all the atoms in the molsetup, in the same atom order.
+Here's an example:
+
+.. code-block:: python
+
+    mk_prep = MoleculePreparation(load_atom_params=["vina_params", "openff"])
+    molsetup = mk_prep(ethanol)[0]
+    print(f"vina radius for first atom: {molsetup.atom_params['vina_ri'][0]}")
+    print(f"openff radius for first atom: {molsetup.atom_params['rmin_half'][0]}")
+    

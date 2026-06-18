@@ -9,6 +9,7 @@ import json
 eol="\n"
 import pathlib
 import warnings
+import logging
 
 from rdkit import Chem
 
@@ -16,6 +17,8 @@ import meeko.macrocycle
 from .molsetup import Bond
 from .molsetup import RDKitMoleculeSetup
 from .atomtyper import AtomTyper
+from .atomtyper import add_crippen_to_molsetup
+from .atomtyper import set_ad4sol_par_including_q
 from .espalomatyper import EspalomaTyper
 from .bondtyper import BondTyperLegacy
 from .hydrate import HydrateMoleculeLegacy
@@ -27,6 +30,18 @@ from .writer import PDBQTWriterLegacy
 from .reactive import assign_reactive_types
 from .openff_xml_parser import load_openff
 
+from sys import version
+if int(version.split()[0].split('.')[1]) >= 11:
+    import tomllib as toml
+    _got_toml = True
+else:
+    try:
+        import tomli as toml
+        _got_toml = True
+    except ImportError as import_err:
+        _toml_import_error = import_err
+        _got_toml = False
+
 pkg_dir = pathlib.Path(__file__).parents[0]
 params_dir = pkg_dir / "data" / "params"
 # the above is controversial, see
@@ -34,7 +49,7 @@ params_dir = pkg_dir / "data" / "params"
 
 # DeprecationWarning is not displayed by default
 warnings.filterwarnings("default", category=DeprecationWarning)
-
+logger = logging.getLogger(__name__)
 
 class MoleculePreparation:
     """
@@ -69,6 +84,7 @@ class MoleculePreparation:
     def __init__(
         self,
         merge_these_atom_types=("H",),
+        merge_rmin_half=False,
         hydrate=False,
         flexible_amides=False,
         rigid_macrocycles=False,
@@ -83,7 +99,7 @@ class MoleculePreparation:
         rigidify_bonds_indices=[],
         input_atom_params=None,
         load_atom_params="ad4_types",
-        add_atom_types=(),
+        add_atom_types=None,
         input_offatom_params=None,
         load_offatom_params=None,
         charge_model="gasteiger",
@@ -93,12 +109,18 @@ class MoleculePreparation:
         reactive_smarts_idx=None,
         add_index_map=False,
         remove_smiles=False,
+        compute_charges=False,
+        crippen=False,
+        crippen_as_solpar=False,
+        override_ad4sol_par_including_q=False,
+        override_ad4sol_par_including_q_qasp=0.0,
     ):
         """
 
         Parameters
         ----------
         merge_these_atom_types
+        merge_rmin_half
         hydrate
         flexible_amides
         rigid_macrocycles
@@ -111,20 +133,36 @@ class MoleculePreparation:
         rigidify_bonds_smarts
         rigidify_bonds_indices
         input_atom_params
-        load_atom_params
+        load_atom_params: list[str]
+            the strings are JSON filenames, either somewhere in the filesystem
+            or packaged in Meeko/meeko/data/params/.
+            The default is ["ad4_types"].
+            The strings can also be an OpenFF forcefield such as
+            "openff-2.3.0". The string "openff" without a version suffix
+            specifies "openff-2.0.0" for backwards compatibility. 
         add_atom_types
         input_offatom_params
         load_offatom_params
         charge_model
-        dihedral_model
+        dihedral_model: str | None
+            string can be "espaloma" or an OpenFF force field such as
+            "openff-2.3.0". The string "openff" without a version suffix
+            specifies "openff-2.0.0" for backwards compatibility. The OpenFF
+            forcefields are available at:
+            https://github.com/openforcefield/openff-forcefields/tree/main/openforcefields/offxml
         reactive_smarts
         reactive_smarts_idx
         add_index_map
         remove_smiles
+        compute_charges
         """
+
+        if type(merge_these_atom_types) not in (list, set, tuple):
+            raise ValueError("you probably forgot '.from_config' in MoleculePreparation.from_config(mk_config)")
 
         self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
+        self.merge_rmin_half = merge_rmin_half
         self.hydrate = hydrate
         self.flexible_amides = flexible_amides
         self.rigid_macrocycles = rigid_macrocycles
@@ -150,7 +188,7 @@ class MoleculePreparation:
             raise NotImplementedError("load_offatom_params not implemented")
         self.load_offatom_params = load_offatom_params
 
-        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read"]
+        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl"]
         if charge_model not in allowed_charge_models:
             raise ValueError(
                 "unrecognized charge_model: %s, allowed options are: %s"
@@ -158,7 +196,12 @@ class MoleculePreparation:
             )
 
         self.charge_model = charge_model
+        self.compute_charges = compute_charges
         self.charge_atom_prop = charge_atom_prop
+        self.crippen = crippen
+        self.crippen_as_solpar = crippen_as_solpar
+        self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
+        self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
 
         if self.charge_model!="read" and self.charge_atom_prop: 
             raise ValueError(
@@ -177,22 +220,23 @@ class MoleculePreparation:
                     f"Invalid value for charge_atom_prop: expected a string (str), but got {type(self.charge_atom_prop).__name__} instead. "
                 )
         
-        allowed_dihedral_models = [None, "openff", "espaloma"]
         if dihedral_model in (None, "espaloma"):
             dihedral_list = []
         elif dihedral_model == "openff":
-            _, dihedral_list, _ = load_openff()
+            _, dihedral_list, _ = load_openff("openff-2.0.0")  # backward compat
+        elif dihedral_model.startswith("openff"):
+            _, dihedral_list, _ = load_openff(dihedral_model)
         else:
             raise ValueError(
                 "unrecognized dihedral_model: %s, allowed options are: %s"
-                % (dihedral_model, allowed_dihedral_models)
+                % (dihedral_model, "None, espaloma, openff-*")
             )
 
         self.dihedral_model = dihedral_model
         self.dihedral_params = dihedral_list
 
-        if dihedral_model == "espaloma" or charge_model == "espaloma":
-            self.espaloma_model = EspalomaTyper()
+        # espaloma model is instantiated later to avoid import cost if it's not needed.
+        self.espaloma_model = None
 
         self.reactive_smarts = reactive_smarts
         self.reactive_smarts_idx = reactive_smarts_idx
@@ -239,9 +283,8 @@ class MoleculePreparation:
         """
         expected_keys = cls.get_defaults_dict().keys()
         bad_keys = [k for k in config if k not in expected_keys]
-        if bad_keys:
-            warnings.warn(f"Ignore unexpected keys: {bad_keys}")
-        config = {k: v for k,v in config.items() if k in expected_keys}
+        for bad_key in bad_keys:
+            logger.error(f"Unexpected key: {bad_key}")
         p = cls(**config)
         return p
     
@@ -364,11 +407,15 @@ class MoleculePreparation:
             load_atom_params = ()
         for name in load_atom_params:
             filename = None
-            if (
-                name == "openff-2.0.0" or name == "openff"
-            ):  # TODO allow multiple versions
-                vdw_list, _, _ = load_openff()
-                d = {"openff-2.0.0": vdw_list}
+            if name.startswith("openff"):
+                if not _got_toml:
+                    raise ImportError("need package tomli to read metal vdw param to complement openff") from _toml_import_error
+                if name == "openff":
+                    name = "openff-2.0.0"
+                vdw_list, _, _ = load_openff(name)
+                with open(params_dir / "metal_vdw.toml", "rb") as f:
+                    metals_vdw = toml.load(f)
+                d = {name: vdw_list + metals_vdw["vdw_params"]}
             elif name in packaged_params:
                 filename = packaged_params[name]
             elif name.endswith(".json"):
@@ -422,17 +469,16 @@ class MoleculePreparation:
 
             atom_params.update(d)
 
-        if len(add_atom_types) > 0:
-            group_keys = list(atom_params.keys())
-            if len(group_keys) != 1:
-                msg = "add_atom_types is usable only when there is one group of parameters"
-                msg += ", but there are %d groups: %s" % (
-                    len(group_keys),
-                    str(group_keys),
-                )
-                raise RuntimeError(msg)
-            key = group_keys[0]
-            atom_params[key].extend(add_atom_types)
+        if add_atom_types is not None:
+            key = "add_atom_types"
+            attempts = 99
+            for attempt_index in range(attempts):
+                if key not in atom_params:
+                    atom_params[key] = add_atom_types
+                    break
+                key = f"add_atom_types_{attempt_index}"
+            if key == f"add_atom_types_{attempts}":
+                raise RuntimeError("could not find a key for add atom types, tried up to {key}")
 
         return atom_params
 
@@ -482,6 +528,8 @@ class MoleculePreparation:
         glue_pseudo_atoms=None,
         conformer_id=-1,
         rename_atoms=False,
+        template_key=None,
+        template_charge=None
     ):
         """
         Create an RDKitMoleculeSetup from an RDKit Mol object.
@@ -517,15 +565,34 @@ class MoleculePreparation:
             raise TypeError(
                 "Molecule is not an instance of supported types: %s" % type(mol)
             )
+
         setup_class = self._classes_setup[mol_type]
+
+
+
+        # make sure template charge is populated
+        # otherwise, charges must be computed or read elsewhere.
+        temp_compute_charges = None
+        if template_charge == None and self.compute_charges == False:
+            temp_compute_charges = self.compute_charges
+            self.compute_charges=True
+            #if self.charge_model == "read":
+            #    print("No template available, or molecule is ligand.\nCharge model will be read from input mol property\n")
+            #else:
+            #    print("Residue missing from template, or molecule is ligand.\nCharge will be computed from scratch.\n")
+
         setup = setup_class.from_mol(
             mol,
             keep_chorded_rings=self.keep_chorded_rings,
             keep_equivalent_rings=self.keep_equivalent_rings,
-            compute_gasteiger_charges=self.charge_model == "gasteiger",
+            charge_model= self.charge_model,
             read_charges_from_prop=self.charge_atom_prop,
             conformer_id=conformer_id,
+            compute_charges=self.compute_charges, 
+            template_key=template_key,
+            template_charge=template_charge
         )
+
 
         self.check_external_ring_break(setup, delete_ring_bonds, glue_pseudo_atoms)
 
@@ -539,16 +606,27 @@ class MoleculePreparation:
         )
 
         # Convert molecule to graph and apply trained Espaloma model
-        if self.dihedral_model == "espaloma" or self.charge_model == "espaloma":
-            molgraph = self.espaloma_model.get_espaloma_graph(setup)
+        # skip if charges are read from template
+        if self.dihedral_model == "espaloma" or (self.charge_model == "espaloma" and self.compute_charges):
+            self.espaloma_model = EspalomaTyper()
+            if mol.GetNumAtoms() > 1:
+                molgraph = self.espaloma_model.get_espaloma_graph(setup)
 
         # Grab dihedrals from graph node and set them to the molsetup
-        if self.dihedral_model == "espaloma":
+        if self.dihedral_model == "espaloma" and mol.GetNumAtoms() > 3:
             self.espaloma_model.set_espaloma_dihedrals(setup, molgraph)
 
         # Grab charges from graph node and set them to the molsetup
-        if self.charge_model == "espaloma":
-            self.espaloma_model.set_espaloma_charges(setup, molgraph)
+        if self.charge_model == "espaloma" and self.compute_charges:
+            if mol.GetNumAtoms() > 1:
+                self.espaloma_model.set_espaloma_charges(setup, molgraph)
+            else:
+                setup.atoms[0].charge = float(mol.GetAtomWithIdx(0).GetFormalCharge())
+        
+
+        # restore value of self.compute_charges
+        if temp_compute_charges is not None:
+            self.compute_charges=temp_compute_charges
 
         # merge hydrogens (or any terminal atoms)
         indices = set()
@@ -556,7 +634,7 @@ class MoleculePreparation:
             for atom in setup.atoms:
                 if atom.atom_type == atype_to_merge:
                     indices.add(atom.index)
-        setup.merge_terminal_atoms(indices)
+        setup.merge_terminal_atoms(indices, self.merge_rmin_half)
 
         # 3.  assign bond types
         #     - all single bonds rotatable except some amides and SMARTS rigidification
@@ -593,6 +671,17 @@ class MoleculePreparation:
                 else:
                     new_atom_info = orig_pdbinfo._replace(name=new_name)
                     atom.pdbinfo = new_atom_info
+
+        if self.crippen or self.crippen_as_solpar:
+            add_crippen_to_molsetup(setup)
+            if not self.crippen:
+                setup.atom_params["ad4_sol_par"] = setup.atom_params.pop("crippen")
+            elif self.crippen_as_solpar:
+                setup.atom_params["ad4_sol_par"] = [value for value in setup.atom_params["crippen"]]
+
+        if self.override_ad4sol_par_including_q:
+            qasp = self.override_ad4sol_par_including_q_qasp
+            set_ad4sol_par_including_q(setup, qasp)
 
         if self.reactive_smarts is None:
             setups = [setup]

@@ -15,6 +15,9 @@ import numpy as np
 pkgdir = pathlib.Path(meeko.__file__).parents[1]
 
 ahhy_example = pkgdir / "test/polymer_data/AHHY.pdb"
+radius_test_file = pkgdir / "test/polymer_data/bad_radius/2xo1_rec.pdb"
+pqr_example = pkgdir / "test/polymer_data/1FAS_dry.pqr"
+nphe_ser_example = pkgdir / "test/polymer_data/NPHE_SER.pdb"
 just_one_ALA_missing = (
     pkgdir / "test/polymer_data/just-one-ALA-missing-CB.pdb"
 )
@@ -29,6 +32,7 @@ has_lys = pkgdir / "test/polymer_data/has-lys.pdb"
 has_lyn = pkgdir / "test/polymer_data/has-lyn.pdb"
 has_lys_resname_lyn = pkgdir / "test/polymer_data/has-lys-resname-lyn.pdb"
 disulfide_adjacent = pkgdir / "test/polymer_data/disulfide_bridge_in_adjacent_residues.pdb"
+nglu = pkgdir / "test/polymer_data/nglu.pdb"
 
 
 # TODO: add checks for untested polymer fields (e.g. input options not indicated here)
@@ -89,6 +93,29 @@ def test_flexres_pdbqt():
     assert nr_flex_atoms == 9
 
 
+def test_rigidify():
+    f = open(ahhy_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+    )
+    ref_rot_bonds = sum([bond.rotatable for _, bond in polymer.monomers["A:2"].molsetup.bond_info.items()])
+    mk_prep2 = MoleculePreparation(
+        rigidify_bonds_smarts=["[CX4]-[CX4]"],
+        rigidify_bonds_indices=[(0, 1)],
+    )
+    polymer.parameterize(mk_prep2)
+    polymer.flexibilize_sidechain("A:2", mk_prep2)
+    flex_rot_bonds = sum([bond.rotatable for _, bond in polymer.monomers["A:2"].molsetup.bond_info.items()])
+    polymer.rigidify_all(mk_prep)
+    rigidified_rot_bonds = sum([bond.rotatable for _, bond in polymer.monomers["A:2"].molsetup.bond_info.items()])
+    assert flex_rot_bonds == 1
+    assert ref_rot_bonds > flex_rot_bonds
+    assert ref_rot_bonds == rigidified_rot_bonds
+    return
+
 def test_AHHY_all_static_residues():
     f = open(ahhy_example, "r")
     pdb_string = f.read()
@@ -121,6 +148,117 @@ def test_AHHY_all_static_residues():
 
     assert len(rigid_part) == 3555
     assert len(movable_part) == 0
+
+def test_AHHY_flex_residues():
+    f = open(ahhy_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+    )
+    polymer.flexibilize_sidechain("A:2", mk_prep)
+    # Asserts that the residues have been imported in a way that makes sense, and that all the
+    # private functions we expect to have run as expected.
+    assert len(polymer.monomers) == 4
+    assert len(polymer.get_ignored_monomers()) == 0
+    assert len(polymer.get_valid_monomers()) == 4
+    assert polymer.monomers["A:1"].residue_template_key == "ALA"
+    assert polymer.monomers["A:2"].residue_template_key == "HID"
+    assert polymer.monomers["A:3"].residue_template_key == "HIE"
+    assert polymer.monomers["A:4"].residue_template_key == "CTYR"
+
+    check_charge(polymer.monomers["A:1"], 0.0)
+    check_charge(polymer.monomers["A:2"], 0.0)
+    check_charge(polymer.monomers["A:3"], 0.0)
+    check_charge(polymer.monomers["A:4"], -1.0)
+
+    pdbqt_strings = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+    rigid_part, movable_part = pdbqt_strings
+
+    # remove newline chars because Windows/Unix differ
+    rigid_part = "".join(rigid_part.splitlines())
+
+    assert len(rigid_part) == 2923
+    assert len(movable_part) == 809
+
+    # and now with a fully rigid sidechain, to make sure it goes in rigid
+    rigid_prep = MoleculePreparation(
+        rigidify_bonds_smarts=["[*]~[*]"],
+        rigidify_bonds_indices=[(0, 1)],
+    )
+    polymer.monomers["A:2"].parameterize(rigid_prep, "A:2")
+    polymer.flexibilize_sidechain("A:2", rigid_prep)
+    pdbqt_strings = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+    rigid_part, movable_part = pdbqt_strings
+
+    # remove newline chars because Windows/Unix differ
+    rigid_part = "".join(rigid_part.splitlines())
+
+    assert len(rigid_part) == 3555
+    assert len(movable_part) == 0
+
+
+def test_AHHY_flexibilize_then_parameterize():
+    f = open(ahhy_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+    )
+    polymer.flexibilize_sidechain("A:2", mk_prep)
+    m = polymer.monomers["A:2"]
+    nr_rot_bonds = sum([b.rotatable for _, b in m.molsetup.bond_info.items()])
+    assert nr_rot_bonds == 2
+    # now parameterize and check we still have 2 rotatable bonds
+    # backbone may have become flexible
+    m.parameterize(mk_prep, "A:2")
+    nr_rot_bonds = sum([b.rotatable for _, b in m.molsetup.bond_info.items()])
+    assert nr_rot_bonds == 2
+
+def test_bad_res_radius():
+    with open(radius_test_file, "r") as f:
+        pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        delete_bad_res_from_box_radius=0,
+        box_center=[0., 0., 0.],
+        box_size=[20, 20, 20],
+    )
+    assert len(polymer.monomers) == 65
+    # change radius to zero and make sure an error is raised
+    with pytest.raises(meeko.polymer.PolymerCreationError) as excinfo:
+        polymer = Polymer.from_pdb_string(
+            pdb_string,
+            chem_templates,
+            mk_prep,
+            delete_bad_res_from_box_radius=10.0,
+            box_center=[0., 0., 0.],
+            box_size=[20, 20, 20],
+        )
+
+def test_protonated_Nterm_residue():
+    f = open(nphe_ser_example, "r")
+    pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        blunt_ends=[("A:2", 0)],
+    )
+    # Asserts that the residues have been imported in a way that makes sense, and that all the
+    # private functions we expect to have run as expected.
+    assert len(polymer.monomers) == 2
+    assert len(polymer.get_ignored_monomers()) == 0
+    assert len(polymer.get_valid_monomers()) == 2
+    assert polymer.monomers["A:1"].residue_template_key == "NPHE"
+    assert polymer.monomers["A:2"].residue_template_key == "SER"
+
+    check_charge(polymer.monomers["A:1"], 1.0)
+    check_charge(polymer.monomers["A:2"], 0.0)
 
 
 def test_AHHY_padding():
@@ -350,6 +488,38 @@ def test_write_pdb_AHHY():
         blunt_ends=[("A:1", 0)],
     )
 
+def test_write_pdbqt_from_pqr():
+    with open(pqr_example, "r") as f:
+        pqr_string = f.read()
+    mk_prep_for_pqr = MoleculePreparation(
+        charge_model="read", 
+        charge_atom_prop="PQRCharge"
+    )
+    polymer = Polymer.from_pqr_string(
+        pqr_string, 
+        chem_templates,
+        mk_prep_for_pqr
+    )
+    pdbqt_rigid = PDBQTWriterLegacy.write_from_polymer(polymer)[0].split("\n")
+    expected_lines = """ATOM      1  C   THR     1      43.983  16.642   1.087  1.00  0.00    +0.550 C
+ATOM      2  O   THR     1      44.150  17.855   0.925  1.00  0.00    -0.550 OA
+ATOM      3  CA  THR     1      44.862  15.936   2.105  1.00  0.00    +0.330 C
+ATOM      4  N   THR     1      46.148  16.581   2.104  1.00  0.00    -0.320 N
+ATOM      5  CB  THR     1      44.293  16.088   3.528  1.00  0.00    +0.000 C
+ATOM      6  CG2 THR     1      43.175  15.110   3.826  1.00  0.00    +0.000 C
+ATOM      7  OG1 THR     1      45.409  15.915   4.403  1.00  0.00    -0.490 OA
+ATOM      8  HG1 THR     1      45.246  15.149   5.034  1.00  0.00    +0.490 HD
+ATOM      9  H1  THR     1      46.041  17.581   2.102  1.00  0.00    +0.330 HD
+ATOM     10  H2  THR     1      46.674  16.320   2.920  1.00  0.00    +0.330 HD
+ATOM     11  H3  THR     1      46.675  16.317   1.289  1.00  0.00    +0.330 HD
+""".splitlines()
+    for i, line in enumerate(expected_lines): 
+        if pdbqt_rigid[i][:len(line)] != line: 
+            print(pdbqt_rigid[i][:len(line)])
+            print(line)
+            assert False
+
+
 def test_non_seq_res():
     """the residue atoms are interrupted (not in contiguous lines)
         which should cause the parser to throw an error. Here we
@@ -467,3 +637,32 @@ def test_disulfide_adjacent():
         chem_templates,
         mk_prep,
     )
+
+def test_stitch_polymer():
+    with open(disulfide_adjacent, "r") as f:
+        pdb_text = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+    )
+    adjacent_disulfide = Chem.MolFromSmarts("S1CCNCCCS1")
+    disulfide_then_proline = Chem.MolFromSmarts("CSSCCC(=O)N1CCCC1")
+    stitched_mol = polymer.to_rdkit_mol()
+    assert stitched_mol.HasSubstructMatch(adjacent_disulfide)
+    assert stitched_mol.HasSubstructMatch(disulfide_then_proline)
+    # after serialization
+    polymer = Polymer.from_json(polymer.to_json())
+    stitched_mol = polymer.stitch()
+    assert stitched_mol.HasSubstructMatch(adjacent_disulfide)
+    assert stitched_mol.HasSubstructMatch(disulfide_then_proline)
+
+def test_nglu():
+    with open(nglu, "r") as f:
+        pdb_text = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_text,
+        chem_templates,
+        mk_prep,
+    )
+    assert ":1" in polymer.get_valid_monomers()

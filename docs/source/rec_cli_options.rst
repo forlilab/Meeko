@@ -8,6 +8,10 @@ Input/Output Options
 
    Read a PDB file using the PDB parser in RDKit.
 
+.. option:: --read_pqr <PQR_FILENAME>
+
+   Read PQR file and does not use ProDy
+
 .. option:: -i, --read_with_prody <MACROMOL_FILENAME>
 
    Read a PDB or mmCIF file using ProDy (if installed). ProDy can be installed from PyPI or conda-forge.
@@ -24,6 +28,9 @@ Input/Output Options
 
    Save the receptor's parameterized configuration to JSON format. Defaults to `--output_basename` if unspecified.
 
+.. option:: --write_pdb [PDB_FILENAME ...]
+   Write prepared receptor to pdb (must specify filename)
+
 .. option:: -g, --write_gpf <GPF_FILENAME> [*]
 
    Output an AutoGrid input file (GPF). Defaults to `--output_basename` if not specified.
@@ -35,6 +42,9 @@ Input/Output Options
 .. option:: --write_pdb <PDB_FILENAME> [*]
 
    Save the prepared receptor in PDB format. Must specify the filename.
+
+.. option:: --debug_fn DEBUG_FN 
+   Log debug elvel to filename DEBUG_FN
 
 Receptor Perception Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -55,21 +65,47 @@ Receptor Perception Options
 
    Load additional templates from one or more JSON files.
 
-.. option:: -a, --allow_bad_res
+.. option:: --cache_templates [CACHE_TEMPLATES] 
+   Turns on caching of ResidueChemTemplates (default is OFF) by this option and (optionally) a provided JSON filename.
+   Default cache filename is: $HOME/.meeko_residue_chem_templates_cached.json) When the caching is ON, the templates
+   for polymer construction will be read from the specified cache file and updates may be made to the same file in a
+   cumulative manner.
 
-   (Flag) Ignore residues with missing atoms instead of raising an error.
+.. option:: --config_preset
+
+   Name of packaged configuration (choices: scofu1). Overriden by --config_file and by command line options.
+
+.. option:: --config_file
+
+   Local json configuration file. Overrides --config_preset option-wise. Overriden by command line options.
+
+.. option:: -d, --delete_bad_res
+
+   (Flag) Ignore residues with missing atoms instead of raising an error. 
+   Replaces previous option -a or --allow_bad_res
+
+.. option:: --delete_bad_res_from_box_radius
+
+   specify radius from box surface outside of which unmatched residues will be deleted.
+   Requires --box_center or --box_enveloping. Incompatible with --delete_bad_res.
 
 .. option:: --default_altloc <location>
 
    Define a default alternate location for residues, overridden by `--wanted_altloc`.
 
 .. option:: --wanted_altloc <location>
-
    Specify alternate locations for particular residues, e.g., `:5=B,B:17=A`.
 
-.. option:: --mk_config <JSON_FILENAME>
+.. option:: --compute_charges
+   Flag to request that charges be computed from scratch. Default is to read 
+   pre-calculated charges from template, which is much faster.
 
-   Specify a JSON configuration file for receptor preparation.
+.. option:: --charge_model [gasteiger, nagl, espaloma, zero, read]
+   Specify charge model to use. Charges will be computed or extracted from template depending 
+   on the `--compute_charges` flag. Note that computing Nagl or Espaloma charges from scratch 
+   can be slow. 
+   Default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr
+
 
 Grid Box Options
 ~~~~~~~~~~~~~~~~
@@ -112,6 +148,11 @@ Flexible and/or Reactive Options
 .. option:: -s, --reactive_name_specific <residue:atom>
 
    Specify the reactive atom for an individual residue by residue ID, e.g., `-s "A:42=NE2"`. The residue becomes reactive.
+
+.. option:: -t, --rot_terminal_group <residues>
+
+   specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, 
+   e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)'
 
 .. option:: --r_eq_12 <value>
 

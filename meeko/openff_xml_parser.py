@@ -1,3 +1,4 @@
+import logging
 import math
 import pathlib
 import xml.etree.ElementTree as ET
@@ -6,12 +7,14 @@ from rdkit import Chem
 
 from .utils.utils import mini_periodic_table
 
+logger = logging.getLogger(__name__)
 
-def load_openff():
+
+def load_openff(name):
     import openforcefields
 
     p = pathlib.Path(openforcefields.__file__)  # find openff-forcefields xml files
-    offxml = p.parents[0] / "offxml" / "openff-2.0.0.offxml"
+    offxml = p.parents[0] / "offxml" / f"{name}.offxml"
     offxml = offxml.resolve()
     vdw_list, dihedral_list, vdw_by_type = parse_offxml(offxml)
     return vdw_list, dihedral_list, vdw_by_type
@@ -156,11 +159,9 @@ def make_dihedral_entry(attrib_dict_from_xml):
                 msg += "\nOffending 'Proper' entry: %s" % attrib_dict_from_xml
                 raise ValueError(msg)
             elif keyword == "k":
-                dihedral_entry[key] = float(
-                    value.replace("* mole**-1 * kilocalorie", "")
-                )
+                dihedral_entry[key] = float(value.split("*")[0])
             elif keyword == "phase":
-                dihedral_entry[key] = math.radians(float(value.replace("* degree", "")))
+                dihedral_entry[key] = math.radians(float(value.split("*")[0]))
             elif keyword == "periodicity":
                 dihedral_entry[key] = int(value)
             elif keyword == "idivf":
@@ -195,12 +196,12 @@ def make_vdw_entry(attrib_dict_from_xml):
         if key in ["id", "smirks"]:
             continue
         elif key == "epsilon":
-            vdw_entry["epsilon"] = float(value.replace("* mole**-1 * kilocalorie", ""))
+            vdw_entry["epsilon"] = float(value.split("*")[0])
         elif key == "rmin_half":
-            vdw_entry["rmin_half"] = float(value.replace("* angstrom", ""))
+            vdw_entry["rmin_half"] = float(value.split("*")[0])
         elif key == "sigma":
             vdw_entry["rmin_half"] = (
-                float(value.replace("* angstrom", "")) * (4 ** (1.0 / 12)) * 0.5
+                float(value.split("*")[0]) * (4 ** (1.0 / 12)) * 0.5
             )
         else:
             msg = "\nGot unexpected key: %s" % key
@@ -288,7 +289,7 @@ def parse_offxml(offxml_filename):
     vdw_list = []
     for child in vdw:
         if child.tag != "Atom":
-            print(" SKIPPING: %s" % child.tag)
+            logger.info(" SKIPPING: %s" % child.tag)
             continue
         v = make_vdw_entry(child.attrib)
         vdw_list.append(v)
@@ -298,7 +299,7 @@ def parse_offxml(offxml_filename):
     dihedral_list = []
     for child in torsions:
         if child.tag != "Proper":
-            print(" SKIPPING: %s" % child.tag)
+            logger.info(" SKIPPING: %s" % child.tag)
             continue
         d = make_dihedral_entry(child.attrib)
         dihedral_list.append(d)

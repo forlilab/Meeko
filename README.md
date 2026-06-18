@@ -1,8 +1,8 @@
 # Meeko: interface for AutoDock
 
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
-[![PyPI version fury.io](https://img.shields.io/badge/version-0.6.1-green.svg)](https://pypi.python.org/pypi/meeko/)
-[![Documentation Status](https://readthedocs.org/projects/meeko/badge/?version=release)](https://meeko.readthedocs.io/en/release/?badge=release)
+[![PyPI version fury.io](https://img.shields.io/badge/version-0.7.1-green.svg)](https://pypi.python.org/pypi/meeko/)
+[![Documentation Status](https://readthedocs.org/projects/meeko/badge/?version=develop)](https://meeko.readthedocs.io)
 
 Meeko prepares the input for AutoDock and processes its output.
 It is developed alongside AutoDock-GPU and AutoDock-Vina.
@@ -13,10 +13,12 @@ Meeko is developed by the [Forli lab](https://forlilab.org/) at the
 [Center for Computational Structural Biology (CCSB)](https://ccsb.scripps.edu)
 at [Scripps Research](https://www.scripps.edu/).
 
+If you use this, please cite: ["Meeko: molecule parameterization and software interoperability for docking and beyond"](https://pubs.acs.org/doi/full/10.1021/acs.jcim.5c02271)
+
 
 ## Documentation
 
-The docs are hosted on [meeko.readthedocs.io](https://meeko.readthedocs.io/en/release)
+The docs are hosted on [meeko.readthedocs.io](https://meeko.readthedocs.io)
 
 
 ## Reporting bugs
@@ -29,7 +31,7 @@ Please check if a similar bug has been reported and, if not, [open an issue](htt
 Visit the docs for a more complete description. One option is conda or mamba:
 
 ```bash
-micromamba install meeko
+micromamba install -c conda-forge meeko
 ```
 
 or from PyPI:
@@ -38,11 +40,17 @@ or from PyPI:
 pip install meeko
 ```
 
+to install the latest version (`develop` branch), which is likely newer than latest release:
+
+```bash
+pip install git+https://github.com/forlilab/meeko
+```
+
 ## Usage
 
 Meeko exposes a Python API to enable scripting. Here we share very minimal examples
 using the command line scripts just to give context.
-Please visit the [meeko.readthedocs.io](https://meeko.readthedocs.io/en/release) for more information.
+Please visit the [meeko.readthedocs.io](https://meeko.readthedocs.io) for more information.
 
 Parameterizing a ligand and writing a PDBQT file:
 ```bash

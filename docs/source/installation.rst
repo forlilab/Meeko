@@ -14,10 +14,59 @@ From conda-forge
 
 .. code-block:: bash
 
-    micromamba install meeko
+    micromamba install -c conda-forge meeko
 
 Other tools like ``mamba`` or ``conda`` can also be used. Note that ``conda``
 is significantly slower.
+
+
+Installing dependencies manually
+--------------------------------
+
+The conda-forge recipe includes the list of dependencies, and using `micromamba`
+will install them automatically. But we didn't add them to the Python package
+configuration, to allow the user to control dependencies manually. 
+
+Meeko requires Python 3.10 or later, and `scipy`, `rdkit`, `gemmi`, and `tqdm`,
+which can be installed from PyPI with `pip`:
+
+.. code-block:: bash
+
+   pip install scipy rdkit gemmi tqdm
+
+If using Python 3.8 or 3.9, please see :ref:`suport-py38` for details. 
+
+
+Optional dependencies
+---------------------
+
+Although optional, ProDy is installed by the conda-forge recipe.
+Meeko uses Prody to parse PDB and mmCIF files. Without prody, PDB files
+can be parsed with the command line option ``--read_pdb`` and with the Python
+method ``Polymer.from_pdb_string()``. However, without ProDy it
+won't be possible to read mmCIF files or use tethered docking.
+Prody is available on PyPI and conda-forge for (at least) Python 3.11 and 3.12.
+
+.. code-block:: bash
+
+   pip install prody
+
+Espaloma can be used to assign partal charges and proper torsion parameters.
+These parameters are useful only for development.
+Not to be confused with package `espaloma_charge`. Meeko uses the `espaloma` package.
+See installation details at `espaloma readthedocs <https://espaloma.wangyq.net/install.html>`_
+
+`OpenFF forcefields <https://github.com/openforcefield/openff-forcefields>`__
+is used to assign vdW and proper torsion parameters. This is
+useful only for development. It can be installed with:
+
+.. code-block:: bash
+
+   micromamba install -c conda-forge "openff-forcefields>=2026"
+
+`OpenFF Toolkit <https://docs.openforcefield.org/projects/toolkit>`__ is used to assign
+NAGL charges, useful only for development. See `installation instructions <https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html>`__
+
 
 
 From PyPI
@@ -57,15 +106,24 @@ This is useful for developers. Changes to the command line scripts may still req
 a re-installation.
 
 
-Support for Python 3.12
+.. _suport-py38:
+Support for Python 3.8
 -----------------------
 
-Meeko runs on Python 3.12 as long as Prody is not installed. To run on 3.12,
-install all dependencies except Prody and install Meeko from source.
+As of v0.6.1, Meeko starts to use features that are only available in Python 3.9 or later. 
+These features are: 
 
-Meeko uses Prody to parse PDB and mmCIF files. Without prody, PDB files
-can be parsed with the command line option ``--read_pdb`` and with the Python
-method ``Polymer.from_pdb_string()``. However, without ProDy it
-won't be possible to read mmCIF files or use tethered docking. Prody developers
-are working to support Python 3.12, so it is possible that Prody will work
-on Python 3.12 soon.
+- Dictionary Union Operators
+- Py39 Type Hints
+- ``importlib.resources.files`` (Details in `PR #223 <https://github.com/forlilab/Meeko/pull/223>`_)
+
+However, they are not essential for the code structure or function. To adapt Meeko to a Python 3.8 
+environment, consider the respective workarounds, such as: 
+
+- Replace dictionary union operators with dictionary unpacking (`{**dict1, **dict2}`), or the `update()` method.
+- Use ``List``, ``Set``, ``Dict``, and ``Tuple`` from ``typing`` for type hints.
+- Use ``Path`` from ``pathlib``, or ``importlib_resources`` backport package for ``importlib.resources.files``.
+
+See a diff report of these changes in `Issue #313 <https://github.com/forlilab/Meeko/issues/313#issuecomment-2612000768>`_. 
+
+Meeko v0.8 includes `match`/`case` statements, which require Python 3.10

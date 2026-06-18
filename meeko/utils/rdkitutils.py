@@ -4,6 +4,7 @@ from .utils import mini_periodic_table
 from .pdbutils import PDBAtomInfo
 from rdkit.Geometry import Point3D
 from rdkit.Chem import rdDetermineBonds
+from rdkit.Chem import rdPartialCharges
 
 periodic_table = Chem.GetPeriodicTable()
 
@@ -458,26 +459,70 @@ def react_and_map(reactants: tuple[Chem.Mol], rxn: rdChemReactions.ChemicalReact
 
     return outcomes
 
+def remove_elements(mol, to_rm=(12, 20, 25, 26, 30)):
+    idx_to_rm = {}
+    neigh_idx_to_nr_h = {}
+    rm_to_neigh = {}
+    for atom in mol.GetAtoms():
+        if atom.GetAtomicNum() in to_rm:
+            idx_to_rm[atom.GetIdx()] = atom.GetFormalCharge()
+            rm_to_neigh[atom.GetIdx()] = set()
+            for neigh in atom.GetNeighbors():
+                n = neigh.GetNumExplicitHs()
+                neigh_idx_to_nr_h[neigh.GetIdx()] = n
+                rm_to_neigh[atom.GetIdx()].add(neigh.GetIdx())
+    if not idx_to_rm:
+        return Chem.Mol(mol), idx_to_rm, rm_to_neigh
+    rwmol = Chem.EditableMol(mol)
+    for idx in sorted(idx_to_rm, reverse=True):
+        rwmol.RemoveAtom(idx)
+    mol = rwmol.GetMol()
+    for idx in neigh_idx_to_nr_h:
+        n = neigh_idx_to_nr_h[idx]
+        newidx = idx - sum([i < idx for i in idx_to_rm]) 
+        mol.GetAtomWithIdx(newidx).SetNumExplicitHs(n + 1)
+    mol.UpdatePropertyCache()
+    Chem.SanitizeMol(mol)
+    mol = Chem.AddHs(mol)
+    return mol, idx_to_rm, rm_to_neigh
 
-covalent_radius = {  # from wikipedia
-    1: 0.31,
-    5: 0.84,
-    6: 0.76,
-    7: 0.71,
-    8: 0.66,
-    9: 0.57,
-    12: 0.00,  # hack to avoid bonds with metals
-    14: 1.11,
-    15: 1.07,
-    16: 1.05,
-    17: 1.02,
-    # 19: 2.03,
-    20: 0.00,
-    # 24: 1.39,
-    25: 0.00,  # hack to avoid bonds with metals
-    26: 0.00,
-    30: 0.00,  # hack to avoid bonds with metals
-    # 34: 1.20,
-    35: 1.20,
-    53: 1.39,
-}
+def compute_gasteiger_charges(rdkit_mol):
+    things = remove_elements(rdkit_mol)
+    copy_mol, idx_rm_to_formal_charge, rm_to_neigh = things
+    for atom in copy_mol.GetAtoms():
+        if atom.GetAtomicNum() == 34:
+            atom.SetAtomicNum(16)
+    rdPartialCharges.ComputeGasteigerCharges(copy_mol)
+    charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
+    if idx_rm_to_formal_charge:
+        ok_charges = charges.copy()
+        for i in sorted(idx_rm_to_formal_charge, reverse=False):
+            ok_charges.insert(i, 0.0)
+        nr_rm = len(idx_rm_to_formal_charge)
+        nr_added_h = copy_mol.GetNumAtoms() - rdkit_mol.GetNumAtoms() + nr_rm
+        ok_charges = ok_charges[:len(ok_charges)-nr_added_h]
+        h_chrg_by_heavy_atom = {}
+        for i in range(nr_added_h):
+            added_H_idx = rdkit_mol.GetNumAtoms() + i - nr_rm
+            neighs = copy_mol.GetAtomWithIdx(added_H_idx).GetNeighbors()
+            if len(neighs) != 1:
+                raise RuntimeError("H should have 1 neighbor")
+            # in iron-sulfur clusters, sulfur will be added more than one hydrogen
+            idx = neighs[0].GetIdx()
+            h_chrg_by_heavy_atom.setdefault(idx, 0.0)
+            h_chrg_by_heavy_atom[idx] += charges[added_H_idx]
+        # in iron-sulfur clusters, each sulfur will donate its added H charges
+        # to multiple irons, so we must divide the total donated charge
+        # by the number of donations
+        contributions_by_neigh = {}
+        for i, neighs in rm_to_neigh.items():
+            for neigh in neighs:
+                contributions_by_neigh.setdefault(neigh, 0)
+                contributions_by_neigh[neigh] += 1
+        for i, neighs in rm_to_neigh.items():
+            ok_charges[i] += idx_rm_to_formal_charge[i]
+            for idx in neighs:
+                newidx = idx - sum([i <= idx for i in idx_rm_to_formal_charge]) 
+                ok_charges[i] += h_chrg_by_heavy_atom[newidx] / contributions_by_neigh[idx]
+        charges = ok_charges
+    return charges

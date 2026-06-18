@@ -9,31 +9,39 @@ Prerequisites and Environment Setup
 ===================================
 
 Create a new virtual environment (recommended)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   micromamba create -c conda-forge -n meeko_tutorial_py39 python=3.9 -y
-   micromamba activate meeko_tutorial_py39         
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~      
 
 In this tutorial, we will use ``micromamba`` as the example package manager. Visit `this official guide  <https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html>`_ for a quick install and setup of micromamba. There are many equivalent ways to manage Python packages, such as ``conda`` and ``mamba``. You can easily adapt the commands to your preferred tool, as the syntax is largely compatible across these package managers. 
 
-Install the required Python packages through ``conda-forge``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Download or copy the following environment specification into a file named ``environment.yaml``:
+
+.. code-block:: yaml
+
+   name: meeko_tutorial_py311
+   channels:
+     - conda-forge
+   dependencies:
+     - python=3.11
+     - meeko
+     - numpy
+     - scipy
+     - rdkit
+     - gemmi
+     - vina
+     - pip
+     - molscrub
+     - multiprocess
+     - chemicalite
+     - pip:
+        - ringtail
+        - git+https://github.com/prody/ProDy.git@main#egg=prody
+
+Then, create the environment using:
 
 .. code-block:: bash
 
-   micromamba install -c conda-forge numpy scipy rdkit gemmi vina -y
-
-Install the additional packages and data from GitHub repositories
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- (Python package) scrubber 
-
-.. code-block:: bash
-
-   git clone --single-branch --branch develop https://github.com/forlilab/scrubber.git
-   cd scrubber; pip install --use-pep517 -e .; cd ..
+   micromamba create -f environment.yaml -y
+   micromamba activate meeko_tutorial_py311
 
 - (Example files for this tutorial) Meeko/example/tutorial1
 Originally from `Forlilab tutorials <https://github.com/forlilab/tutorials>`_

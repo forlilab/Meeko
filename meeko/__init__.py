@@ -4,7 +4,7 @@
 # Meeko
 #
 
-__version__ = "0.6.1"
+__version__ = "0.7.1"
 
 try:
     import prody
@@ -23,6 +23,8 @@ from .utils import pdbutils
 from .utils import geomutils
 from .utils import utils
 from .atomtyper import AtomTyper
+from .atomtyper import add_crippen_to_molsetup
+from .atomtyper import set_ad4sol_par_including_q
 from .receptor_pdbqt import PDBQTReceptor
 from .polymer import Polymer
 from .polymer import Monomer

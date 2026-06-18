@@ -129,7 +129,6 @@ For output control: We are expecting at least two types of files, the receptor P
    Flexible residues:
    chain resnum is_reactive reactive_atom
       A    309       False              
-   reactive_flexres=set()
 
    Files written:
         3kgd_receptorH_flex.pdbqt <-- flexible receptor input file
@@ -155,7 +154,9 @@ In this step, we will use mk_prepare_ligand.py to generate the PDBQT file for th
 Docking Calculation
 ===================
 
-The tethered docking method needs an empty ligand file, which is allowed in AutoDock-GPU that requires grid map computation with AutoGrid4 before the docking calculation. 
+The tethered docking does **not** use a ligand file as input (specified with ``-L`` or ``--lfile`` flag).
+Instead, it uses only the flexible side chain file, which contains the ligand
+and the residue side chain. This file is passed to the ``-F`` or ``--flexres`` flag.
 
 The previously generated GPF file (``3kgd_receptorH_rigid.gpf``), together with the PDBQT file of the rigid part of the receptor (``3kgd_receptorH_rigid.pdbqt``), will be used to compute the grid maps: 
 
@@ -163,16 +164,18 @@ The previously generated GPF file (``3kgd_receptorH_rigid.gpf``), together with 
 
    ./autogrid4 -p 3kgd_receptorH_rigid.gpf
 
-And to run the docking calculation, the ligand PDBQT file (``HIE_AMP.pdbqt``) and the map files will be needed. Please note that althogh the commands and the filenames look the same, the GPF from the reactive docking tutorial :ref:`tutorial2` has additional parameters for reactive docking, and therefore the maps cannot be reused in this example. Also, we will be passing ``HIE_AMP.pdbqt`` as a flexible residue file instead of a ligand file to AD-GPU. In this docking calculation, the ligand will be ``empty`` which is indeed an empty file. With the following command for docking calculation, the output file will have basename ``HIE_AMP``.  
+Please note that the GPF from the reactive docking tutorial :ref:`tutorial2` has additional parameters for reactive docking,
+and therefore the maps cannot be reused in this example, even though the filenames and commands are similar.
+
+To run the docking calculation, we pass the ligand and side chain ``HIE_AMP.pdbqt`` as a flexible residue file.
 
 .. code-block:: bash
 
-   touch empty
-   ./adgpu --lfile empty --flexres HIE_AMP.pdbqt \
+   ./adgpu --flexres HIE_AMP.pdbqt \
    --ffile 3kgd_receptorH_rigid.maps.fld \
    --resnam HIE_AMP
 
-If you're running these calculations on Google T4 backends, here are the pre-compiled executables of autogrid4 and adgpu specifically for T4: :ref:`T4_executables` 
+The output file will have basename ``HIE_AMP``.  
 
 Export the Docking Poses
 ========================

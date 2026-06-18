@@ -10,15 +10,13 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 import json
 eol="\n"
-import sys
+import logging
 import warnings
 from typing import Union
 from typing import Optional, Any
 
 import numpy as np
-import rdkit.Chem
 from rdkit import Chem
-from rdkit.Chem import rdPartialCharges
 from rdkit.Chem import rdMolInterchange
 
 from .utils.jsonutils import rdkit_mol_from_json, tuple_to_string, string_to_tuple
@@ -29,7 +27,6 @@ from .utils import rdkitutils
 from .utils import utils
 from .utils.geomutils import calcDihedral
 from .utils.pdbutils import PDBAtomInfo
-from .receptor_pdbqt import PDBQTReceptor
 
 try:
     from misctools import StereoIsomorphism
@@ -40,6 +37,8 @@ else:
 
 
 from .utils import rdkitutils
+
+logger = logging.getLogger(__name__)
 
 # region DEFAULT VALUES
 DEFAULT_PDBINFO = None
@@ -160,7 +159,8 @@ class UniqAtomParams:
         return new_row_index
 
     def add_molsetup(
-        self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False
+        self, molsetup, atom_params=None, add_atomic_nr=False, add_atom_type=False,
+        remove_params=(),
     ):
         if "charge" in molsetup.atom_params or "atom_type" in molsetup.atom_params:
             msg = '"charge" and "atom_type" found in molsetup.atom_params'
@@ -174,7 +174,7 @@ class UniqAtomParams:
             if atom.is_ignore:
                 param_idx = None
             else:
-                p = {k: v[atom.index] for (k, v) in molsetup.atom_params.items()}
+                p = {k: v[atom.index] for (k, v) in molsetup.atom_params.items() if k not in remove_params}
                 if add_atomic_nr:
                     if "atomic_nr" in p:
                         raise RuntimeError(
@@ -202,7 +202,6 @@ class Atom(BaseJSONParsable):
     atom_type: str = DEFAULT_ATOM_TYPE
     is_ignore: bool = DEFAULT_IS_IGNORE
     graph: list[int] = field(default_factory=list)
-    interaction_vectors: list[np.array] = field(default_factory=list)
 
     is_dummy: bool = False
     is_pseudo_atom: bool = False
@@ -220,7 +219,6 @@ class Atom(BaseJSONParsable):
             "atom_type": obj.atom_type,
             "is_ignore": obj.is_ignore,
             "graph": obj.graph,
-            "interaction_vectors": [v.tolist() for v in obj.interaction_vectors],
             "is_dummy": obj.is_dummy,
             "is_pseudo_atom": obj.is_pseudo_atom,
         }
@@ -236,7 +234,6 @@ class Atom(BaseJSONParsable):
             "atom_type",
             "is_ignore",
             "graph",
-            "interaction_vectors",
             "is_dummy",
             "is_pseudo_atom",
         }
@@ -253,7 +250,6 @@ class Atom(BaseJSONParsable):
         atom_type = obj["atom_type"]
         is_ignore = obj["is_ignore"]
         graph = obj["graph"]
-        interaction_vectors = [np.asarray(i) for i in obj["interaction_vectors"]]
         is_dummy = obj["is_dummy"]
         is_pseudo_atom = obj["is_pseudo_atom"]
         output_atom = cls(
@@ -265,7 +261,6 @@ class Atom(BaseJSONParsable):
             atom_type,
             is_ignore,
             graph,
-            interaction_vectors,
             is_dummy,
             is_pseudo_atom,
         )
@@ -429,7 +424,6 @@ class MoleculeSetup(BaseJSONParsable):
     Attributes
     ----------
     name: str
-    is_sidechain: bool
     pseudoatom_count: int
 
     atoms: list[Atom]
@@ -447,11 +441,10 @@ class MoleculeSetup(BaseJSONParsable):
     PSEUDOATOM_ATOMIC_NUM = 0
     # endregion
 
-    def __init__(self, name: str = None, is_sidechain: bool = False):
+    def __init__(self, name: str = None):
 
         # Initializer attributes 
         self.name: str = name
-        self.is_sidechain: bool = is_sidechain
 
         # (JSON-bound) computed attributes
         self.pseudoatom_count: int = 0
@@ -474,7 +467,6 @@ class MoleculeSetup(BaseJSONParsable):
             
         output_dict = {
             "name": obj.name,
-            "is_sidechain": obj.is_sidechain,
             "pseudoatom_count": obj.pseudoatom_count,
             "atoms": [Atom.json_encoder(x) for x in obj.atoms],
             "bond_info": {
@@ -512,7 +504,6 @@ class MoleculeSetup(BaseJSONParsable):
     # Keys to check for deserialized JSON 
     expected_json_keys = {
             "name",
-            "is_sidechain",
             "pseudoatom_count",
             "atoms",
             "bond_info",
@@ -529,8 +520,7 @@ class MoleculeSetup(BaseJSONParsable):
 
         # Constructs a MoleculeSetup object and restores the expected attributes
         name = obj["name"]
-        is_sidechain = obj["is_sidechain"]
-        molsetup = cls(name, is_sidechain)
+        molsetup = cls(name)
 
         molsetup.pseudoatom_count = obj["pseudoatom_count"]
         molsetup.atoms = [Atom.from_dict(x) for x in obj["atoms"]]
@@ -666,7 +656,6 @@ class MoleculeSetup(BaseJSONParsable):
         is_ignore: bool = DEFAULT_IS_IGNORE,
         anchor_list: list[int] = None,
         rotatable: bool = False,
-        directional_vectors: list[int] = None,
     ):
         """
         Adds a pseudoatom with all the specified attributes to the MoleculeSetup. Default values will be used for any
@@ -689,8 +678,6 @@ class MoleculeSetup(BaseJSONParsable):
             a list of ints indicating the multiple bonds that can be specified as input
         rotatable: bool
             flag indicating if the anchor atom should be marked as rotatable to allow the pseudoatom movement.
-        directional_vectors
-            TODO: needs info
 
         Returns
         -------
@@ -723,9 +710,6 @@ class MoleculeSetup(BaseJSONParsable):
         if anchor_list is not None:
             for anchor in anchor_list:
                 self.add_bond(pseudoatom_index, anchor, rotatable=rotatable)
-        # Adds directional vectors [Check what this is used for/if this is used]
-        if directional_vectors is not None:
-            self._add_interaction_vectors(pseudoatom_index, directional_vectors)
         # If there are no specified anchor atoms,
         if not self.flexibility_model or not anchor_list:
             return pseudoatom_index
@@ -895,33 +879,6 @@ class MoleculeSetup(BaseJSONParsable):
                     del self.rotamers[bond_id]
         return
 
-    def _add_interaction_vectors(self, atom_index: int, vector_list: list[np.array]):
-        """
-        Adds input vector list to the list of directional interaction vectors for the specified atom.
-
-        Parameters
-        ----------
-        atom_index: int
-            index of the atom to add the vectors to
-        vector_list: list[np.array]
-            a list of directional interaction vectors
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        IndexError
-            if the specified atom index does not exist or is a dummy atom.
-        """
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom."
-            )
-        for vector in vector_list:
-            self.atoms[atom_index].interaction_vectors.append(vector)
-        return
 
     @property
     def true_atom_count(self):
@@ -1217,16 +1174,9 @@ class MoleculeSetup(BaseJSONParsable):
             )
         return self.atoms[atom_index].graph
 
-    def get_interaction_vectors(self, atom_index: int):
-        if atom_index > len(self.atoms) or self.atoms[atom_index].is_dummy:
-            raise IndexError(
-                "GET_INTERACTION_VECTORS: provided atom index is out of range or is a dummy atom"
-            )
-        return self.atoms[atom_index].interaction_vectors
-
     # endregion
 
-    def merge_terminal_atoms(self, indices) -> None:
+    def merge_terminal_atoms(self, indices, merge_rmin_half=False) -> None:
         """
         Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
         other atom.
@@ -1235,11 +1185,15 @@ class MoleculeSetup(BaseJSONParsable):
         ----------
         indices: list
             A list of indices to merge
+        merge_rmin_half: bool
+            Defaults to false because everything currently defaults to AD4 scoring, and those radii are already united atom.
 
         Returns
         -------
         None
         """
+        if merge_rmin_half and "rmin_half" not in self.atom_params:
+            raise ValueError("can't merge rmin_half because it's not in atom_params")
         for index in indices:
             if len(self.get_neighbors(index)) != 1:
                 msg = "Atempted to merge atom %d with %d neighbors. "
@@ -1250,6 +1204,13 @@ class MoleculeSetup(BaseJSONParsable):
             self.atoms[neighbor_index].charge += self.get_charge(index)
             self.atoms[index].charge = 0.0
             self.atoms[index].is_ignore = True
+            if not merge_rmin_half:
+                continue
+            r_neigh = self.atom_params["rmin_half"][neighbor_index]
+            r_source = self.atom_params["rmin_half"][index]
+            new_r = np.cbrt(r_neigh**3 + r_source**3)
+            self.atom_params["rmin_half"][neighbor_index] = new_r
+            self.atom_params["rmin_half"][index] = 0.0
         return
 
     # NOTE: This is a candidate for moving to utils
@@ -1500,11 +1461,11 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         constructor for the RDKitMoleculeSetup object (consider adapting to init?)
     """
 
-    def __init__(self, name: str = None, is_sidechain: bool = False, 
+    def __init__(self, name: str = None,
                  source: "MoleculeSetup" = None):
         
         # Initializer attributes 
-        super().__init__(name, is_sidechain)
+        super().__init__(name)
 
         if source:
             if isinstance(source, MoleculeSetup):
@@ -1521,6 +1482,8 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         self.dihedral_labels: dict = {}
         self.atom_to_ring_id = {}
         self.rmsd_symmetry_indices = ()
+
+        self.compute_charges = False
 
     # region JSON-interchange functions
     @classmethod
@@ -1593,9 +1556,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         mol: Chem.Mol,
         keep_chorded_rings: bool = False,
         keep_equivalent_rings: bool = False,
-        compute_gasteiger_charges: bool = True,
+        charge_model: str = "gasteiger",
         read_charges_from_prop: str = None,
         conformer_id: int = -1,
+        compute_charges: bool = False, 
+        template_key: str = None,
+        template_charge: dict = None
     ):
         """
 
@@ -1605,9 +1571,10 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             RDKit Mol object to build the RDKitMoleculeSetup from.
         keep_chorded_rings: bool
         keep_equivalent_rings: bool
-        compute_gasteiger_charges: bool
+        charge_model: str
         read_charges_from_prop: str
         conformer_id: int
+        compute_charges: bool
 
         Returns
         -------
@@ -1631,12 +1598,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         rdkit_conformer = mol.GetConformer(conformer_id)
         if not rdkit_conformer.Is3D():
             warnings.warn(
-                "RDKit molecule not labeled as 3D. This warning won't show again."
+                "RDKit molecule not labeled as 3D. This warning won't show again.", RuntimeWarning
             )
             RDKitMoleculeSetup.warned_not3D = True
         if mol.GetNumConformers() > 1 and conformer_id == -1:
             msg = "RDKit molecule has multiple conformers. Considering only the first one."
-            print(msg, file=sys.stderr)
+            warnings.warn(msg, RuntimeWarning)
         if len(Chem.GetMolFrags(mol)) != 1:
             raise ValueError(f"RDKit molecule has {len(Chem.GetMolFrags(mol))} fragments. Must have 1.")
         if mol.HasQuery():
@@ -1644,12 +1611,18 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         # Creating and populating the molecule setup with properties from RDKit as well as calculated values from our
         # functions
+
         molsetup = cls()
         molsetup.mol = mol
         molsetup.atom_true_count = molsetup.get_num_mol_atoms()
+        molsetup.compute_charges = compute_charges
         molsetup.name = molsetup.get_mol_name()
         coords = rdkit_conformer.GetPositions()
-        molsetup.init_atom(compute_gasteiger_charges, read_charges_from_prop, coords)
+        molsetup.init_atom(charge_model, 
+                           read_charges_from_prop, 
+                           coords, 
+                           template_key = template_key, 
+                           template_charge = template_charge)
         molsetup.init_bond()
         molsetup.perceive_rings(keep_chorded_rings, keep_equivalent_rings)
         # molsetup.rmsd_symmetry_indices = cls.get_symmetries_for_rmsd(mol)
@@ -1742,7 +1715,12 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         return mol, idx_to_rm, rm_to_neigh
 
-    def init_atom(self, compute_gasteiger_charges: bool, read_charges_from_prop: str, coords: list[np.ndarray]):
+    def init_atom(self, 
+                  charge_model: str, 
+                  read_charges_from_prop: str, 
+                  coords: list[np.ndarray], 
+                  template_key: str | None = None,
+                  template_charge: str | None = None):
         """
         Generates information about the atoms in an RDKit Mol and adds them to an RDKitMoleculeSetup.
 
@@ -1757,14 +1735,52 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         -------
         None
         """
+
+        # Quick sanity check
+        if template_key == None and self.compute_charges == False:
+            raise ValueError("Template key is none and compute_charges is false. Something has gone terribly wrong. ")
+
+        temp_compute_charges = None
+        if charge_model == "read":
+            # pqr option, leave this here for now. 
+            # since read pqr is computed by the first function. 
+            temp_compute_charges = self.compute_charges
+            self.compute_charges = True
+
+        if self.compute_charges: # not from template --recompute_charges option
+            charges = self.calculate_charges(charge_model, read_charges_from_prop)
+        else: # read from template json
+            charges = self.get_charges_from_template(charge_model, template_charge)
+
+        if temp_compute_charges is not None:
+            # restore variable
+            self.compute_charges = temp_compute_charges
+
+
+        # register atom
+        for a in self.mol.GetAtoms():
+            idx = a.GetIdx()
+            self.add_atom(
+                atom_index=idx,
+                pdbinfo=rdkitutils.getPdbInfoNoNull(a),
+                charge=charges[idx],
+                coord=coords[idx],
+                atomic_num=a.GetAtomicNum(),
+                is_ignore=False,
+            )
+
+    def calculate_charges(
+            self,
+            charge_model: str,
+            read_charges_from_prop: str, 
+
+    ):
         # extract/generate charges
-        if compute_gasteiger_charges: 
+        if charge_model == "gasteiger": 
             if read_charges_from_prop is not None: 
-                raise ValueError(
-                    "Conflicting options: compute_gasteiger_charges and read_charges_from_prop cannot both be set. "
-                )
+                raise ValueError("Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set.")
             
-            # remove metal elemeents and replace removed bonds by non-real hydrogens
+            # remove metal elements and replace removed bonds by non-real hydrogens
             things = self.remove_elements(self.mol)
             copy_mol, idx_rm_to_formal_charge, rm_to_neigh = things
             for atom in copy_mol.GetAtoms():
@@ -1809,6 +1825,36 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                             # of M-L (= num_nr_h, number of non-real Hs added for the M-L bond)
                             ok_charges[i] += sum(chrg_by_heavy_atom[newidx]) * num_nr_h / len(chrg_by_heavy_atom[newidx])
                 charges = ok_charges
+        
+        elif charge_model == "nagl":
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set.")
+            
+            # compute nagl charges
+            # note this requires the latest openff versions
+            try:
+                from openff.toolkit import Molecule
+            except ImportError:
+                print("A recent version of OpenFF is required for NAGL charges")
+
+            # assign stereochemistry
+            # ?test?
+            # Chem.AssignStereochemistryFrom3D(self.mol)
+
+            mol_off = Molecule.from_rdkit(self.mol, allow_undefined_stereo=True, hydrogens_are_explicit=True)
+
+            try:
+
+                mol_off.assign_partial_charges(
+                    partial_charge_method="openff-gnn-am1bcc-1.0.0.pt"
+                    )
+
+                charges = mol_off.partial_charges.magnitude.tolist()
+            except Exception as e:
+                print("NAGL charge computation failed with with exception:")
+                print(e)
+                print("Make sure you've installed the latest version of openff")
+
         elif read_charges_from_prop is not None: 
             if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
                 raise ValueError(
@@ -1822,23 +1868,60 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             if None in charges: 
                 for idx, charge in enumerate(charges):
                     if charge is None:
-                        print(f"Charge at index {idx} is None.")
+                        logger.error(f"Charge at index {idx} is None.")
                 raise ValueError(
                     f"The list of charges based on atom property name {read_charges_from_prop} contains None. "
                 )  
         else:
             charges = [0.0] * self.mol.GetNumAtoms()
-        # register atom
-        for a in self.mol.GetAtoms():
-            idx = a.GetIdx()
-            self.add_atom(
-                atom_index=idx,
-                pdbinfo=rdkitutils.getPdbInfoNoNull(a),
-                charge=charges[idx],
-                coord=coords[idx],
-                atomic_num=a.GetAtomicNum(),
-                is_ignore=False,
-            )
+
+        return charges
+
+    def get_charges_from_template(
+            self,
+            charge_model: str, 
+            template_charge: dict, 
+    ):
+        """
+        Obtain charges from template json
+
+        """
+        if self.mol is None:
+            raise ValueError(
+                    f"No rdkit mol generated for current residue. "
+                )
+
+        # substructure match between template mol and padded mol
+        template_mol = Chem.MolFromMolBlock(template_charge['molblock'], removeHs=False)
+        self.template_mol = template_mol
+        match_indices = list(template_mol.GetSubstructMatch(self.mol))
+
+        # check for mismatch
+        if len(match_indices) != self.mol.GetNumAtoms():
+            l1 = len(match_indices)
+            l2 = self.mol.GetNumAtoms()
+            raise ValueError(f"Mismatch between template mol ({l1} atoms) and padded mol ({l2} atoms). Abandoning prep!")
+        
+
+        # get appropriate charge array
+        match charge_model:
+            case "nagl":
+                charges = template_charge['nagl_charges']
+            case "espaloma": 
+                charges = template_charge['espaloma_charges']
+            case "gasteiger":
+                charges = template_charge['gasteiger_charges']
+            case "zero":
+                charges = [0.0] * self.mol.GetNumAtoms()
+            case _:
+                raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
+        
+        # make sure order of charge is same for both version of the residue
+        charges = np.array(charges)
+        charges = [float(x) for x in charges[match_indices]]
+        
+        return charges
+
 
     def init_bond(self):
         """
@@ -1854,7 +1937,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             rotatable = int(b.GetBondType()) == 1
             self.add_bond(idx1, idx2, rotatable=rotatable)
 
-    def find_pattern(self, smarts: str):
+    def find_pattern(self, smarts: str, uniquify=False, max_matches=int(1e7)):
         """
         Given a SMARTS pattern, finds substruct matches in the molecule.
 
@@ -1868,8 +1951,14 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         The substruct matches in the RDKit Mol for the given SMARTS.
         """
         p = Chem.MolFromSmarts(smarts)
-        nr_atoms = self.mol.GetNumAtoms()
-        return self.mol.GetSubstructMatches(p, maxMatches=nr_atoms)
+        # the default maxMatches is 1000, which is insufficient for very large molecules
+        # a very flexible smarts "[*]~[*]~[*](~[*])~[*]~[*]" produced 2.1 M matches
+        # with a molecule (protein) consisting of 10k arginines. The default herein
+        # is very generous at 10 M
+        # OpenFF uses uniquify=False. If we don't do that we parameterize only one of
+        # the water H with TIP3P parameters from OpenFF XML files (the other H gets
+        # general hydroxyl parameters)
+        return self.mol.GetSubstructMatches(p, uniquify=uniquify, maxMatches=max_matches)
 
     def get_mol_name(self):
         """
@@ -2119,13 +2208,13 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 molname = mol.GetProp("_Name")
             else:
                 molname = ""
-            print(
-                "warning: found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd"
-                % max_matches
+            warnings.warn(
+                "Found the maximum nr of matches (%d) in RDKitMolSetup.get_symmetries_for_rmsd"
+                % max_matches, RuntimeWarning
             )
-            print(
-                'Maybe this molecule is "too" symmetric? %s' % molname,
-                Chem.MolToSmiles(mol_noHs),
+            warnings.warn(
+                'Maybe this molecule is "too" symmetric? %s %s' % (molname, Chem.MolToSmiles(mol_noHs)),
+                RuntimeWarning
             )
         return matches
 

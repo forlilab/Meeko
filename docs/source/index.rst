@@ -23,6 +23,19 @@ Meeko is written in Python and exposes functions and classes that operate on
 RDKit molecules for the ligands, leveraging RDKit's popularity to facilitate
 integration with external software that also interfaces with RDKit.
 
+Example of polymer creation using the Python API:
+
+.. code-block:: python
+
+   from meeko import Polymer 
+
+   pdb_file = "path/to/pdb/file.pdb"
+   with open(pdb_file) as f:
+      pdb_string = f.read()
+
+   polymer = Polymer.from_pdb_string(pdb_string) # accept defaults for all parameters
+
+
 Command line scripts
 --------------------
 
@@ -89,6 +102,7 @@ to run molecular docking and virtual screening.
    Overview <rec_overview>
    Info on templates  <py_build_temp>
    Command line usage <cli_rec_prep>
+   Python bindings <py_rec_prep>
    mk_prepare_receptor.py options <rec_cli_options>
 
 .. toctree::
@@ -98,3 +112,11 @@ to run molecular docking and virtual screening.
 
    Usage <export_usage>
    mk_export.py options <export_cli_options>
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   :caption: Appendix
+
+   pdbqt specification <pdbqt_spec>
+   Flexible receptors pdbqt <flex_rec_pdbqt>

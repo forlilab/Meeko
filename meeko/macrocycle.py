@@ -6,6 +6,7 @@
 
 from collections import defaultdict
 from operator import itemgetter
+import warnings
 
 from .molsetup import Bond
 
@@ -333,7 +334,7 @@ class FlexMacrocycle:
         return broken_rings
 
     def show_macrocycle_scores(self, setup):
-        print("Warning: not showing macrocycle scores, check implementation.")
+        warnings.warn("Not showing macrocycle scores, check implementation.", RuntimeWarning)
         return
         if setup is not None:
             print("\n==============[ MACROCYCLE SCORES ]================")
