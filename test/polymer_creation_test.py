@@ -6,6 +6,7 @@ from meeko import Polymer
 from meeko import PDBQTWriterLegacy
 from meeko import MoleculePreparation
 from meeko import ResidueChemTemplates
+from meeko.polymer import PolymerCreationError
 
 from rdkit import Chem
 import numpy as np
@@ -14,6 +15,7 @@ workdir = pathlib.Path(__file__)
 datadir = workdir.parents[0] / "polymer_data"
 
 ahhy_example = datadir / "AHHY.pdb"
+radius_test_file = datadir / "bad_radius" / "2xo1_rec.pdb"
 pqr_example = datadir / "1FAS_dry.pqr"
 nphe_ser_example = datadir / "NPHE_SER.pdb"
 just_one_ALA_missing = datadir / "just-one-ALA-missing-CB.pdb"
@@ -213,7 +215,28 @@ def test_AHHY_flexibilize_then_parameterize():
     nr_rot_bonds = sum([b.rotatable for _, b in m.molsetup.bond_info.items()])
     assert nr_rot_bonds == 2
 
-
+def test_bad_res_radius():
+    with open(radius_test_file, "r") as f:
+        pdb_string = f.read()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates,
+        mk_prep,
+        delete_bad_res_from_box_radius=0,
+        box_center=[0., 0., 0.],
+        box_size=[20, 20, 20],
+    )
+    assert len(polymer.monomers) == 65
+    # change radius to zero and make sure an error is raised
+    with pytest.raises(PolymerCreationError) as excinfo:
+        polymer = Polymer.from_pdb_string(
+            pdb_string,
+            chem_templates,
+            mk_prep,
+            delete_bad_res_from_box_radius=10.0,
+            box_center=[0., 0., 0.],
+            box_size=[20, 20, 20],
+        )
 
 def test_protonated_Nterm_residue():
     f = open(nphe_ser_example, "r")
@@ -476,17 +499,17 @@ def test_write_pdbqt_from_pqr():
         mk_prep_for_pqr
     )
     pdbqt_rigid = PDBQTWriterLegacy.write_from_polymer(polymer)[0].split("\n")
-    expected_lines = """ATOM      1  C   THR     1      43.983  16.642   1.087  1.00  0.00     0.550 C 
+    expected_lines = """ATOM      1  C   THR     1      43.983  16.642   1.087  1.00  0.00    +0.550 C
 ATOM      2  O   THR     1      44.150  17.855   0.925  1.00  0.00    -0.550 OA
-ATOM      3  CA  THR     1      44.862  15.936   2.105  1.00  0.00     0.330 C 
-ATOM      4  N   THR     1      46.148  16.581   2.104  1.00  0.00    -0.320 N 
-ATOM      5  CB  THR     1      44.293  16.088   3.528  1.00  0.00     0.000 C 
-ATOM      6 CG2  THR     1      43.175  15.110   3.826  1.00  0.00     0.000 C 
-ATOM      7 OG1  THR     1      45.409  15.915   4.403  1.00  0.00    -0.490 OA
-ATOM      8 HG1  THR     1      45.246  15.149   5.034  1.00  0.00     0.490 HD
-ATOM      9  H1  THR     1      46.041  17.581   2.102  1.00  0.00     0.330 HD
-ATOM     10  H2  THR     1      46.674  16.320   2.920  1.00  0.00     0.330 HD
-ATOM     11  H3  THR     1      46.675  16.317   1.289  1.00  0.00     0.330 HD
+ATOM      3  CA  THR     1      44.862  15.936   2.105  1.00  0.00    +0.330 C
+ATOM      4  N   THR     1      46.148  16.581   2.104  1.00  0.00    -0.320 N
+ATOM      5  CB  THR     1      44.293  16.088   3.528  1.00  0.00    +0.000 C
+ATOM      6  CG2 THR     1      43.175  15.110   3.826  1.00  0.00    +0.000 C
+ATOM      7  OG1 THR     1      45.409  15.915   4.403  1.00  0.00    -0.490 OA
+ATOM      8  HG1 THR     1      45.246  15.149   5.034  1.00  0.00    +0.490 HD
+ATOM      9  H1  THR     1      46.041  17.581   2.102  1.00  0.00    +0.330 HD
+ATOM     10  H2  THR     1      46.674  16.320   2.920  1.00  0.00    +0.330 HD
+ATOM     11  H3  THR     1      46.675  16.317   1.289  1.00  0.00    +0.330 HD
 """.splitlines()
     for i, line in enumerate(expected_lines): 
         if pdbqt_rigid[i][:len(line)] != line: 
