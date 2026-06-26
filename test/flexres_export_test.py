@@ -6,12 +6,12 @@ from meeko import MoleculePreparation
 from meeko import ResidueChemTemplates
 from meeko import PDBQTMolecule
 from meeko import export_pdb_updated_flexres
-import meeko
 
-pkgdir = pathlib.Path(meeko.__file__).parents[1]
-just_three_residues = pkgdir / "test/polymer_data/just-three-residues.pdb"
-j3r_docked = pkgdir / "test/polymer_data/just-three-residues_vina_flexres.pdbqt"
-j3r_idx_docked = pkgdir / "test/polymer_data/just-three-residues_vina_flexres_idxmap.pdbqt"
+workdir = pathlib.Path(__file__)
+datadir = workdir.parents[0] / "polymer_data"
+just_three_residues = datadir / "just-three-residues.pdb"
+j3r_docked = datadir / "just-three-residues_vina_flexres.pdbqt"
+j3r_idx_docked = datadir / "just-three-residues_vina_flexres_idxmap.pdbqt"
 
 chem_templates = ResidueChemTemplates.create_from_defaults()
 mk_prep = MoleculePreparation(

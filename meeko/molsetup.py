@@ -1176,7 +1176,7 @@ class MoleculeSetup(BaseJSONParsable):
 
     # endregion
 
-    def merge_terminal_atoms(self, indices, merge_rmin_half=False) -> None:
+    def merge_terminal_atoms(self, indices, merge_rmin_half=False, merge_these_atom_params=()) -> None:
         """
         Primarily for merging hydrogens, but will merge the data for any atom or pseudoatom that is bonded to only one
         other atom.
@@ -1194,6 +1194,8 @@ class MoleculeSetup(BaseJSONParsable):
         """
         if merge_rmin_half and "rmin_half" not in self.atom_params:
             raise ValueError("can't merge rmin_half because it's not in atom_params")
+        if merge_rmin_half and "rmin_half" in merge_these_atom_params:
+            raise ValueError("merge_rmin_half=True wants to merge by volume, rmin_half in merge_these_atom_params wants to merge by radius")
         for index in indices:
             if len(self.get_neighbors(index)) != 1:
                 msg = "Atempted to merge atom %d with %d neighbors. "
@@ -1204,6 +1206,10 @@ class MoleculeSetup(BaseJSONParsable):
             self.atoms[neighbor_index].charge += self.get_charge(index)
             self.atoms[index].charge = 0.0
             self.atoms[index].is_ignore = True
+            for param_key in merge_these_atom_params:
+                value = self.atom_params[param_key][index]
+                self.atom_params[param_key][neighbor_index] += value
+                self.atom_params[param_key][index] = 0.0
             if not merge_rmin_half:
                 continue
             r_neigh = self.atom_params["rmin_half"][neighbor_index]

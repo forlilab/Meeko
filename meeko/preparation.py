@@ -84,6 +84,7 @@ class MoleculePreparation:
     def __init__(
         self,
         merge_these_atom_types=("H",),
+        merge_these_atom_params=(),
         merge_rmin_half=False,
         hydrate=False,
         flexible_amides=False,
@@ -120,6 +121,7 @@ class MoleculePreparation:
         Parameters
         ----------
         merge_these_atom_types
+        merge_these_atom_params
         merge_rmin_half
         hydrate
         flexible_amides
@@ -162,6 +164,7 @@ class MoleculePreparation:
 
         self.deprecated_setup_access = None
         self.merge_these_atom_types = merge_these_atom_types
+        self.merge_these_atom_params = merge_these_atom_params
         self.merge_rmin_half = merge_rmin_half
         self.hydrate = hydrate
         self.flexible_amides = flexible_amides
@@ -605,6 +608,17 @@ class MoleculePreparation:
             self.dihedral_params,
         )
 
+        if self.crippen or self.crippen_as_solpar:
+            add_crippen_to_molsetup(setup)
+            if not self.crippen:
+                setup.atom_params["ad4_sol_par"] = setup.atom_params.pop("crippen")
+            elif self.crippen_as_solpar:
+                setup.atom_params["ad4_sol_par"] = [value for value in setup.atom_params["crippen"]]
+
+        if self.override_ad4sol_par_including_q:
+            qasp = self.override_ad4sol_par_including_q_qasp
+            set_ad4sol_par_including_q(setup, qasp)
+
         # Convert molecule to graph and apply trained Espaloma model
         # skip if charges are read from template
         if self.dihedral_model == "espaloma" or (self.charge_model == "espaloma" and self.compute_charges):
@@ -634,7 +648,7 @@ class MoleculePreparation:
             for atom in setup.atoms:
                 if atom.atom_type == atype_to_merge:
                     indices.add(atom.index)
-        setup.merge_terminal_atoms(indices, self.merge_rmin_half)
+        setup.merge_terminal_atoms(indices, self.merge_rmin_half, self.merge_these_atom_params)
 
         # 3.  assign bond types
         #     - all single bonds rotatable except some amides and SMARTS rigidification
@@ -671,17 +685,6 @@ class MoleculePreparation:
                 else:
                     new_atom_info = orig_pdbinfo._replace(name=new_name)
                     atom.pdbinfo = new_atom_info
-
-        if self.crippen or self.crippen_as_solpar:
-            add_crippen_to_molsetup(setup)
-            if not self.crippen:
-                setup.atom_params["ad4_sol_par"] = setup.atom_params.pop("crippen")
-            elif self.crippen_as_solpar:
-                setup.atom_params["ad4_sol_par"] = [value for value in setup.atom_params["crippen"]]
-
-        if self.override_ad4sol_par_including_q:
-            qasp = self.override_ad4sol_par_including_q_qasp
-            set_ad4sol_par_including_q(setup, qasp)
 
         if self.reactive_smarts is None:
             setups = [setup]

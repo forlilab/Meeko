@@ -5,7 +5,6 @@ from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 from meeko import MoleculePreparation
 import numpy as np
-import meeko
 import pytest
 
 try:
@@ -15,10 +14,10 @@ except ImportError as err:
     _got_openff = False
 
 
-pkgdir = pathlib.Path(meeko.__file__).parents[1]
-
-lig_3zlq_a = pkgdir / "test/parameterization_data/3zlq_lig_a.sdf"
-lig_3zlq_b = pkgdir / "test/parameterization_data/3zlq_lig_b.sdf"
+workdir = pathlib.Path(__file__)
+datadir = workdir.parents[0] / "parameterization_data"
+lig_3zlq_a = datadir / "3zlq_lig_a.sdf"
+lig_3zlq_b = datadir / "3zlq_lig_b.sdf"
 
 
 def canonicalize_four_indices(four_indices):
@@ -114,12 +113,29 @@ def test_mbondi():
     rdDistGeom.EmbedMolecule(mol, etkdg_v3)
     mk_prep = MoleculePreparation(load_atom_params="gb_mbondi")
     molsetup = mk_prep(mol)[0]
-    print(molsetup.atom_params)
     assert 1.3 in molsetup.atom_params["mbondi_radius"]  # H bound to N or C
     assert 0.8 in molsetup.atom_params["mbondi_radius"]  # H bound to O or S
     assert 1.2 not in molsetup.atom_params["mbondi_radius"]  # other H
     assert molsetup.atom_params["gb_screen"].count(0.72) == 4  # C
     assert molsetup.atom_params["gb_screen"].count(0.79) == 2  # N
+
+def test_merge_crippen():
+    mol = Chem.AddHs(Chem.MolFromSmiles("OC(F)F"))
+    etkdg_v3 = rdDistGeom.ETKDGv3()
+    rdDistGeom.EmbedMolecule(mol, etkdg_v3)
+    mk_prep = MoleculePreparation(crippen=True, load_atom_params=["ad4_types"])
+    molsetup = mk_prep(mol)[0]
+    mk_prep = MoleculePreparation(crippen=True, load_atom_params=["ad4_types"], merge_these_atom_params=["crippen"])
+    molsetup_merge = mk_prep(mol)[0]
+    h_mask = np.array([atom.atom_type == "H" for atom in molsetup.atoms])
+    crippen_orig = np.array(molsetup.atom_params["crippen"])
+    crippen_merge = np.array(molsetup_merge.atom_params["crippen"])
+    abs_diff = np.abs(crippen_merge - crippen_orig)
+    assert abs(sum(crippen_orig) - sum(crippen_merge)) < 1e-8
+    assert np.max(crippen_orig[h_mask]) > 1e-2
+    assert np.max(crippen_merge[h_mask]) < 1e-8
+    assert np.min(abs_diff[h_mask]) > 1e-2
+    assert np.max(abs_diff[~h_mask]) > 1e-2
 
 def test_override_ad4sol_par_including_q():
     qasp = 0.01097
