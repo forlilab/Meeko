@@ -2789,39 +2789,25 @@ def add_rotamers_to_polymer_molsetups(rotamer_states_list, polymer):
         for specific_res in specific_res_list:
             rotamer_res_disambiguate[specific_res] = primary_res
 
-    no_resname_to_resname = {}
-    for res_with_resname in polymer.monomers:
-        chain, resname, resnum = res_with_resname.split(":")
-        no_resname_key = f"{chain}:{resnum}"
-        if no_resname_key in no_resname_to_resname:
-            errmsg = "both %s and %s would be keyed by %s" % (
-                res_with_resname,
-                no_resname_to_resname[no_resname_key],
-                no_resname_key,
-            )
-            raise RuntimeError(errmsg)
-        no_resname_to_resname[no_resname_key] = res_with_resname
-
     state_indices_list = []
     for state_index, state_dict in enumerate(rotamer_states_list):
         logger.info(f"adding rotamer state {state_index + 1}")
         state_indices = {}
-        for res_no_resname, angles in state_dict.items():
-            res_with_resname = no_resname_to_resname[res_no_resname]
-            if polymer.monomers[res_with_resname].molsetup is None:
+        for res_id, angles in state_dict.items():
+            if polymer.monomers[res_id].molsetup is None:
                 raise RuntimeError(
-                    "no molsetup for %s, can't add rotamers" % (res_with_resname)
+                    "no molsetup for %s, can't add rotamers" % (res_id)
                 )
             # next block is inefficient for large rotamer_states_list
             # refactored polymers could help by having the following
             # data readily available
-            molsetup = polymer.monomers[res_with_resname].molsetup
+            molsetup = polymer.monomers[res_id].molsetup
             name_to_molsetup_idx = {}
             for atom in molsetup.atoms:
                 atom_name = atom.pdbinfo.name
                 name_to_molsetup_idx[atom_name] = atom.index
 
-            resname = res_with_resname.split(":")[1]
+            resname = polymer.monomers[res_id].input_resname
             resname = rotamer_res_disambiguate.get(resname, resname)
 
             atom_names = residues_rotamers[resname]
@@ -2835,8 +2821,8 @@ def add_rotamers_to_polymer_molsetups(rotamer_states_list, polymer):
                 tmp = [name_to_molsetup_idx[name] for name in names]
                 atom_idxs.append(tmp)
 
-            state_indices[res_with_resname] = len(molsetup.rotamers)
-            molsetup.add_rotamer(atom_idxs, np.radians(angles))
+            state_indices[res_id] = len(molsetup.rotamers)
+            molsetup.add_rotamers(atom_idxs, np.radians(angles))
 
         state_indices_list.append(state_indices)
 
