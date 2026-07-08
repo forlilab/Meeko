@@ -442,6 +442,7 @@ def main():
         sys.exit(2)
     delete_bad_res = args.allow_bad_res or args.delete_bad_res
 
+
     if args.wanted_altloc is None:
         wanted_altloc = None
     else:
@@ -614,11 +615,14 @@ def main():
             print("Error: --delete_bad_res_from_box_radius requires --box_center/--box_size or --box_enveloping.", file=sys.stderr)
             sys.exit(2)
 
-        if args.box_center:
-            box_center = args.box_center
-            box_size = args.box_size
-        else:
-            box_center, box_size = getBoxFromFile(args.box_enveloping, args.padding)
+    if args.box_center:
+        box_center = args.box_center
+        box_size = args.box_size
+    elif args.box_enveloping:
+        box_center, box_size = getBoxFromFile(args.box_enveloping, args.padding)
+    else:
+        box_center = None
+        box_size = None
 
     # initialize MoleculePreparation with config
     mk_prep = MoleculePreparation.from_config(mk_config)
