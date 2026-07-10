@@ -55,6 +55,16 @@ def test_build_noncovalent_CC():
 
     assert template_equality_check(default_template_file, basename, "_fl-ccd", cc)
 
+
+def test_radical_cofactor_NO():
+    basename = "NO"  # free ligand from CCD
+    cc = build_noncovalent_CC(basename, radical_cofactor=True)
+
+    assert cc is not None
+    assert isinstance(cc, ChemicalComponent)
+
+    assert cc.smiles_exh == '[N]=O'
+
 def test_add_variants():
     basename = "AMP" 
     cc_list = build_linked_CCs(basename)

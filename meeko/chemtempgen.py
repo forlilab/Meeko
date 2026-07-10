@@ -372,7 +372,7 @@ def recharge(rwmol: Chem.RWMol) -> Chem.RWMol:
 
 
 # Attribute Formatters
-def get_smiles_with_atom_names(mol: Chem.Mol) -> tuple[str, list[str]]:
+def get_smiles_with_atom_names(mol: Chem.Mol, radical_cofactor) -> tuple[str, list[str]]:
     """
     Generate SMILES with atom names in the order of SMILES output
     
@@ -380,6 +380,8 @@ def get_smiles_with_atom_names(mol: Chem.Mol) -> tuple[str, list[str]]:
     ----------
     mol : Chem.Mol
         Input molecule
+    radical_cofactor:
+        true of the input is meant to be a radical
         
     Returns
     -------
@@ -387,7 +389,10 @@ def get_smiles_with_atom_names(mol: Chem.Mol) -> tuple[str, list[str]]:
         Tuple containing the SMILES string and a list of atom names in the order of SMILES output
     """
     # allHsExplicit may expose the implicit Hs of linker atoms to Smiles; the implicit Hs don't have names
-    smiles_exh = Chem.MolToSmiles(mol, allHsExplicit=True)
+    if radical_cofactor:
+        smiles_exh = Chem.MolToSmiles(mol)
+    else:
+        smiles_exh = Chem.MolToSmiles(mol, allHsExplicit=True)
 
     smiles_atom_output_order = mol.GetProp('_smilesAtomOutputOrder')
     delimiters = ('[', ']', ',')
@@ -515,7 +520,7 @@ class ChemicalComponent:
         return False
 
     @classmethod
-    def from_cif(cls, source_cif: str, resname: str):
+    def from_cif(cls, source_cif: str, resname: str, radical_cofactor):
         """
         Create ChemicalComponent from a chemical component dict file and a searchable residue name in file.
         
@@ -553,6 +558,8 @@ class ChemicalComponent:
             if len(element)==2:
                 element = element[0] + element[1].lower()
             rdkit_atom = Chem.Atom(element)
+            if radical_cofactor:
+                rdkit_atom.SetNoImplicit(True)
             for attr in atom_attributes:
                 rdkit_atom.SetProp(attr, atom_cols[attr][idx])
                 # strip double quotes in names
@@ -607,6 +614,8 @@ class ChemicalComponent:
         # Finish eidting mol 
         try:    
             rwmol.UpdatePropertyCache()
+            if radical_cofactor:
+                Chem.SanitizeMol(rwmol)
         except Exception as e:
             logger.error(f"Failed to create rdkitmol from cif. Error: {e} -> template for {resname} will be None. ")
             return None
@@ -620,7 +629,7 @@ class ChemicalComponent:
         rdkit_mol = rwmol.GetMol()
             
         # Get Smiles with explicit Hs and ordered atom names
-        smiles_exh, atom_name = get_smiles_with_atom_names(rdkit_mol)
+        smiles_exh, atom_name = get_smiles_with_atom_names(rdkit_mol, radical_cofactor)
         
         return cls(rdkit_mol, resname, smiles_exh, atom_name)
 
@@ -693,7 +702,7 @@ class ChemicalComponent:
         
     def make_pretty_smiles(self):
         """Build and name explicit hydrogens for atoms with implicit Hs by atom names and/or patterns."""
-        self.smiles_exh, self.atom_name = get_smiles_with_atom_names(self.rdkit_mol)
+        self.smiles_exh, self.atom_name = get_smiles_with_atom_names(self.rdkit_mol, False)
         self.smiles_exh = get_pretty_smiles(self.smiles_exh)
         return self
 
@@ -912,7 +921,9 @@ acidic_proton_loc_canonical = {
     }
 
 # Standard pipelines
-def build_noncovalent_CC(basename: str, ignore_https_cert = False) -> ChemicalComponent: 
+def build_noncovalent_CC(basename: str, 
+                         ignore_https_cert = False, 
+                         radical_cofactor=False) -> ChemicalComponent: 
     """
     Build a noncovalent chemical component from a CIF file.
 
@@ -927,7 +938,7 @@ def build_noncovalent_CC(basename: str, ignore_https_cert = False) -> ChemicalCo
         The constructed ChemicalComponent instance.
     """
     with ChemicalComponent_LoggingControler(): 
-        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename, ignore_https_cert=ignore_https_cert), basename)
+        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename, ignore_https_cert=ignore_https_cert), basename, radical_cofactor)
         if cc_from_cif is None:
             return None
 
@@ -939,7 +950,8 @@ def build_noncovalent_CC(basename: str, ignore_https_cert = False) -> ChemicalCo
             err = f"Template Generation failed for {cc.resname}. Error: Molecule breaks into fragments during the deleterious editing. "
             raise RuntimeError(err)
 
-        cc = cc.make_pretty_smiles()
+        if not radical_cofactor:
+            cc = cc.make_pretty_smiles()
 
         # Check
         try:
@@ -1057,7 +1069,8 @@ class NA_recipe:
 def build_linked_CCs(basename: str, embed_allowed_smarts: str = None, 
                      cap_allowed_smarts: str = None, cap_protonate: bool = False, 
                      pattern_to_label_mapping_standard = dict[str, str], 
-                     variant_dict = dict[str, tuple], ignore_https_cert = False) -> list[ChemicalComponent]: 
+                     variant_dict = dict[str, tuple], ignore_https_cert = False, 
+                     radical_cofactor=False) -> list[ChemicalComponent]: 
     """
     Build a linked chemical component from a CIF file.
 
@@ -1084,7 +1097,7 @@ def build_linked_CCs(basename: str, embed_allowed_smarts: str = None,
         List of ChemicalComponent instances with the added variants.
     """
     with ChemicalComponent_LoggingControler(): 
-        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename, ignore_https_cert=ignore_https_cert), basename)
+        cc_from_cif = ChemicalComponent.from_cif(fetch_from_pdb(basename, ignore_https_cert=ignore_https_cert), basename, radical_cofactor)
         if cc_from_cif is None:
             return None
         

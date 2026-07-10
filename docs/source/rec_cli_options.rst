@@ -107,6 +107,10 @@ Receptor Perception Options
    Default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr
 
 
+.. option:: --radical_cofactor
+   Meeko fails if the receptor contains a radical cofactor. This option relaxes some of the 
+   checks so that radical cofactors are handled properly. 
+
 Grid Box Options
 ~~~~~~~~~~~~~~~~
 
