@@ -1128,7 +1128,8 @@ class Polymer(BaseJSONParsable):
         blunt_ends: list[tuple[str, int]] = None,
         get_atomprop_from_raw: dict = None,
         ignore_https_cert = False,
-        forgive_extra_bonds: bool = False
+        forgive_extra_bonds: bool = False,
+        adj_padding: bool = False
     ):
         """
         Parameters
@@ -1179,6 +1180,11 @@ class Polymer(BaseJSONParsable):
 
         # store a copy of bonds.
         self.bonds = bonds.copy()
+
+        self.adj_padding = adj_padding 
+
+        if self.adj_padding and not mk_prep.compute_charges:
+            raise ValueError("adj_padding must be used with compute_charges in MoleculePreparation()")
 
         if set_template is None:
             set_template = {}
@@ -1304,7 +1310,8 @@ class Polymer(BaseJSONParsable):
         bonds = _bonds
 
 
-        if mk_prep.adj_padding:
+
+        if self.adj_padding:
             # create adjacency dict
             adj_dict = self.adjacency(self.bonds)
             # NEW padding
@@ -1627,6 +1634,7 @@ class Polymer(BaseJSONParsable):
         delete_bad_res_from_box_radius=None,
         box_size=None,
         box_center=None,
+        adj_padding=False
     ):
         """
 
@@ -1709,7 +1717,8 @@ class Polymer(BaseJSONParsable):
             blunt_ends,
             None,
             ignore_https_cert,
-            forgive_extra_bonds=forgive_extra_bonds
+            forgive_extra_bonds=forgive_extra_bonds,
+            adj_padding=adj_padding
         )
 
         unmatched_res = polymer.get_ignored_monomers()
@@ -1744,6 +1753,7 @@ class Polymer(BaseJSONParsable):
         delete_bad_res_from_box_radius=None,
         box_size=None,
         box_center=None,
+        adj_padding=False
     ):
         """
 
@@ -1818,6 +1828,7 @@ class Polymer(BaseJSONParsable):
             get_atomprop_from_raw = {"PQRCharge": 0.},
             ignore_https_cert=ignore_https_cert,
             forgive_extra_bonds=forgive_extra_bonds,
+            adj_padding=adj_padding
         )
 
         if polymer.log["matched_with_H_anomaly"]:
@@ -1863,6 +1874,7 @@ class Polymer(BaseJSONParsable):
         delete_bad_res_from_box_radius=None,
         box_size=None,
         box_center=None,
+        adj_padding=False
     ):
         """
 
@@ -1940,7 +1952,8 @@ class Polymer(BaseJSONParsable):
             blunt_ends,
             None,
             ignore_https_cert,
-            forgive_extra_bonds=forgive_extra_bonds
+            forgive_extra_bonds=forgive_extra_bonds,
+            adj_padding=adj_padding
         )
         unmatched_res = polymer.get_ignored_monomers()
         handle_parsing_situations(

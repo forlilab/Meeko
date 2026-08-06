@@ -604,7 +604,6 @@ def main():
     else:
         print("Template padding will be used.")
 
-    mk_config["adj_padding"] = args.adj_padding
     mk_config["compute_charges"] = args.compute_charges
 
     # update config by inputs from arguments
@@ -709,6 +708,7 @@ def main():
                     delete_bad_res_from_box_radius=args.delete_bad_res_from_box_radius,
                     box_size=box_size,
                     box_center=box_center,
+                    adj_padding=args.adj_padding
                 )
             except PolymerCreationError as e:
                 print(e)
@@ -731,6 +731,7 @@ def main():
                 delete_bad_res_from_box_radius=args.delete_bad_res_from_box_radius,
                 box_size=box_size,
                 box_center=box_center,
+                adj_padding=args.adj_padding
             )
         except PolymerCreationError as e:
             print(e)
@@ -760,6 +761,7 @@ def main():
                 delete_bad_res_from_box_radius=args.delete_bad_res_from_box_radius,
                 box_size=box_size,
                 box_center=box_center,
+                adj_padding=args.adj_padding
             )
         except PolymerCreationError as e:
             print(e)
@@ -791,6 +793,7 @@ def main():
                 delete_bad_res_from_box_radius=args.delete_bad_res_from_box_radius,
                 box_size=box_size,
                 box_center=box_center,
+                adj_padding=args.adj_padding
             )
         except PolymerCreationError as e:
             print(e)
