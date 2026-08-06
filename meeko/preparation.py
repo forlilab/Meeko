@@ -111,6 +111,7 @@ class MoleculePreparation:
         add_index_map=False,
         remove_smiles=False,
         compute_charges=False,
+        adj_padding=False,
         crippen=False,
         crippen_as_solpar=False,
         override_ad4sol_par_including_q=False,
@@ -199,12 +200,18 @@ class MoleculePreparation:
             )
 
         self.charge_model = charge_model
+        self.adj_padding = adj_padding
         self.compute_charges = compute_charges
         self.charge_atom_prop = charge_atom_prop
         self.crippen = crippen
         self.crippen_as_solpar = crippen_as_solpar
         self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
         self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
+
+
+        # check: adj_padding must be used with compute charges
+        if self.adj_padding and not self.compute_charges:
+            raise ValueError("adj_padding can only be used with compute_charges.")
 
         if self.charge_model!="read" and self.charge_atom_prop: 
             raise ValueError(

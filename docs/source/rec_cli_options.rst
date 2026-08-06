@@ -96,6 +96,12 @@ Receptor Perception Options
 .. option:: --wanted_altloc <location>
    Specify alternate locations for particular residues, e.g., `:5=B,B:17=A`.
 
+.. option:: --adj_padding
+   By default, meeko pads each residue with a reaction defined in the template files. This option
+   requests each residue to be padded with the adjacent residues instead. This may address some errors
+   related to template matching, and also makes creating custom templates simpler. 
+   Must be used in combination with `--compute_charges` since precomputed charges are no longer possible. 
+
 .. option:: --compute_charges
    Flag to request that charges be computed from scratch. Default is to read 
    pre-calculated charges from template, which is much faster.

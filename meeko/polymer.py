@@ -37,6 +37,7 @@ from .preparation import MoleculePreparation
 
 import numpy as np
 
+
 data_path = files("meeko") / "data"
 periodic_table = Chem.GetPeriodicTable()
 
@@ -1302,8 +1303,18 @@ class Polymer(BaseJSONParsable):
             _bonds[key] = [(invmap1[b[0]], invmap2[b[1]]) for b in bond_list]
         bonds = _bonds
 
-        # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
-        padded_mols = self._build_padded_mols(self.monomers, bonds, padders)
+
+        if mk_prep.adj_padding:
+            # create adjacency dict
+            adj_dict = self.adjacency(self.bonds)
+            # NEW padding
+            padded_mols = self.build_adj_padding(adj_dict)
+
+        else:
+            # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
+            # OLD padding
+            padded_mols = self._build_padded_mols(self.monomers, bonds, padders)
+
         for residue_id, (padded_mol, mapidx_from_pad) in padded_mols.items():
             monomer = self.monomers[residue_id]
             monomer.padded_mol = padded_mol
@@ -1311,7 +1322,6 @@ class Polymer(BaseJSONParsable):
 
         if mk_prep is not None:
             self.parameterize(mk_prep, get_atomprop_from_raw = get_atomprop_from_raw)
-
         return
     
     # region JSON-interchange functions
@@ -1360,6 +1370,118 @@ class Polymer(BaseJSONParsable):
                 nxt.append(Chem.CombineMols(a, b) if b is not None else a)
             mols = nxt
         return mols[0]
+
+
+    def adjacency(self, bonds):
+        """
+        Take the dictionary of bonded residue pairs and output in a more convenient format
+
+        {res_i: {bonded: [res_j, res_k], 
+                 indx: [(a,b), (c,d)]}}
+
+        """
+        result = {}
+        for (a, b), idx in bonds.items():
+            for res, partner, flip in ((a, b, False), (b, a, True)):
+                entry = result.setdefault(res, {"bonded": [], "indx": []})
+                entry["bonded"].append(partner)
+                entry["indx"].extend([(y, x) for (x, y) in idx] if flip else list(idx))
+        return result
+
+
+
+    def build_adj_padding(self, adjacencies):
+        """
+        build padded mols for each monomer by using adjacent monomers
+
+        monomer.rdkit_mol is used as the building blocks for the padded mols. 
+        """
+
+        padded_mols = {}
+        for key, monomer in self.monomers.items():
+            # mapidx_from_raw is already in the monomers
+            if monomer.rdkit_mol is None:
+                continue
+            ref_mol = monomer.rdkit_mol
+            adj = adjacencies[key]
+            terminal = len(adj["bonded"]) == 1 # check if terminal residue
+            #TODO need to loop instead of doing it separately. 
+            mon1 = self.monomers[adj["bonded"][0]]
+            mol1 = mon1.rdkit_mol
+            if not terminal: 
+                mon2 = self.monomers[adj["bonded"][1]]
+                mol2 = mon2.rdkit_mol
+
+            #update indices from raw to match rdkit_mol
+            # in adj, first index always refers to the ref monomer. 
+            # mon 1
+            a,b = adj["indx"][0]
+            ind1 = (monomer.mapidx_from_raw[a], mon1.mapidx_from_raw[b])
+            if not terminal:
+                a,b = adj["indx"][1]
+                ind2 = (monomer.mapidx_from_raw[a], mon2.mapidx_from_raw[b])
+
+            if terminal: 
+                padded_mols[key] = self._combine_two_mols_SINGLEBOND(ref_mol, mol1, ind1)
+            else:
+                padded_mols[key] = self._combine_three_mols_SINGLEBOND(ref_mol, mol1, mol2, ind1, ind2)
+
+        
+        return padded_mols
+
+
+    def _combine_two_mols_SINGLEBOND(self, ref_mol, mol1, ind1):
+        idx1, idx2 = ind1
+
+        # 2. Combine molecules and adjust index for the second mol
+        combined = Chem.CombineMols(ref_mol, mol1)
+        adjusted_idx2 = idx2 + ref_mol.GetNumAtoms()
+
+        # 3. Make editable, add the bond, and get the new RDKit mol
+        editable = Chem.EditableMol(combined)
+        editable.AddBond(idx1, adjusted_idx2, order=Chem.rdchem.BondType.SINGLE)
+        new_mol = editable.GetMol()
+
+        # 4. Clean up and sanitize
+        Chem.SanitizeMol(new_mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL)
+
+        atom_map = {i: i for i in range(ref_mol.GetNumAtoms())}
+
+        new_mol = Chem.AddHs(new_mol, addCoords=True)
+
+
+        return new_mol, atom_map
+
+    
+    def _combine_three_mols_SINGLEBOND(self, ref_mol, mol1, mol2, ind1, ind2):
+        """
+        Attach mol1 and mol2 to ref_mol with single bonds. 
+        """
+        combined = Chem.CombineMols(Chem.CombineMols(ref_mol, mol1), mol2)
+
+        n_ref = ref_mol.GetNumAtoms()
+        n_mol1 = mol1.GetNumAtoms()
+
+        # ind1 = (ref_atom, mol1_atom); ind2 = (ref_atom, mol2_atom)
+        ref_a1, mol1_a = ind1
+        ref_a2, mol2_a = ind2
+
+        adjusted_mol1 = mol1_a + n_ref            # mol1 atoms follow ref_mol
+        adjusted_mol2 = mol2_a + n_ref + n_mol1   # mol2 atoms follow mol1
+
+        editable = Chem.EditableMol(combined)
+        editable.AddBond(ref_a1, adjusted_mol1, order=Chem.rdchem.BondType.SINGLE)
+        editable.AddBond(ref_a2, adjusted_mol2, order=Chem.rdchem.BondType.SINGLE)
+        new_mol = editable.GetMol()
+
+        Chem.SanitizeMol(new_mol)
+
+        atom_map = {i: i for i in range(n_ref)}
+
+        new_mol = Chem.AddHs(new_mol, addCoords=True)
+
+        return new_mol, atom_map
+
 
     def to_rdkit_mol(self, residues_to_add: Optional[set[str]] = None, 
                bonds_to_use: Optional[dict[tuple[str], list[tuple[int]]]] = None):
@@ -3625,4 +3747,3 @@ class ResidueTemplate(BaseJSONParsable):
 
 
 # endregion
-

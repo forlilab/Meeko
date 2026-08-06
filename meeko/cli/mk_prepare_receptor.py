@@ -255,6 +255,11 @@ def get_args():
         help='specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
     )
 
+    config_group.add_argument(
+        "--adj_padding", 
+        help="use adjacent residues to pad each molecule. Must be used with --compute_charges",
+        action="store_true",
+    )
     
     config_group.add_argument(
         "--compute_charges",
@@ -587,7 +592,19 @@ def main():
     if args.config_file is not None:
         with open(args.config_file) as f:
             mk_config.update(json.load(f))
-    
+
+
+
+    if args.adj_padding:
+        if not args.compute_charges:
+            print("")
+            raise ValueError("--adj_padding requires charges to be computed on the fly.\nUse --compute_charges and --charge_model options.")
+        else: 
+            print("Molecules will be padded with adjacent residues.")
+    else:
+        print("Template padding will be used.")
+
+    mk_config["adj_padding"] = args.adj_padding
     mk_config["compute_charges"] = args.compute_charges
 
     # update config by inputs from arguments
@@ -629,7 +646,7 @@ def main():
 
     if mk_config["compute_charges"]:
         # use green text
-        print(f"\033[32m {mk_prep.charge_model} harges will be computed from scratch\n \033[0m")
+        print(f"\033[32m {mk_prep.charge_model} charges will be computed from scratch\n \033[0m")
     else:
         print(f"\033[32m {mk_prep.charge_model} charges will be read from template file \n \033[0m")
    
