@@ -1037,7 +1037,7 @@ def main():
             box_center = np.mean(box_centers, 0)
             box_size = args.box_size
         elif args.box_enveloping is not None:
-            box_center, box_size = getBoxFromFile(args.box_enveloping, padding)
+            box_center, box_size = getBoxFromFile(args.box_enveloping, args.padding)
         else:
             print("Error: No box center specified.", file=sys.stderr)
             sys.exit(2)
