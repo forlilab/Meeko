@@ -1381,18 +1381,17 @@ class Polymer(BaseJSONParsable):
 
     def adjacency(self, bonds):
         """
-        Take the dictionary of bonded residue pairs and output in a more convenient format
+        Take the dictionary of bonded residue pairs and output in a more convenient format.
 
-        {res_i: {bonded: [res_j, res_k], 
-                 indx: [(a,b), (c,d)]}}
-
+        {res_i: {"bonded": [res_j, res_k],
+                "indx":   [[(a,b)], [(c,d),(e,f)]]}}   # indx[k] belongs to bonded[k]
         """
         result = {}
         for (a, b), idx in bonds.items():
             for res, partner, flip in ((a, b, False), (b, a, True)):
                 entry = result.setdefault(res, {"bonded": [], "indx": []})
                 entry["bonded"].append(partner)
-                entry["indx"].extend([(y, x) for (x, y) in idx] if flip else list(idx))
+                entry["indx"].append([(y, x) for (x, y) in idx] if flip else list(idx))
         return result
 
 
@@ -1409,81 +1408,67 @@ class Polymer(BaseJSONParsable):
             # mapidx_from_raw is already in the monomers
             if monomer.rdkit_mol is None:
                 continue
-            ref_mol = monomer.rdkit_mol
-            adj = adjacencies[key]
-            terminal = len(adj["bonded"]) == 1 # check if terminal residue
-            #TODO need to loop instead of doing it separately. 
-            mon1 = self.monomers[adj["bonded"][0]]
-            mol1 = mon1.rdkit_mol
-            if not terminal: 
-                mon2 = self.monomers[adj["bonded"][1]]
-                mol2 = mon2.rdkit_mol
 
+            ref_mol = monomer.rdkit_mol
+
+            if key not in adjacencies:
+                print(f"WARNING: Resid {key} not bonded to any other residues.")
+                padded_mols[key] = (Chem.AddHs(ref_mol, addCoords=True), {i: i for i in range(ref_mol.GetNumAtoms())})
+                continue
+
+            adj = adjacencies[key]
+
+            bonded_resids = adj["bonded"]
+            bonded_mons = [self.monomers[resid] for resid in bonded_resids]
+            bonded_mols = [mon.rdkit_mol for mon in bonded_mons]
             #update indices from raw to match rdkit_mol
             # in adj, first index always refers to the ref monomer. 
-            # mon 1
-            a,b = adj["indx"][0]
-            ind1 = (monomer.mapidx_from_raw[a], mon1.mapidx_from_raw[b])
-            if not terminal:
-                a,b = adj["indx"][1]
-                ind2 = (monomer.mapidx_from_raw[a], mon2.mapidx_from_raw[b])
 
-            if terminal: 
-                padded_mols[key] = self._combine_two_mols_SINGLEBOND(ref_mol, mol1, ind1)
-            else:
-                padded_mols[key] = self._combine_three_mols_SINGLEBOND(ref_mol, mol1, mol2, ind1, ind2)
+            indxs = adj["indx"]
+            resid_index_mapped = zip(bonded_mons, indxs)
+            indxs_mapped = []
+            for mon, atom_indxs in resid_index_mapped:
+                indxs_mapped.append([(monomer.mapidx_from_raw[a], mon.mapidx_from_raw[b]) for a,b in atom_indxs])
 
-        
+            padded_mols[key] = self._combine_mols_SINGLEBOND(ref_mol, bonded_mols, indxs_mapped)
+
         return padded_mols
 
 
-    def _combine_two_mols_SINGLEBOND(self, ref_mol, mol1, ind1):
-        idx1, idx2 = ind1
-
-        # 2. Combine molecules and adjust index for the second mol
-        combined = Chem.CombineMols(ref_mol, mol1)
-        adjusted_idx2 = idx2 + ref_mol.GetNumAtoms()
-
-        # 3. Make editable, add the bond, and get the new RDKit mol
-        editable = Chem.EditableMol(combined)
-        editable.AddBond(idx1, adjusted_idx2, order=Chem.rdchem.BondType.SINGLE)
-        new_mol = editable.GetMol()
-
-        # 4. Clean up and sanitize
-        Chem.SanitizeMol(new_mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL)
-
-        atom_map = {i: i for i in range(ref_mol.GetNumAtoms())}
-
-        new_mol = Chem.AddHs(new_mol, addCoords=True)
-
-
-        return new_mol, atom_map
-
-    
-    def _combine_three_mols_SINGLEBOND(self, ref_mol, mol1, mol2, ind1, ind2):
+    def _combine_mols_SINGLEBOND(self, ref_mol, mols, bond_lists):
         """
-        Attach mol1 and mol2 to ref_mol with single bonds. 
+        Attach any number of mols to ref_mol with single bonds.
+
+        mols       : list of RDKit mols to attach to ref_mol
+        bond_lists : list parallel to `mols`; bond_lists[k] is a list of
+                    (ref_atom, mol_atom) tuples joining ref_mol to mols[k].
+                    A mol bonded by more than one atom pair simply has more
+                    than one tuple in its list.
         """
-        combined = Chem.CombineMols(Chem.CombineMols(ref_mol, mol1), mol2)
+        if len(mols) != len(bond_lists):
+            raise ValueError("mols and bond_lists must have the same length")
 
-        n_ref = ref_mol.GetNumAtoms()
-        n_mol1 = mol1.GetNumAtoms()
+        combined = ref_mol
+        for m in mols:
+            combined = Chem.CombineMols(combined, m)
 
-        # ind1 = (ref_atom, mol1_atom); ind2 = (ref_atom, mol2_atom)
-        ref_a1, mol1_a = ind1
-        ref_a2, mol2_a = ind2
-
-        adjusted_mol1 = mol1_a + n_ref            # mol1 atoms follow ref_mol
-        adjusted_mol2 = mol2_a + n_ref + n_mol1   # mol2 atoms follow mol1
+        # Offset for each mol = number of atoms placed before it.
+        offsets = []
+        running = ref_mol.GetNumAtoms()
+        for m in mols:
+            offsets.append(running)
+            running += m.GetNumAtoms()
 
         editable = Chem.EditableMol(combined)
-        editable.AddBond(ref_a1, adjusted_mol1, order=Chem.rdchem.BondType.SINGLE)
-        editable.AddBond(ref_a2, adjusted_mol2, order=Chem.rdchem.BondType.SINGLE)
+        for pairs, offset in zip(bond_lists, offsets):
+            for ref_a, mol_a in pairs:
+                editable.AddBond(ref_a, mol_a + offset,
+                                order=Chem.rdchem.BondType.SINGLE)
         new_mol = editable.GetMol()
 
         Chem.SanitizeMol(new_mol)
 
-        atom_map = {i: i for i in range(n_ref)}
+        atom_map = {i: i for i in range(ref_mol.GetNumAtoms())}
 
         new_mol = Chem.AddHs(new_mol, addCoords=True)
 
