@@ -315,16 +315,19 @@ def _identify_bonds(atom_idx, positions, atom_types):
     k = 5 if len(atom_idx) > 5 else len(atom_idx)
     atom_idx = np.array(atom_idx)
 
-    # If there is only one atom, we know there won't be a single bond..
-    if len(atom_idx) == 1:
+    # with fewer than two atoms there is no neighbor to bond to
+    if k < 2:
         return bonds
 
-    for atom_i, position, atom_type in zip(atom_idx, positions, atom_types):
-        distances, indices = KDTree.query(position, k=k)
-        r_cov = covalent_radius[autodock4_atom_types_elements[atom_type]]
+    # query every atom in one call, so the search stays in C
+    distances, indices = KDTree.query(positions, k=k, workers=-1)
+    neighbors = indices[:, 1:]
+    r_cov = np.array([covalent_radius[autodock4_atom_types_elements[t]] for t in atom_types])
+    optimal_distances = bond_allowance_factor * (r_cov[:, None] + r_cov[neighbors])
+    is_bonded = distances[:, 1:] < optimal_distances
 
-        optimal_distances = [bond_allowance_factor * (r_cov + covalent_radius[autodock4_atom_types_elements[atom_types[i]]]) for i in indices[1:]]
-        bonds[atom_i] = atom_idx[indices[1:][np.where(distances[1:] < optimal_distances)]].tolist()
+    for i, atom_i in enumerate(atom_idx):
+        bonds[atom_i] = atom_idx[neighbors[i][is_bonded[i]]].tolist()
 
     return bonds
 
