@@ -115,6 +115,7 @@ class MoleculePreparation:
         crippen_as_solpar=False,
         override_ad4sol_par_including_q=False,
         override_ad4sol_par_including_q_qasp=0.0,
+        radical_cofactor=False,
     ):
         """
 
@@ -245,6 +246,8 @@ class MoleculePreparation:
         self.reactive_smarts_idx = reactive_smarts_idx
         self.add_index_map = add_index_map
         self.remove_smiles = remove_smiles
+
+        self.radical_cofactor=radical_cofactor
 
         self._bond_typer = BondTyperLegacy()
         self._macrocycle_typer = FlexMacrocycle(

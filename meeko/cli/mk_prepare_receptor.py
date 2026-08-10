@@ -255,7 +255,6 @@ def get_args():
         help='specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)',
     )
 
-    
     config_group.add_argument(
         "--compute_charges",
         help="compute charges from scratch with the given charge model instead of reading from template (note: this option is slower)",
@@ -267,6 +266,11 @@ def get_args():
         choices=("gasteiger", "espaloma", "nagl", "zero", "read"),
         help="default is gasteiger, 'zero' sets all zeros, 'read' requires --read_pqr",
         default=None,
+    )
+    config_group.add_argument(
+        "--radical_cofactor",
+        help="if the receptor has a radical cofactor and meeko faisl, try this option",
+        action="store_true",
     )
 
     box_group = parser.add_argument_group("Size and center of grid box")
@@ -589,6 +593,8 @@ def main():
             mk_config.update(json.load(f))
     
     mk_config["compute_charges"] = args.compute_charges
+
+    mk_config["radical_cofactor"] = args.radical_cofactor
 
     # update config by inputs from arguments
 

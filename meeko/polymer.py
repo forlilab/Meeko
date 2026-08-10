@@ -1243,7 +1243,9 @@ class Polymer(BaseJSONParsable):
             if unbound_unknown_res: 
                 for resname in set(unbound_unknown_res.values()): 
                     try: 
-                        cc = build_noncovalent_CC(resname, ignore_https_cert=ignore_https_cert)
+                        cc = build_noncovalent_CC(resname, 
+                                                  ignore_https_cert=ignore_https_cert, 
+                                                  radical_cofactor=mk_prep.radical_cofactor)
                         fetch_template_dict = json.loads(export_chem_templates_to_json([cc]))['residue_templates'][cc.resname]
                         residue_templates.update({resname: ResidueTemplate(
                                                     smiles = fetch_template_dict['smiles'],
