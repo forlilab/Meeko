@@ -43,6 +43,36 @@ def mol_contains_unexpected_element(mol: Chem.Mol, allowed_elements: list[str] =
     return False
 
 
+def formal_charge_from_cif_value(charge_value: str) -> int:
+    """
+    Convert a ``_chem_comp_atom.charge`` token from a CIF into an int formal charge.
+
+    mmCIF uses ``?`` (value unknown) and ``.`` (value not applicable) as null
+    markers, and CCD entries fetched from the PDB sometimes carry one of these
+    (or a blank) in the charge column instead of an integer. Only these
+    documented null markers are treated as an unspecified formal charge (0,
+    RDKit's default) so a missing charge no longer crashes the whole receptor
+    preparation. Any other token is still parsed as an integer, so a genuinely
+    malformed charge continues to raise (fail-loud) as it did before.
+
+    Parameters
+    ----------
+    charge_value : str
+        The raw charge token read from the CIF atom table.
+
+    Returns
+    -------
+    int
+        The parsed integer formal charge, or 0 for a CIF null marker/blank.
+    """
+    if charge_value is None:
+        return 0
+    token = charge_value.strip()
+    if token in ("", "?", "."):
+        return 0
+    return int(token)
+
+
 def get_atom_idx_by_names(mol: Chem.Mol, wanted_names: set[str] = set()) -> set[int]:
     """
     Get atom idx by atom names
@@ -558,9 +588,9 @@ class ChemicalComponent:
                 # strip double quotes in names
                 raw_name = rdkit_atom.GetProp('atom_id')
                 rdkit_atom.SetProp('atom_id', raw_name.strip('"'))
-            target_charge = atom_cols['charge'][idx]
-            if target_charge!='0':
-                rdkit_atom.SetFormalCharge(int(target_charge)) # this needs to be int for rdkit
+            target_charge = formal_charge_from_cif_value(atom_cols['charge'][idx])
+            if target_charge != 0:
+                rdkit_atom.SetFormalCharge(target_charge) # this needs to be int for rdkit
             rwmol.AddAtom(rdkit_atom)
 
         # Check if rwmol contains unexpected elements
