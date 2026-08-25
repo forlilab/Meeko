@@ -45,15 +45,10 @@ def mol_contains_unexpected_element(mol: Chem.Mol, allowed_elements: list[str] =
 
 def formal_charge_from_cif_value(charge_value: str) -> int:
     """
-    Convert a ``_chem_comp_atom.charge`` token from a CIF into an int formal charge.
+    Convert a ``_chem_comp_atom.charge`` to an int.
 
     mmCIF uses ``?`` (value unknown) and ``.`` (value not applicable) as null
-    markers, and CCD entries fetched from the PDB sometimes carry one of these
-    (or a blank) in the charge column instead of an integer. Only these
-    documented null markers are treated as an unspecified formal charge (0,
-    RDKit's default) so a missing charge no longer crashes the whole receptor
-    preparation. Any other token is still parsed as an integer, so a genuinely
-    malformed charge continues to raise (fail-loud) as it did before.
+    markers, convert these and empty/whitespace str to zero.
 
     Parameters
     ----------

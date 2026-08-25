@@ -68,12 +68,9 @@ def test_add_variants():
         assert template_equality_check(default_template_file, cc.resname, "-ccd", cc)
 
 
-# --- Regression tests for issue #491 -----------------------------------------
+# --- Parsing tests for issue #491 -----------------------------------------
 # mmCIF uses '?' (value unknown) and '.' (value not applicable) as null markers.
-# CCD templates fetched for unknown residues (e.g. HEM) can carry one of these
-# in the _chem_comp_atom.charge column, which used to crash from_cif() with
-# "ValueError: invalid literal for int() with base 10: '?'" and abort the whole
-# receptor preparation. These tests are network-free and pin the fix in place.
+# Some residues carry these for formal charges
 
 def _write_single_atom_cif(directory: pathlib.Path, charge_token: str) -> str:
     """Write a minimal CCD-style CIF for a single-Fe residue with the given
