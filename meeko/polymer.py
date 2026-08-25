@@ -37,6 +37,7 @@ from .preparation import MoleculePreparation
 
 import numpy as np
 
+
 data_path = files("meeko") / "data"
 periodic_table = Chem.GetPeriodicTable()
 
@@ -1127,7 +1128,8 @@ class Polymer(BaseJSONParsable):
         blunt_ends: list[tuple[str, int]] = None,
         get_atomprop_from_raw: dict = None,
         ignore_https_cert = False,
-        forgive_extra_bonds: bool = False
+        forgive_extra_bonds: bool = False,
+        adj_padding: bool = False
     ):
         """
         Parameters
@@ -1178,6 +1180,11 @@ class Polymer(BaseJSONParsable):
 
         # store a copy of bonds.
         self.bonds = bonds.copy()
+
+        self.adj_padding = adj_padding 
+
+        if self.adj_padding and not mk_prep.compute_charges:
+            raise ValueError("adj_padding must be used with compute_charges in MoleculePreparation()")
 
         if set_template is None:
             set_template = {}
@@ -1302,8 +1309,19 @@ class Polymer(BaseJSONParsable):
             _bonds[key] = [(invmap1[b[0]], invmap2[b[1]]) for b in bond_list]
         bonds = _bonds
 
-        # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
-        padded_mols = self._build_padded_mols(self.monomers, bonds, padders)
+
+
+        if self.adj_padding:
+            # create adjacency dict
+            adj_dict = self.adjacency(self.bonds)
+            # NEW padding
+            padded_mols = self.build_adj_padding(adj_dict)
+
+        else:
+            # padding may seem overkill but we had to run a reaction anyway for h_coord_from_dipep
+            # OLD padding
+            padded_mols = self._build_padded_mols(self.monomers, bonds, padders)
+
         for residue_id, (padded_mol, mapidx_from_pad) in padded_mols.items():
             monomer = self.monomers[residue_id]
             monomer.padded_mol = padded_mol
@@ -1311,7 +1329,6 @@ class Polymer(BaseJSONParsable):
 
         if mk_prep is not None:
             self.parameterize(mk_prep, get_atomprop_from_raw = get_atomprop_from_raw)
-
         return
     
     # region JSON-interchange functions
@@ -1360,6 +1377,103 @@ class Polymer(BaseJSONParsable):
                 nxt.append(Chem.CombineMols(a, b) if b is not None else a)
             mols = nxt
         return mols[0]
+
+
+    def adjacency(self, bonds):
+        """
+        Take the dictionary of bonded residue pairs and output in a more convenient format.
+
+        {res_i: {"bonded": [res_j, res_k],
+                "indx":   [[(a,b)], [(c,d),(e,f)]]}}   # indx[k] belongs to bonded[k]
+        """
+        result = {}
+        for (a, b), idx in bonds.items():
+            for res, partner, flip in ((a, b, False), (b, a, True)):
+                entry = result.setdefault(res, {"bonded": [], "indx": []})
+                entry["bonded"].append(partner)
+                entry["indx"].append([(y, x) for (x, y) in idx] if flip else list(idx))
+        return result
+
+
+
+    def build_adj_padding(self, adjacencies):
+        """
+        build padded mols for each monomer by using adjacent monomers
+
+        monomer.rdkit_mol is used as the building blocks for the padded mols. 
+        """
+
+        padded_mols = {}
+        for key, monomer in self.monomers.items():
+            # mapidx_from_raw is already in the monomers
+            if monomer.rdkit_mol is None:
+                continue
+
+            ref_mol = monomer.rdkit_mol
+
+            if key not in adjacencies:
+                print(f"WARNING: Resid {key} not bonded to any other residues.")
+                padded_mols[key] = (Chem.AddHs(ref_mol, addCoords=True), {i: i for i in range(ref_mol.GetNumAtoms())})
+                continue
+
+            adj = adjacencies[key]
+
+            bonded_resids = adj["bonded"]
+            bonded_mons = [self.monomers[resid] for resid in bonded_resids]
+            bonded_mols = [mon.rdkit_mol for mon in bonded_mons]
+            #update indices from raw to match rdkit_mol
+            # in adj, first index always refers to the ref monomer. 
+
+            indxs = adj["indx"]
+            resid_index_mapped = zip(bonded_mons, indxs)
+            indxs_mapped = []
+            for mon, atom_indxs in resid_index_mapped:
+                indxs_mapped.append([(monomer.mapidx_from_raw[a], mon.mapidx_from_raw[b]) for a,b in atom_indxs])
+
+            padded_mols[key] = self._combine_mols_SINGLEBOND(ref_mol, bonded_mols, indxs_mapped)
+
+        return padded_mols
+
+
+    def _combine_mols_SINGLEBOND(self, ref_mol, mols, bond_lists):
+        """
+        Attach any number of mols to ref_mol with single bonds.
+
+        mols       : list of RDKit mols to attach to ref_mol
+        bond_lists : list parallel to `mols`; bond_lists[k] is a list of
+                    (ref_atom, mol_atom) tuples joining ref_mol to mols[k].
+                    A mol bonded by more than one atom pair simply has more
+                    than one tuple in its list.
+        """
+        if len(mols) != len(bond_lists):
+            raise ValueError("mols and bond_lists must have the same length")
+
+        combined = ref_mol
+        for m in mols:
+            combined = Chem.CombineMols(combined, m)
+
+        # Offset for each mol = number of atoms placed before it.
+        offsets = []
+        running = ref_mol.GetNumAtoms()
+        for m in mols:
+            offsets.append(running)
+            running += m.GetNumAtoms()
+
+        editable = Chem.EditableMol(combined)
+        for pairs, offset in zip(bond_lists, offsets):
+            for ref_a, mol_a in pairs:
+                editable.AddBond(ref_a, mol_a + offset,
+                                order=Chem.rdchem.BondType.SINGLE)
+        new_mol = editable.GetMol()
+
+        Chem.SanitizeMol(new_mol)
+
+        atom_map = {i: i for i in range(ref_mol.GetNumAtoms())}
+
+        new_mol = Chem.AddHs(new_mol, addCoords=True)
+
+        return new_mol, atom_map
+
 
     def to_rdkit_mol(self, residues_to_add: Optional[set[str]] = None, 
                bonds_to_use: Optional[dict[tuple[str], list[tuple[int]]]] = None):
@@ -1505,6 +1619,7 @@ class Polymer(BaseJSONParsable):
         delete_bad_res_from_box_radius=None,
         box_size=None,
         box_center=None,
+        adj_padding=False
     ):
         """
 
@@ -1587,7 +1702,8 @@ class Polymer(BaseJSONParsable):
             blunt_ends,
             None,
             ignore_https_cert,
-            forgive_extra_bonds=forgive_extra_bonds
+            forgive_extra_bonds=forgive_extra_bonds,
+            adj_padding=adj_padding
         )
 
         unmatched_res = polymer.get_ignored_monomers()
@@ -1622,6 +1738,7 @@ class Polymer(BaseJSONParsable):
         delete_bad_res_from_box_radius=None,
         box_size=None,
         box_center=None,
+        adj_padding=False
     ):
         """
 
@@ -1696,6 +1813,7 @@ class Polymer(BaseJSONParsable):
             get_atomprop_from_raw = {"PQRCharge": 0.},
             ignore_https_cert=ignore_https_cert,
             forgive_extra_bonds=forgive_extra_bonds,
+            adj_padding=adj_padding
         )
 
         if polymer.log["matched_with_H_anomaly"]:
@@ -1741,6 +1859,7 @@ class Polymer(BaseJSONParsable):
         delete_bad_res_from_box_radius=None,
         box_size=None,
         box_center=None,
+        adj_padding=False
     ):
         """
 
@@ -1818,7 +1937,8 @@ class Polymer(BaseJSONParsable):
             blunt_ends,
             None,
             ignore_https_cert,
-            forgive_extra_bonds=forgive_extra_bonds
+            forgive_extra_bonds=forgive_extra_bonds,
+            adj_padding=adj_padding
         )
         unmatched_res = polymer.get_ignored_monomers()
         handle_parsing_situations(
@@ -3625,4 +3745,3 @@ class ResidueTemplate(BaseJSONParsable):
 
 
 # endregion
-

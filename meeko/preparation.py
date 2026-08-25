@@ -206,6 +206,7 @@ class MoleculePreparation:
         self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
         self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
 
+
         if self.charge_model!="read" and self.charge_atom_prop: 
             raise ValueError(
                 f"A charge_atom_prop ({charge_atom_prop}) is given to MoleculePreparation but its current charge_model is {charge_model}. " + eol + 
