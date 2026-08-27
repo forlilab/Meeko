@@ -1,7 +1,7 @@
 # Meeko: interface for AutoDock
 
 [![API stability](https://img.shields.io/badge/stable%20API-no-orange)](https://shields.io/)
-[![PyPI version fury.io](https://img.shields.io/badge/version-0.7.1-green.svg)](https://pypi.python.org/pypi/meeko/)
+[![PyPI version fury.io](https://img.shields.io/badge/version-0.8.0-green.svg)](https://pypi.python.org/pypi/meeko/)
 [![Documentation Status](https://readthedocs.org/projects/meeko/badge/?version=develop)](https://meeko.readthedocs.io)
 
 Meeko prepares the input for AutoDock and processes its output.
