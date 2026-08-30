@@ -386,55 +386,51 @@ def _build_from_consensus_template_connectivity(pdbmol, residue_templates):
         return None
 
     input_elements = {
-        atom_names[atom.GetIdx()]: atom.GetAtomicNum()
-        for atom in pdbmol.GetAtoms()
+        name: atom.GetAtomicNum()
+        for name, atom in zip(atom_names, pdbmol.GetAtoms())
     }
     heavy_names = {
         name for name, atomic_number in input_elements.items() if atomic_number > 1
     }
     graphs = set()
     for template in residue_templates:
+        template_names = template.atom_names
         template_elements = {
-            template.atom_names[atom.GetIdx()]: atom.GetAtomicNum()
-            for atom in template.mol.GetAtoms()
+            name: atom.GetAtomicNum()
+            for name, atom in zip(template_names, template.mol.GetAtoms())
         }
-        template_heavy_names = {
+        if heavy_names != {
             name
             for name, atomic_number in template_elements.items()
             if atomic_number > 1
-        }
-        if template_heavy_names != heavy_names:
+        }:
             continue
-        if not input_elements.keys() <= template_elements.keys():
-            continue
-        if any(
-            input_elements[name] != template_elements[name]
-            for name in input_elements
-        ):
+        if not input_elements.items() <= template_elements.items():
             continue
         graphs.add(
             frozenset(
                 tuple(
                     sorted(
                         (
-                            template.atom_names[bond.GetBeginAtomIdx()],
-                            template.atom_names[bond.GetEndAtomIdx()],
+                            template_names[bond.GetBeginAtomIdx()],
+                            template_names[bond.GetEndAtomIdx()],
                         )
                     )
                 )
                 for bond in template.mol.GetBonds()
-                if template.atom_names[bond.GetBeginAtomIdx()] in input_elements
-                and template.atom_names[bond.GetEndAtomIdx()] in input_elements
+                if template_names[bond.GetBeginAtomIdx()] in input_elements
+                and template_names[bond.GetEndAtomIdx()] in input_elements
             )
         )
     if len(graphs) != 1:
         return None
 
+    graph, = graphs
     editable = Chem.RWMol(pdbmol)
     for atom in editable.GetAtoms():
         atom.SetNoImplicit(True)
     indices = {name: index for index, name in enumerate(atom_names)}
-    for first, second in sorted(next(iter(graphs))):
+    for first, second in sorted(graph):
         editable.AddBond(indices[first], indices[second], Chem.BondType.SINGLE)
     mol = editable.GetMol()
     mol.SetBoolProp("_MeekoUsePDBAtomNames", True)

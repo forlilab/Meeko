@@ -58,6 +58,13 @@ else:
 logger = logging.getLogger(__name__)
 rdkit_logger = logging.getLogger("rdkit")
 
+STANDARD_AMINO_ACID_RESNAMES = frozenset(
+    {
+        "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+        "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+    }
+)
+
 residues_rotamers = {
     "SER": [("C", "CA", "CB", "OG")],
     "THR": [("C", "CA", "CB", "CG2")],
@@ -99,31 +106,6 @@ residues_rotamers = {
         ("CG", "CD", "CE", "NZ"),
     ],
 }
-
-STANDARD_AMINO_ACID_RESNAMES = frozenset(
-    {
-        "ALA",
-        "ARG",
-        "ASN",
-        "ASP",
-        "CYS",
-        "GLN",
-        "GLU",
-        "GLY",
-        "HIS",
-        "ILE",
-        "LEU",
-        "LYS",
-        "MET",
-        "PHE",
-        "PRO",
-        "SER",
-        "THR",
-        "TRP",
-        "TYR",
-        "VAL",
-    }
-)
 
 
 def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=()):
@@ -2479,7 +2461,7 @@ class Polymer(BaseJSONParsable):
         wanted_altloc: Optional[dict[str, str]]=None,
         default_altloc: Optional[str]=None,
         chem_templates=None,
-        set_template: Optional[dict[str, str]]=None,
+        set_template: dict[str, str] | None=None,
     ):
         """
 
@@ -3767,45 +3749,36 @@ class ResidueTemplate(BaseJSONParsable):
             return None
 
         input_indices = {name: index for index, name in enumerate(input_names)}
-        template_indices = {
-            name: index for index, name in enumerate(self.atom_names)
-        }
+        template_indices = {name: index for index, name in enumerate(self.atom_names)}
         if not input_indices.keys() <= template_indices.keys():
             return None
-        if any(
-            input_mol.GetAtomWithIdx(input_index).GetAtomicNum()
-            != self.mol.GetAtomWithIdx(template_indices[name]).GetAtomicNum()
-            for name, input_index in input_indices.items()
-        ):
-            return None
 
-        input_bonds = {
-            frozenset(
-                (
-                    input_names[bond.GetBeginAtomIdx()],
-                    input_names[bond.GetEndAtomIdx()],
-                )
-            )
-            for bond in input_mol.GetBonds()
-        }
-        template_bonds = {
-            frozenset(
-                (
-                    self.atom_names[bond.GetBeginAtomIdx()],
-                    self.atom_names[bond.GetEndAtomIdx()],
-                )
-            )
-            for bond in self.mol.GetBonds()
-            if self.atom_names[bond.GetBeginAtomIdx()] in input_indices
-            and self.atom_names[bond.GetEndAtomIdx()] in input_indices
-        }
-        if input_bonds != template_bonds:
-            return None
-
-        return {
+        mapping = {
             template_indices[name]: input_index
             for name, input_index in input_indices.items()
         }
+        if any(
+            self.mol.GetAtomWithIdx(template_index).GetAtomicNum()
+            != input_mol.GetAtomWithIdx(input_index).GetAtomicNum()
+            for template_index, input_index in mapping.items()
+        ):
+            return None
+
+        if any(
+            {
+                mapping[neighbor.GetIdx()]
+                for neighbor in self.mol.GetAtomWithIdx(template_index).GetNeighbors()
+                if neighbor.GetIdx() in mapping
+            }
+            != {
+                neighbor.GetIdx()
+                for neighbor in input_mol.GetAtomWithIdx(input_index).GetNeighbors()
+            }
+            for template_index, input_index in mapping.items()
+        ):
+            return None
+
+        return mapping
 
     def match(self, input_mol):
         mapping = self._match_by_pdb_atom_names(input_mol)

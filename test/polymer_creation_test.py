@@ -109,10 +109,6 @@ _STANDARD_HEAVY_BONDS = {
 }
 
 
-def _atom_names(bonds):
-    return sorted({name for bond in bonds for name in bond})
-
-
 def _pdb_atom_record(serial, name, resname, chain, resnum, xyz, altloc=""):
     element = name[0]
     x, y, z = xyz
@@ -174,7 +170,9 @@ _NAMED_CONNECTIVITY_CASES = [
     _NAMED_CONNECTIVITY_CASES,
 )
 def test_named_template_connectivity(resname, expected_bonds, atom_names, altlocs):
-    atom_names = atom_names or _atom_names(expected_bonds)
+    atom_names = atom_names or sorted(
+        {name for bond in expected_bonds for name in bond}
+    )
     parser_options = {"wanted_altloc": {"Z:1": "A"}} if altlocs == ("A", "B") else {}
     raw_mol = Polymer._pdb_to_residue_mols(
         _spaced_pdb(resname, atom_names, altlocs),
@@ -241,7 +239,7 @@ def test_named_coordinates_and_prepared_bytes_are_hash_seed_invariant():
         mk_prep=MoleculePreparation(),
     )
     rigid, flexible = PDBQTWriterLegacy.write_string_from_polymer(polymer)
-    expected_output = [polymer.to_pdb(), [rigid, flexible]]
+    expected_output = json.dumps([polymer.to_pdb(), [rigid, flexible]]).encode() + b"\n"
     assert _input_named_records(polymer.to_pdb()) == _input_named_records(pdb_string)
 
     script = """
@@ -257,18 +255,13 @@ polymer = Polymer.from_pdb_string(
 rigid, flexible = PDBQTWriterLegacy.write_string_from_polymer(polymer)
 print(json.dumps([polymer.to_pdb(), [rigid, flexible]]))
 """
-    results = []
-    for seed in range(1, 6):
-        environment = os.environ.copy()
-        environment["PYTHONHASHSEED"] = str(seed)
-        completed = subprocess.run(
+    results = [
+        subprocess.check_output(
             [sys.executable, "-c", script, str(distorted_standard_residues)],
-            check=True,
-            capture_output=True,
-            text=True,
-            env=environment,
+            env={**os.environ, "PYTHONHASHSEED": str(seed)},
         )
-        results.append(json.loads(completed.stdout))
+        for seed in range(1, 6)
+    ]
 
     assert results == [expected_output] * len(results)
 
@@ -279,8 +272,6 @@ def test_explicit_template_controls_parsing_and_preserves_named_coordinates(
 ):
     lines = [
         line[:17] + input_resname + line[20:]
-        if line.startswith(("ATOM", "HETATM"))
-        else line
         for line in distorted_standard_residues.read_text().splitlines()
         if line.startswith(("ATOM", "HETATM")) and line[21:26].strip() == "A 577"
     ]
