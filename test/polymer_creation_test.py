@@ -1,5 +1,8 @@
 import json
+import os
 import pathlib
+import subprocess
+import sys
 import pytest
 
 from meeko import Polymer
@@ -68,57 +71,206 @@ def _named_bonds(mol):
     }
 
 
-def _bonds_from_adjacency(adjacency):
-    return {
-        frozenset((first, second))
-        for first, seconds in adjacency.items()
-        for second in seconds
-    }
+def _bond_pairs(specification):
+    return {frozenset(bond.split("-")) for bond in specification.split()}
 
 
-def test_standard_residue_connectivity_comes_from_templates():
-    lysine_bonds = _bonds_from_adjacency(
-        {
-            "N": ("CA", "H"),
-            "CA": ("C", "CB", "HA"),
-            "C": ("O",),
-            "CB": ("CG", "HB2", "HB3"),
-            "CG": ("CD", "HG2", "HG3"),
-            "CD": ("CE", "HD2", "HD3"),
-            "CE": ("NZ", "HE2", "HE3"),
-            "NZ": ("HZ1", "HZ2", "HZ3"),
-        }
+_BACKBONE_HEAVY_BONDS = _bond_pairs("N-CA CA-C C-O")
+_STANDARD_SIDECHAIN_HEAVY_BONDS = {
+    "ALA": "CA-CB",
+    "ARG": "CA-CB CB-CG CG-CD CD-NE NE-CZ CZ-NH1 CZ-NH2",
+    "ASN": "CA-CB CB-CG CG-OD1 CG-ND2",
+    "ASP": "CA-CB CB-CG CG-OD1 CG-OD2",
+    "CYS": "CA-CB CB-SG",
+    "GLN": "CA-CB CB-CG CG-CD CD-OE1 CD-NE2",
+    "GLU": "CA-CB CB-CG CG-CD CD-OE1 CD-OE2",
+    "GLY": "",
+    "HIS": "CA-CB CB-CG CG-ND1 ND1-CE1 CE1-NE2 NE2-CD2 CD2-CG",
+    "ILE": "CA-CB CB-CG1 CG1-CD1 CB-CG2",
+    "LEU": "CA-CB CB-CG CG-CD1 CG-CD2",
+    "LYS": "CA-CB CB-CG CG-CD CD-CE CE-NZ",
+    "MET": "CA-CB CB-CG CG-SD SD-CE",
+    "PHE": "CA-CB CB-CG CG-CD1 CD1-CE1 CE1-CZ CZ-CE2 CE2-CD2 CD2-CG",
+    "PRO": "CA-CB CB-CG CG-CD CD-N",
+    "SER": "CA-CB CB-OG",
+    "THR": "CA-CB CB-OG1 CB-CG2",
+    "TRP": (
+        "CA-CB CB-CG CG-CD1 CD1-NE1 NE1-CE2 CE2-CD2 CD2-CG "
+        "CD2-CE3 CE3-CZ3 CZ3-CH2 CH2-CZ2 CZ2-CE2"
+    ),
+    "TYR": (
+        "CA-CB CB-CG CG-CD1 CD1-CE1 CE1-CZ CZ-CE2 CE2-CD2 CD2-CG CZ-OH"
+    ),
+    "VAL": "CA-CB CB-CG1 CB-CG2",
+}
+_STANDARD_HEAVY_BONDS = {
+    resname: _BACKBONE_HEAVY_BONDS | _bond_pairs(sidechain)
+    for resname, sidechain in _STANDARD_SIDECHAIN_HEAVY_BONDS.items()
+}
+
+
+def _atom_names(bonds):
+    return sorted({name for bond in bonds for name in bond})
+
+
+def _pdb_atom_record(serial, name, resname, chain, resnum, xyz, altloc=""):
+    element = name[0]
+    x, y, z = xyz
+    return (
+        f"ATOM  {serial:5d} {name:>4s}{altloc:1s}{resname:>3s} "
+        f"{chain}{resnum:4d}    {x:8.3f}{y:8.3f}{z:8.3f}"
+        f"  1.00  0.00          {element:>2s}"
     )
-    arginine_bonds = _bonds_from_adjacency(
-        {
-            "N": ("CA", "H"),
-            "CA": ("C", "CB", "HA"),
-            "C": ("O",),
-            "CB": ("CG", "HB2", "HB3"),
-            "CG": ("CD", "HG2", "HG3"),
-            "CD": ("NE", "HD2", "HD3"),
-            "NE": ("CZ", "HE"),
-            "CZ": ("NH1", "NH2"),
-            "NH1": ("HH11", "HH12"),
-            "NH2": ("HH21", "HH22"),
+
+
+def _spaced_pdb(resname, names, altlocs=("",), chain="Z", resnum=1):
+    lines = []
+    serial = 1
+    for atom_index, name in enumerate(names, 1):
+        for altloc_index, altloc in enumerate(altlocs, 1):
+            lines.append(
+                _pdb_atom_record(
+                    serial,
+                    name,
+                    resname,
+                    chain,
+                    resnum,
+                    (atom_index * 5.0, float(altloc_index), 0.0),
+                    altloc,
+                )
+            )
+            serial += 1
+    return "\n".join(lines) + "\nEND\n"
+
+
+_CONNECTIVITY_BOUNDARIES = (
+    ("LYS", "NZ-HZ1", None, ("",)),
+    ("ARG", "NH1-HH11 NH2-HH21", None, ("",)),
+    (
+        "ALA",
+        "N-H1 N-H2 N-H3 CA-HA CB-HB1 CB-HB2 CB-HB3",
+        "C O CA HA N H1 H2 H3 CB HB1 HB2 HB3".split(),
+        ("",),
+    ),
+    (
+        "ALA",
+        "C-OXT N-H CA-HA CB-HB1 CB-HB2 CB-HB3",
+        "OXT C O CA HA N H CB HB1 HB2 HB3".split(),
+        ("",),
+    ),
+    ("ALA", "", None, ("A", "B")),
+)
+_NAMED_CONNECTIVITY_CASES = [
+    (resname, bonds, None, ("",))
+    for resname, bonds in _STANDARD_HEAVY_BONDS.items()
+] + [
+    (resname, _STANDARD_HEAVY_BONDS[resname] | _bond_pairs(extra), names, altlocs)
+    for resname, extra, names, altlocs in _CONNECTIVITY_BOUNDARIES
+]
+
+
+@pytest.mark.parametrize(
+    ("resname", "expected_bonds", "atom_names", "altlocs"),
+    _NAMED_CONNECTIVITY_CASES,
+)
+def test_named_template_connectivity(resname, expected_bonds, atom_names, altlocs):
+    atom_names = atom_names or _atom_names(expected_bonds)
+    parser_options = {"wanted_altloc": {"Z:1": "A"}} if altlocs == ("A", "B") else {}
+    raw_mol = Polymer._pdb_to_residue_mols(
+        _spaced_pdb(resname, atom_names, altlocs),
+        chem_templates=chem_templates,
+        **parser_options,
+    )["Z:1"][0]
+
+    assert _named_bonds(raw_mol) == expected_bonds
+    if parser_options:
+        positions = raw_mol.GetConformer()
+        assert {
+            atom.GetPDBResidueInfo().GetName().strip(): tuple(
+                positions.GetAtomPosition(atom.GetIdx())
+            )
+            for atom in raw_mol.GetAtoms()
+        } == {
+            name: (index * 5.0, 1.0, 0.0)
+            for index, name in enumerate(atom_names, 1)
         }
+
+
+def test_incomplete_or_duplicate_names_keep_coordinate_fallback():
+    incomplete = Polymer._pdb_to_residue_mols(
+        just_one_ALA_missing.read_text(),
+        chem_templates=chem_templates,
+    )["A:1"][0]
+    assert _named_bonds(incomplete) == _bond_pairs("N-CA CA-C C-O")
+
+    lines = [
+        line[:21] + "Z" + f"{99:4d}" + line[26:]
+        for line in just_one_ALA.read_text().splitlines()
+    ]
+    lines += [
+        _pdb_atom_record(6, "HX", "ALA", "Z", 99, (7.0, 2.529, -3.691)),
+        _pdb_atom_record(7, "HX", "ALA", "Z", 99, (3.5, 3.891, -2.559)),
+    ]
+    duplicate = Polymer._pdb_to_residue_mols(
+        "\n".join(lines) + "\nEND\n",
+        chem_templates=chem_templates,
+    )["Z:99"][0]
+    assert _named_bonds(duplicate) == _bond_pairs(
+        "N-CA CA-C C-O CA-CB N-HX CB-HX"
     )
-    with open(distorted_standard_residues) as f:
-        raw_mols = Polymer._pdb_to_residue_mols(
-            f.read(),
-            chem_templates=chem_templates,
+
+
+def _input_named_records(pdb_string):
+    return sorted(
+        [
+            f"{line[21:22].strip()}:{int(line[22:26])}{line[26:27].strip()}",
+            line[12:16].strip(),
+            line[76:78].strip(),
+            [float(line[30:38]), float(line[38:46]), float(line[46:54])],
+        ]
+        for line in pdb_string.splitlines()
+        if line.startswith(("ATOM", "HETATM"))
+    )
+
+
+def test_named_coordinates_and_prepared_bytes_are_hash_seed_invariant():
+    pdb_string = distorted_standard_residues.read_text()
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates=ResidueChemTemplates.create_from_defaults(),
+        mk_prep=MoleculePreparation(),
+    )
+    rigid, flexible = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+    expected_output = [polymer.to_pdb(), [rigid, flexible]]
+    assert _input_named_records(polymer.to_pdb()) == _input_named_records(pdb_string)
+
+    script = """
+import json
+import pathlib
+import sys
+from meeko import MoleculePreparation, PDBQTWriterLegacy, Polymer, ResidueChemTemplates
+polymer = Polymer.from_pdb_string(
+    pathlib.Path(sys.argv[1]).read_text(),
+    chem_templates=ResidueChemTemplates.create_from_defaults(),
+    mk_prep=MoleculePreparation(),
+)
+rigid, flexible = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+print(json.dumps([polymer.to_pdb(), [rigid, flexible]]))
+"""
+    results = []
+    for seed in range(1, 6):
+        environment = os.environ.copy()
+        environment["PYTHONHASHSEED"] = str(seed)
+        completed = subprocess.run(
+            [sys.executable, "-c", script, str(distorted_standard_residues)],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
         )
+        results.append(json.loads(completed.stdout))
 
-    expected = {
-        "A:60": lysine_bonds,
-        "P:256": arginine_bonds,
-        "A:577": lysine_bonds,
-        "A:108": lysine_bonds,
-    }
-    assert {
-        residue_id: _named_bonds(raw_mols[residue_id][0])
-        for residue_id in expected
-    } == expected
+    assert results == [expected_output] * len(results)
 
 
 def run_padding_checks(residue):

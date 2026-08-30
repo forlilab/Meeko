@@ -3738,8 +3738,68 @@ class ResidueTemplate(BaseJSONParsable):
             raise ValueError(f"{len(atom_names)=} differs from {mol.GetNumAtoms()=}")
         return
 
+    def _match_by_pdb_atom_names(self, input_mol):
+        if (
+            not input_mol.HasProp("_MeekoUsePDBAtomNames")
+            or self.atom_names is None
+        ):
+            return None
+
+        input_names = [
+            atom.GetPDBResidueInfo().GetName().strip()
+            for atom in input_mol.GetAtoms()
+        ]
+        if (
+            len(input_names) != len(set(input_names))
+            or len(self.atom_names) != len(set(self.atom_names))
+        ):
+            return None
+
+        input_indices = {name: index for index, name in enumerate(input_names)}
+        template_indices = {
+            name: index for index, name in enumerate(self.atom_names)
+        }
+        if not input_indices.keys() <= template_indices.keys():
+            return None
+        if any(
+            input_mol.GetAtomWithIdx(input_index).GetAtomicNum()
+            != self.mol.GetAtomWithIdx(template_indices[name]).GetAtomicNum()
+            for name, input_index in input_indices.items()
+        ):
+            return None
+
+        input_bonds = {
+            frozenset(
+                (
+                    input_names[bond.GetBeginAtomIdx()],
+                    input_names[bond.GetEndAtomIdx()],
+                )
+            )
+            for bond in input_mol.GetBonds()
+        }
+        template_bonds = {
+            frozenset(
+                (
+                    self.atom_names[bond.GetBeginAtomIdx()],
+                    self.atom_names[bond.GetEndAtomIdx()],
+                )
+            )
+            for bond in self.mol.GetBonds()
+            if self.atom_names[bond.GetBeginAtomIdx()] in input_indices
+            and self.atom_names[bond.GetEndAtomIdx()] in input_indices
+        }
+        if input_bonds != template_bonds:
+            return None
+
+        return {
+            template_indices[name]: input_index
+            for name, input_index in input_indices.items()
+        }
+
     def match(self, input_mol):
-        mapping = mapping_by_mcs(self.mol, input_mol)
+        mapping = self._match_by_pdb_atom_names(input_mol)
+        if mapping is None:
+            mapping = mapping_by_mcs(self.mol, input_mol)
         mapping_inv = {value: key for (key, value) in mapping.items()}
         if len(mapping_inv) != len(mapping):
             raise RuntimeError(

@@ -414,10 +414,12 @@ def _build_from_consensus_template_connectivity(pdbmol, residue_templates):
             continue
         graphs.add(
             frozenset(
-                frozenset(
-                    (
-                        template.atom_names[bond.GetBeginAtomIdx()],
-                        template.atom_names[bond.GetEndAtomIdx()],
+                tuple(
+                    sorted(
+                        (
+                            template.atom_names[bond.GetBeginAtomIdx()],
+                            template.atom_names[bond.GetEndAtomIdx()],
+                        )
                     )
                 )
                 for bond in template.mol.GetBonds()
@@ -432,9 +434,11 @@ def _build_from_consensus_template_connectivity(pdbmol, residue_templates):
     for atom in editable.GetAtoms():
         atom.SetNoImplicit(True)
     indices = {name: index for index, name in enumerate(atom_names)}
-    for first, second in next(iter(graphs)):
+    for first, second in sorted(next(iter(graphs))):
         editable.AddBond(indices[first], indices[second], Chem.BondType.SINGLE)
-    return editable.GetMol()
+    mol = editable.GetMol()
+    mol.SetBoolProp("_MeekoUsePDBAtomNames", True)
+    return mol
 
 
 def _aux_altloc_mol_build(
