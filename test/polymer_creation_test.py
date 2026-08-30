@@ -31,6 +31,7 @@ has_lyn = datadir / "has-lyn.pdb"
 has_lys_resname_lyn = datadir / "has-lys-resname-lyn.pdb"
 disulfide_adjacent = datadir / "disulfide_bridge_in_adjacent_residues.pdb"
 nglu = datadir / "nglu.pdb"
+distorted_standard_residues = datadir / "distorted-standard-residues.pdb"
 
 
 # TODO: add checks for untested polymer fields (e.g. input options not indicated here)
@@ -49,6 +50,75 @@ def check_charge(residue, expected_charge, tolerance=0.002):
         if not atom.is_ignore:
             charge += atom.charge
     assert abs(charge - expected_charge) < tolerance
+
+
+def _named_bonds(mol):
+    atom_names = [
+        atom.GetPDBResidueInfo().GetName().strip()
+        for atom in mol.GetAtoms()
+    ]
+    return {
+        frozenset(
+            (
+                atom_names[bond.GetBeginAtomIdx()],
+                atom_names[bond.GetEndAtomIdx()],
+            )
+        )
+        for bond in mol.GetBonds()
+    }
+
+
+def _bonds_from_adjacency(adjacency):
+    return {
+        frozenset((first, second))
+        for first, seconds in adjacency.items()
+        for second in seconds
+    }
+
+
+def test_standard_residue_connectivity_comes_from_templates():
+    lysine_bonds = _bonds_from_adjacency(
+        {
+            "N": ("CA", "H"),
+            "CA": ("C", "CB", "HA"),
+            "C": ("O",),
+            "CB": ("CG", "HB2", "HB3"),
+            "CG": ("CD", "HG2", "HG3"),
+            "CD": ("CE", "HD2", "HD3"),
+            "CE": ("NZ", "HE2", "HE3"),
+            "NZ": ("HZ1", "HZ2", "HZ3"),
+        }
+    )
+    arginine_bonds = _bonds_from_adjacency(
+        {
+            "N": ("CA", "H"),
+            "CA": ("C", "CB", "HA"),
+            "C": ("O",),
+            "CB": ("CG", "HB2", "HB3"),
+            "CG": ("CD", "HG2", "HG3"),
+            "CD": ("NE", "HD2", "HD3"),
+            "NE": ("CZ", "HE"),
+            "CZ": ("NH1", "NH2"),
+            "NH1": ("HH11", "HH12"),
+            "NH2": ("HH21", "HH22"),
+        }
+    )
+    with open(distorted_standard_residues) as f:
+        raw_mols = Polymer._pdb_to_residue_mols(
+            f.read(),
+            chem_templates=chem_templates,
+        )
+
+    expected = {
+        "A:60": lysine_bonds,
+        "P:256": arginine_bonds,
+        "A:577": lysine_bonds,
+        "A:108": lysine_bonds,
+    }
+    assert {
+        residue_id: _named_bonds(raw_mols[residue_id][0])
+        for residue_id in expected
+    } == expected
 
 
 def run_padding_checks(residue):

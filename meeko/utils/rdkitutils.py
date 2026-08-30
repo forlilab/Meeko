@@ -379,7 +379,70 @@ def build_one_rdkit_mol_per_altloc(atom_fields_list):
     return rdkit_mol_dict
 
 
-def _aux_altloc_mol_build(atom_field_list, requested_altloc, default_altloc):
+def _build_from_consensus_template_connectivity(pdbmol, residue_templates):
+    """Build a residue graph when all applicable templates agree."""
+    atom_names = [atom.GetPDBResidueInfo().GetName().strip() for atom in pdbmol.GetAtoms()]
+    if len(atom_names) != len(set(atom_names)):
+        return None
+
+    input_elements = {
+        atom_names[atom.GetIdx()]: atom.GetAtomicNum()
+        for atom in pdbmol.GetAtoms()
+    }
+    heavy_names = {
+        name for name, atomic_number in input_elements.items() if atomic_number > 1
+    }
+    graphs = set()
+    for template in residue_templates:
+        template_elements = {
+            template.atom_names[atom.GetIdx()]: atom.GetAtomicNum()
+            for atom in template.mol.GetAtoms()
+        }
+        template_heavy_names = {
+            name
+            for name, atomic_number in template_elements.items()
+            if atomic_number > 1
+        }
+        if template_heavy_names != heavy_names:
+            continue
+        if not input_elements.keys() <= template_elements.keys():
+            continue
+        if any(
+            input_elements[name] != template_elements[name]
+            for name in input_elements
+        ):
+            continue
+        graphs.add(
+            frozenset(
+                frozenset(
+                    (
+                        template.atom_names[bond.GetBeginAtomIdx()],
+                        template.atom_names[bond.GetEndAtomIdx()],
+                    )
+                )
+                for bond in template.mol.GetBonds()
+                if template.atom_names[bond.GetBeginAtomIdx()] in input_elements
+                and template.atom_names[bond.GetEndAtomIdx()] in input_elements
+            )
+        )
+    if len(graphs) != 1:
+        return None
+
+    editable = Chem.RWMol(pdbmol)
+    for atom in editable.GetAtoms():
+        atom.SetNoImplicit(True)
+    indices = {name: index for index, name in enumerate(atom_names)}
+    for first, second in next(iter(graphs)):
+        editable.AddBond(indices[first], indices[second], Chem.BondType.SINGLE)
+    return editable.GetMol()
+
+
+def _aux_altloc_mol_build(
+    atom_field_list,
+    requested_altloc,
+    default_altloc,
+    residue_templates=(),
+):
     missed_altloc = False
     needed_altloc = False
     mols_dict = build_one_rdkit_mol_per_altloc(atom_field_list) 
@@ -408,7 +471,14 @@ def _aux_altloc_mol_build(atom_field_list, requested_altloc, default_altloc):
         idx_to_rdkit = None
         return pdbmol, idx_to_rdkit, missed_altloc, needed_altloc
     else:
-        rdDetermineBonds.DetermineConnectivity(pdbmol)
+        template_mol = _build_from_consensus_template_connectivity(
+            pdbmol,
+            residue_templates,
+        )
+        if template_mol is None:
+            rdDetermineBonds.DetermineConnectivity(pdbmol)
+        else:
+            pdbmol = template_mol
         for atom in pdbmol.GetAtoms():
             if atom.GetAtomicNum() == 7 and len(atom.GetNeighbors()) == 4:
                 atom.SetFormalCharge(1)

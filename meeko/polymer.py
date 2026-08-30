@@ -100,6 +100,31 @@ residues_rotamers = {
     ],
 }
 
+STANDARD_AMINO_ACID_RESNAMES = frozenset(
+    {
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
+    }
+)
+
 
 def find_graph_paths(graph, start_node, end_nodes, current_path=(), paths_found=()):
     """
@@ -1654,6 +1679,7 @@ class Polymer(BaseJSONParsable):
             pdb_string,
             wanted_altloc,
             default_altloc,
+            chem_templates,
         )
 
         # from here on it duplicates self.from_prody(), but extracting
@@ -2451,6 +2477,7 @@ class Polymer(BaseJSONParsable):
         pdb_string,
         wanted_altloc: Optional[dict[str, str]]=None,
         default_altloc: Optional[str]=None,
+        chem_templates=None,
     ):
         """
 
@@ -2530,11 +2557,20 @@ class Polymer(BaseJSONParsable):
         for reskey, atom_field_list in blocks_by_residue.items():
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             requested_altloc = wanted_altloc.get(reskey, None)  
+            residue_templates = ()
+            if chem_templates is not None and resname in STANDARD_AMINO_ACID_RESNAMES:
+                template_keys = chem_templates.ambiguous.get(resname, (resname,))
+                residue_templates = tuple(
+                    chem_templates.residue_templates[key]
+                    for key in template_keys
+                    if key in chem_templates.residue_templates
+                )
             try:
                 pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
                     atom_field_list,
                     requested_altloc,
                     default_altloc,
+                    residue_templates,
                 )
             except:
                 msg = f"unable to build rdkit mol for residue {resname} corresponding to key {reskey}"
