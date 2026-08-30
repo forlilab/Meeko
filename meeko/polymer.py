@@ -58,6 +58,13 @@ else:
 logger = logging.getLogger(__name__)
 rdkit_logger = logging.getLogger("rdkit")
 
+STANDARD_AMINO_ACID_RESNAMES = frozenset(
+    {
+        "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+        "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+    }
+)
+
 residues_rotamers = {
     "SER": [("C", "CA", "CB", "OG")],
     "THR": [("C", "CA", "CB", "CG2")],
@@ -1654,6 +1661,8 @@ class Polymer(BaseJSONParsable):
             pdb_string,
             wanted_altloc,
             default_altloc,
+            chem_templates,
+            set_template,
         )
 
         # from here on it duplicates self.from_prody(), but extracting
@@ -2451,6 +2460,8 @@ class Polymer(BaseJSONParsable):
         pdb_string,
         wanted_altloc: Optional[dict[str, str]]=None,
         default_altloc: Optional[str]=None,
+        chem_templates=None,
+        set_template: dict[str, str] | None=None,
     ):
         """
 
@@ -2530,15 +2541,33 @@ class Polymer(BaseJSONParsable):
         for reskey, atom_field_list in blocks_by_residue.items():
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             requested_altloc = wanted_altloc.get(reskey, None)  
+            residue_templates = ()
+            if chem_templates is not None:
+                explicit_template = (set_template or {}).get(reskey)
+                if explicit_template in chem_templates.residue_templates:
+                    template_keys = (explicit_template,)
+                elif resname in STANDARD_AMINO_ACID_RESNAMES:
+                    template_keys = chem_templates.ambiguous.get(resname, (resname,))
+                else:
+                    template_keys = ()
+                residue_templates = tuple(
+                    chem_templates.residue_templates[key]
+                    for key in template_keys
+                    if key in chem_templates.residue_templates
+                )
             try:
                 pdbmol, _, missed_altloc, needed_altloc = _aux_altloc_mol_build(
                     atom_field_list,
                     requested_altloc,
                     default_altloc,
+                    residue_templates,
                 )
-            except:
+            except Exception:
                 msg = f"unable to build rdkit mol for residue {resname} corresponding to key {reskey}"
-                raise RuntimeError(msg) 
+                logger.warning(msg)
+                pdbmol = None
+                missed_altloc = False
+                needed_altloc = False
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
 
         return raw_input_mols
@@ -3702,8 +3731,59 @@ class ResidueTemplate(BaseJSONParsable):
             raise ValueError(f"{len(atom_names)=} differs from {mol.GetNumAtoms()=}")
         return
 
+    def _match_by_pdb_atom_names(self, input_mol):
+        if (
+            not input_mol.HasProp("_MeekoUsePDBAtomNames")
+            or self.atom_names is None
+        ):
+            return None
+
+        input_names = [
+            atom.GetPDBResidueInfo().GetName().strip()
+            for atom in input_mol.GetAtoms()
+        ]
+        if (
+            len(input_names) != len(set(input_names))
+            or len(self.atom_names) != len(set(self.atom_names))
+        ):
+            return None
+
+        input_indices = {name: index for index, name in enumerate(input_names)}
+        template_indices = {name: index for index, name in enumerate(self.atom_names)}
+        if not input_indices.keys() <= template_indices.keys():
+            return None
+
+        mapping = {
+            template_indices[name]: input_index
+            for name, input_index in input_indices.items()
+        }
+        if any(
+            self.mol.GetAtomWithIdx(template_index).GetAtomicNum()
+            != input_mol.GetAtomWithIdx(input_index).GetAtomicNum()
+            for template_index, input_index in mapping.items()
+        ):
+            return None
+
+        if any(
+            {
+                mapping[neighbor.GetIdx()]
+                for neighbor in self.mol.GetAtomWithIdx(template_index).GetNeighbors()
+                if neighbor.GetIdx() in mapping
+            }
+            != {
+                neighbor.GetIdx()
+                for neighbor in input_mol.GetAtomWithIdx(input_index).GetNeighbors()
+            }
+            for template_index, input_index in mapping.items()
+        ):
+            return None
+
+        return mapping
+
     def match(self, input_mol):
-        mapping = mapping_by_mcs(self.mol, input_mol)
+        mapping = self._match_by_pdb_atom_names(input_mol)
+        if mapping is None:
+            mapping = mapping_by_mcs(self.mol, input_mol)
         mapping_inv = {value: key for (key, value) in mapping.items()}
         if len(mapping_inv) != len(mapping):
             raise RuntimeError(
