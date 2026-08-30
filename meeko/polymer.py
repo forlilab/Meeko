@@ -2580,9 +2580,12 @@ class Polymer(BaseJSONParsable):
                     default_altloc,
                     residue_templates,
                 )
-            except:
+            except Exception:
                 msg = f"unable to build rdkit mol for residue {resname} corresponding to key {reskey}"
-                raise RuntimeError(msg) 
+                logger.warning(msg)
+                pdbmol = None
+                missed_altloc = False
+                needed_altloc = False
             raw_input_mols[reskey] = (pdbmol, resname, missed_altloc, needed_altloc)
 
         return raw_input_mols

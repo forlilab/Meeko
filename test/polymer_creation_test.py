@@ -300,6 +300,38 @@ def test_explicit_template_controls_parsing_and_preserves_named_coordinates(
     assert _input_named_records(polymer.to_pdb()) == _input_named_records(pdb_string)
 
 
+def test_allow_bad_res_isolates_unsanitisable_residue():
+    bad_lines = [_pdb_atom_record(1001, "CA", "ALA", "Z", 999, (0, 0, 0))]
+    for index, xyz in enumerate(
+        ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1)),
+        1,
+    ):
+        bad_lines.append(
+            _pdb_atom_record(1001 + index, f"H{index}", "ALA", "Z", 999, xyz)
+        )
+    pdb_string = (
+        just_one_ALA.read_text()
+        + "TER\n"
+        + "\n".join(bad_lines)
+        + "\nEND\n"
+    )
+
+    raw_mols = Polymer._pdb_to_residue_mols(
+        pdb_string,
+        chem_templates=chem_templates,
+    )
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates=chem_templates,
+        allow_bad_res=True,
+        blunt_ends=[("A:1", 0), ("A:1", 2)],
+    )
+
+    assert raw_mols["Z:999"][0] is None
+    assert set(polymer.get_valid_monomers()) == {"A:1"}
+    assert not polymer.get_ignored_monomers()
+
+
 def run_padding_checks(residue):
     assert len(residue.molsetup_mapidx) == residue.rdkit_mol.GetNumAtoms()
     # check index mapping between padded and rea molecule
