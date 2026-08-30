@@ -273,6 +273,33 @@ print(json.dumps([polymer.to_pdb(), [rigid, flexible]]))
     assert results == [expected_output] * len(results)
 
 
+@pytest.mark.parametrize("input_resname", ("LYS", "LYN"))
+def test_explicit_template_controls_parsing_and_preserves_named_coordinates(
+    input_resname,
+):
+    lines = [
+        line[:17] + input_resname + line[20:]
+        if line.startswith(("ATOM", "HETATM"))
+        else line
+        for line in distorted_standard_residues.read_text().splitlines()
+        if line.startswith(("ATOM", "HETATM")) and line[21:26].strip() == "A 577"
+    ]
+    pdb_string = "\n".join(lines) + "\nEND\n"
+    custom_templates = ResidueChemTemplates.create_from_defaults()
+    if input_resname == "LYS":
+        custom_templates.ambiguous["LYS"] = ["LYN"]
+
+    polymer = Polymer.from_pdb_string(
+        pdb_string,
+        chem_templates=custom_templates,
+        set_template={"A:577": "LYS"},
+        allow_bad_res=True,
+    )
+
+    assert polymer.monomers["A:577"].residue_template_key == "LYS"
+    assert _input_named_records(polymer.to_pdb()) == _input_named_records(pdb_string)
+
+
 def run_padding_checks(residue):
     assert len(residue.molsetup_mapidx) == residue.rdkit_mol.GetNumAtoms()
     # check index mapping between padded and rea molecule

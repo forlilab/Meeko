@@ -1680,6 +1680,7 @@ class Polymer(BaseJSONParsable):
             wanted_altloc,
             default_altloc,
             chem_templates,
+            set_template,
         )
 
         # from here on it duplicates self.from_prody(), but extracting
@@ -2478,6 +2479,7 @@ class Polymer(BaseJSONParsable):
         wanted_altloc: Optional[dict[str, str]]=None,
         default_altloc: Optional[str]=None,
         chem_templates=None,
+        set_template: Optional[dict[str, str]]=None,
     ):
         """
 
@@ -2558,8 +2560,14 @@ class Polymer(BaseJSONParsable):
             resname = list(reskey_to_resname[reskey])[0]  # verified length 1
             requested_altloc = wanted_altloc.get(reskey, None)  
             residue_templates = ()
-            if chem_templates is not None and resname in STANDARD_AMINO_ACID_RESNAMES:
-                template_keys = chem_templates.ambiguous.get(resname, (resname,))
+            if chem_templates is not None:
+                explicit_template = (set_template or {}).get(reskey)
+                if explicit_template in chem_templates.residue_templates:
+                    template_keys = (explicit_template,)
+                elif resname in STANDARD_AMINO_ACID_RESNAMES:
+                    template_keys = chem_templates.ambiguous.get(resname, (resname,))
+                else:
+                    template_keys = ()
                 residue_templates = tuple(
                     chem_templates.residue_templates[key]
                     for key in template_keys
