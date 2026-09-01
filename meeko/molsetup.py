@@ -1643,6 +1643,84 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         return molsetup
 
+    @staticmethod
+    def remove_elements(input_mol): 
+
+        # mapping between L-M bond type and number of non-real Hs
+        # that should be added to L upon removal of -M (the bond & metal)
+        bond_type_to_nr_h = {
+            Chem.rdchem.BondType.DATIVE: 0,
+            Chem.rdchem.BondType.SINGLE: 1,
+            Chem.rdchem.BondType.DOUBLE: 2,
+            Chem.rdchem.BondType.TRIPLE: 3,
+            Chem.rdchem.BondType.QUADRUPLE: 4,
+        }
+
+        def is_metal(atomic_number):
+            """
+            Determine if an element is a metal based on its atomic number.
+            """
+            # Alkali metals
+            if atomic_number in [3, 11, 19, 37, 55, 87]:
+                return True
+            # Alkaline earth metals
+            if atomic_number in [4, 12, 20, 38, 56, 88]:
+                return True
+            # Transition metals (Groups 3-12)
+            if (21 <= atomic_number <= 30) or (39 <= atomic_number <= 48) or (57 <= atomic_number <= 80) or (89 <= atomic_number <= 112):
+                return True
+            # Post-transition metals
+            if atomic_number in [13, 31, 49, 50, 81, 82, 83, 113, 114, 115, 116]:
+                return True
+
+            return False
+        
+        # make a copy of mol to avoid changes of atom properties by SetNumExplicitHs
+        mol = Chem.Mol(input_mol) 
+        # pre-populate list of atoms in the input mol
+        atoms_in_mol = [atom for atom in mol.GetAtoms()]
+
+        # mapping between index of M in the input mol and M's formal charge
+        idx_to_rm = {}
+        for atom in atoms_in_mol:
+            if is_metal(atom.GetAtomicNum()): 
+                atom_idx = atom.GetIdx()
+                idx_to_rm[atom_idx] = atom.GetFormalCharge()
+
+        # mapping between index of M in the input mol and a dict which is 
+        # mapping between index of M's neighbor L in the input mol and number of non-real Hs
+        # that should be added upon removal of the M-L bond
+        rm_to_neigh = {}
+        if not idx_to_rm:
+            # return the copy of mol to avoid changes of input_mol in the subsequent steps (outside of this function)
+            return mol, idx_to_rm, rm_to_neigh
+        for atom_idx in idx_to_rm:
+            rm_to_neigh[atom_idx] = {}
+            for neigh in atoms_in_mol[atom_idx].GetNeighbors():
+                nei_idx = neigh.GetIdx()
+                bond = mol.GetBondBetweenAtoms(atom_idx, nei_idx)
+                bond_type = bond.GetBondType() if bond else None
+                if bond_type in bond_type_to_nr_h: 
+                    num_nr_h = bond_type_to_nr_h[bond_type] 
+                    rm_to_neigh[atom_idx].update({nei_idx: num_nr_h})
+                    # add the number of non-real Hs to current number of explicit Hs
+                    nei_valence = atoms_in_mol[nei_idx].GetNumExplicitHs()
+                    atoms_in_mol[nei_idx].SetNumExplicitHs(nei_valence + num_nr_h)
+        
+        # remove metals
+        rwmol = Chem.EditableMol(mol)
+        for idx in sorted(idx_to_rm, reverse=True):
+            rwmol.RemoveAtom(idx)
+        mol = rwmol.GetMol()
+
+        # add non-real Hs
+        mol.UpdatePropertyCache()
+        Chem.SanitizeMol(mol)
+        # uses updated number of explicit Hs
+        mol = Chem.AddHs(mol)
+
+        return mol, idx_to_rm, rm_to_neigh
+
     def init_atom(self, 
                   charge_model: str, 
                   read_charges_from_prop: str, 
@@ -1708,11 +1786,51 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             if read_charges_from_prop is not None: 
                 raise ValueError("Conflicting options: charge_model cannot be gasteiger and read_charges_from_prop cannot both be set.")
             
-            try:
-                charges = rdkitutils.compute_gasteiger_charges(self.mol)
-            except Exception as e:
-                print("gasteiger charge computation failed with: ")
-                print(e)
+            # remove metal elements and replace removed bonds by non-real hydrogens
+            things = self.remove_elements(self.mol)
+            copy_mol, idx_rm_to_formal_charge, rm_to_neigh = things
+            for atom in copy_mol.GetAtoms():
+                if atom.GetAtomicNum() == 34:
+                    atom.SetAtomicNum(16)
+            rdPartialCharges.ComputeGasteigerCharges(copy_mol)
+
+            # populate list of Gasteiger charges of atoms in copy_mol
+            charges = [a.GetDoubleProp("_GasteigerCharge") for a in copy_mol.GetAtoms()]
+            if idx_rm_to_formal_charge:
+                ok_charges = charges.copy()
+                for i in sorted(idx_rm_to_formal_charge, reverse=True):
+                    ok_charges.insert(i, 0.0)
+                nr_rm = len(idx_rm_to_formal_charge)
+                nr_added_h = copy_mol.GetNumAtoms() - self.mol.GetNumAtoms() + nr_rm
+                ok_charges = ok_charges[:len(ok_charges)-nr_added_h]
+
+                # mapping of coordinate atom index in copy_mol and 
+                # list of Gasteiger charges of added non-real Hs at this coordinate atom
+                chrg_by_heavy_atom = {}
+                for i in range(nr_added_h):
+                    added_H_idx = self.mol.GetNumAtoms() + i - nr_rm
+                    neighs = copy_mol.GetAtomWithIdx(added_H_idx).GetNeighbors()
+                    if len(neighs) != 1:
+                        raise RuntimeError("H should have 1 neighbor")
+                    neigh_idx = neighs[0].GetIdx()
+                    if neigh_idx in chrg_by_heavy_atom:
+                        chrg_by_heavy_atom[neigh_idx] += [charges[added_H_idx]]
+                    else:
+                        chrg_by_heavy_atom[neigh_idx] = [charges[added_H_idx]]
+                
+                # compute the partial charge of removed metals as a sum of
+                # (1) M's formal charge (from input)
+                # (2) Gasteiger charges of added non-real Hs account for the M-L bonds
+                for i, neighs in rm_to_neigh.items():
+                    ok_charges[i] += idx_rm_to_formal_charge[i]
+                    for idx, num_nr_h in neighs.items():
+                        if num_nr_h > 0: 
+                            # get the idex of coordinate atom in copy_mol
+                            newidx = idx - sum([i <= idx for i in idx_rm_to_formal_charge]) 
+                            # if there are multiple add Hs on the coordinate atom, distribute the total charge by bond order
+                            # of M-L (= num_nr_h, number of non-real Hs added for the M-L bond)
+                            ok_charges[i] += sum(chrg_by_heavy_atom[newidx]) * num_nr_h / len(chrg_by_heavy_atom[newidx])
+                charges = ok_charges
         
         elif charge_model == "nagl":
             if read_charges_from_prop is not None: 
