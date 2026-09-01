@@ -1595,6 +1595,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         # Checks if the input molecule is valid
         if cls.has_implicit_hydrogens(mol):
             raise ValueError("RDKit molecule has implicit Hs. Need explicit Hs.")
+        
         if mol.GetNumConformers() == 0:
             raise ValueError(
                 "RDKit molecule does not have a conformer. Need 3D coordinates."
