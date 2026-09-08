@@ -113,6 +113,7 @@ class MoleculePreparation:
         compute_charges=False,
         crippen=False,
         crippen_as_solpar=False,
+        solpar_offset=0.0,
         override_ad4sol_par_including_q=False,
         override_ad4sol_par_including_q_qasp=0.0,
     ):
@@ -203,6 +204,7 @@ class MoleculePreparation:
         self.charge_atom_prop = charge_atom_prop
         self.crippen = crippen
         self.crippen_as_solpar = crippen_as_solpar
+        self.solpar_offset = solpar_offset
         self.override_ad4sol_par_including_q = override_ad4sol_par_including_q
         self.override_ad4sol_par_including_q_qasp = override_ad4sol_par_including_q_qasp
 
@@ -619,6 +621,10 @@ class MoleculePreparation:
         if self.override_ad4sol_par_including_q:
             qasp = self.override_ad4sol_par_including_q_qasp
             set_ad4sol_par_including_q(setup, qasp)
+
+        if "ad4_sol_par" in setup.atom_params:
+            setup.atom_params["ad4_sol_par"] = [value + self.solpar_offset for value in setup.atom_params["ad4_sol_par"]]
+            
 
         # Convert molecule to graph and apply trained Espaloma model
         # skip if charges are read from template
