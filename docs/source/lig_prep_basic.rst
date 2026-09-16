@@ -70,3 +70,35 @@ Note that calling ``mk_prep`` returns a list of molecule setups.
 As of v0.6.0, this list contains only one element unless ``mk_prep`` is
 configured for reactive docking, which is not the case in this example. This is
 why we are considering the first (and only) molecule setup in the list.
+
+Reading Precomputed Charges
+---------------------------
+
+Meeko supports reading partial charges directly from MOL2 files when using the Tripos charge format via the atom property ``_TriposPartialCharge`` using RDKit's ``Chem.MolFromMol2File``. The basic usage is as follows: 
+
+.. code-block:: bash
+
+    mk_prepare_ligand.py -i ligand.mol2 --charge_model read 
+
+Additionally, it is possible to read precomputed charges that are assigned to atoms in the RDKit molecule object from a named property, not limited to ``_TriposPartialCharge``. See the following Python API example: 
+
+.. code-block:: python
+
+    from meeko import MoleculePreparation
+    from meeko import PDBQTWriterLegacy
+    from rdkit import Chem
+
+    input_filename = "path_to_liagand.mol2"
+    output_filename = "path_to_liagand.pdbqt"
+    mol = Chem.MolFromMol2File(input_filename, removeHs=False)
+    mk_prep = MoleculePreparation(charge_model="read", charge_atom_prop="_TriposPartialCharge")
+    # or alternatively, compute and assign a named atom property and do:
+    # mk_prep = MoleculePreparation(charge_model="read", charge_atom_prop="my_charge_property")
+    molsetup_list = mk_prep(mol)
+    molsetup = molsetup_list[0]
+    pdbqt_string = PDBQTWriterLegacy.write_string(molsetup)
+
+    with open(output_filename, "w") as f:
+        f.write(pdbqt_string[0])
+
+This option ensures that existing charges are retained (til the merging of hydrogens) instead of recalculating them. It may be useful for reading precomputed charges from other software, such as AmberTools, OpenEye or Schrodinger.
