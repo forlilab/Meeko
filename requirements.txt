@@ -1,6 +1,6 @@
 numpy
 gemmi
 rdkit
-scipy
+scipy>=1.6
 tomli
 tqdm
