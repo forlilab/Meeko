@@ -41,7 +41,6 @@ def _read_receptor_pdbqt_string(pdbqt_string, skip_typing=False):
     # TZ is a pseudo atom for AutoDock4Zn FF
     pseudo_atom_types = ['TZ']
 
-    idx = 0
     for line in pdbqt_string.split(eol):
         if line.startswith('ATOM') or line.startswith("HETATM"):
             serial = int(line[6:11].strip())
@@ -67,19 +66,20 @@ def _read_receptor_pdbqt_string(pdbqt_string, skip_typing=False):
                 temp_factor = None
             record_type = line[0:6].strip()
 
-            if skip_typing:
-                atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type,
-                              alt_id, in_code, occupancy, temp_factor, record_type))
+            if not skip_typing and atom_type in pseudo_atom_types:
                 continue
-            if not atom_type in pseudo_atom_types:
+
+            # idx must stay equal to the row position in atoms, because the
+            # annotation lists are used to index into it
+            idx = len(atoms)
+            if not skip_typing:
                 atom_annotations['all'].append(idx)
                 atom_annotations[atom_property_definitions[atom_type]].append(idx)
-                atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type,
-                              alt_id, in_code, occupancy, temp_factor, record_type))
+            atoms.append((idx, serial, name, resid, resname, chainid, xyz, partial_charges, atom_type,
+                          alt_id, in_code, occupancy, temp_factor, record_type))
 
-            idx += 1
-    if idx == 0:
-        raise ValueError(f"no atoms found in {pdbqt_string=}") 
+    if not atoms:
+        raise ValueError(f"no atoms found in {pdbqt_string=}")
     atoms = np.array(atoms, dtype=atoms_dtype)
 
     return atoms, atom_annotations
