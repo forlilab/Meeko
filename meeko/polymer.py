@@ -932,6 +932,7 @@ class ResidueChemTemplates(BaseJSONParsable):
         self.residue_templates = residue_templates
         self.padders = padders
         self.ambiguous = ambiguous
+        self.bonds = None
 
         # also read charge template here
         # TODO add option for custom charge template to be inputed. 
@@ -2381,7 +2382,7 @@ class Polymer(BaseJSONParsable):
 
                 # Always call the padder
                 padded_mol, mapidx = padders[link_label](
-                    padded_mol, adjacent_mol, atom_index, adjacent_atom_index
+                    padded_mol, adjacent_mol, atom_index, adjacent_atom_index, bonds
                 )
 
                 # Update mapidx_pad
@@ -3296,7 +3297,7 @@ class ResiduePadder(BaseJSONParsable):
     # reaction should not delete atoms, not even Hs
     # reaction should create bonds at non-real Hs (implicit or explicit rdktt H)
 
-    def __init__(self, rxn_smarts: str, adjacent_res_smarts: str = None, auto_blunt:bool=False): 
+    def __init__(self, rxn_smarts: str, adjacent_res_smarts: str = None, auto_blunt:bool=False, bonds = None): 
         """
         Initialize the ResiduePadder with reaction SMARTS and optional adjacent residue SMARTS.
 
@@ -3321,6 +3322,7 @@ class ResiduePadder(BaseJSONParsable):
         # Ensure rxn_smarts has single reactant and single product
         self.rxn = self._validate_rxn_smarts(rxn_smarts)
         self.auto_blunt = auto_blunt
+        self.bonds = bonds
 
         # Fill in adjacent_smartsmol_mapidx
         if adjacent_res_smarts is None:
@@ -3377,7 +3379,9 @@ class ResiduePadder(BaseJSONParsable):
                              unmapped product labels in reaction ({padding_ids})")
 
     def __call__(self, target_mol: Chem.Mol, adjacent_mol = None, 
-                 target_required_atom_index = None, adjacent_required_atom_index = None):
+                 target_required_atom_index = None, 
+                 adjacent_required_atom_index = None,
+                 bonds = None):
         # add Hs only to padding atoms
         # copy coordinates if adjacent res has Hs bound to heavy atoms
         # labels have been checked upstream
@@ -3434,7 +3438,9 @@ class ResiduePadder(BaseJSONParsable):
                 if self._check_adjacent_mol(adjacent_smartsmol, adjacent_mol, adjacent_required_atom_index):
                     logger.info(f"Switched from Template adjacent mol ({Chem.MolToSmarts(self.adjacent_smartsmol)}) to Fallback adjacent mol ({Chem.MolToSmarts(adjacent_smartsmol)})")
                 else:
-                    raise RuntimeError(f"adjacent_mol doesn't contain the mapped atoms in adjacent_smartsmol.") 
+                    # TEST this further
+                    adjacent_smartsmol = adjacent_mol
+                    # raise RuntimeError(f"adjacent_mol doesn't contain the mapped atoms in adjacent_smartsmol.") 
             
             # Update hit and adjacent_smartsmol_mapidx 
             hit = adjacent_mol.GetSubstructMatches(adjacent_smartsmol)[0]
@@ -3509,6 +3515,7 @@ class ResiduePadder(BaseJSONParsable):
         hits = adjacent_mol.GetSubstructMatches(expected_adjacent_smartsmol)
         if adjacent_required_atom_index is not None:
             hits = [hit for hit in hits if adjacent_required_atom_index in hit]
+
             if len(hits) > 1:
                 raise RuntimeError(f"adjacent_mol has multiple matches for adjacent_smartsmol.")  
             elif len(hits) == 0:
@@ -3675,6 +3682,7 @@ class ResidueTemplate(BaseJSONParsable):
         atom_name = cls.access_with_deprecated_key(obj, old_key="atom_names", new_key="atom_name")
 
         # Construct a ResidueTemplate object
+        
         residue_template = cls(mol_smiles, None, atom_name)
         # Separately ensure that link_labels is restored to the value we expect it to be so there are not errors in
         # the constructor
@@ -3685,6 +3693,7 @@ class ResidueTemplate(BaseJSONParsable):
 
     def check(self, mol, link_labels, atom_names):
         have_implicit_hs = set()
+
         for atom in mol.GetAtoms():
             if atom.GetTotalNumHs() > 0:
                 have_implicit_hs.add(atom.GetIdx())
