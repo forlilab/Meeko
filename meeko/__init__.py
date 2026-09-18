@@ -25,7 +25,6 @@ from .utils import utils
 from .atomtyper import AtomTyper
 from .atomtyper import add_crippen_to_molsetup
 from .atomtyper import set_ad4sol_par_including_q
-from .receptor_pdbqt import PDBQTReceptor
 from .polymer import Polymer
 from .polymer import Monomer
 from .polymer import ResiduePadder
@@ -57,7 +56,7 @@ rdBase.LogToPythonLogger()
 
 __all__ = ['MoleculePreparation', 'RDKitMoleculeSetup', 
            'pdbutils', 'geomutils', 'rdkitutils', 'utils',
-           'AtomTyper', 'PDBQTMolecule', 'PDBQTReceptor', 'analysis',
+           'AtomTyper', 'PDBQTMolecule', 'analysis',
            'Polymer', 'Monomer', 'ResiduePadder', 'ResidueTemplate', 'ResidueChemTemplates',
            'add_rotamers_to_polymer_molsetups',
            'RDKitMolCreate',
