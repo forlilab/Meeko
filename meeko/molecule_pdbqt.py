@@ -486,8 +486,8 @@ class PDBQTMolecule:
 
         """
         if atom_idx is not None:
-            if not isinstance(atom_idx, (list, tuple, np.ndarray)):
-                atom_idx = np.array(atom_idx, dtype=np.int)
+            if isinstance(atom_idx, (int, np.integer)):
+                atom_idx = [int(atom_idx)]
         else:
             atom_idx = np.arange(0, self._atoms.shape[0])
 
