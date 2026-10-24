@@ -1,0 +1,4 @@
+{
+    "merge_these_atom_types": ["H", "HD"],
+    "load_atom_params": ["vina_params", "ad4_types"]
+}
