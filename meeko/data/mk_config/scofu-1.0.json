@@ -1,7 +1,7 @@
 {
     "merge_these_atom_types": [],
-    "load_atom_params": ["openff"],
+    "load_atom_params": ["openff", "ad4_desolv_volume"],
     "charge_model": "espaloma",
     "dihedral_model": "openff",
-    "rigid_macrocycles": true
+    "crippen_as_solpar": true
 }

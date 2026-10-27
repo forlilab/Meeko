@@ -217,7 +217,7 @@ def get_args():
                               default=False,
     )
     config_group.add_argument("--config_file", help="local json configuration file. Overrides --config_preset option-wise. Overriden by command line options.")
-    config_group.add_argument("--config_preset", help="name of packaged configuration (choices: scofu1). Overriden by --config_file and by command line options.")
+    config_group.add_argument("--config_preset", help="name of packaged config: [vina, ad4, scofu-1.0]. Overriden by --config_file and by command line options.")
     config_group.add_argument(
         "-x", "--delete_bad_res",
         action="store_true",

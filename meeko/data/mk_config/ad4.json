@@ -1,0 +1,9 @@
+{
+    "load_atom_params": [
+        "ad4_desolv_param",
+        "ad4_desolv_volume",
+        "ad4_hb",
+        "ad4_vdw",
+        "ad4_types"
+    ]
+}
