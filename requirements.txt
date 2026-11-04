@@ -1,6 +1,6 @@
 numpy
 gemmi
-rdkit<2026.09
+rdkit
 scipy
 tomli
 tqdm

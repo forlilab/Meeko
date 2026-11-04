@@ -9,7 +9,7 @@ def test():
     smiles = "C1CCCC1"
     mol = Chem.MolFromSmiles(smiles)
     mol = Chem.AddHs(mol)
-    etkdgv3 = rdDistGeom.srETKDGv3()
+    etkdgv3 = rdDistGeom.ETKDGv3()
     rdDistGeom.EmbedMolecule(mol, etkdgv3)
     mk_prep = MoleculePreparation()
     molsetup = mk_prep.prepare(mol)[0]
