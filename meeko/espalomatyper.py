@@ -14,11 +14,6 @@ from .molsetup import RDKitMoleculeSetup
 
 logger = logging.getLogger(__name__)
 
-# loaded espaloma models, keyed by version, so they are loaded once per process
-_espaloma_models = {}
-# whether the model layout supports the reduced charge-only path, keyed by version
-_charges_only_supported = {}
-
 # module layout of the espaloma model that the reduced charge-only path relies on
 _EXPECTED_MODEL_LAYOUT = [
     "Sequential",
@@ -50,25 +45,21 @@ class EspalomaTyper:
             raise ImportError("OpenFF is required")
 
         # Fetch and load latest pretrained model from GitHub
-        # check if model is loaded before loading
-        if version not in _espaloma_models:
-            model = esp.get_model(version)
-            _espaloma_models[version] = model
-            # For charges only, a reduced graph is built and only the model parts
-            # that produce atom charges (n1 "q") are run.
-            layout = [type(module).__name__ for module in model]
-            _charges_only_supported[version] = (
-                layout == _EXPECTED_MODEL_LAYOUT
-                and set(model[1].out_features.get(1, {})) == {"e", "s"}
+        self.espaloma_model = esp.get_model(version)
+
+        # For charges only, a reduced graph is built and only the model parts
+        # that produce atom charges (n1 "q") are run.
+        layout = [type(module).__name__ for module in self.espaloma_model]
+        self.charges_only_supported = (
+            layout == _EXPECTED_MODEL_LAYOUT
+            and set(self.espaloma_model[1].out_features.get(1, {})) == {"e", "s"}
+        )
+        if not self.charges_only_supported:
+            logger.warning(
+                f"Unrecognized espaloma model layout {layout} (version {version}), "
+                "falling back to building the full espaloma graph and running the whole model "
+                "for charges. Espaloma charge assignment can be considerably slower."
             )
-            if not _charges_only_supported[version]:
-                logger.warning(
-                    f"Unrecognized espaloma model layout {layout} (version {version}), "
-                    "falling back to building the full espaloma graph and running the whole model "
-                    "for charges. Espaloma charge assignment can be considerably slower."
-                )
-        self.espaloma_model = _espaloma_models[version]
-        self.charges_only_supported = _charges_only_supported[version]
 
         # store methods in instance, otherwise they are out of scope
         self.openffmol_from_rdkit = Molecule.from_rdkit

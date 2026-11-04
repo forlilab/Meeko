@@ -76,6 +76,9 @@ class MoleculePreparation:
     atom_params:
     """
 
+    # EspalomaTyper shared by all instances, so the espaloma model is loaded once per process
+    _espaloma_typer = None
+
     packaged_params = {}
     for path in params_dir.glob("*.json"):  # e.g. data/params/ad4_types.json
         name = path.with_suffix("").name  # e.g. "ad4_types"
@@ -629,7 +632,9 @@ class MoleculePreparation:
         # Convert molecule to graph and apply trained Espaloma model
         # skip if charges are read from template
         if self.dihedral_model == "espaloma" or (self.charge_model == "espaloma" and self.compute_charges):
-            self.espaloma_model = EspalomaTyper()
+            if MoleculePreparation._espaloma_typer is None:
+                MoleculePreparation._espaloma_typer = EspalomaTyper()
+            self.espaloma_model = MoleculePreparation._espaloma_typer
             if mol.GetNumAtoms() > 1:
                 molgraph = self.espaloma_model.get_espaloma_graph(setup, charges_only=self.dihedral_model != "espaloma")
 
