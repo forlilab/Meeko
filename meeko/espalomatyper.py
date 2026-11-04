@@ -5,10 +5,24 @@
 #
 
 # import numpy as np
+import logging
 from math import pi
 
 
 from .molsetup import RDKitMoleculeSetup
+
+
+logger = logging.getLogger(__name__)
+
+# module layout of the espaloma model that the reduced charge-only path relies on
+_EXPECTED_MODEL_LAYOUT = [
+    "Sequential",
+    "JanossyPooling",
+    "JanossyPoolingWithSmirnoffImproper",
+    "ExpCoefficients",
+    "ChargeEquilibrium",
+    "LinearMixtureToOriginal",
+]
 
 class EspalomaTyper:
 
@@ -33,23 +47,86 @@ class EspalomaTyper:
         # Fetch and load latest pretrained model from GitHub
         self.espaloma_model = esp.get_model(version)
 
+        # For charges only, a reduced graph is built and only the model parts
+        # that produce atom charges (n1 "q") are run.
+        layout = [type(module).__name__ for module in self.espaloma_model]
+        self.charges_only_supported = (
+            layout == _EXPECTED_MODEL_LAYOUT
+            and set(self.espaloma_model[1].out_features.get(1, {})) == {"e", "s"}
+        )
+        if not self.charges_only_supported:
+            logger.warning(
+                f"Unrecognized espaloma model layout {layout} (version {version}), "
+                "falling back to building the full espaloma graph and running the whole model "
+                "for charges. Espaloma charge assignment can be considerably slower."
+            )
+
         # store methods in instance, otherwise they are out of scope
-        self.openffmol_from_rdkit = Molecule.from_rdkit 
+        self.openffmol_from_rdkit = Molecule.from_rdkit
         self.EspalomaGraph = esp.Graph
         self.Pytorch = torch
 
-    def get_espaloma_graph(self, molsetup):
-        """ Apply espaloma model to a graph representation of the molecule. """
+    def get_espaloma_graph(self, molsetup, charges_only=False):
+        """ Apply espaloma model to a graph representation of the molecule.
+
+        If charges_only, only atom charges (n1 "q") are computed, using a reduced
+        graph and only the model parts that produce them.
+        """
 
         if not isinstance(molsetup, RDKitMoleculeSetup):
             raise NotImplementedError("need rdkit molecule for espaloma typing")
-        
+
         rdmol = molsetup.mol
         openffmol = self.openffmol_from_rdkit(rdmol, hydrogens_are_explicit=True, allow_undefined_stereo=True)
-        molgraph = self.EspalomaGraph(openffmol)
-        self.espaloma_model(molgraph.heterograph)
-        
-        return molgraph
+        if not (charges_only and self.charges_only_supported):
+            molgraph = self.EspalomaGraph(openffmol)
+            self.espaloma_model(molgraph.heterograph)
+            return molgraph
+
+        heterograph = self._get_charges_only_heterograph(openffmol)
+        representation, janossy, charge_equilibrium = self.espaloma_model[0], self.espaloma_model[1], self.espaloma_model[4]
+        with self.Pytorch.no_grad():
+            representation(heterograph)
+            # atom level readout, as in espaloma's JanossyPooling
+            x = janossy.sequential_1(g=None, x=heterograph.nodes["n1"].data["h"])
+            heterograph.nodes["n1"].data["e"] = janossy.f_out_1_to_e(x)
+            heterograph.nodes["n1"].data["s"] = janossy.f_out_1_to_s(x)
+            charge_equilibrium(heterograph)
+
+        return self.EspalomaGraph(heterograph=heterograph)
+
+    def _get_charges_only_heterograph(self, openffmol):
+        """ Build only the parts of espaloma's heterograph needed for atom charges.
+
+        Uses espaloma's own featurization and bond enumeration, so the atom features
+        and edge order are the same as in the full heterograph.
+        """
+        import numpy as np
+        import dgl
+        from espaloma.graphs.utils import offmol_indices, read_homogeneous_graph
+        from espaloma.graphs.utils.read_heterogeneous_graph import duplicate_index_ordering
+
+        torch = self.Pytorch
+        homograph = read_homogeneous_graph.from_openff_toolkit_mol(openffmol)
+        n_atoms = homograph.number_of_nodes()
+
+        bonds = offmol_indices.bond_indices(openffmol)
+        if len(bonds) == 0:
+            bonds = np.empty((0, 2), dtype=np.int64)
+        bonds = duplicate_index_ordering(bonds)
+
+        atoms = torch.arange(n_atoms)
+        zeros = torch.zeros(n_atoms, dtype=torch.int64)
+        data = {
+            ("n1", "n1_neighbors_n1", "n1"): (torch.from_numpy(bonds[:, 0]), torch.from_numpy(bonds[:, 1])),
+            ("n1", "n1_in_g", "g"): (atoms, zeros),
+            ("g", "g_has_n1", "n1"): (zeros, atoms),
+        }
+
+        heterograph = dgl.heterograph(data, num_nodes_dict={"n1": n_atoms, "g": 1})
+        heterograph.nodes["n1"].data["h0"] = homograph.ndata["h0"]
+        heterograph.nodes["g"].data["sum_q"] = homograph.ndata["sum_q"][0].reshape(1, 1)
+        return heterograph
     
     def set_espaloma_charges(self, molsetup, molgraph):
         """Grab charges from graph node and set them to the molsetup """
