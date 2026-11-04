@@ -11,5 +11,6 @@ include example/*
 include example/tutorial1/*
 include meeko/data/*
 include meeko/data/params/*
+include meeko/data/mk_config/*
 include meeko/tmp/*
 include meeko/utils/*
