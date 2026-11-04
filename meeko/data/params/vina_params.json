@@ -19,7 +19,6 @@
 
     {"smarts": "[#8][#1]",          "vina_donor": true},
     {"smarts": "[#7][#1]",          "vina_donor": true},
-    {"smarts": "[#16][#1]",         "vina_donor": true},
     {"smarts": "[#7X2v3]",          "vina_acceptor": true},
     {"smarts": "[#7X3v3]",          "vina_acceptor": true},
     {"smarts": "[#7;X1]",           "vina_acceptor": true},
