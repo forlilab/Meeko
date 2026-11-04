@@ -631,7 +631,7 @@ class MoleculePreparation:
         if self.dihedral_model == "espaloma" or (self.charge_model == "espaloma" and self.compute_charges):
             self.espaloma_model = EspalomaTyper()
             if mol.GetNumAtoms() > 1:
-                molgraph = self.espaloma_model.get_espaloma_graph(setup)
+                molgraph = self.espaloma_model.get_espaloma_graph(setup, charges_only=self.dihedral_model != "espaloma")
 
         # Grab dihedrals from graph node and set them to the molsetup
         if self.dihedral_model == "espaloma" and mol.GetNumAtoms() > 3:
