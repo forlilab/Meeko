@@ -4,15 +4,96 @@
 # Meeko Espaloma typer
 #
 
-# import numpy as np
+import numpy as np
 import logging
 from math import pi
 
+from rdkit import Chem
 
 from .molsetup import RDKitMoleculeSetup
 
 
 logger = logging.getLogger(__name__)
+
+# The functions below build the charge-only graph inputs directly from the RDKit molecule,
+# mirroring espaloma/graphs/utils/read_homogeneous_graph.py (fp_rdkit, from_openff_toolkit_mol),
+# without the OpenFF back and forth conversion and without creating torch tensors for each atom.
+
+HYBRIDIZATION_RDKIT = {
+    Chem.rdchem.HybridizationType.SP: [1, 0, 0, 0, 0],
+    Chem.rdchem.HybridizationType.SP2: [0, 1, 0, 0, 0],
+    Chem.rdchem.HybridizationType.SP3: [0, 0, 1, 0, 0],
+    Chem.rdchem.HybridizationType.SP3D: [0, 0, 0, 1, 0],
+    Chem.rdchem.HybridizationType.SP3D2: [0, 0, 0, 0, 1],
+    Chem.rdchem.HybridizationType.S: [0, 0, 0, 0, 0],
+}
+
+# d and f block elements in periodic table, whose radicals OpenFF's Molecule.from_rdkit accepts
+_D_AND_F_BLOCK_ELEMENTS = {*range(21, 31), *range(39, 49), *range(57, 81), *range(89, 113)}
+
+
+def fp_rdkit(atom):
+    """ espaloma's fp_rdkit, as a list """
+    return [
+        atom.GetTotalDegree(),
+        # Note: Discard resonance-variant features
+        # Issue related to https://github.com/choderalab/espaloma_charge/issues/18
+        # atom.GetTotalValence(),
+        # atom.GetExplicitValence(),
+        # atom.GetFormalCharge(),
+        atom.GetIsAromatic() * 1.0,
+        atom.GetMass(),
+        atom.IsInRingSize(3) * 1.0,
+        atom.IsInRingSize(4) * 1.0,
+        atom.IsInRingSize(5) * 1.0,
+        atom.IsInRingSize(6) * 1.0,
+        atom.IsInRingSize(7) * 1.0,
+        atom.IsInRingSize(8) * 1.0,
+    ] + HYBRIDIZATION_RDKIT[atom.GetHybridization()]
+
+
+def rdmol_with_openff_perception(mol):
+    """ The RDKit molecule that espaloma uses after OpenFF Molecule.from_rdkit and
+    Molecule.to_rdkit contains information that is changed / lost from the interconversion:
+    no isotopes, MDL aromaticity and hybridization perceived under
+    that model, SSSR ring info. Radicals are rejected as in Molecule.from_rdkit.
+    """
+    from openff.toolkit.utils.exceptions import RadicalsNotSupportedError
+
+    rdmol = Chem.Mol(mol)
+    for atom in rdmol.GetAtoms():
+        atom.SetIsotope(0)
+    Chem.Kekulize(rdmol, clearAromaticFlags=True)
+    Chem.SetAromaticity(rdmol, Chem.AromaticityModel.AROMATICITY_MDL)
+    Chem.SanitizeMol(rdmol, Chem.SANITIZE_ALL ^ Chem.SANITIZE_ADJUSTHS ^ Chem.SANITIZE_SETAROMATICITY)
+    Chem.SetAromaticity(rdmol, Chem.AromaticityModel.AROMATICITY_MDL)
+    Chem.GetSSSR(rdmol)
+    for atom in rdmol.GetAtoms():
+        if atom.GetAtomicNum() not in _D_AND_F_BLOCK_ELEMENTS and atom.GetNumRadicalElectrons() != 0:
+            raise RadicalsNotSupportedError(
+                "The OpenFF Toolkit does not currently support parsing molecules with S- and P-block radicals. "
+                f"Found {atom.GetNumRadicalElectrons()} radical electrons on molecule {Chem.MolToSmiles(rdmol)}."
+            )
+    return rdmol
+
+
+def from_rdkit_mol(mol):
+    """ Atom features "h0" and total charge "sum_q" as in espaloma's from_openff_toolkit_mol """
+    import torch
+
+    rdmol = rdmol_with_openff_perception(mol)
+    n_atoms = rdmol.GetNumAtoms()
+    total_charge = Chem.GetFormalCharge(rdmol)
+    sum_q = torch.Tensor([[total_charge]])
+
+    h_v = np.zeros((n_atoms, 100), dtype=np.float32)
+    h_v[np.arange(n_atoms), [atom.GetAtomicNum() for atom in rdmol.GetAtoms()]] = 1.0
+
+    h_v_fp = np.array([fp_rdkit(atom) for atom in rdmol.GetAtoms()], dtype=np.float32)
+
+    h_v = np.concatenate([h_v, h_v_fp], axis=-1)  # (n_atoms, 114)
+
+    return torch.from_numpy(h_v), sum_q
 
 # module layout of the espaloma model that the reduced charge-only path relies on
 _EXPECTED_MODEL_LAYOUT = [
@@ -47,6 +128,10 @@ class EspalomaTyper:
         # Fetch and load latest pretrained model from GitHub
         self.espaloma_model = esp.get_model(version)
 
+        # run the model on the GPU when available
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.espaloma_model.to(self.device)
+
         # For charges only, a reduced graph is built and only the model parts
         # that produce atom charges (n1 "q") are run.
         layout = [type(module).__name__ for module in self.espaloma_model]
@@ -77,13 +162,15 @@ class EspalomaTyper:
             raise NotImplementedError("need rdkit molecule for espaloma typing")
 
         rdmol = molsetup.mol
-        openffmol = self.openffmol_from_rdkit(rdmol, hydrogens_are_explicit=True, allow_undefined_stereo=True)
         if not (charges_only and self.charges_only_supported):
+            openffmol = self.openffmol_from_rdkit(rdmol, hydrogens_are_explicit=True, allow_undefined_stereo=True)
             molgraph = self.EspalomaGraph(openffmol)
-            self.espaloma_model(molgraph.heterograph)
+            heterograph = molgraph.heterograph.to(self.device)
+            self.espaloma_model(heterograph)
+            molgraph.heterograph = heterograph.to("cpu")
             return molgraph
 
-        heterograph = self._get_charges_only_heterograph(openffmol)
+        heterograph = self._get_charges_only_heterograph(rdmol).to(self.device)
         representation, janossy, charge_equilibrium = self.espaloma_model[0], self.espaloma_model[1], self.espaloma_model[4]
         with self.Pytorch.no_grad():
             representation(heterograph)
@@ -93,24 +180,22 @@ class EspalomaTyper:
             heterograph.nodes["n1"].data["s"] = janossy.f_out_1_to_s(x)
             charge_equilibrium(heterograph)
 
-        return self.EspalomaGraph(heterograph=heterograph)
+        return self.EspalomaGraph(heterograph=heterograph.to("cpu"))
 
-    def _get_charges_only_heterograph(self, openffmol):
+    def _get_charges_only_heterograph(self, rdmol):
         """ Build only the parts of espaloma's heterograph needed for atom charges.
 
-        Uses espaloma's own featurization and bond enumeration, so the atom features
+        Mirrors espaloma's featurization and bond enumeration, so the atom features
         and edge order are the same as in the full heterograph.
         """
-        import numpy as np
         import dgl
-        from espaloma.graphs.utils import offmol_indices, read_homogeneous_graph
         from espaloma.graphs.utils.read_heterogeneous_graph import duplicate_index_ordering
 
         torch = self.Pytorch
-        homograph = read_homogeneous_graph.from_openff_toolkit_mol(openffmol)
-        n_atoms = homograph.number_of_nodes()
+        h0, sum_q = from_rdkit_mol(rdmol)
+        n_atoms = rdmol.GetNumAtoms()
 
-        bonds = offmol_indices.bond_indices(openffmol)
+        bonds = np.array([(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in rdmol.GetBonds()])
         if len(bonds) == 0:
             bonds = np.empty((0, 2), dtype=np.int64)
         bonds = duplicate_index_ordering(bonds)
@@ -124,8 +209,8 @@ class EspalomaTyper:
         }
 
         heterograph = dgl.heterograph(data, num_nodes_dict={"n1": n_atoms, "g": 1})
-        heterograph.nodes["n1"].data["h0"] = homograph.ndata["h0"]
-        heterograph.nodes["g"].data["sum_q"] = homograph.ndata["sum_q"][0].reshape(1, 1)
+        heterograph.nodes["n1"].data["h0"] = h0
+        heterograph.nodes["g"].data["sum_q"] = sum_q
         return heterograph
     
     def set_espaloma_charges(self, molsetup, molgraph):
