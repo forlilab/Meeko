@@ -315,7 +315,7 @@ class RDKitMolCreate:
             raise RuntimeError(
                 "Number of atom is rdmol {n_atoms} mismatches"
                 "number of pairs in index map {n_at}!".format(
-                    n_coords=n_atoms, n_at=n_mappings))
+                    n_atoms=n_atoms, n_at=n_mappings))
         coord_is_set = [False] * n_atoms
         for i in range(n_mappings):
             pdbqt_index = int(index_map[i * 2 + 1]) - 1
