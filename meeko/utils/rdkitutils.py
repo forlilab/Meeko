@@ -385,9 +385,11 @@ def _aux_altloc_mol_build(atom_field_list, requested_altloc, default_altloc):
     mols_dict = build_one_rdkit_mol_per_altloc(atom_field_list) 
     has_altloc = None not in mols_dict
     if has_altloc and requested_altloc is None and default_altloc is None:
-        pdbmol = None
-        missed_altloc = False 
-        needed_altloc = True
+        if len(mols_dict) == 1:
+            pdbmol, idx_to_rdkit = next(iter(mols_dict.values()))
+        else:
+            pdbmol = None
+            needed_altloc = True
     elif requested_altloc and requested_altloc in mols_dict:
         pdbmol, idx_to_rdkit = mols_dict[requested_altloc]
     elif requested_altloc and requested_altloc not in mols_dict:
