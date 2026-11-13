@@ -2785,49 +2785,14 @@ class Polymer(BaseJSONParsable):
             msg = f"Residue IDs not in valid monomers: {unknown_res_ids}"
             raise ValueError(msg)
 
-        pdbout = ""
+        pdb_string = ""
         atom_count = 0
-        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                      {:>2s} "
-        pdb_line += eol
         for res_id, monomer in self.get_valid_monomers().items():
-            rdkit_mol = monomer.rdkit_mol
-            if res_id in new_positions:
-                positions = get_updated_positions(
-                    monomer,
-                    new_positions[res_id],
-                )
-            else:
-                rdkit_to_padded = {j: i for i, j in monomer.molsetup_mapidx.items()}
-                positions = [monomer.molsetup.atoms[rdkit_to_padded[i]].coord for i in range(rdkit_mol.GetNumAtoms())]
+            pos = new_positions.get(res_id, None)
+            res_string, atom_count = monomer.to_pdb(pos, atom_count, res_id)
+            pdb_string += res_string
+        return pdb_string
 
-            chain, resnum = res_id.split(":")
-            if resnum[-1].isalpha():
-                icode = resnum[-1]
-                resnum = resnum[:-1]
-            else:
-                icode = ""
-            resnum = int(resnum)
-
-            for i, atom in enumerate(rdkit_mol.GetAtoms()):
-                atom_count += 1
-                props = atom.GetPropsAsDict()
-                atom_name = monomer.atom_names[i]
-                x, y, z = positions[i]
-                element = mini_periodic_table[atom.GetAtomicNum()]
-                pdbout += pdb_line.format(
-                    "ATOM",
-                    atom_count,
-                    atom_name,
-                    monomer.input_resname,
-                    chain,
-                    resnum,
-                    icode,
-                    x,
-                    y,
-                    z,
-                    element,
-                )
-        return pdbout
 
     def export_static_atom_params(self):
         """
@@ -3263,6 +3228,69 @@ class Monomer(BaseJSONParsable):
                 atom_name, self.input_resname, int(resnum), icode, chain
             )
         return
+
+    def to_pdb(
+        self,
+        new_positions: Optional[dict]=None,
+        atom_count=0,
+        res_id=None,
+    ):
+        """
+        Parameters
+        ----------
+        new_positions: dict (int -> (float, float, float)))
+                             |      |
+                    atom_index      |
+                                    new_position
+        atom_count: int
+        res_id: str
+
+        Returns
+        -------
+        pdb_string: str
+        """
+
+        pdbout = ""
+        pdb_line = "{:6s}{:5d} {:^4s} {:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}                      {:>2s} "
+        pdb_line += eol
+        rdkit_mol = self.rdkit_mol
+        if new_positions is not None:
+            positions = get_updated_positions(self, new_positions)
+        else:
+            rdkit_to_padded = {j: i for i, j in self.molsetup_mapidx.items()}
+            positions = [self.molsetup.atoms[rdkit_to_padded[i]].coord for i in range(rdkit_mol.GetNumAtoms())]
+
+        if res_id is None:
+            chain, resnum, icode = "", "0", ""
+        else:
+            chain, resnum = res_id.split(":")
+            if resnum[-1].isalpha():
+                icode = resnum[-1]
+                resnum = resnum[:-1]
+            else:
+                icode = ""
+        resnum = int(resnum)
+
+        for i, atom in enumerate(rdkit_mol.GetAtoms()):
+            atom_count += 1
+            props = atom.GetPropsAsDict()
+            atom_name = self.atom_names[i]
+            x, y, z = positions[i]
+            element = mini_periodic_table[atom.GetAtomicNum()]
+            pdbout += pdb_line.format(
+                "ATOM",
+                atom_count,
+                atom_name,
+                self.input_resname,
+                chain,
+                resnum,
+                icode,
+                x,
+                y,
+                z,
+                element,
+            )
+        return pdbout, atom_count
 
 
 class NoAtomMapWarning(logging.Filter):
