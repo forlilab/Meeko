@@ -575,6 +575,37 @@ def test_altloc():
             break
     assert abs(xyz[index][0] - 12.346) < 0.001
 
+
+@pytest.mark.parametrize("altloc, expected_x", [("A", 12.346), ("B", 11.220)])
+def test_single_altloc(altloc, expected_x):
+    with open(has_altloc, "r") as f:
+        pdb_text = "".join(line for line in f if line[16:17] in (" ", altloc))
+    polymer = Polymer.from_pdb_string(pdb_text, chem_templates, mk_prep)
+    reference = Polymer.from_pdb_string(
+        pdb_text, chem_templates, mk_prep, default_altloc=altloc
+    )
+    assert polymer.monomers.keys() == reference.monomers.keys()
+    for res_id, res in polymer.monomers.items():
+        assert res.atom_names == reference.monomers[res_id].atom_names
+        np.testing.assert_allclose(
+            res.rdkit_mol.GetConformer().GetPositions(),
+            reference.monomers[res_id].rdkit_mol.GetConformer().GetPositions(),
+        )
+    res = polymer.monomers["A:264"]
+    index = res.atom_names.index("OG")
+    assert abs(res.rdkit_mol.GetConformer().GetPositions()[index][0] - expected_x) < 0.001
+
+
+@pytest.mark.parametrize(
+    "options", [{"default_altloc": "B"}, {"wanted_altloc": {"A:264": "B"}}]
+)
+def test_single_altloc_missing_selection(options):
+    with open(has_altloc, "r") as f:
+        pdb_text = "".join(line for line in f if line[16:17] in (" ", "A"))
+    with pytest.raises(PolymerCreationError, match="Requested altlocs not found"):
+        Polymer.from_pdb_string(pdb_text, chem_templates, mk_prep, **options)
+
+
 def test_set_template_LYN():
     """the input is fully protonated NH3+"""
     with open(loop_with_disulfide) as f:
