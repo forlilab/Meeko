@@ -559,7 +559,7 @@ def divide_int_gracefully(integer, weights, allow_equal_weights_to_differ=False)
 
     """
     for weight in weights:
-        if type(weight) not in [int, float] or weight < 0:
+        if (not isinstance(weight, (int, float, np.number))) or weight < 0:
             raise ValueError("weights must be numeric and non-negative")
     if type(integer) is not int:
         raise ValueError("integer must be integer")
