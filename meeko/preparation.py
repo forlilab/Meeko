@@ -195,7 +195,7 @@ class MoleculePreparation:
             raise NotImplementedError("load_offatom_params not implemented")
         self.load_offatom_params = load_offatom_params
 
-        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl"]
+        allowed_charge_models = ["espaloma", "gasteiger", "zero", "read", "nagl","espaloma_charge"]
         if charge_model not in allowed_charge_models:
             raise ValueError(
                 "unrecognized charge_model: %s, allowed options are: %s"

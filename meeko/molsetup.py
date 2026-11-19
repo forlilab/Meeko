@@ -1675,7 +1675,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             temp_compute_charges = self.compute_charges
             self.compute_charges = True
 
-        if self.compute_charges: # not from template --recompute_charges option
+        if self.compute_charges: # not from template --compute_charges option
             charges = self.calculate_charges(charge_model, read_charges_from_prop)
         else: # read from template json
             charges = self.get_charges_from_template(charge_model, template_charge)
@@ -1743,6 +1743,19 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 print(e)
                 print("Make sure you've installed the latest version of openff")
 
+        elif charge_model == "espaloma_charge":
+            from espaloma_charge import charge
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be espaloma_charge and read_charges_from_prop cannot both be set.")
+
+            try:
+                charges = charge(self.mol)
+            except:
+                print("Espaloma_charge computation failed with with exception:")
+                print(e)
+                print("Most like an issue with the espaloma_charge package")
+                     
+
         elif read_charges_from_prop is not None: 
             if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
                 raise ValueError(
@@ -1802,7 +1815,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             case "zero":
                 charges = [0.0] * self.mol.GetNumAtoms()
             case _:
-                raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
+                raise ValueError("Incompatible charge model requested from charge template. Use --compute_charges")
         
         # make sure order of charge is same for both version of the residue
         charges = np.array(charges)
