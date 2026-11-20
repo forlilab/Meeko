@@ -15,6 +15,8 @@ import warnings
 from typing import Union
 from typing import Optional, Any
 
+from importlib.resources import files
+
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import rdMolInterchange
@@ -1712,7 +1714,24 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 charges = rdkitutils.compute_gasteiger_charges(self.mol)
             except Exception as e:
                 print("gasteiger charge computation failed with: ")
+                print(e)
                 raise e
+
+        elif charge_model == "espaloma_onnx":
+            from .espaloma_onnx import charges_from_onnx
+
+            onnx_file = files("meeko.data").joinpath("espaloma_charges.onnx")
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be espaloma_onnx and read_charges_from_prop cannot both be set.")
+
+            try:
+                charges = charges_from_onnx(self.mol, onnx_file)
+            except Exception as e: 
+                print("Espaloma_onnx charge computation failed with with exception:")
+                print(e)
+                raise e
+
+                
         
         elif charge_model == "nagl":
             if read_charges_from_prop is not None: 
