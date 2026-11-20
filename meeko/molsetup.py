@@ -1712,7 +1712,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
                 charges = rdkitutils.compute_gasteiger_charges(self.mol)
             except Exception as e:
                 print("gasteiger charge computation failed with: ")
-                print(e)
+                raise e
         
         elif charge_model == "nagl":
             if read_charges_from_prop is not None: 
@@ -1739,9 +1739,9 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
                 charges = mol_off.partial_charges.magnitude.tolist()
             except Exception as e:
-                print("NAGL charge computation failed with with exception:")
-                print(e)
+                print("NAGL charge computation failed.")
                 print("Make sure you've installed the latest version of openff")
+                raise e
 
         elif charge_model == "espaloma_charge":
             from espaloma_charge import charge
@@ -1750,10 +1750,10 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
             try:
                 charges = charge(self.mol)
-            except:
-                print("Espaloma_charge computation failed with with exception:")
-                print(e)
-                print("Most like an issue with the espaloma_charge package")
+            except Exception as e:
+                print("Espaloma_charge computation failed.")
+                print("Most likely an issue with the espaloma_charge package")
+                raise e
                      
 
         elif read_charges_from_prop is not None: 
