@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import gzip
 import json
 import math
 eol="\n"
@@ -948,8 +949,12 @@ def main():
             fn = args.write_json[0]
         else:  # args.write_json is empty list (was used without arg)
             fn = str(outpath) + ".json"
-        with open(fn, "w") as f:
-            f.write(polymer.to_json())
+        if fn.endswith(".gz"):
+            with gzip.open(fn, "wb") as f:
+                f.write(polymer.to_json().encode())
+        else:
+            with open(fn, "w") as f:
+                f.write(polymer.to_json())
         written_files_log["filename"].append(fn)
         written_files_log["description"].append("parameterized receptor")
     
