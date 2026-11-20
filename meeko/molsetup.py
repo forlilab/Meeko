@@ -1677,7 +1677,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             temp_compute_charges = self.compute_charges
             self.compute_charges = True
 
-        if self.compute_charges: # not from template --recompute_charges option
+        if self.compute_charges: # not from template --compute_charges option
             charges = self.calculate_charges(charge_model, read_charges_from_prop)
         else: # read from template json
             charges = self.get_charges_from_template(charge_model, template_charge)
@@ -1715,6 +1715,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             except Exception as e:
                 print("gasteiger charge computation failed with: ")
                 print(e)
+                raise e
 
         elif charge_model == "espaloma_onnx":
             from .espaloma_onnx import charges_from_onnx
@@ -1728,7 +1729,10 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             except Exception as e: 
                 print("Espaloma_onnx charge computation failed with with exception:")
                 print(e)
+                raise e
 
+                
+        
         elif charge_model == "nagl":
             if read_charges_from_prop is not None: 
                 raise ValueError("Conflicting options: charge_model cannot be nagl and read_charges_from_prop cannot both be set.")
@@ -1754,9 +1758,22 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
                 charges = mol_off.partial_charges.magnitude.tolist()
             except Exception as e:
-                print("NAGL charge computation failed with with exception:")
-                print(e)
+                print("NAGL charge computation failed.")
                 print("Make sure you've installed the latest version of openff")
+                raise e
+
+        elif charge_model == "espaloma_charge":
+            from espaloma_charge import charge
+            if read_charges_from_prop is not None: 
+                raise ValueError("Conflicting options: charge_model cannot be espaloma_charge and read_charges_from_prop cannot both be set.")
+
+            try:
+                charges = charge(self.mol)
+            except Exception as e:
+                print("Espaloma_charge computation failed.")
+                print("Most likely an issue with the espaloma_charge package")
+                raise e
+                     
 
         elif read_charges_from_prop is not None: 
             if not isinstance(read_charges_from_prop, str) or not read_charges_from_prop: 
@@ -1817,7 +1834,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
             case "zero":
                 charges = [0.0] * self.mol.GetNumAtoms()
             case _:
-                raise ValueError("Incompatible charge model requested from charge template. Use --recompute_charges")
+                raise ValueError("Incompatible charge model requested from charge template. Use --compute_charges")
         
         # make sure order of charge is same for both version of the residue
         charges = np.array(charges)
