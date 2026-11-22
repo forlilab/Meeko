@@ -158,7 +158,8 @@ Flexible and/or Reactive Options
 .. option:: -t, --rot_terminal_group <residues>
 
    specify the residues for which to make terminal functional group rotatable by the chain ID and residue number, 
-   e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)'
+   e.g. -t ":42,B:23" is equivalent to -t ":42" -t "B:23" (leave chain ID empty if omitted in input PDB or mmCIF)
+   If used in conjunction with `--delete_bad_res`, invalid residues will be ignored. Otherwise the program will crash. 
 
 .. option:: --r_eq_12 <value>
 
