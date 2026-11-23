@@ -4,3 +4,4 @@ rdkit
 scipy
 tomli
 tqdm
+espaloma_charge
