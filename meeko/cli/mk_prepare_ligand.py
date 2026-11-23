@@ -206,7 +206,7 @@ def cmd_lineparser():
     )
     config_group.add_argument(
         "--charge_model",
-        choices=("gasteiger", "espaloma", "espaloma_onnx", "zero", "read", "nagl"),
+        choices=("gasteiger", "espaloma", "espaloma_onnx", "zero", "read", "nagl", "espaloma_charge"),
         help="default is 'gasteiger', 'zero' sets all zeros",
         default="gasteiger",
     )
