@@ -1719,7 +1719,7 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
         elif charge_model == "espaloma_onnx":
             from .espaloma_onnx import charges_from_onnx
 
-            onnx_file = files("meeko.data").joinpath("espaloma_charges.onnx")
+            onnx_file = files("meeko.data").joinpath("espaloma_charges_0.0.8.onnx")
             if read_charges_from_prop is not None: 
                 raise ValueError("Conflicting options: charge_model cannot be espaloma_onnx and read_charges_from_prop cannot both be set.")
 

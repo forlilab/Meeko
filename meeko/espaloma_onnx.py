@@ -9,6 +9,7 @@ import functools
 
 import numpy as np
 from rdkit import Chem
+from importlib.resources import files
 
 SUPPORTED_ELEMENTS = frozenset(["H", "C", "N", "O", "F", "P", "S", "Cl", "Br", "I"])
 
@@ -83,7 +84,7 @@ def _featurize(mol, total_charge=None):
     return h0, edge_index, float(total_charge)
 
 
-def charges_from_onnx(mol, onnx_path, total_charge=None, providers=("CPUExecutionProvider",)):
+def charges_from_onnx(mol, onnx_path = None, total_charge=None, providers=("CPUExecutionProvider",)):
     """Partial charges for one RDKit molecule.
 
     Parameters
@@ -102,6 +103,10 @@ def charges_from_onnx(mol, onnx_path, total_charge=None, providers=("CPUExecutio
     -------
     np.ndarray, shape (n_atoms,), float32, in the atom order of `mol`.
     """
+
+    if onnx_path is None:
+        onnx_path = files("meeko.data").joinpath("espaloma_charges_0.0.8.onnx")
+    
     h0, edge_index, q_tot = _featurize(mol, total_charge)
     session = _get_session(str(onnx_path), tuple(providers))
     q = session.run(
@@ -116,11 +121,15 @@ def charges_from_onnx(mol, onnx_path, total_charge=None, providers=("CPUExecutio
     return q
 
 
-def charges_from_onnx_multiple(mols, onnx_path, providers=("CPUExecutionProvider",)):
+def charges_from_onnx_multiple(mols, onnx_path = None, providers=("CPUExecutionProvider",)):
     """Partial charges for a list of molecules in a single model call.
 
     Returns a list of arrays, one per molecule. Total charge is the formal-charge sum.
     """
+
+    if onnx_path is None:
+            onnx_path = files("meeko.data").joinpath("espaloma_charges_0.0.8.onnx")
+            
     mols = list(mols)
     if not mols:
         return []
