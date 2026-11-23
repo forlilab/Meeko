@@ -5,3 +5,5 @@ scipy
 tomli
 tqdm
 espaloma_charge
+torch==2.4.1
+torchdata==0.8.0
