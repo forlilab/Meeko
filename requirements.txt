@@ -5,3 +5,4 @@ scipy
 tomli
 tqdm
 espaloma_charge @ git+https://github.com/choderalab/espaloma-charge
+onnxruntime
