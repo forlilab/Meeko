@@ -448,6 +448,14 @@ def main():
         sys.exit(2)
     delete_bad_res = args.allow_bad_res or args.delete_bad_res
 
+    if args.flexres is not None and args.write_json is not None:
+        # It is easy to forget that a saved polymer has flexible side chains
+        # we might consider removing the is_movable attribute from Monomer
+        # to force flexres specification to be made downstream of Meeko.
+        # However, for vina/adgpu, flexres must be defined in Meeko because
+        # flexres are saved in a separate PDBQT file.
+        print("Error: -f/--flexres and -j/--write_json cannot be used together.")
+        sys.exit(2)
 
     if args.wanted_altloc is None:
         wanted_altloc = None
