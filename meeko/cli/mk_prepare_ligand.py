@@ -406,6 +406,10 @@ class Output:
         self.duplicate_filenames = set()
         self.visited_names = set()
         self.duplicate_names = set()
+        self.reactive_variant_mols = set()
+        self._name_mol_ids = {}
+        self._auto_mol_id = 0
+        self._last_auto_name = None
         self.num_files_written = 0
         self.counter = 0
         self.name_from_prop = name_from_prop
@@ -433,11 +437,40 @@ class Output:
         self.tar_pdbqt_count += 1
         return
 
-    def __call__(self, pdbqt_string, name, suffixes=()):
+    @staticmethod
+    def _is_mk_suffix(suffix):
+        return (
+            suffix is not None
+            and len(suffix) > 2
+            and suffix.startswith("mk")
+            and suffix[2:].isdigit()
+        )
+
+    def __call__(self, pdbqt_string, name, suffixes=(), mol_id=None):
         self.counter += 1
-        if name in self.visited_names:
+        has_mk_suffix = any(self._is_mk_suffix(s) for s in suffixes)
+        if mol_id is None:
+            mk_continuing = (
+                has_mk_suffix
+                and "mk1" not in suffixes
+                and name == self._last_auto_name
+            )
+            if not mk_continuing:
+                self._auto_mol_id += 1
+                self._last_auto_name = name
+            effective_mol_id = ("auto", self._auto_mol_id)
+        else:
+            effective_mol_id = mol_id
+
+        if name not in self._name_mol_ids:
+            self._name_mol_ids[name] = effective_mol_id
+            self.visited_names.add(name)
+        elif self._name_mol_ids[name] != effective_mol_id:
             self.duplicate_names.add(name)
-        self.visited_names.add(name)
+
+        if has_mk_suffix:
+            self.reactive_variant_mols.add(effective_mol_id)
+
         if self.multimol_prefix is not None:
             name = "%s-%d" % (self.multimol_prefix, self.counter)
         for suffix in suffixes:
@@ -488,20 +521,25 @@ class Output:
     def get_duplicates_info_string(self):
         if not self.is_multimol:
             return None
-        if len(self.duplicate_names):
-            # with multimol_prefix with can have duplicate molecule names,
+        if len(self.duplicate_filenames):
+            # if we have duplicate_filenames, we also have duplicate molecule names,
+            # so it suffices to return the string below
+            string = (
+                "Warning: %d molecules with repeated names were suffixed with -again<n>"
+                % len(self.duplicate_filenames)
+            )
+        elif len(self.duplicate_names):
+            # with multimol_prefix we can have duplicate molecule names,
             # but not duplicate filenames. This warning is for such cases.
             string = "Warning: %d molecules have duplicated names" % len(
                 self.duplicate_names
             )
         else:
-            string = "No duplicate molecule molecule names were found"
-        # if we have duplicate_filenames, we also have duplicate molecule names,
-        # but it suffices to return the string below
-        if len(self.duplicate_filenames):
-            string = (
-                "Warning: %d molecules with repeated names were suffixed with -again<n>"
-                % len(self.duplicate_filenames)
+            string = "No duplicate molecule names were found"
+        if len(self.reactive_variant_mols):
+            string += (
+                "\nNote: %d molecules with multiple reactive SMARTS matches produced multiple PDBQT variants suffixed with _mk<n>"
+                % len(self.reactive_variant_mols)
             )
         return string
 
@@ -579,6 +617,7 @@ def main():
         elif ext=="mol2": 
             config["charge_atom_prop"] = "_TriposPartialCharge"
 
+    mol_id = 0
     preparator = MoleculePreparation.from_config(config)
     for mol in mol_supplier:
         if is_after_first and output.is_multimol == False:
@@ -605,6 +644,7 @@ def main():
         else:
             name = mol.GetProp("_Name")
         is_after_first = True
+        mol_id += 1
 
         if is_covalent:
             for cov_lig in covalent_builder.process(
@@ -632,7 +672,7 @@ def main():
                             )
                         )
                         name = molsetup.name
-                        output(pdbqt_string, name, (cov_lig.label, suffix))
+                        output(pdbqt_string, name, (cov_lig.label, suffix), mol_id=mol_id)
                     else:
                         nr_failures += 1
                         this_mol_had_failure = True
@@ -658,7 +698,7 @@ def main():
                     add_index_map=args.add_index_map,
                 )
                 if success:
-                    output(pdbqt_string, name, (suffix,))
+                    output(pdbqt_string, name, (suffix,), mol_id=mol_id)
                     if args.verbose:
                         molsetup.show()
                 else:
