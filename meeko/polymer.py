@@ -1744,7 +1744,7 @@ class Polymer(BaseJSONParsable):
 
         Parameters
         ----------
-        pdb_string
+        pqr_string
         chem_templates
         mk_prep
         set_template
@@ -2768,7 +2768,7 @@ class Polymer(BaseJSONParsable):
                                  atom_index      |
                                                  new_position
         Returns
-        _______
+        -------
         pdb_string: str
         """    
 

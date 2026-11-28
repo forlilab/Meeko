@@ -1656,8 +1656,6 @@ class RDKitMoleculeSetup(MoleculeSetup, MoleculeSetupExternalToolkit, BaseJSONPa
 
         Parameters
         ----------
-        compute_gasteiger_charges: bool
-            Indicates whether we should compute gasteiger charges.
         coords: list[np.ndarray]
             Atom coordinates for the RDKit Mol.
 

@@ -50,7 +50,7 @@ class FlexMacrocycle:
             Maximum size of the ring, default is 33.
         double_bond_penalty: float
         max_breaks: int
-        allow_break_type_A: bool
+        allow_break_atype_A: bool
             Allow breaking bonds involving atoms typed A, default is False.
         untyped: bool
             Does not use atom typing, any rotatable bond can break
